@@ -9,12 +9,10 @@ from typing import Optional, Dict, Any
 import aiohttp
 from aiohttp import web
 from dotenv import load_dotenv
-from supabase import create_client, Client
 from aiogram import Bot, Dispatcher, Router, F
 from aiogram.filters import Command, CommandStart
 from aiogram.types import (
-    Message, CallbackQuery, LabeledPrice, PreCheckoutQuery,
-    InlineKeyboardButton
+    Message, CallbackQuery, LabeledPrice, PreCheckoutQuery
 )
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
@@ -48,7 +46,7 @@ STAR_PACKAGES = [
 ARCHETYPES = {
     "es": {
         "schoolmate": "🎓 Compañero/a de escuela",
-        "stepmom": "💋 Madrastra",
+        "stepmom": " Madrastra",
         "stepdad": "👔 Padrastro",
         "stepsister": "🌸 Hermanastra",
         "stepbrother": "💪 Hermanastro",
@@ -57,30 +55,30 @@ ARCHETYPES = {
         "boss": "💼 Jefe/a",
         "trainer": "🏋️ Entrenador/a personal",
         "model": "📸 Modelo/Influencer",
-        "musician": "🎵 Músico/a",
+        "musician": " Músico/a",
         "actor": "🎬 Actor/Actriz",
         "doctor": "⚕️ Médico/Enfermera",
         "chef": "👨‍🍳 Chef",
-        "artist": "🎨 Artista",
-        "writer": "✍️ Escritor/a"
+        "artist": " Artista",
+        "writer": "️ Escritor/a"
     },
     "en": {
-        "schoolmate": "🎓 Schoolmate",
-        "stepmom": "💋 Stepmother",
+        "schoolmate": " Schoolmate",
+        "stepmom": " Stepmother",
         "stepdad": "👔 Stepfather",
         "stepsister": "🌸 Stepsister",
         "stepbrother": "💪 Stepbrother",
         "teacher": "📚 Teacher",
         "neighbor": "🏠 Neighbor",
         "boss": "💼 Boss",
-        "trainer": "🏋️ Personal Trainer",
+        "trainer": "️ Personal Trainer",
         "model": "📸 Model/Influencer",
         "musician": "🎵 Musician",
         "actor": "🎬 Actor/Actress",
         "doctor": "⚕️ Doctor/Nurse",
-        "chef": "👨‍🍳 Chef",
+        "chef": "👨🍳 Chef",
         "artist": "🎨 Artist",
-        "writer": "✍️ Writer"
+        "writer": "️ Writer"
     }
 }
 
@@ -113,8 +111,96 @@ logger = logging.getLogger(__name__)
 # Estado temporal de usuarios
 user_states: Dict[int, Dict[str, Any]] = {}
 
-# Inicializar Supabase
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+# ==================== CLIENTE SUPABASE REST API ====================
+
+class SupabaseClient:
+    def __init__(self, url: str, key: str):
+        self.base_url = url.rstrip('/') + '/rest/v1'
+        self.headers = {
+            'apikey': key,
+            'Authorization': f'Bearer {key}',
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation'
+        }
+        self.session: Optional[aiohttp.ClientSession] = None
+    
+    async def get_session(self) -> aiohttp.ClientSession:
+        if self.session is None or self.session.closed:
+            self.session = aiohttp.ClientSession()
+        return self.session
+    
+    async def close(self):
+        if self.session and not self.session.closed:
+            await self.session.close()
+    
+    async def select(self, table: str, columns: str = '*', filters: Dict[str, Any] = None, 
+                     order: str = None, limit: int = None) -> list:
+        session = await self.get_session()
+        url = f"{self.base_url}/{table}?select={columns}"
+        
+        if filters:
+            for key, value in filters.items():
+                url += f"&{key}=eq.{value}"
+        
+        if order:
+            url += f"&order={order}"
+        if limit:
+            url += f"&limit={limit}"
+        
+        async with session.get(url, headers=self.headers) as response:
+            if response.status == 200:
+                return await response.json()
+            else:
+                error = await response.text()
+                logger.error(f"Supabase SELECT error: {error}")
+                return []
+    
+    async def insert(self, table: str, data: dict) -> Optional[dict]:
+        session = await self.get_session()
+        url = f"{self.base_url}/{table}"
+        
+        async with session.post(url, headers=self.headers, json=data) as response:
+            if response.status in [200, 201]:
+                result = await response.json()
+                return result[0] if result else None
+            else:
+                error = await response.text()
+                logger.error(f"Supabase INSERT error: {error}")
+                return None
+    
+    async def update(self, table: str, data: dict, filters: Dict[str, Any]) -> bool:
+        session = await self.get_session()
+        url = f"{self.base_url}/{table}?"
+        
+        for key, value in filters.items():
+            url += f"{key}=eq.{value}&"
+        
+        url = url.rstrip('&')
+        
+        async with session.patch(url, headers=self.headers, json=data) as response:
+            if response.status in [200, 204]:
+                return True
+            else:
+                error = await response.text()
+                logger.error(f"Supabase UPDATE error: {error}")
+                return False
+    
+    async def count(self, table: str, filters: Dict[str, Any] = None) -> int:
+        session = await self.get_session()
+        url = f"{self.base_url}/{table}?select=id&count=exact"
+        
+        if filters:
+            for key, value in filters.items():
+                url += f"&{key}=eq.{value}"
+        
+        async with session.get(url, headers=self.headers) as response:
+            if response.status == 200:
+                count = response.headers.get('Content-Range', '0-0/0')
+                return int(count.split('/')[-1])
+            return 0
+
+# Inicializar cliente
+db = SupabaseClient(SUPABASE_URL, SUPABASE_KEY)
 
 # ==================== FUNCIONES DE BASE DE DATOS ====================
 
@@ -133,38 +219,34 @@ async def create_user(telegram_id: int, username: str, first_name: str,
         'gems': 15,
         'referral_code': referral_code,
         'referred_by': referred_by,
-        'created_at': datetime.utcnow().isoformat(),
-        'last_active': datetime.utcnow().isoformat()
+        'total_referrals': 0,
+        'bonus_gems_from_referrals': 0
     }
     
-    result = supabase.table('users').insert(user_data).execute()
+    result = await db.insert('users', user_data)
     
-    if referred_by:
-        supabase.table('referrals').insert({
+    if referred_by and result:
+        await db.insert('referrals', {
             'referrer_id': referred_by,
             'referred_id': telegram_id
-        }).execute()
+        })
         
-        referral_count = supabase.table('referrals').select(
-            'id', count='exact'
-        ).eq('referrer_id', referred_by).execute().count
+        referral_count = await db.count('referrals', {'referrer_id': referred_by})
         
-        supabase.table('users').update({
-            'total_referrals': referral_count
-        }).eq('telegram_id', referred_by).execute()
+        await db.update('users', {'total_referrals': referral_count}, 
+                       {'telegram_id': referred_by})
         
         await add_gems(referred_by, 5, 'referral', f'Referido: {username}')
     
-    return result.data[0] if result.data else None
+    return result
 
 async def get_user(telegram_id: int):
-    result = supabase.table('users').select('*').eq('telegram_id', telegram_id).execute()
-    return result.data[0] if result.data else None
+    results = await db.select('users', '*', {'telegram_id': telegram_id})
+    return results[0] if results else None
 
 async def update_last_active(telegram_id: int):
-    supabase.table('users').update({
-        'last_active': datetime.utcnow().isoformat()
-    }).eq('telegram_id', telegram_id).execute()
+    await db.update('users', {'last_active': datetime.utcnow().isoformat()}, 
+                   {'telegram_id': telegram_id})
 
 async def check_and_reset_daily_gems(telegram_id: int):
     user = await get_user(telegram_id)
@@ -178,11 +260,11 @@ async def check_and_reset_daily_gems(telegram_id: int):
         bonus_gems = min(user['total_referrals'], 10)
         new_gems = 15 + bonus_gems
         
-        supabase.table('users').update({
+        await db.update('users', {
             'gems': new_gems,
             'daily_gems_reset': now.isoformat(),
             'bonus_gems_from_referrals': bonus_gems
-        }).eq('telegram_id', telegram_id).execute()
+        }, {'telegram_id': telegram_id})
         
         user['gems'] = new_gems
     
@@ -196,16 +278,14 @@ async def deduct_gems(telegram_id: int, amount: int, transaction_type: str,
     
     new_gems = user['gems'] - amount
     
-    supabase.table('users').update({
-        'gems': new_gems
-    }).eq('telegram_id', telegram_id).execute()
+    await db.update('users', {'gems': new_gems}, {'telegram_id': telegram_id})
     
-    supabase.table('gem_transactions').insert({
+    await db.insert('gem_transactions', {
         'telegram_id': telegram_id,
         'amount': -amount,
         'transaction_type': transaction_type,
         'description': description
-    }).execute()
+    })
     
     return True
 
@@ -217,73 +297,62 @@ async def add_gems(telegram_id: int, amount: int, transaction_type: str,
     
     new_gems = user['gems'] + amount
     
-    supabase.table('users').update({
-        'gems': new_gems
-    }).eq('telegram_id', telegram_id).execute()
+    await db.update('users', {'gems': new_gems}, {'telegram_id': telegram_id})
     
-    supabase.table('gem_transactions').insert({
+    await db.insert('gem_transactions', {
         'telegram_id': telegram_id,
         'amount': amount,
         'transaction_type': transaction_type,
         'description': description
-    }).execute()
+    })
     
     return True
 
 async def save_character(telegram_id: int, character_name: str, gender: str, 
                         archetype: str, personality: str):
-    supabase.table('user_characters').update({
-        'is_active': False
-    }).eq('telegram_id', telegram_id).execute()
+    await db.update('user_characters', {'is_active': False}, {'telegram_id': telegram_id})
     
-    result = supabase.table('user_characters').insert({
+    result = await db.insert('user_characters', {
         'telegram_id': telegram_id,
         'character_name': character_name,
         'gender': gender,
         'archetype': archetype,
         'personality': personality,
-        'created_at': datetime.utcnow().isoformat(),
         'is_active': True
-    }).execute()
+    })
     
-    return result.data[0] if result.data else None
+    return result
 
 async def get_active_character(telegram_id: int):
-    result = supabase.table('user_characters').select('*').eq(
-        'telegram_id', telegram_id
-    ).eq('is_active', True).execute()
-    
-    return result.data[0] if result.data else None
+    results = await db.select('user_characters', '*', 
+                             {'telegram_id': telegram_id, 'is_active': True})
+    return results[0] if results else None
 
 async def save_message(telegram_id: int, role: str, content: str):
-    supabase.table('conversation_history').insert({
+    await db.insert('conversation_history', {
         'telegram_id': telegram_id,
         'role': role,
-        'content': content,
-        'created_at': datetime.utcnow().isoformat()
-    }).execute()
+        'content': content
+    })
 
 async def get_conversation_history(telegram_id: int, limit: int = 20):
-    result = supabase.table('conversation_history').select('*').eq(
-        'telegram_id', telegram_id
-    ).order('created_at', desc=False).limit(limit).execute()
-    
-    return result.data
+    return await db.select('conversation_history', '*', 
+                          {'telegram_id': telegram_id}, 
+                          order='created_at.asc', limit=limit)
 
 async def get_user_by_referral_code(referral_code: str):
-    result = supabase.table('users').select('*').eq('referral_code', referral_code).execute()
-    return result.data[0] if result.data else None
+    results = await db.select('users', '*', {'referral_code': referral_code})
+    return results[0] if results else None
 
 async def record_star_purchase(telegram_id: int, stars: int, gems: int, 
                               is_first_purchase: bool, charge_id: str):
-    supabase.table('star_purchases').insert({
+    await db.insert('star_purchases', {
         'telegram_id': telegram_id,
         'stars_amount': stars,
         'gems_amount': gems,
         'is_first_purchase': is_first_purchase,
-        'telegram_charge_id': charge_id,
-        'created_at': datetime.utcnow().isoformat()
-    }).execute()
+        'telegram_charge_id': charge_id
+    })
     
     await add_gems(telegram_id, gems, 'purchase', f'Compra con {stars} stars')
 
@@ -310,19 +379,19 @@ async def generate_openrouter_response(messages: list, language: str = 'es'):
         "max_tokens": 500
     }
     
-    async with aiohttp.ClientSession() as session:
-        async with session.post(
-            "https://openrouter.ai/api/v1/chat/completions", 
-            headers=headers, 
-            json=data
-        ) as response:
-            if response.status == 200:
-                result = await response.json()
-                return result['choices'][0]['message']['content']
-            else:
-                error = await response.text()
-                logger.error(f"Error en OpenRouter: {error}")
-                return None
+    session = await db.get_session()
+    async with session.post(
+        "https://openrouter.ai/api/v1/chat/completions", 
+        headers=headers, 
+        json=data
+    ) as response:
+        if response.status == 200:
+            result = await response.json()
+            return result['choices'][0]['message']['content']
+        else:
+            error = await response.text()
+            logger.error(f"Error en OpenRouter: {error}")
+            return None
 
 async def generate_novita_image(prompt: str):
     headers = {
@@ -337,19 +406,19 @@ async def generate_novita_image(prompt: str):
         "size": "1024x1024"
     }
     
-    async with aiohttp.ClientSession() as session:
-        async with session.post(
-            "https://api.novita.ai/v3/openai/images/generations", 
-            headers=headers, 
-            json=data
-        ) as response:
-            if response.status == 200:
-                result = await response.json()
-                return result['data'][0]['url']
-            else:
-                error = await response.text()
-                logger.error(f"Error en Novita: {error}")
-                return None
+    session = await db.get_session()
+    async with session.post(
+        "https://api.novita.ai/v3/openai/images/generations", 
+        headers=headers, 
+        json=data
+    ) as response:
+        if response.status == 200:
+            result = await response.json()
+            return result['data'][0]['url']
+        else:
+            error = await response.text()
+            logger.error(f"Error en Novita: {error}")
+            return None
 
 # ==================== SERVICIOS DE GEMAS ====================
 
@@ -487,7 +556,7 @@ async def process_language(callback: CallbackQuery):
         builder.button(text="👩 Mujer", callback_data="gender_female")
         text = "🎭 Selecciona el género de tu personaje:"
     else:
-        builder.button(text="👨 Male", callback_data="gender_male")
+        builder.button(text=" Male", callback_data="gender_male")
         builder.button(text="👩 Female", callback_data="gender_female")
         text = "🎭 Select your character's gender:"
     
@@ -531,7 +600,7 @@ async def process_archetype(callback: CallbackQuery):
     telegram_id = callback.from_user.id
     
     if telegram_id not in user_states:
-        await callback.answer("⏱️ Sesión expirada. Usa /start de nuevo.")
+        await callback.answer("️ Sesión expirada. Usa /start de nuevo.")
         return
     
     archetype = callback.data.split('_')[1]
@@ -541,7 +610,7 @@ async def process_archetype(callback: CallbackQuery):
     language = user_states[telegram_id]['language']
     
     if language == 'es':
-        text = "✍️ ¿Qué nombre quieres para tu personaje?"
+        text = "️ ¿Qué nombre quieres para tu personaje?"
     else:
         text = "✍️ What name do you want for your character?"
     
@@ -714,12 +783,12 @@ async def cmd_balance(message: Message):
 
 Gemas actuales: {gems}
 
-📊 Información:
+ Información:
 • Gemas gratis diarias: 15
 • Bonus por referidos: +{user['bonus_gems_from_referrals']}
 • Total de referidos: {user['total_referrals']}
 
-💡 Usa /shop para comprar más gemas."""
+ Usa /shop para comprar más gemas."""
     else:
         text = f"""💎 Your Balance
 
@@ -900,7 +969,7 @@ async def cmd_invite(message: Message):
 
 ¡Comparte tu enlace y gana gemas gratis!"""
     else:
-        text = f"""🎁 Referral System
+        text = f""" Referral System
 
 🔗 Your referral link:
 {referral_link}
@@ -939,7 +1008,7 @@ async def cmd_newchar(message: Message):
     if language == 'es':
         builder.button(text="👨 Hombre", callback_data="gender_male")
         builder.button(text="👩 Mujer", callback_data="gender_female")
-        text = "🎭 Selecciona el género de tu nuevo personaje:"
+        text = " Selecciona el género de tu nuevo personaje:"
     else:
         builder.button(text="👨 Male", callback_data="gender_male")
         builder.button(text="👩 Female", callback_data="gender_female")
@@ -986,10 +1055,10 @@ async def show_welcome(message: Message, character_name: str, language: str):
     else:
         text = f"""✅ Registration complete!
 
-🎭 Your character: {character_name}
+ Your character: {character_name}
 💎 You have 15 free gems every day
 
-📝 Commands:
+ Commands:
 /chat - Start conversation
 /img - Generate image (10 gems)
 /balance - Check your gems
@@ -1012,7 +1081,7 @@ async def show_main_menu(message: Message, language: str):
 /invite - Invitar amigos
 /newchar - Crear nuevo personaje"""
     else:
-        text = """🏠 Main Menu
+        text = """ Main Menu
 
 📝 Available commands:
 /chat - Start conversation
@@ -1042,6 +1111,7 @@ async def on_shutdown():
     logger.info("Deteniendo bot...")
     await bot.delete_webhook()
     await bot.session.close()
+    await db.close()
 
 async def handle_webhook(request):
     if request.path == '/webhook':
