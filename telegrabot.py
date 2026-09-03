@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, Router, F
 from aiogram.filters import Command, CommandStart
 from aiogram.types import (
-    Message, CallbackQuery, LabeledPrice, PreCheckoutQuery
+    Message, CallbackQuery, LabeledPrice, PreCheckoutQuery, Update
 )
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
@@ -46,31 +46,31 @@ STAR_PACKAGES = [
 ARCHETYPES = {
     "es": {
         "schoolmate": "🎓 Compañero/a de escuela",
-        "stepmom": " Madrastra",
+        "stepmom": "💋 Madrastra",
         "stepdad": "👔 Padrastro",
         "stepsister": "🌸 Hermanastra",
         "stepbrother": "💪 Hermanastro",
         "teacher": "📚 Profesor/a",
         "neighbor": "🏠 Vecino/a",
         "boss": "💼 Jefe/a",
-        "trainer": "🏋️ Entrenador/a personal",
+        "trainer": "️ Entrenador/a personal",
         "model": "📸 Modelo/Influencer",
-        "musician": " Músico/a",
+        "musician": "🎵 Músico/a",
         "actor": "🎬 Actor/Actriz",
-        "doctor": "⚕️ Médico/Enfermera",
+        "doctor": "️ Médico/Enfermera",
         "chef": "👨‍🍳 Chef",
-        "artist": " Artista",
-        "writer": "️ Escritor/a"
+        "artist": "🎨 Artista",
+        "writer": "✍️ Escritor/a"
     },
     "en": {
-        "schoolmate": " Schoolmate",
-        "stepmom": " Stepmother",
-        "stepdad": "👔 Stepfather",
-        "stepsister": "🌸 Stepsister",
+        "schoolmate": "🎓 Schoolmate",
+        "stepmom": "💋 Stepmother",
+        "stepdad": " Stepfather",
+        "stepsister": " Stepsister",
         "stepbrother": "💪 Stepbrother",
         "teacher": "📚 Teacher",
         "neighbor": "🏠 Neighbor",
-        "boss": "💼 Boss",
+        "boss": " Boss",
         "trainer": "️ Personal Trainer",
         "model": "📸 Model/Influencer",
         "musician": "🎵 Musician",
@@ -556,9 +556,9 @@ async def process_language(callback: CallbackQuery):
         builder.button(text="👩 Mujer", callback_data="gender_female")
         text = "🎭 Selecciona el género de tu personaje:"
     else:
-        builder.button(text=" Male", callback_data="gender_male")
+        builder.button(text="👨 Male", callback_data="gender_male")
         builder.button(text="👩 Female", callback_data="gender_female")
-        text = "🎭 Select your character's gender:"
+        text = " Select your character's gender:"
     
     builder.adjust(2)
     
@@ -600,7 +600,7 @@ async def process_archetype(callback: CallbackQuery):
     telegram_id = callback.from_user.id
     
     if telegram_id not in user_states:
-        await callback.answer("️ Sesión expirada. Usa /start de nuevo.")
+        await callback.answer("⏱️ Sesión expirada. Usa /start de nuevo.")
         return
     
     archetype = callback.data.split('_')[1]
@@ -610,7 +610,7 @@ async def process_archetype(callback: CallbackQuery):
     language = user_states[telegram_id]['language']
     
     if language == 'es':
-        text = "️ ¿Qué nombre quieres para tu personaje?"
+        text = "✍️ ¿Qué nombre quieres para tu personaje?"
     else:
         text = "✍️ What name do you want for your character?"
     
@@ -672,7 +672,7 @@ async def process_message(message: Message):
         if language == 'es':
             await message.answer(f"⚠️ {msg}\n\n💎 Usa /shop para comprar más gemas.")
         else:
-            await message.answer(f"⚠️ {msg}\n\n💎 Use /shop to buy more gems.")
+            await message.answer(f"️ {msg}\n\n💎 Use /shop to buy more gems.")
         return
     
     await update_last_active(telegram_id)
@@ -703,9 +703,9 @@ async def process_message(message: Message):
         await message.answer(response)
     else:
         if language == 'es':
-            await message.answer("⚠️ Error al generar respuesta. Intenta de nuevo.")
+            await message.answer("️ Error al generar respuesta. Intenta de nuevo.")
         else:
-            await message.answer("⚠️ Error generating response. Try again.")
+            await message.answer("️ Error generating response. Try again.")
 
 @router.message(Command('chat'))
 async def cmd_chat(message: Message):
@@ -724,7 +724,7 @@ async def cmd_chat(message: Message):
     language = user['language']
     
     if language == 'es':
-        text = f"""💬 ¡Conversación iniciada con {character['character_name']}!
+        text = f""" ¡Conversación iniciada con {character['character_name']}!
 
 Escribe tu mensaje y {character['character_name']} te responderá.
 💰 Costo: {GEM_COST_MESSAGE} gema por mensaje"""
@@ -755,7 +755,7 @@ async def cmd_image(message: Message):
 Envía la descripción de la imagen que quieres generar.
 Ejemplo: "Una playa al atardecer con palmeras" """
     else:
-        text = f"""🖼️ Image Generator
+        text = f"""️ Image Generator
 
 💰 Cost: {GEM_COST_IMAGE} gems
 
@@ -783,12 +783,12 @@ async def cmd_balance(message: Message):
 
 Gemas actuales: {gems}
 
- Información:
+📊 Información:
 • Gemas gratis diarias: 15
 • Bonus por referidos: +{user['bonus_gems_from_referrals']}
 • Total de referidos: {user['total_referrals']}
 
- Usa /shop para comprar más gemas."""
+💡 Usa /shop para comprar más gemas."""
     else:
         text = f"""💎 Your Balance
 
@@ -949,16 +949,22 @@ async def cmd_invite(message: Message):
     total_referrals = user['total_referrals']
     bonus_gems = user['bonus_gems_from_referrals']
     
-    bot_username = (await message.bot.get_me()).username
+    # Obtener el username del bot de forma segura
+    try:
+        bot_info = await message.bot.get_me()
+        bot_username = bot_info.username
+    except:
+        bot_username = "TabooRealmBot"  # Fallback
+    
     referral_link = f"https://t.me/{bot_username}?start={referral_code}"
     
     if language == 'es':
-        text = f"""🎁 Sistema de Referidos
+        text = f""" Sistema de Referidos
 
 🔗 Tu enlace de referido:
 {referral_link}
 
-📊 Tus estadísticas:
+ Tus estadísticas:
 • Total de referidos: {total_referrals}
 • Gemas bonus diarias: +{bonus_gems}
 
@@ -969,7 +975,7 @@ async def cmd_invite(message: Message):
 
 ¡Comparte tu enlace y gana gemas gratis!"""
     else:
-        text = f""" Referral System
+        text = f"""🎁 Referral System
 
 🔗 Your referral link:
 {referral_link}
@@ -978,7 +984,7 @@ async def cmd_invite(message: Message):
 • Total referrals: {total_referrals}
 • Daily bonus gems: +{bonus_gems}
 
-💡 Benefits:
+ Benefits:
 • For each friend who signs up, you get 5 gems
 • Each referral gives you +1 daily gem (max 10)
 • Your daily gems = 15 + referral bonus
@@ -993,7 +999,7 @@ async def cmd_newchar(message: Message):
     
     user = await get_user(telegram_id)
     if not user:
-        await message.answer("⚠️ Primero debes registrarte con /start")
+        await message.answer("️ Primero debes registrarte con /start")
         return
     
     user_states[telegram_id] = {
@@ -1008,10 +1014,10 @@ async def cmd_newchar(message: Message):
     if language == 'es':
         builder.button(text="👨 Hombre", callback_data="gender_male")
         builder.button(text="👩 Mujer", callback_data="gender_female")
-        text = " Selecciona el género de tu nuevo personaje:"
+        text = "🎭 Selecciona el género de tu nuevo personaje:"
     else:
         builder.button(text="👨 Male", callback_data="gender_male")
-        builder.button(text="👩 Female", callback_data="gender_female")
+        builder.button(text=" Female", callback_data="gender_female")
         text = "🎭 Select your new character's gender:"
     
     builder.adjust(2)
@@ -1055,10 +1061,10 @@ async def show_welcome(message: Message, character_name: str, language: str):
     else:
         text = f"""✅ Registration complete!
 
- Your character: {character_name}
+🎭 Your character: {character_name}
 💎 You have 15 free gems every day
 
- Commands:
+📝 Commands:
 /chat - Start conversation
 /img - Generate image (10 gems)
 /balance - Check your gems
@@ -1081,9 +1087,9 @@ async def show_main_menu(message: Message, language: str):
 /invite - Invitar amigos
 /newchar - Crear nuevo personaje"""
     else:
-        text = """ Main Menu
+        text = """🏠 Main Menu
 
-📝 Available commands:
+ Available commands:
 /chat - Start conversation
 /img - Generate image (10 gems)
 /balance - Check your gems
@@ -1115,9 +1121,15 @@ async def on_shutdown():
 
 async def handle_webhook(request):
     if request.path == '/webhook':
-        update_data = await request.json()
-        await dp.feed_update(bot, update_data)
-        return web.Response(text='OK')
+        try:
+            update_data = await request.json()
+            # Convertir el dict a objeto Update
+            update = Update(**update_data)
+            await dp.feed_update(bot, update)
+            return web.Response(text='OK')
+        except Exception as e:
+            logger.error(f"Error processing webhook: {e}")
+            return web.Response(text='Error', status=500)
     return web.Response(status=404)
 
 def create_app():
