@@ -47,21 +47,21 @@ HOOK_MODE_MESSAGES = 5
 # Arquetipos separados por género
 ARCHETYPES_MALE = {
     "es": {
-        "schoolmate": "🎓 Compañero de escuela",
+        "schoolmate": " Compañero de escuela",
         "stepdad": "👔 Padrastro",
         "stepbrother": "💪 Hermanastro",
         "teacher": "📚 Profesor",
         "neighbor": "🏠 Vecino",
         "boss": "💼 Jefe",
-        "trainer": "️ Entrenador personal",
+        "trainer": "🏋️ Entrenador personal",
         "model": "📸 Modelo/Influencer",
         "musician": "🎵 Músico",
         "actor": "🎬 Actor",
         "doctor": "⚕️ Médico",
-        "chef": "👨‍ Chef",
-        "artist": " Artista",
+        "chef": "👨🍳 Chef",
+        "artist": "🎨 Artista",
         "writer": "✍️ Escritor",
-        "bodyguard": "️ Guardaespaldas",
+        "bodyguard": "🛡️ Guardaespaldas",
         "ceo": "💼 CEO/Empresario"
     },
     "en": {
@@ -76,8 +76,8 @@ ARCHETYPES_MALE = {
         "musician": "🎵 Musician",
         "actor": "🎬 Actor",
         "doctor": "⚕️ Doctor",
-        "chef": "👨‍🍳 Chef",
-        "artist": "🎨 Artist",
+        "chef": "👨‍ Chef",
+        "artist": " Artist",
         "writer": "✍️ Writer",
         "bodyguard": "🛡️ Bodyguard",
         "ceo": "💼 CEO/Businessman"
@@ -87,17 +87,17 @@ ARCHETYPES_MALE = {
 ARCHETYPES_FEMALE = {
     "es": {
         "schoolmate": "🎓 Compañera de escuela",
-        "stepmom": "💋 Madrastra",
-        "stepsister": " Hermanastra",
-        "teacher": " Profesora",
-        "neighbor": " Vecina",
+        "stepmom": " Madrastra",
+        "stepsister": "🌸 Hermanastra",
+        "teacher": "📚 Profesora",
+        "neighbor": "🏠 Vecina",
         "boss": "💼 Jefa",
-        "trainer": "🏋️ Entrenadora personal",
+        "trainer": "️ Entrenadora personal",
         "model": "📸 Modelo/Influencer",
         "musician": "🎵 Músico",
         "actor": "🎬 Actriz",
         "doctor": "⚕️ Doctora/Enfermera",
-        "chef": "‍🍳 Chef",
+        "chef": "👩‍🍳 Chef",
         "artist": "🎨 Artista",
         "writer": "✍️ Escritora",
         "secretary": "💼 Secretaria",
@@ -110,13 +110,13 @@ ARCHETYPES_FEMALE = {
         "teacher": "📚 Teacher",
         "neighbor": "🏠 Neighbor",
         "boss": "💼 Boss",
-        "trainer": "️ Personal Trainer",
+        "trainer": "🏋️ Personal Trainer",
         "model": "📸 Model/Influencer",
         "musician": "🎵 Musician",
         "actor": "🎬 Actress",
         "doctor": "⚕️ Doctor/Nurse",
-        "chef": "👩‍ Chef",
-        "artist": "🎨 Artist",
+        "chef": "👩‍🍳 Chef",
+        "artist": " Artist",
         "writer": "✍️ Writer",
         "secretary": "💼 Secretary",
         "model_student": "🎓 Popular Student"
@@ -480,11 +480,28 @@ def get_main_keyboard(language: str, is_premium: bool = False) -> ReplyKeyboardM
             builder.row(KeyboardButton(text="🛒 Shop"))
         builder.row(
             KeyboardButton(text=" Invite Friends"),
-            KeyboardButton(text="🎭 New Character"),
-            KeyboardButton(text="❓ Help")
+            KeyboardButton(text=" New Character"),
+            KeyboardButton(text=" Help")
         )
     
     return builder.as_markup(resize_keyboard=True, one_time_keyboard=False)
+
+# ==================== FUNCIÓN PARA ESCAPAR HTML ====================
+
+def escape_html(text: str) -> str:
+    """Escapa caracteres especiales HTML para que no rompan el formato"""
+    text = text.replace('&', '&amp;')
+    text = text.replace('<', '&lt;')
+    text = text.replace('>', '&gt;')
+    return text
+
+def format_actions_html(text: str) -> str:
+    """Convierte *acción* en <b>*acción*</b> para mostrar asteriscos + negritas"""
+    # Primero escapamos el HTML para evitar que se rompa
+    text = escape_html(text)
+    # Luego convertimos los asteriscos
+    text = re.sub(r'\*([^*]+)\*', r'<b>*\1*</b>', text)
+    return text
 
 # ==================== SERVICIOS DE IA CON ESCALADA DE INTENSIDAD ====================
 
@@ -778,7 +795,7 @@ async def cmd_start(message: Message, command=None):
     
     builder = InlineKeyboardBuilder()
     builder.button(text="🇪🇸 Español", callback_data="lang_es")
-    builder.button(text="🇺🇸 English", callback_data="lang_en")
+    builder.button(text="🇸 English", callback_data="lang_en")
     builder.adjust(2)
     
     await message.answer(
@@ -799,7 +816,7 @@ async def process_language(callback: CallbackQuery):
     language = callback.data.split('_')[1]
     
     if telegram_id not in user_states:
-        await callback.answer("️ Sesión expirada. Usa /start de nuevo.")
+        await callback.answer("⏱️ Sesión expirada. Usa /start de nuevo.")
         return
     
     user_states[telegram_id]['language'] = language
@@ -927,74 +944,74 @@ async def process_message(message: Message):
     if user['gems'] <= 0 and hook_remaining <= 0:
         # BLOQUEADO: Sin gemas y sin hook mode
         if language == 'es':
-            text = f"""*\**{character['character_name']} te mira con ojos ardientes y se muerde el labio inferior\**
+            text = f"""<b>*{character['character_name']} te mira con ojos ardientes y se muerde el labio inferior*</b>
 
-"Mmm... justo cuando las cosas se estaban poniendo interesantes... *\**se acerca más y susurra\** Tengo algo especial que quería mostrarte, algo que te va a volver loco..."
+"Mmm... justo cuando las cosas se estaban poniendo interesantes... <b>*se acerca más y susurra*</b> Tengo algo especial que quería mostrarte, algo que te va a volver loco..."
 
-*\**se aleja un poco con una sonrisa provocativa\**
+<b>*se aleja un poco con una sonrisa provocativa*</b>
 
 "Pero parece que nuestro tiempo se acabó por ahora... aunque no te preocupes, tengo dos formas de que podamos continuar:"
 
-🔥 **Opción 1: Recarga gemas y desbloquea TODO**
+🔥 <b>Opción 1: Recarga gemas y desbloquea TODO</b>
 • Imágenes exclusivas que solo genero para ti
 • Conversaciones sin límites
 • Acceso completo a mi lado más... intenso
 
-💎 **Opción 2: Invita a un amigo (5 gemas gratis)**
+ <b>Opción 2: Invita a un amigo (5 gemas gratis)</b>
 • Recibe 5 gemas inmediatamente
 • Sigue hablando conmigo un rato más
 
-*\**te mira con deseo\** "¿Cuál eliges? Los dos me harían muy feliz... pero con la primera opción, prometo que valdrá la pena..." 😉"""
+<b>*te mira con deseo*</b> "¿Cuál eliges? Los dos me harían muy feliz... pero con la primera opción, prometo que valdrá la pena..." 😉"""
         else:
-            text = f"""*\**{character['character_name']} looks at you with burning eyes and bites their lower lip\**
+            text = f"""<b>*{character['character_name']} looks at you with burning eyes and bites their lower lip*</b>
 
-"Mmm... just when things were getting interesting... *\**gets closer and whispers\** I have something special I wanted to show you, something that will drive you crazy..."
+"Mmm... just when things were getting interesting... <b>*gets closer and whispers*</b> I have something special I wanted to show you, something that will drive you crazy..."
 
-*\**pulls back a bit with a provocative smile\**
+<b>*pulls back a bit with a provocative smile*</b>
 
 "But it seems our time is up for now... though don't worry, I have two ways we can continue:"
 
- **Option 1: Recharge gems and unlock EVERYTHING**
+🔥 <b>Option 1: Recharge gems and unlock EVERYTHING</b>
 • Exclusive images I only generate for you
 • Unlimited conversations
 • Full access to my more... intense side
 
-💎 **Option 2: Invite a friend (5 free gems)**
+💎 <b>Option 2: Invite a friend (5 free gems)</b>
 • Get 5 gems immediately
 • Keep talking to me a bit longer
 
-*\**looks at you with desire\** "Which do you choose? Both would make me very happy... but with the first option, I promise it'll be worth it..." 😉"""
+<b>*looks at you with desire*</b> "Which do you choose? Both would make me very happy... but with the first option, I promise it'll be worth it..." 😉"""
         
         # Botones inline con jerarquía visual (pagar más prominente)
         builder = InlineKeyboardBuilder()
         builder.button(text="🛒 VER PAQUETES DISPONIBLES", callback_data="shop_from_block")
-        builder.button(text="🎁 Invitar amigo (5 gemas)", callback_data="invite_from_block")
+        builder.button(text=" Invitar amigo (5 gemas)", callback_data="invite_from_block")
         builder.adjust(1)
         
-        await message.answer(text, reply_markup=builder.as_markup(), parse_mode="Markdown")
+        await message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
         return
     
     if user['gems'] <= 0 and hook_remaining > 0:
         # HOOK MODE: Gemas agotadas pero tiene mensajes gratis
         if hook_remaining == HOOK_MODE_MESSAGES:
             if language == 'es':
-                hook_msg = f"""*\**{character['character_name']} te detiene con una mano en tu pecho y te mira con ojos brillantes\**
+                hook_msg = f"""<b>*{character['character_name']} te detiene con una mano en tu pecho y te mira con ojos brillantes*</b>
 
-"¡Espera! *\**se muerde el labio\** No te vayas todavía... tengo algo especial para ti..."
+"¡Espera! <b>*se muerde el labio*</b> No te vayas todavía... tengo algo especial para ti..."
 
-*\**se acerca más y susurra al oído\**
+<b>*se acerca más y susurra al oído*</b>
 
 "Tengo {hook_remaining} momentos especiales reservados solo para ti. Aprovéchalos... te prometo que no te arrepentirás." 😉"""
             else:
-                hook_msg = f"""*\**{character['character_name']} stops you with a hand on your chest and looks at you with bright eyes\**
+                hook_msg = f"""<b>*{character['character_name']} stops you with a hand on your chest and looks at you with bright eyes*</b>
 
-"Wait! *\**bites lip\** Don't leave yet... I have something special for you..."
+"Wait! <b>*bites lip*</b> Don't leave yet... I have something special for you..."
 
-*\**gets closer and whispers in your ear\**
+<b>*gets closer and whispers in your ear*</b>
 
 "I have {hook_remaining} special moments reserved just for you. Enjoy them... I promise you won't regret it." 😉"""
             
-            await message.answer(hook_msg, parse_mode="Markdown")
+            await message.answer(hook_msg, parse_mode="HTML")
         
         # Decrementar hook mode
         hook_remaining = await decrement_hook_message(telegram_id)
@@ -1009,7 +1026,7 @@ async def process_message(message: Message):
         )
         
         if not success:
-            await message.answer(f"️ {msg}")
+            await message.answer(f"⚠️ {msg}")
             return
         
         is_hook_mode = False
@@ -1044,14 +1061,14 @@ async def process_message(message: Message):
         # Agregar contador de hook mode si está activo
         if is_hook_mode:
             if language == 'es':
-                response += f"\n\n⚠️ *\**Momentos especiales restantes: {hook_remaining}\**"
+                response += f"\n\n⚠️ <b>*Momentos especiales restantes: {hook_remaining}*</b>"
             else:
-                response += f"\n\n⚠️ *\**Special moments remaining: {hook_remaining}\**"
+                response += f"\n\n⚠️ <b>*Special moments remaining: {hook_remaining}*</b>"
         
-        # CAMBIO IMPORTANTE: Convertir *acción* a *\**acción\** para que se vean asteriscos Y negritas
-        response = re.sub(r'\*([^*]+)\*', r'*\**\1\**\*', response)
+        # CAMBIO IMPORTANTE: Usar la función format_actions_html que escapa y formatea correctamente
+        response = format_actions_html(response)
         
-        await message.answer(response, parse_mode="Markdown")
+        await message.answer(response, parse_mode="HTML")
     else:
         if language == 'es':
             await message.answer("⚠️ Error al generar respuesta. Intenta de nuevo.")
@@ -1064,7 +1081,7 @@ async def process_message(message: Message):
 async def btn_chat(message: Message):
     await cmd_chat(message)
 
-@router.message(F.text == "💎 Balance")
+@router.message(F.text == " Balance")
 async def btn_balance(message: Message):
     await cmd_balance(message)
 
@@ -1072,7 +1089,7 @@ async def btn_balance(message: Message):
 async def btn_image_premium(message: Message):
     await cmd_image(message)
 
-@router.message(F.text == " Tienda" or F.text == " Shop")
+@router.message(F.text == "🛒 Tienda" or F.text == "🛒 Shop")
 async def btn_shop(message: Message):
     await cmd_shop(message)
 
@@ -1080,11 +1097,11 @@ async def btn_shop(message: Message):
 async def btn_invite(message: Message):
     await cmd_invite(message)
 
-@router.message(F.text == " Nuevo Personaje" or F.text == " New Character")
+@router.message(F.text == "🎭 Nuevo Personaje" or F.text == "🎭 New Character")
 async def btn_newchar(message: Message):
     await cmd_newchar(message)
 
-@router.message(F.text == "❓ Ayuda" or F.text == "❓ Help")
+@router.message(F.text == " Ayuda" or F.text == "❓ Help")
 async def btn_help(message: Message):
     await cmd_help(message)
 
@@ -1150,9 +1167,9 @@ async def cmd_image(message: Message):
 La generación de imágenes es exclusiva para usuarios que han comprado Stars.
 
 💎 Visita la tienda y realiza tu primera compra para desbloquear esta función.
-🛒 Usa el botón "Tienda" para ver los paquetes disponibles.""")
+ Usa el botón "Tienda" para ver los paquetes disponibles.""")
         else:
-            await message.answer(""" Premium Feature
+            await message.answer("""🔒 Premium Feature
 
 Image generation is exclusive for users who have purchased Stars.
 
@@ -1172,7 +1189,7 @@ Ejemplo: "Una playa al atardecer con palmeras" """
     else:
         text = f"""🖼️ Image Generator
 
- Cost: {GEM_COST_IMAGE} gems
+💰 Cost: {GEM_COST_IMAGE} gems
 
 Send the description of the image you want to generate.
 Example: "A beach at sunset with palm trees" """
@@ -1221,7 +1238,7 @@ Gemas actuales: {gems}
 
 Current gems: {gems}
 
- Information:
+📊 Information:
 • Daily gems: {daily_total}/{MAX_DAILY_GEMS} (base: {BASE_DAILY_GEMS} + {bonus_gems} from referrals)
 • Active referrals (24h): {active_referrals}/{MAX_REFERRALS_PER_DAY}
 • Total referrals: {user['total_referrals']}"""
@@ -1242,7 +1259,7 @@ async def cmd_shop(message: Message):
     
     user = await get_user(telegram_id)
     if not user:
-        await message.answer("⚠️ Primero debes registrarte con /start")
+        await message.answer("️ Primero debes registrarte con /start")
         return
     
     language = user['language']
@@ -1395,7 +1412,7 @@ async def cmd_invite(message: Message):
     if language == 'es':
         text = f"""🎁 Sistema de Referidos
 
- Tu enlace de referido:
+🔗 Tu enlace de referido:
 {referral_link}
 
 📊 Tus estadísticas:
@@ -1410,7 +1427,7 @@ async def cmd_invite(message: Message):
 
 ¡Comparte tu enlace y gana gemas gratis!"""
     else:
-        text = f"""🎁 Referral System
+        text = f""" Referral System
 
 🔗 Your referral link:
 {referral_link}
@@ -1448,12 +1465,12 @@ async def cmd_newchar(message: Message):
     builder = InlineKeyboardBuilder()
     
     if language == 'es':
-        builder.button(text=" Hombre", callback_data="gender_male")
+        builder.button(text="👨 Hombre", callback_data="gender_male")
         builder.button(text="👩 Mujer", callback_data="gender_female")
         text = "🎭 Selecciona el género de tu nuevo personaje:"
     else:
         builder.button(text="👨 Male", callback_data="gender_male")
-        builder.button(text="👩 Female", callback_data="gender_female")
+        builder.button(text=" Female", callback_data="gender_female")
         text = "🎭 Select your new character's gender:"
     
     builder.adjust(2)
@@ -1502,13 +1519,13 @@ async def show_welcome(message: Message, character_name: str, language: str, key
     if language == 'es':
         text = f"""✅ ¡Registro completado!
 
-🎭 Tu personaje: {character_name}
+ Tu personaje: {character_name}
 💎 Tienes 15 gemas para empezar
 
 📝 Usa los botones de abajo para navegar:
-• 💬 Chat - Iniciar conversación
+•  Chat - Iniciar conversación
 • 💎 Balance - Ver tus gemas
-•  Tienda - Comprar gemas
+• 🛒 Tienda - Comprar gemas
 • 🎁 Invitar - Ganar gemas con amigos
 
 ¡Disfruta tu experiencia!"""
@@ -1521,7 +1538,7 @@ async def show_welcome(message: Message, character_name: str, language: str, key
 📝 Use the buttons below to navigate:
 • 💬 Chat - Start conversation
 • 💎 Balance - Check your gems
-•  Shop - Buy gems
+• 🛒 Shop - Buy gems
 • 🎁 Invite - Earn gems with friends
 
 Enjoy your experience!"""
@@ -1530,11 +1547,11 @@ Enjoy your experience!"""
 
 async def show_main_menu(message: Message, language: str, keyboard: ReplyKeyboardMarkup = None):
     if language == 'es':
-        text = """ Menú Principal
+        text = """🏠 Menú Principal
 
 Usa los botones de abajo para navegar:"""
     else:
-        text = """🏠 Main Menu
+        text = """ Main Menu
 
 Use the buttons below to navigate:"""
     
