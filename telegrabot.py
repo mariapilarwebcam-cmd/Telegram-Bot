@@ -34,16 +34,20 @@ GEM_COST_MESSAGE = 1
 GEM_COST_IMAGE = 10
 GEM_COST_AUDIO = 5
 
+# CAMBIO: Máximo 2 referidos activos para gemas diarias
+MAX_REFERRALS_FOR_BONUS = 2
+GEMS_PER_REFERRAL = 5  # Gemas inmediatas por referido que use el bot
+
 # Arquetipos separados por género
 ARCHETYPES_MALE = {
     "es": {
         "schoolmate": "🎓 Compañero de escuela",
-        "stepdad": "👔 Padrastro",
+        "stepdad": " Padrastro",
         "stepbrother": "💪 Hermanastro",
-        "teacher": "📚 Profesor",
-        "neighbor": "🏠 Vecino",
+        "teacher": " Profesor",
+        "neighbor": " Vecino",
         "boss": "💼 Jefe",
-        "trainer": "️ Entrenador personal",
+        "trainer": "🏋️ Entrenador personal",
         "model": "📸 Modelo/Influencer",
         "musician": "🎵 Músico",
         "actor": "🎬 Actor",
@@ -52,16 +56,16 @@ ARCHETYPES_MALE = {
         "artist": "🎨 Artista",
         "writer": "✍️ Escritor",
         "bodyguard": "🛡️ Guardaespaldas",
-        "ceo": "💼 CEO/Empresario"
+        "ceo": " CEO/Empresario"
     },
     "en": {
-        "schoolmate": "🎓 Schoolmate",
-        "stepdad": " Stepfather",
+        "schoolmate": " Schoolmate",
+        "stepdad": "👔 Stepfather",
         "stepbrother": "💪 Stepbrother",
         "teacher": "📚 Teacher",
-        "neighbor": " Neighbor",
+        "neighbor": "🏠 Neighbor",
         "boss": "💼 Boss",
-        "trainer": "🏋️ Personal Trainer",
+        "trainer": "️ Personal Trainer",
         "model": "📸 Model/Influencer",
         "musician": "🎵 Musician",
         "actor": "🎬 Actor",
@@ -79,15 +83,15 @@ ARCHETYPES_FEMALE = {
         "schoolmate": "🎓 Compañera de escuela",
         "stepmom": "💋 Madrastra",
         "stepsister": " Hermanastra",
-        "teacher": " Profesora",
+        "teacher": "📚 Profesora",
         "neighbor": "🏠 Vecina",
         "boss": "💼 Jefa",
         "trainer": "️ Entrenadora personal",
         "model": "📸 Modelo/Influencer",
         "musician": "🎵 Músico",
-        "actor": " Actriz",
-        "doctor": "️ Doctora/Enfermera",
-        "chef": "👩‍ Chef",
+        "actor": "🎬 Actriz",
+        "doctor": "⚕️ Doctora/Enfermera",
+        "chef": "👩‍🍳 Chef",
         "artist": "🎨 Artista",
         "writer": "✍️ Escritora",
         "secretary": "💼 Secretaria",
@@ -96,20 +100,20 @@ ARCHETYPES_FEMALE = {
     "en": {
         "schoolmate": "🎓 Schoolmate",
         "stepmom": "💋 Stepmother",
-        "stepsister": " Stepsister",
-        "teacher": " Teacher",
-        "neighbor": " Neighbor",
+        "stepsister": "🌸 Stepsister",
+        "teacher": "📚 Teacher",
+        "neighbor": "🏠 Neighbor",
         "boss": "💼 Boss",
         "trainer": "🏋️ Personal Trainer",
         "model": "📸 Model/Influencer",
         "musician": "🎵 Musician",
         "actor": "🎬 Actress",
-        "doctor": "️ Doctor/Nurse",
+        "doctor": "⚕️ Doctor/Nurse",
         "chef": "👩‍🍳 Chef",
         "artist": "🎨 Artist",
         "writer": "✍️ Writer",
         "secretary": "💼 Secretary",
-        "model_student": "🎓 Popular Student"
+        "model_student": " Popular Student"
     }
 }
 
@@ -137,13 +141,13 @@ PERSONALITIES = {
     "model_student": "Eres un estudiante popular, carismático y exitoso. Todos te admiran. Eres sociable y tienes muchas aventuras."
 }
 
-# Paquetes de Telegram Stars corregidos
+# Paquetes de Telegram Stars
 STAR_PACKAGES = [
     {"stars": 50, "gems": 200, "bonus": 0, "first_time": True},
     {"stars": 75, "gems": 300, "bonus": 0, "first_time": False},
-    {"stars": 150, "gems": 600, "bonus": 5, "first_time": False},      # 600 + 5% = 630
-    {"stars": 300, "gems": 1200, "bonus": 10, "first_time": False},    # 1200 + 10% = 1320
-    {"stars": 500, "gems": 2000, "bonus": 15, "first_time": False},    # 2000 + 15% = 2300
+    {"stars": 150, "gems": 600, "bonus": 5, "first_time": False},
+    {"stars": 300, "gems": 1200, "bonus": 10, "first_time": False},
+    {"stars": 500, "gems": 2000, "bonus": 15, "first_time": False},
 ]
 
 # Logging
@@ -261,7 +265,7 @@ async def create_user(telegram_id: int, username: str, first_name: str,
         'username': username,
         'first_name': first_name,
         'language': language,
-        'gems': 5,  # CAMBIO: 5 gemas base en lugar de 15
+        'gems': 5,
         'referral_code': referral_code,
         'referred_by': referred_by,
         'total_referrals': 0,
@@ -281,9 +285,6 @@ async def create_user(telegram_id: int, username: str, first_name: str,
         
         await db.update('users', {'total_referrals': referral_count}, 
                        {'telegram_id': referred_by})
-        
-        # Dar 5 gemas inmediatas por cada referido
-        await add_gems(referred_by, 5, 'referral', f'Referido: {username}')
     
     return result
 
@@ -304,11 +305,10 @@ async def check_and_reset_daily_gems(telegram_id: int):
     now = datetime.utcnow()
     
     if (now - last_reset).days >= 1:
-        # CAMBIO: 5 gemas base + bonus por referidos (max 10 referidos = 10 gemas extra)
-        # Total máximo: 15 gemas diarias
+        # CAMBIO: 5 gemas base + bonus por referidos activos (máximo 2)
         base_gems = 5
-        bonus_gems = min(user['total_referrals'], 10)  # Máximo 10 referidos cuentan
-        new_gems = base_gems + bonus_gems  # Máximo 5 + 10 = 15
+        bonus_gems = min(user['total_referrals'], MAX_REFERRALS_FOR_BONUS)
+        new_gems = base_gems + bonus_gems  # Máximo 5 + 2 = 7
         
         await db.update('users', {
             'gems': new_gems,
@@ -409,6 +409,7 @@ async def record_star_purchase(telegram_id: int, stars: int, gems: int,
 # ==================== SERVICIOS DE IA ====================
 
 async def generate_openrouter_response(messages: list, language: str = 'es'):
+    """Genera respuesta con OpenRouter con mejor manejo de errores"""
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json"
@@ -429,19 +430,36 @@ async def generate_openrouter_response(messages: list, language: str = 'es'):
         "max_tokens": 500
     }
     
-    session = await db.get_session()
-    async with session.post(
-        "https://openrouter.ai/api/v1/chat/completions", 
-        headers=headers, 
-        json=data
-    ) as response:
-        if response.status == 200:
-            result = await response.json()
-            return result['choices'][0]['message']['content']
-        else:
-            error = await response.text()
-            logger.error(f"Error en OpenRouter: {error}")
-            return None
+    try:
+        session = await db.get_session()
+        logger.info(f"Enviando request a OpenRouter con modelo {OPENROUTER_MODEL}")
+        
+        async with session.post(
+            "https://openrouter.ai/api/v1/chat/completions", 
+            headers=headers, 
+            json=data
+        ) as response:
+            response_text = await response.text()
+            logger.info(f"OpenRouter response status: {response.status}")
+            
+            if response.status == 200:
+                result = await response.json()
+                return result['choices'][0]['message']['content']
+            else:
+                logger.error(f"OpenRouter error {response.status}: {response_text}")
+                
+                # Mensaje de error más descriptivo
+                if response.status == 401:
+                    logger.error("Error: API Key de OpenRouter inválida o sin saldo")
+                elif response.status == 429:
+                    logger.error("Error: Rate limit excedido")
+                elif response.status == 402:
+                    logger.error("Error: Sin saldo en OpenRouter")
+                
+                return None
+    except Exception as e:
+        logger.error(f"Excepción en OpenRouter: {str(e)}")
+        return None
 
 async def generate_novita_image(prompt: str):
     headers = {
@@ -563,6 +581,9 @@ async def cmd_start(message: Message, command=None):
         referrer = await get_user_by_referral_code(command.args)
         if referrer:
             referred_by = referrer['telegram_id']
+            # CAMBIO: Dar 5 gemas al referidor cuando el referido empieza a usar el bot
+            await add_gems(referred_by, GEMS_PER_REFERRAL, 'referral', 
+                          f'Referido empezó a usar el bot: {username}')
     
     user = await get_user(telegram_id)
     
@@ -572,7 +593,7 @@ async def cmd_start(message: Message, command=None):
     
     builder = InlineKeyboardBuilder()
     builder.button(text="🇪🇸 Español", callback_data="lang_es")
-    builder.button(text="🇺🇸 English", callback_data="lang_en")
+    builder.button(text="🇸 English", callback_data="lang_en")
     builder.adjust(2)
     
     await message.answer(
@@ -631,7 +652,6 @@ async def process_gender(callback: CallbackQuery):
     
     builder = InlineKeyboardBuilder()
     
-    # CAMBIO: Seleccionar arquetipos según el género
     if gender == 'male':
         archetypes = ARCHETYPES_MALE[language]
     else:
@@ -655,7 +675,7 @@ async def process_archetype(callback: CallbackQuery):
     telegram_id = callback.from_user.id
     
     if telegram_id not in user_states:
-        await callback.answer("⏱️ Sesión expirada. Usa /start de nuevo.")
+        await callback.answer("️ Sesión expirada. Usa /start de nuevo.")
         return
     
     archetype = callback.data.split('_')[1]
@@ -665,7 +685,7 @@ async def process_archetype(callback: CallbackQuery):
     language = user_states[telegram_id]['language']
     
     if language == 'es':
-        text = "✍️ ¿Qué nombre quieres para tu personaje?"
+        text = "️ ¿Qué nombre quieres para tu personaje?"
     else:
         text = "✍️ What name do you want for your character?"
     
@@ -779,7 +799,7 @@ async def cmd_chat(message: Message):
     language = user['language']
     
     if language == 'es':
-        text = f"""💬 ¡Conversación iniciada con {character['character_name']}!
+        text = f""" ¡Conversación iniciada con {character['character_name']}!
 
 Escribe tu mensaje y {character['character_name']} te responderá.
 💰 Costo: {GEM_COST_MESSAGE} gema por mensaje"""
@@ -787,7 +807,7 @@ Escribe tu mensaje y {character['character_name']} te responderá.
         text = f"""💬 Conversation started with {character['character_name']}!
 
 Write your message and {character['character_name']} will respond.
- Cost: {GEM_COST_MESSAGE} gem per message"""
+💰 Cost: {GEM_COST_MESSAGE} gem per message"""
     
     await message.answer(text)
 
@@ -835,7 +855,7 @@ async def cmd_balance(message: Message):
     
     # Calcular gemas diarias actuales
     base_gems = 5
-    max_bonus = min(user['total_referrals'], 10)
+    max_bonus = min(user['total_referrals'], MAX_REFERRALS_FOR_BONUS)
     daily_gems = base_gems + max_bonus
     
     if language == 'es':
@@ -843,12 +863,12 @@ async def cmd_balance(message: Message):
 
 Gemas actuales: {gems}
 
- Información:
-• Gemas diarias: {daily_gems}/15 (base: 5 + {max_bonus} por referidos)
+📊 Información:
+• Gemas diarias: {daily_gems}/7 (base: 5 + {max_bonus} por referidos)
 • Total de referidos: {user['total_referrals']}
 • Gemas bonus por referidos: +{max_bonus}/día
 
-💡 Invita más amigos para aumentar tus gemas diarias (máx. 15)
+ Invita más amigos para aumentar tus gemas diarias (máx. 7)
 💎 Usa /shop para comprar más gemas."""
     else:
         text = f"""💎 Your Balance
@@ -856,11 +876,11 @@ Gemas actuales: {gems}
 Current gems: {gems}
 
 📊 Information:
-• Daily gems: {daily_gems}/15 (base: 5 + {max_bonus} from referrals)
+• Daily gems: {daily_gems}/7 (base: 5 + {max_bonus} from referrals)
 • Total referrals: {user['total_referrals']}
 • Bonus gems from referrals: +{max_bonus}/day
 
-💡 Invite more friends to increase your daily gems (max 15)
+💡 Invite more friends to increase your daily gems (max 7)
 💎 Use /shop to buy more gems."""
     
     await message.answer(text)
@@ -952,7 +972,6 @@ async def process_purchase(callback: CallbackQuery):
         title = f"{gems_with_bonus} Gems"
         description = f"Package of {gems_with_bonus} gems"
     
-    # CAMBIO: Sin multiplicar por 100 - los stars ya están en la unidad correcta
     prices = [LabeledPrice(label="Gems", amount=stars)]
     
     await callback.bot.send_invoice(
@@ -1011,45 +1030,45 @@ async def cmd_invite(message: Message):
     referral_code = user['referral_code']
     total_referrals = user['total_referrals']
     
-    # Calcular bonus actual (máximo 10 referidos cuentan para gemas diarias)
-    bonus_gems = min(total_referrals, 10)
+    # Calcular bonus actual (máximo 2 referidos cuentan para gemas diarias)
+    bonus_gems = min(total_referrals, MAX_REFERRALS_FOR_BONUS)
     daily_total = 5 + bonus_gems  # 5 base + bonus
     
     bot_username = (await message.bot.get_me()).username
     referral_link = f"https://t.me/{bot_username}?start={referral_code}"
     
     if language == 'es':
-        text = f""" Sistema de Referidos
+        text = f"""🎁 Sistema de Referidos
 
 🔗 Tu enlace de referido:
 {referral_link}
 
 📊 Tus estadísticas:
 • Total de referidos: {total_referrals}
-• Gemas diarias actuales: {daily_total}/15
+• Gemas diarias actuales: {daily_total}/7
 
 💡 Beneficios:
-• Por cada amigo que se registre, recibes 5 gemas INMEDIATAS
-• Cada referido te da +1 gema diaria adicional (máximo 10)
+• Por cada amigo que empiece a usar el bot, recibes {GEMS_PER_REFERRAL} gemas INMEDIATAS
+• Cada referido te da +1 gema diaria adicional (máximo {MAX_REFERRALS_FOR_BONUS})
 • Gemas diarias base: 5
-• Con 10+ referidos: 15 gemas diarias
+• Con {MAX_REFERRALS_FOR_BONUS}+ referidos: 7 gemas diarias
 
 ¡Comparte tu enlace y gana gemas gratis!"""
     else:
         text = f"""🎁 Referral System
 
-🔗 Your referral link:
+ Your referral link:
 {referral_link}
 
 📊 Your stats:
 • Total referrals: {total_referrals}
-• Current daily gems: {daily_total}/15
+• Current daily gems: {daily_total}/7
 
 💡 Benefits:
-• For each friend who signs up, you get 5 gems IMMEDIATELY
-• Each referral gives you +1 daily gem (max 10)
+• For each friend who starts using the bot, you get {GEMS_PER_REFERRAL} gems IMMEDIATELY
+• Each referral gives you +1 daily gem (max {MAX_REFERRALS_FOR_BONUS})
 • Base daily gems: 5
-• With 10+ referrals: 15 daily gems
+• With {MAX_REFERRALS_FOR_BONUS}+ referrals: 7 daily gems
 
 Share your link and earn free gems!"""
     
@@ -1099,7 +1118,7 @@ async def cmd_help(message: Message):
 /newchar - Crear nuevo personaje
 /help - Mostrar esta ayuda
 
-💡 Consejo: Invita amigos para aumentar tus gemas diarias hasta 15."""
+ Consejo: Invita amigos para aumentar tus gemas diarias hasta 7."""
     
     await message.answer(text)
 
@@ -1141,7 +1160,7 @@ async def show_main_menu(message: Message, language: str):
     if language == 'es':
         text = """🏠 Menú Principal
 
- Comandos disponibles:
+📝 Comandos disponibles:
 /chat - Iniciar conversación
 /img - Generar imagen (10 gemas)
 /balance - Ver tus gemas
@@ -1185,7 +1204,6 @@ async def handle_webhook(request):
     if request.path == '/webhook':
         try:
             update_data = await request.json()
-            # Convertir el dict a objeto Update
             update = Update(**update_data)
             await dp.feed_update(bot, update)
             return web.Response(text='OK')
