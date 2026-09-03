@@ -3,6 +3,7 @@ import random
 import string
 import logging
 import asyncio
+import re
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 
@@ -47,35 +48,35 @@ HOOK_MODE_MESSAGES = 5
 ARCHETYPES_MALE = {
     "es": {
         "schoolmate": "🎓 Compañero de escuela",
-        "stepdad": " Padrastro",
+        "stepdad": "👔 Padrastro",
         "stepbrother": "💪 Hermanastro",
         "teacher": "📚 Profesor",
         "neighbor": "🏠 Vecino",
         "boss": "💼 Jefe",
-        "trainer": "🏋️ Entrenador personal",
+        "trainer": "️ Entrenador personal",
         "model": "📸 Modelo/Influencer",
         "musician": "🎵 Músico",
         "actor": "🎬 Actor",
         "doctor": "⚕️ Médico",
-        "chef": "👨‍🍳 Chef",
-        "artist": "🎨 Artista",
+        "chef": "👨‍ Chef",
+        "artist": " Artista",
         "writer": "✍️ Escritor",
-        "bodyguard": "🛡️ Guardaespaldas",
+        "bodyguard": "️ Guardaespaldas",
         "ceo": "💼 CEO/Empresario"
     },
     "en": {
         "schoolmate": "🎓 Schoolmate",
         "stepdad": "👔 Stepfather",
         "stepbrother": "💪 Stepbrother",
-        "teacher": " Teacher",
+        "teacher": "📚 Teacher",
         "neighbor": "🏠 Neighbor",
         "boss": "💼 Boss",
         "trainer": "🏋️ Personal Trainer",
         "model": "📸 Model/Influencer",
-        "musician": " Musician",
-        "actor": " Actor",
-        "doctor": "️ Doctor",
-        "chef": "‍🍳 Chef",
+        "musician": "🎵 Musician",
+        "actor": "🎬 Actor",
+        "doctor": "⚕️ Doctor",
+        "chef": "👨‍🍳 Chef",
         "artist": "🎨 Artist",
         "writer": "✍️ Writer",
         "bodyguard": "🛡️ Bodyguard",
@@ -85,18 +86,18 @@ ARCHETYPES_MALE = {
 
 ARCHETYPES_FEMALE = {
     "es": {
-        "schoolmate": " Compañera de escuela",
+        "schoolmate": "🎓 Compañera de escuela",
         "stepmom": "💋 Madrastra",
-        "stepsister": "🌸 Hermanastra",
-        "teacher": "📚 Profesora",
-        "neighbor": "🏠 Vecina",
+        "stepsister": " Hermanastra",
+        "teacher": " Profesora",
+        "neighbor": " Vecina",
         "boss": "💼 Jefa",
         "trainer": "🏋️ Entrenadora personal",
         "model": "📸 Modelo/Influencer",
-        "musician": " Músico",
-        "actor": " Actriz",
-        "doctor": "️ Doctora/Enfermera",
-        "chef": "👩‍🍳 Chef",
+        "musician": "🎵 Músico",
+        "actor": "🎬 Actriz",
+        "doctor": "⚕️ Doctora/Enfermera",
+        "chef": "‍🍳 Chef",
         "artist": "🎨 Artista",
         "writer": "✍️ Escritora",
         "secretary": "💼 Secretaria",
@@ -105,16 +106,16 @@ ARCHETYPES_FEMALE = {
     "en": {
         "schoolmate": "🎓 Schoolmate",
         "stepmom": "💋 Stepmother",
-        "stepsister": " Stepsister",
-        "teacher": " Teacher",
+        "stepsister": "🌸 Stepsister",
+        "teacher": "📚 Teacher",
         "neighbor": "🏠 Neighbor",
         "boss": "💼 Boss",
-        "trainer": "🏋️ Personal Trainer",
+        "trainer": "️ Personal Trainer",
         "model": "📸 Model/Influencer",
-        "musician": " Musician",
-        "actor": " Actress",
-        "doctor": "️ Doctor/Nurse",
-        "chef": "👩‍🍳 Chef",
+        "musician": "🎵 Musician",
+        "actor": "🎬 Actress",
+        "doctor": "⚕️ Doctor/Nurse",
+        "chef": "👩‍ Chef",
         "artist": "🎨 Artist",
         "writer": "✍️ Writer",
         "secretary": "💼 Secretary",
@@ -463,11 +464,11 @@ def get_main_keyboard(language: str, is_premium: bool = False) -> ReplyKeyboardM
     if language == 'es':
         builder.row(KeyboardButton(text="💬 Chat"), KeyboardButton(text="💎 Balance"))
         if is_premium:
-            builder.row(KeyboardButton(text="🖼️ Generar Imagen"), KeyboardButton(text="🛒 Tienda"))
+            builder.row(KeyboardButton(text="🖼️ Generar Imagen"), KeyboardButton(text=" Tienda"))
         else:
             builder.row(KeyboardButton(text="🛒 Tienda"))
         builder.row(
-            KeyboardButton(text="🎁 Invitar Amigos"),
+            KeyboardButton(text=" Invitar Amigos"),
             KeyboardButton(text="🎭 Nuevo Personaje"),
             KeyboardButton(text="❓ Ayuda")
         )
@@ -476,9 +477,9 @@ def get_main_keyboard(language: str, is_premium: bool = False) -> ReplyKeyboardM
         if is_premium:
             builder.row(KeyboardButton(text="🖼️ Generate Image"), KeyboardButton(text="🛒 Shop"))
         else:
-            builder.row(KeyboardButton(text=" Shop"))
+            builder.row(KeyboardButton(text="🛒 Shop"))
         builder.row(
-            KeyboardButton(text="🎁 Invite Friends"),
+            KeyboardButton(text=" Invite Friends"),
             KeyboardButton(text="🎭 New Character"),
             KeyboardButton(text="❓ Help")
         )
@@ -798,7 +799,7 @@ async def process_language(callback: CallbackQuery):
     language = callback.data.split('_')[1]
     
     if telegram_id not in user_states:
-        await callback.answer("⏱️ Sesión expirada. Usa /start de nuevo.")
+        await callback.answer("️ Sesión expirada. Usa /start de nuevo.")
         return
     
     user_states[telegram_id]['language'] = language
@@ -807,7 +808,7 @@ async def process_language(callback: CallbackQuery):
     builder = InlineKeyboardBuilder()
     
     if language == 'es':
-        builder.button(text=" Hombre", callback_data="gender_male")
+        builder.button(text="👨 Hombre", callback_data="gender_male")
         builder.button(text="👩 Mujer", callback_data="gender_female")
         text = "🎭 Selecciona el género de tu personaje:"
     else:
@@ -847,7 +848,7 @@ async def process_gender(callback: CallbackQuery):
     builder.adjust(2)
     
     if language == 'es':
-        text = " Selecciona el tipo de personaje:"
+        text = "🎭 Selecciona el tipo de personaje:"
     else:
         text = "🎭 Select character type:"
     
@@ -926,11 +927,11 @@ async def process_message(message: Message):
     if user['gems'] <= 0 and hook_remaining <= 0:
         # BLOQUEADO: Sin gemas y sin hook mode
         if language == 'es':
-            text = f"""*{character['character_name']} te mira con ojos ardientes y se muerde el labio inferior*
+            text = f"""*\**{character['character_name']} te mira con ojos ardientes y se muerde el labio inferior\**
 
-"Mmm... justo cuando las cosas se estaban poniendo interesantes... *se acerca más y susurra* Tengo algo especial que quería mostrarte, algo que te va a volver loco..."
+"Mmm... justo cuando las cosas se estaban poniendo interesantes... *\**se acerca más y susurra\** Tengo algo especial que quería mostrarte, algo que te va a volver loco..."
 
-*se aleja un poco con una sonrisa provocativa*
+*\**se aleja un poco con una sonrisa provocativa\**
 
 "Pero parece que nuestro tiempo se acabó por ahora... aunque no te preocupes, tengo dos formas de que podamos continuar:"
 
@@ -943,17 +944,17 @@ async def process_message(message: Message):
 • Recibe 5 gemas inmediatamente
 • Sigue hablando conmigo un rato más
 
-*te mira con deseo* "¿Cuál eliges? Los dos me harían muy feliz... pero con la primera opción, prometo que valdrá la pena..." 😉"""
+*\**te mira con deseo\** "¿Cuál eliges? Los dos me harían muy feliz... pero con la primera opción, prometo que valdrá la pena..." 😉"""
         else:
-            text = f"""*{character['character_name']} looks at you with burning eyes and bites their lower lip*
+            text = f"""*\**{character['character_name']} looks at you with burning eyes and bites their lower lip\**
 
-"Mmm... just when things were getting interesting... *gets closer and whispers* I have something special I wanted to show you, something that will drive you crazy..."
+"Mmm... just when things were getting interesting... *\**gets closer and whispers\** I have something special I wanted to show you, something that will drive you crazy..."
 
-*pulls back a bit with a provocative smile*
+*\**pulls back a bit with a provocative smile\**
 
 "But it seems our time is up for now... though don't worry, I have two ways we can continue:"
 
-🔥 **Option 1: Recharge gems and unlock EVERYTHING**
+ **Option 1: Recharge gems and unlock EVERYTHING**
 • Exclusive images I only generate for you
 • Unlimited conversations
 • Full access to my more... intense side
@@ -962,7 +963,7 @@ async def process_message(message: Message):
 • Get 5 gems immediately
 • Keep talking to me a bit longer
 
-*looks at you with desire* "Which do you choose? Both would make me very happy... but with the first option, I promise it'll be worth it..." 😉"""
+*\**looks at you with desire\** "Which do you choose? Both would make me very happy... but with the first option, I promise it'll be worth it..." 😉"""
         
         # Botones inline con jerarquía visual (pagar más prominente)
         builder = InlineKeyboardBuilder()
@@ -977,19 +978,19 @@ async def process_message(message: Message):
         # HOOK MODE: Gemas agotadas pero tiene mensajes gratis
         if hook_remaining == HOOK_MODE_MESSAGES:
             if language == 'es':
-                hook_msg = f"""*{character['character_name']} te detiene con una mano en tu pecho y te mira con ojos brillantes*
+                hook_msg = f"""*\**{character['character_name']} te detiene con una mano en tu pecho y te mira con ojos brillantes\**
 
-"¡Espera! *se muerde el labio* No te vayas todavía... tengo algo especial para ti..."
+"¡Espera! *\**se muerde el labio\** No te vayas todavía... tengo algo especial para ti..."
 
-*se acerca más y susurra al oído*
+*\**se acerca más y susurra al oído\**
 
 "Tengo {hook_remaining} momentos especiales reservados solo para ti. Aprovéchalos... te prometo que no te arrepentirás." 😉"""
             else:
-                hook_msg = f"""*{character['character_name']} stops you with a hand on your chest and looks at you with bright eyes*
+                hook_msg = f"""*\**{character['character_name']} stops you with a hand on your chest and looks at you with bright eyes\**
 
-"Wait! *bites lip* Don't leave yet... I have something special for you..."
+"Wait! *\**bites lip\** Don't leave yet... I have something special for you..."
 
-*gets closer and whispers in your ear*
+*\**gets closer and whispers in your ear\**
 
 "I have {hook_remaining} special moments reserved just for you. Enjoy them... I promise you won't regret it." 😉"""
             
@@ -1008,7 +1009,7 @@ async def process_message(message: Message):
         )
         
         if not success:
-            await message.answer(f"⚠️ {msg}")
+            await message.answer(f"️ {msg}")
             return
         
         is_hook_mode = False
@@ -1043,12 +1044,14 @@ async def process_message(message: Message):
         # Agregar contador de hook mode si está activo
         if is_hook_mode:
             if language == 'es':
-                response += f"\n\n⚠️ *Momentos especiales restantes: {hook_remaining}*"
+                response += f"\n\n⚠️ *\**Momentos especiales restantes: {hook_remaining}\**"
             else:
-                response += f"\n\n⚠️ *Special moments remaining: {hook_remaining}*"
+                response += f"\n\n⚠️ *\**Special moments remaining: {hook_remaining}\**"
         
-        # CAMBIO IMPORTANTE: Sin parse_mode para que los asteriscos se vean literales
-        await message.answer(response)
+        # CAMBIO IMPORTANTE: Convertir *acción* a *\**acción\** para que se vean asteriscos Y negritas
+        response = re.sub(r'\*([^*]+)\*', r'*\**\1\**\*', response)
+        
+        await message.answer(response, parse_mode="Markdown")
     else:
         if language == 'es':
             await message.answer("⚠️ Error al generar respuesta. Intenta de nuevo.")
@@ -1069,7 +1072,7 @@ async def btn_balance(message: Message):
 async def btn_image_premium(message: Message):
     await cmd_image(message)
 
-@router.message(F.text == "🛒 Tienda" or F.text == " Shop")
+@router.message(F.text == " Tienda" or F.text == " Shop")
 async def btn_shop(message: Message):
     await cmd_shop(message)
 
@@ -1077,11 +1080,11 @@ async def btn_shop(message: Message):
 async def btn_invite(message: Message):
     await cmd_invite(message)
 
-@router.message(F.text == "🎭 Nuevo Personaje" or F.text == "🎭 New Character")
+@router.message(F.text == " Nuevo Personaje" or F.text == " New Character")
 async def btn_newchar(message: Message):
     await cmd_newchar(message)
 
-@router.message(F.text == "❓ Ayuda" or F.text == " Help")
+@router.message(F.text == "❓ Ayuda" or F.text == "❓ Help")
 async def btn_help(message: Message):
     await cmd_help(message)
 
@@ -1124,7 +1127,7 @@ Escribe tu mensaje y {character['character_name']} te responderá.
         text = f"""💬 Conversation started with {character['character_name']}!
 
 Write your message and {character['character_name']} will respond.
- Cost: {GEM_COST_MESSAGE} gem per message"""
+💰 Cost: {GEM_COST_MESSAGE} gem per message"""
     
     await message.answer(text)
 
@@ -1154,7 +1157,7 @@ La generación de imágenes es exclusiva para usuarios que han comprado Stars.
 Image generation is exclusive for users who have purchased Stars.
 
 💎 Visit the shop and make your first purchase to unlock this feature.
- Use the "Shop" button to see available packages.""")
+🛒 Use the "Shop" button to see available packages.""")
         return
     
     language = user['language']
@@ -1169,7 +1172,7 @@ Ejemplo: "Una playa al atardecer con palmeras" """
     else:
         text = f"""🖼️ Image Generator
 
-💰 Cost: {GEM_COST_IMAGE} gems
+ Cost: {GEM_COST_IMAGE} gems
 
 Send the description of the image you want to generate.
 Example: "A beach at sunset with palm trees" """
@@ -1218,7 +1221,7 @@ Gemas actuales: {gems}
 
 Current gems: {gems}
 
-📊 Information:
+ Information:
 • Daily gems: {daily_total}/{MAX_DAILY_GEMS} (base: {BASE_DAILY_GEMS} + {bonus_gems} from referrals)
 • Active referrals (24h): {active_referrals}/{MAX_REFERRALS_PER_DAY}
 • Total referrals: {user['total_referrals']}"""
@@ -1356,18 +1359,18 @@ async def process_successful_payment(message: Message):
     
     if success:
         if language == 'es':
-            await message.answer(f"✅ {msg}\n\n ¡Ahora tienes acceso a la generación de imágenes! Usa el botón 🖼️ Generar Imagen en el menú.")
+            await message.answer(f"✅ {msg}\n\n🎉 ¡Ahora tienes acceso a la generación de imágenes! Usa el botón 🖼️ Generar Imagen en el menú.")
         else:
-            await message.answer(f"✅ {msg}\n\n You now have access to image generation! Use the ️ Generate Image button in the menu.")
+            await message.answer(f"✅ {msg}\n\n🎉 You now have access to image generation! Use the 🖼️ Generate Image button in the menu.")
         
         is_premium = await has_user_purchased(telegram_id)
         new_keyboard = get_main_keyboard(language, is_premium)
-        await message.answer(" ¡Tu teclado ha sido actualizado!", reply_markup=new_keyboard)
+        await message.answer("🎊 ¡Tu teclado ha sido actualizado!", reply_markup=new_keyboard)
     else:
         if language == 'es':
-            await message.answer("⚠️ Error al procesar la compra. Contacta soporte.")
+            await message.answer("️ Error al procesar la compra. Contacta soporte.")
         else:
-            await message.answer("⚠️ Error processing purchase. Contact support.")
+            await message.answer("️ Error processing purchase. Contact support.")
 
 @router.message(Command('invite'))
 async def cmd_invite(message: Message):
@@ -1390,12 +1393,12 @@ async def cmd_invite(message: Message):
     referral_link = f"https://t.me/{bot_username}?start={referral_code}"
     
     if language == 'es':
-        text = f""" Sistema de Referidos
+        text = f"""🎁 Sistema de Referidos
 
-🔗 Tu enlace de referido:
+ Tu enlace de referido:
 {referral_link}
 
- Tus estadísticas:
+📊 Tus estadísticas:
 • Referidos activos (24h): {active_referrals}/{MAX_REFERRALS_PER_DAY}
 • Gemas diarias actuales: {daily_total}/{MAX_DAILY_GEMS}
 
@@ -1445,12 +1448,12 @@ async def cmd_newchar(message: Message):
     builder = InlineKeyboardBuilder()
     
     if language == 'es':
-        builder.button(text="👨 Hombre", callback_data="gender_male")
+        builder.button(text=" Hombre", callback_data="gender_male")
         builder.button(text="👩 Mujer", callback_data="gender_female")
         text = "🎭 Selecciona el género de tu nuevo personaje:"
     else:
         builder.button(text="👨 Male", callback_data="gender_male")
-        builder.button(text=" Female", callback_data="gender_female")
+        builder.button(text="👩 Female", callback_data="gender_female")
         text = "🎭 Select your new character's gender:"
     
     builder.adjust(2)
@@ -1480,7 +1483,7 @@ async def cmd_menu(message: Message):
     user = await get_user(telegram_id)
     
     if not user:
-        await message.answer("️ Primero debes registrarte con /start")
+        await message.answer("⚠️ Primero debes registrarte con /start")
         return
     
     is_premium = await has_user_purchased(telegram_id)
@@ -1505,7 +1508,7 @@ async def show_welcome(message: Message, character_name: str, language: str, key
 📝 Usa los botones de abajo para navegar:
 • 💬 Chat - Iniciar conversación
 • 💎 Balance - Ver tus gemas
-• 🛒 Tienda - Comprar gemas
+•  Tienda - Comprar gemas
 • 🎁 Invitar - Ganar gemas con amigos
 
 ¡Disfruta tu experiencia!"""
@@ -1518,7 +1521,7 @@ async def show_welcome(message: Message, character_name: str, language: str, key
 📝 Use the buttons below to navigate:
 • 💬 Chat - Start conversation
 • 💎 Balance - Check your gems
-• 🛒 Shop - Buy gems
+•  Shop - Buy gems
 • 🎁 Invite - Earn gems with friends
 
 Enjoy your experience!"""
@@ -1527,7 +1530,7 @@ Enjoy your experience!"""
 
 async def show_main_menu(message: Message, language: str, keyboard: ReplyKeyboardMarkup = None):
     if language == 'es':
-        text = """🏠 Menú Principal
+        text = """ Menú Principal
 
 Usa los botones de abajo para navegar:"""
     else:
