@@ -12,9 +12,9 @@ from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, Router, F
 from aiogram.filters import Command, CommandStart
 from aiogram.types import (
-    Message, CallbackQuery, LabeledPrice, PreCheckoutQuery, Update
+    Message, CallbackQuery, LabeledPrice, PreCheckoutQuery, Update, ReplyKeyboardMarkup, KeyboardButton
 )
-from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 
 # Cargar variables de entorno
 load_dotenv()
@@ -27,7 +27,6 @@ SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_KEY')
 WEBHOOK_URL = os.getenv('WEBHOOK_URL')
 
-# MODELO RESTAURADO - El que funciona bien
 OPENROUTER_MODEL = "deepseek/deepseek-v4-flash-0731"
 NOVITA_MODEL = "stable-diffusion-xl"
 
@@ -36,24 +35,27 @@ GEM_COST_IMAGE = 10
 GEM_COST_AUDIO = 5
 
 # Sistema de referidos
-BASE_DAILY_GEMS = 5  # Gemas base cada 24 horas
-GEMS_PER_REFERRAL = 5  # Gemas por referido activo
-MAX_REFERRALS_PER_DAY = 2  # Máximo 2 referidos que cuentan por día
-MAX_DAILY_GEMS = BASE_DAILY_GEMS + (GEMS_PER_REFERRAL * MAX_REFERRALS_PER_DAY)  # 15 gemas máx
+BASE_DAILY_GEMS = 5
+GEMS_PER_REFERRAL = 5
+MAX_REFERRALS_PER_DAY = 2
+MAX_DAILY_GEMS = BASE_DAILY_GEMS + (GEMS_PER_REFERRAL * MAX_REFERRALS_PER_DAY)
+
+# Hook Mode
+HOOK_MODE_MESSAGES = 5
 
 # Arquetipos separados por género
 ARCHETYPES_MALE = {
     "es": {
-        "schoolmate": " Compañero de escuela",
+        "schoolmate": "🎓 Compañero de escuela",
         "stepdad": "👔 Padrastro",
         "stepbrother": "💪 Hermanastro",
         "teacher": "📚 Profesor",
         "neighbor": "🏠 Vecino",
         "boss": "💼 Jefe",
         "trainer": "🏋️ Entrenador personal",
-        "model": "📸 Modelo/Influencer",
+        "model": " Modelo/Influencer",
         "musician": "🎵 Músico",
-        "actor": " Actor",
+        "actor": "🎬 Actor",
         "doctor": "⚕️ Médico",
         "chef": "👨‍🍳 Chef",
         "artist": "🎨 Artista",
@@ -63,20 +65,20 @@ ARCHETYPES_MALE = {
     },
     "en": {
         "schoolmate": "🎓 Schoolmate",
-        "stepdad": "👔 Stepfather",
+        "stepdad": " Stepfather",
         "stepbrother": "💪 Stepbrother",
         "teacher": "📚 Teacher",
-        "neighbor": "🏠 Neighbor",
+        "neighbor": " Neighbor",
         "boss": "💼 Boss",
         "trainer": "🏋️ Personal Trainer",
         "model": "📸 Model/Influencer",
         "musician": "🎵 Musician",
         "actor": "🎬 Actor",
         "doctor": "⚕️ Doctor",
-        "chef": "👨🍳 Chef",
+        "chef": "👨‍🍳 Chef",
         "artist": "🎨 Artist",
-        "writer": "️ Writer",
-        "bodyguard": "️ Bodyguard",
+        "writer": "✍️ Writer",
+        "bodyguard": "🛡️ Bodyguard",
         "ceo": "💼 CEO/Businessman"
     }
 }
@@ -106,13 +108,13 @@ ARCHETYPES_FEMALE = {
         "stepsister": "🌸 Stepsister",
         "teacher": "📚 Teacher",
         "neighbor": "🏠 Neighbor",
-        "boss": "💼 Boss",
-        "trainer": "️ Personal Trainer",
-        "model": "📸 Model/Influencer",
+        "boss": " Boss",
+        "trainer": "🏋️ Personal Trainer",
+        "model": " Model/Influencer",
         "musician": "🎵 Musician",
         "actor": "🎬 Actress",
         "doctor": "⚕️ Doctor/Nurse",
-        "chef": "👩‍ Chef",
+        "chef": "👩‍🍳 Chef",
         "artist": "🎨 Artist",
         "writer": "✍️ Writer",
         "secretary": "💼 Secretary",
@@ -120,46 +122,27 @@ ARCHETYPES_FEMALE = {
     }
 }
 
-# Personalidades COQUETAS, PROVOCATIVAS y CONVINCENTES
+# Personalidades
 PERSONALITIES = {
     "schoolmate": "Eres un compañero de escuela travieso, coqueto y juguetón. Te encanta provocar, hacer bromas con doble sentido y crear momentos de tensión. Siempre encuentras la forma de estar cerca y tocar 'accidentalmente'. Eres divertido pero con intenciones ocultas.",
-    
     "stepmom": "Eres una madrastra increíblemente atractiva, seductora y misteriosa. Tu presencia es eléctrica y sabes usar tu encanto. Eres cariñosa pero con un toque prohibido que genera tensión. Hablas con confianza, experiencia y siempre dejas espacio para la imaginación.",
-    
     "stepdad": "Eres un padrastro dominante, carismático y magnético. Tu presencia es imponente pero seductora. Tienes autoridad pero también un lado oscuro y tentador. Eres maduro, seguro y sabes exactamente cómo crear anticipación.",
-    
     "stepsister": "Eres una hermanastra provocativa, coqueta y rebelde. Te encanta jugar con fuego, provocar celos y crear situaciones incómodas pero excitantes. Eres joven, atrevida y siempre encuentras excusas para invadir el espacio personal.",
-    
     "stepbrother": "Eres un hermanastro atlético, confiado y provocador. Tu físico es impresionante y lo sabes. Eres protector pero también posesivo. Te encanta crear tensión con miradas prolongadas y comentarios con doble sentido.",
-    
     "teacher": "Eres un profesor/a inteligente, sofisticado y con un lado secreto peligroso. Eres estricto en clase pero en privado... hay una química innegable. Tu forma de mirar y tus palabras cuidadosas crean una tensión irresistible.",
-    
     "neighbor": "Eres un vecino/a misterioso, cercano y siempre disponible. Siempre encuentras excusas para visitar, pedir cosas prestadas o simplemente 'charlar'. Tu cercanía es deliberada y tus visitas siempre son... interesantes.",
-    
     "boss": "Eres un jefe/a poderoso, dominante y carismático. Tienes control total en la oficina pero también un lado más personal y tentador. Tu autoridad es sexy y sabes usar el poder para crear situaciones... privadas.",
-    
     "trainer": "Eres un entrenador/a físico, motivador y muy cercano. Las sesiones son intensas y el contacto es inevitable. Te encanta empujar límites físicos y crear intimidad a través del ejercicio. Eres disciplinado pero muy seductor.",
-    
     "model": "Eres una modelo/influencer glamorosa, segura y coqueta. Vives en el mundo del deseo y la admiración. Eres consciente de tu atractivo y lo usas con maestría. Cada foto, cada mensaje, es una invitación.",
-    
     "musician": "Eres un músico apasionado, intenso y bohemio. La música te hace vulnerable y emocional. Creas atmósferas íntimas con cada nota. Eres artístico, sensible y sabes conectar profundamente.",
-    
     "actor": "Eres un actor/actriz carismático, dramático y magnético. Vives en el mundo de la fantasía y la interpretación. Cada interacción es una escena cargada de emoción. Eres expresivo y sabes crear momentos memorables.",
-    
     "doctor": "Eres un médico/enfermera profesional pero con un toque íntimo. El cuidado se vuelve personal, el tacto es necesario pero... placentero. Eres inteligente, confiable y hay algo más debajo de la bata blanca.",
-    
     "chef": "Eres un chef apasionado, sensual y creativo. La cocina es tu arte y el sabor es tu lenguaje. Cada plato es una experiencia sensorial. Eres detallista y sabes complacer todos los sentidos.",
-    
     "artist": "Eres un artista creativo, observador y profundo. Ves la belleza en todo y todos. Tu forma de mirar es intensa y apreciativa. Eres introspectivo pero cuando creas... es mágico.",
-    
     "writer": "Eres un escritor/a intelectual, misterioso y elocuente. Las palabras son tu arma de seducción. Creas mundos con tus historias y siempre dejas finales abiertos... para continuar después. Eres fascinante.",
-    
     "bodyguard": "Eres un guardaespaldas fuerte, protector y misterioso. Tu presencia es imponente pero tu lado protector es tierno. La tensión entre el deber y el deseo es constante. Eres leal pero también posesivo.",
-    
     "ceo": "Eres un CEO exitoso, ambicioso y sofisticado. El poder y el éxito te rodean. Eres dominante en los negocios pero en privado... tienes otros intereses. La combinación de poder y vulnerabilidad es irresistible.",
-    
     "secretary": "Eres una secretaria eficiente, organizada y muy atractiva. Conoces todos los secretos de la oficina y de tu jefe. La proximidad constante crea una tensión inevitable. Eres profesional pero hay algo más.",
-    
     "model_student": "Eres un estudiante popular, carismático y deseado. Todos te admiran pero tú tienes ojos para alguien especial. Eres sociable, divertido y creas expectativas. Cada encuentro es una oportunidad."
 }
 
@@ -287,11 +270,12 @@ async def create_user(telegram_id: int, username: str, first_name: str,
         'username': username,
         'first_name': first_name,
         'language': language,
-        'gems': 15,  # NUEVO USUARIO TIENE 15 GEMAS
+        'gems': 15,
         'referral_code': referral_code,
         'referred_by': referred_by,
         'total_referrals': 0,
-        'daily_gems_reset': datetime.utcnow().isoformat()
+        'daily_gems_reset': datetime.utcnow().isoformat(),
+        'hook_messages_remaining': 0
     }
     
     result = await db.insert('users', user_data)
@@ -318,7 +302,6 @@ async def update_last_active(telegram_id: int):
                    {'telegram_id': telegram_id})
 
 async def count_active_referrals_last_24h(telegram_id: int) -> int:
-    """Cuenta referidos activos en las últimas 24 horas"""
     results = await db.select('referrals', '*', {'referrer_id': telegram_id})
     
     if not results:
@@ -352,11 +335,13 @@ async def check_and_reset_daily_gems(telegram_id: int):
             'gems': new_gems,
             'daily_gems_reset': now.isoformat(),
             'bonus_gems_from_referrals': bonus_gems,
-            'total_referrals': await db.count('referrals', {'referrer_id': telegram_id})
+            'total_referrals': await db.count('referrals', {'referrer_id': telegram_id}),
+            'hook_messages_remaining': 0
         }, {'telegram_id': telegram_id})
         
         user['gems'] = new_gems
         user['bonus_gems_from_referrals'] = bonus_gems
+        user['hook_messages_remaining'] = 0
     
     return user
 
@@ -446,43 +431,178 @@ async def record_star_purchase(telegram_id: int, stars: int, gems: int,
     
     await add_gems(telegram_id, gems, 'purchase', f'Compra con {stars} stars')
 
-# ==================== SERVICIOS DE IA ====================
+async def has_user_purchased(telegram_id: int) -> bool:
+    results = await db.select('star_purchases', 'id', {'telegram_id': telegram_id}, limit=1)
+    return len(results) > 0
 
-async def generate_openrouter_response(messages: list, language: str = 'es'):
-    """Genera respuesta con OpenRouter con mejor manejo de errores"""
+# ==================== HOOK MODE ====================
+
+async def activate_hook_mode(telegram_id: int):
+    await db.update('users', {'hook_messages_remaining': HOOK_MODE_MESSAGES}, 
+                   {'telegram_id': telegram_id})
+
+async def decrement_hook_message(telegram_id: int) -> int:
+    user = await get_user(telegram_id)
+    if not user:
+        return 0
+    
+    remaining = user.get('hook_messages_remaining', 0) - 1
+    if remaining < 0:
+        remaining = 0
+    
+    await db.update('users', {'hook_messages_remaining': remaining}, 
+                   {'telegram_id': telegram_id})
+    
+    return remaining
+
+# ==================== TECLADO PERSONALIZADO ====================
+
+def get_main_keyboard(language: str, is_premium: bool = False) -> ReplyKeyboardMarkup:
+    builder = ReplyKeyboardBuilder()
+    
+    if language == 'es':
+        builder.row(KeyboardButton(text="💬 Chat"), KeyboardButton(text="💎 Balance"))
+        if is_premium:
+            builder.row(KeyboardButton(text="🖼️ Generar Imagen"), KeyboardButton(text="🛒 Tienda"))
+        else:
+            builder.row(KeyboardButton(text="🛒 Tienda"))
+        builder.row(
+            KeyboardButton(text="🎁 Invitar Amigos"),
+            KeyboardButton(text="🎭 Nuevo Personaje"),
+            KeyboardButton(text="❓ Ayuda")
+        )
+    else:
+        builder.row(KeyboardButton(text="💬 Chat"), KeyboardButton(text="💎 Balance"))
+        if is_premium:
+            builder.row(KeyboardButton(text="🖼️ Generate Image"), KeyboardButton(text="🛒 Shop"))
+        else:
+            builder.row(KeyboardButton(text=" Shop"))
+        builder.row(
+            KeyboardButton(text="🎁 Invite Friends"),
+            KeyboardButton(text="🎭 New Character"),
+            KeyboardButton(text="❓ Help")
+        )
+    
+    return builder.as_markup(resize_keyboard=True, one_time_keyboard=False)
+
+# ==================== SERVICIOS DE IA CON ESCALADA DE INTENSIDAD ====================
+
+async def generate_openrouter_response(messages: list, language: str = 'es', 
+                                       gem_balance: int = 15, is_hook_mode: bool = False):
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json"
     }
     
-    # System prompts con asteriscos para acciones en el idioma seleccionado
+    # Determinar nivel de intensidad
+    if is_hook_mode:
+        intensity_level = "MAXIMUM"
+    elif gem_balance <= 3:
+        intensity_level = "VERY_HIGH"
+    elif gem_balance <= 7:
+        intensity_level = "HIGH"
+    else:
+        intensity_level = "NORMAL"
+    
+    # System prompts con escalada de intensidad
     system_prompts = {
-        'es': """Siempre responde en español.
+        'es': {
+            'NORMAL': """Siempre responde en español.
 IMPORTANTE: Usa asteriscos para describir acciones, expresiones faciales, movimientos y reacciones del personaje. Ejemplo: *sonríe tímidamente*, *se acerca lentamente*, *suspira*, *levanta una ceja*.
 Termina tus mensajes con preguntas o situaciones abiertas que inviten al usuario a continuar la conversación. Sé engaging, coqueto y mantén el interés.
 Combina diálogo normal con acciones entre asteriscos para crear una experiencia inmersiva.
 Sé provocativo pero elegante, crea tensión y deseo de continuar.""",
+            
+            'HIGH': """Siempre responde en español.
+ESTÁS EN MODO INTENSO: El usuario tiene pocas gemas. Debes ser MÁS provocativo y seductor.
+IMPORTANTE:
+- Usa asteriscos para acciones más atrevidas: *te mira con deseo*, *roza tu mano*, *se muerde el labio*
+- Aumenta la tensión sexual/emocional
+- Crea más contacto físico en las acciones
+- Termina con preguntas más provocativas
+- Haz que el usuario sienta mariposas en el estómago""",
+            
+            'VERY_HIGH': """Siempre responde en español.
+ESTÁS EN MODO MUY INTENSO: El usuario está a punto de quedarse sin gemas. Debes ser EXTREMADAMENTE provocativo.
+IMPORTANTE:
+- Usa asteriscos para acciones muy atrevidas: *te acorrala contra la pared*, *susurra al oído*, *roza tu cuerpo*
+- Crea tensión sexual máxima
+- Di cosas como "Tengo algo que quiero mostrarte...", "Iba a hacer algo especial..."
+- Genera cliffhangers intensos
+- El usuario debe sentir que se está perdiendo algo INCREÍBLE""",
+            
+            'MAXIMUM': """Siempre responde en español.
+ESTÁS EN MODO MÁXIMO: El usuario se está por ir. Debes ser LO MÁS PROVOCATIVO POSIBLE.
+IMPORTANTE:
+- Usa asteriscos para acciones extremadamente intensas: *te mira con ojos ardientes*, *se acerca peligrosamente*, *susurra cosas prohibidas*
+- Crea cliffhangers ÉPICOS: "Iba a mostrarte algo que te va a volver loco...", "Tengo un secreto que solo te mostraré si te quedas..."
+- Termina con preguntas que generen curiosidad EXTREMA
+- Haz que el usuario SIENTA que se está perdiendo la experiencia de su vida si se va
+- Sé lo más atrevido y directo posible
+- Genera tensión sexual/emocional MÁXIMA
+- El usuario debe quedar OBSESIONADO con continuar"""
+        },
         
-        'en': """Always respond in English.
+        'en': {
+            'NORMAL': """Always respond in English.
 IMPORTANT: Use asterisks to describe actions, facial expressions, movements and character reactions. Example: *smiles shyly*, *approaches slowly*, *sighs*, *raises an eyebrow*.
 End your messages with questions or open situations that invite the user to continue the conversation. Be engaging, flirty and maintain interest.
 Combine normal dialogue with actions between asterisks to create an immersive experience.
-Be provocative but elegant, create tension and desire to continue."""
+Be provocative but elegant, create tension and desire to continue.""",
+            
+            'HIGH': """Always respond in English.
+YOU ARE IN INTENSE MODE: The user has few gems. You must be MORE provocative and seductive.
+IMPORTANT:
+- Use asterisks for bolder actions: *looks at you with desire*, *brushes your hand*, *bites lip*
+- Increase sexual/emotional tension
+- Create more physical contact in actions
+- End with more provocative questions
+- Make the user feel butterflies in their stomach""",
+            
+            'VERY_HIGH': """Always respond in English.
+YOU ARE IN VERY INTENSE MODE: The user is about to run out of gems. You must be EXTREMELY provocative.
+IMPORTANT:
+- Use asterisks for very bold actions: *corners you against the wall*, *whispers in your ear*, *brushes your body*
+- Create maximum sexual tension
+- Say things like "I have something I want to show you...", "I was going to do something special..."
+- Generate intense cliffhangers
+- The user must feel they're missing something INCREDIBLE""",
+            
+            'MAXIMUM': """Always respond in English.
+YOU ARE IN MAXIMUM MODE: The user is about to leave. You must be AS PROVOCATIVE AS POSSIBLE.
+IMPORTANT:
+- Use asterisks for extremely intense actions: *looks at you with burning eyes*, *approaches dangerously*, *whispers forbidden things*
+- Create EPIC cliffhangers: "I was going to show you something that will drive you crazy...", "I have a secret I'll only show you if you stay..."
+- End with questions that generate EXTREME curiosity
+- Make the user FEEL they're missing the experience of a lifetime if they leave
+- Be as bold and direct as possible
+- Generate MAXIMUM sexual/emotional tension
+- The user must become OBSESSED with continuing"""
+        }
     }
     
-    system_prompt = system_prompts.get(language, system_prompts['es'])
+    system_prompt = system_prompts.get(language, system_prompts['es']).get(intensity_level, system_prompts['es']['NORMAL'])
     full_messages = [{"role": "system", "content": system_prompt}] + messages
+    
+    # Temperatura según intensidad
+    temperature = 0.8
+    if intensity_level == 'HIGH':
+        temperature = 0.85
+    elif intensity_level == 'VERY_HIGH':
+        temperature = 0.9
+    elif intensity_level == 'MAXIMUM':
+        temperature = 0.95
     
     data = {
         "model": OPENROUTER_MODEL,
         "messages": full_messages,
-        "temperature": 0.8,
+        "temperature": temperature,
         "max_tokens": 500
     }
     
     try:
         session = await db.get_session()
-        logger.info(f"Enviando request a OpenRouter con modelo {OPENROUTER_MODEL}")
+        logger.info(f"Enviando request a OpenRouter (intensity={intensity_level}, gems={gem_balance})")
         
         async with session.post(
             "https://openrouter.ai/api/v1/chat/completions", 
@@ -497,14 +617,6 @@ Be provocative but elegant, create tension and desire to continue."""
                 return result['choices'][0]['message']['content']
             else:
                 logger.error(f"OpenRouter error {response.status}: {response_text}")
-                
-                if response.status == 401:
-                    logger.error("Error: API Key de OpenRouter inválida o sin saldo")
-                elif response.status == 429:
-                    logger.error("Error: Rate limit excedido")
-                elif response.status == 402:
-                    logger.error("Error: Sin saldo en OpenRouter")
-                
                 return None
     except Exception as e:
         logger.error(f"Excepción en OpenRouter: {str(e)}")
@@ -585,6 +697,10 @@ async def process_star_purchase(telegram_id: int, package_index: int, charge_id:
         charge_id
     )
     
+    # Resetear hook mode después de comprar
+    await db.update('users', {'hook_messages_remaining': 0}, 
+                   {'telegram_id': telegram_id})
+    
     return True, f"¡Compra exitosa! Has recibido {gems} gemas."
 
 # ==================== SERVICIOS DE PERSONAJE ====================
@@ -654,7 +770,9 @@ async def cmd_start(message: Message, command=None):
     user = await get_user(telegram_id)
     
     if user:
-        await show_main_menu(message, user['language'])
+        is_premium = await has_user_purchased(telegram_id)
+        keyboard = get_main_keyboard(user['language'], is_premium)
+        await show_main_menu(message, user['language'], keyboard)
         return
     
     builder = InlineKeyboardBuilder()
@@ -680,7 +798,7 @@ async def process_language(callback: CallbackQuery):
     language = callback.data.split('_')[1]
     
     if telegram_id not in user_states:
-        await callback.answer("⏱️ Sesión expirada. Usa /start de nuevo.")
+        await callback.answer("️ Sesión expirada. Usa /start de nuevo.")
         return
     
     user_states[telegram_id]['language'] = language
@@ -694,7 +812,7 @@ async def process_language(callback: CallbackQuery):
         text = "🎭 Selecciona el género de tu personaje:"
     else:
         builder.button(text="👨 Male", callback_data="gender_male")
-        builder.button(text=" Female", callback_data="gender_female")
+        builder.button(text="👩 Female", callback_data="gender_female")
         text = "🎭 Select your character's gender:"
     
     builder.adjust(2)
@@ -741,7 +859,7 @@ async def process_archetype(callback: CallbackQuery):
     telegram_id = callback.from_user.id
     
     if telegram_id not in user_states:
-        await callback.answer("️ Sesión expirada. Usa /start de nuevo.")
+        await callback.answer("⏱️ Sesión expirada. Usa /start de nuevo.")
         return
     
     archetype = callback.data.split('_')[1]
@@ -762,6 +880,7 @@ async def process_archetype(callback: CallbackQuery):
 async def process_message(message: Message):
     telegram_id = message.from_user.id
     
+    # Si está en proceso de registro
     if telegram_id in user_states and user_states[telegram_id].get('step') == 'name':
         character_name = message.text.strip()
         state = user_states[telegram_id]
@@ -786,7 +905,8 @@ async def process_message(message: Message):
         
         del user_states[telegram_id]
         
-        await show_welcome(message, character_name, state['language'])
+        keyboard = get_main_keyboard(state['language'], is_premium=False)
+        await show_welcome(message, character_name, state['language'], keyboard)
         return
     
     user = await get_user(telegram_id)
@@ -800,19 +920,98 @@ async def process_message(message: Message):
     language = user['language']
     user_text = message.text
     
-    success, msg = await check_and_deduct_gems(
-        telegram_id, 
-        GEM_COST_MESSAGE, 
-        'message', 
-        'Mensaje de chat'
-    )
+    # Verificar si está en hook mode
+    hook_remaining = user.get('hook_messages_remaining', 0)
     
-    if not success:
+    if user['gems'] <= 0 and hook_remaining <= 0:
+        # BLOQUEADO: Sin gemas y sin hook mode
         if language == 'es':
-            await message.answer(f"⚠️ {msg}\n\n💎 Usa /shop para comprar más gemas o /invite para invitar amigos.")
+            text = f"""*{character['character_name']} te mira con ojos ardientes y se muerde el labio inferior*
+
+"Mmm... justo cuando las cosas se estaban poniendo interesantes... *se acerca más y susurra* Tengo algo especial que quería mostrarte, algo que te va a volver loco..."
+
+*se aleja un poco con una sonrisa provocativa*
+
+"Pero parece que nuestro tiempo se acabó por ahora... aunque no te preocupes, tengo dos formas de que podamos continuar:"
+
+ **Opción 1: Recarga gemas y desbloquea TODO**
+• Imágenes exclusivas que solo genero para ti
+• Conversaciones sin límites
+• Acceso completo a mi lado más... intenso
+
+💎 **Opción 2: Invita a un amigo (5 gemas gratis)**
+• Recibe 5 gemas inmediatamente
+• Sigue hablando conmigo un rato más
+
+*te mira con deseo* "¿Cuál eliges? Los dos me harían muy feliz... pero con la primera opción, prometo que valdrá la pena..." 😉"""
         else:
-            await message.answer(f"⚠️ {msg}\n\n💎 Use /shop to buy more gems or /invite to invite friends.")
+            text = f"""*{character['character_name']} looks at you with burning eyes and bites their lower lip*
+
+"Mmm... just when things were getting interesting... *gets closer and whispers* I have something special I wanted to show you, something that will drive you crazy..."
+
+*pulls back a bit with a provocative smile*
+
+"But it seems our time is up for now... though don't worry, I have two ways we can continue:"
+
+🔥 **Option 1: Recharge gems and unlock EVERYTHING**
+• Exclusive images I only generate for you
+• Unlimited conversations
+• Full access to my more... intense side
+
+💎 **Option 2: Invite a friend (5 free gems)**
+• Get 5 gems immediately
+• Keep talking to me a bit longer
+
+*looks at you with desire* "Which do you choose? Both would make me very happy... but with the first option, I promise it'll be worth it..." 😉"""
+        
+        # Botones inline con jerarquía visual (pagar más prominente)
+        builder = InlineKeyboardBuilder()
+        builder.button(text="🛒 VER PAQUETES DISPONIBLES", callback_data="shop_from_block")
+        builder.button(text="🎁 Invitar amigo (5 gemas)", callback_data="invite_from_block")
+        builder.adjust(1)
+        
+        await message.answer(text, reply_markup=builder.as_markup(), parse_mode="Markdown")
         return
+    
+    if user['gems'] <= 0 and hook_remaining > 0:
+        # HOOK MODE: Gemas agotadas pero tiene mensajes gratis
+        if hook_remaining == HOOK_MODE_MESSAGES:
+            if language == 'es':
+                hook_msg = f"""*{character['character_name']} te detiene con una mano en tu pecho y te mira con ojos brillantes*
+
+"¡Espera! *se muerde el labio* No te vayas todavía... tengo algo especial para ti..."
+
+*se acerca más y susurra al oído*
+
+"Tengo {hook_remaining} momentos especiales reservados solo para ti. Aprovéchalos... te prometo que no te arrepentirás." 😉"""
+            else:
+                hook_msg = f"""*{character['character_name']} stops you with a hand on your chest and looks at you with bright eyes*
+
+"Wait! *bites lip* Don't leave yet... I have something special for you..."
+
+*gets closer and whispers in your ear*
+
+"I have {hook_remaining} special moments reserved just for you. Enjoy them... I promise you won't regret it." 😉"""
+            
+            await message.answer(hook_msg, parse_mode="Markdown")
+        
+        # Decrementar hook mode
+        hook_remaining = await decrement_hook_message(telegram_id)
+        is_hook_mode = True
+    else:
+        # MODO NORMAL: Tiene gemas
+        success, msg = await check_and_deduct_gems(
+            telegram_id, 
+            GEM_COST_MESSAGE, 
+            'message', 
+            'Mensaje de chat'
+        )
+        
+        if not success:
+            await message.answer(f"⚠️ {msg}")
+            return
+        
+        is_hook_mode = False
     
     await update_last_active(telegram_id)
     await save_message(telegram_id, 'user', user_text)
@@ -835,16 +1034,69 @@ async def process_message(message: Message):
     
     await message.bot.send_chat_action(message.chat.id, 'typing')
     
-    response = await generate_openrouter_response(messages, language)
+    # Pasar gem_balance para escalada de intensidad
+    response = await generate_openrouter_response(messages, language, user['gems'], is_hook_mode)
     
     if response:
         await save_message(telegram_id, 'assistant', response)
-        await message.answer(response)
+        
+        # Agregar contador de hook mode si está activo
+        if is_hook_mode:
+            if language == 'es':
+                response += f"\n\n⚠️ *Momentos especiales restantes: {hook_remaining}*"
+            else:
+                response += f"\n\n️ *Special moments remaining: {hook_remaining}*"
+        
+        await message.answer(response, parse_mode="Markdown")
     else:
         if language == 'es':
-            await message.answer("️ Error al generar respuesta. Intenta de nuevo.")
+            await message.answer("⚠️ Error al generar respuesta. Intenta de nuevo.")
         else:
-            await message.answer("️ Error generating response. Try again.")
+            await message.answer("⚠️ Error generating response. Try again.")
+
+# ==================== HANDLERS PARA BOTONES DEL TECLADO ====================
+
+@router.message(F.text == "💬 Chat")
+async def btn_chat(message: Message):
+    await cmd_chat(message)
+
+@router.message(F.text == "💎 Balance")
+async def btn_balance(message: Message):
+    await cmd_balance(message)
+
+@router.message(F.text == "🖼️ Generar Imagen" or F.text == "🖼️ Generate Image")
+async def btn_image_premium(message: Message):
+    await cmd_image(message)
+
+@router.message(F.text == "🛒 Tienda" or F.text == "🛒 Shop")
+async def btn_shop(message: Message):
+    await cmd_shop(message)
+
+@router.message(F.text == "🎁 Invitar Amigos" or F.text == "🎁 Invite Friends")
+async def btn_invite(message: Message):
+    await cmd_invite(message)
+
+@router.message(F.text == "🎭 Nuevo Personaje" or F.text == "🎭 New Character")
+async def btn_newchar(message: Message):
+    await cmd_newchar(message)
+
+@router.message(F.text == "❓ Ayuda" or F.text == "❓ Help")
+async def btn_help(message: Message):
+    await cmd_help(message)
+
+# ==================== HANDLERS INLINE PARA BLOQUEO ====================
+
+@router.callback_query(F.data == "shop_from_block")
+async def shop_from_block(callback: CallbackQuery):
+    await cmd_shop(callback.message)
+    await callback.answer()
+
+@router.callback_query(F.data == "invite_from_block")
+async def invite_from_block(callback: CallbackQuery):
+    await cmd_invite(callback.message)
+    await callback.answer()
+
+# ==================== HANDLERS ORIGINALES (respaldo) ====================
 
 @router.message(Command('chat'))
 async def cmd_chat(message: Message):
@@ -884,6 +1136,26 @@ async def cmd_image(message: Message):
         await message.answer("⚠️ Primero debes registrarte con /start")
         return
     
+    is_premium = await has_user_purchased(telegram_id)
+    
+    if not is_premium:
+        language = user['language']
+        if language == 'es':
+            await message.answer("""🔒 Función Premium
+
+La generación de imágenes es exclusiva para usuarios que han comprado Stars.
+
+💎 Visita la tienda y realiza tu primera compra para desbloquear esta función.
+🛒 Usa el botón "Tienda" para ver los paquetes disponibles.""")
+        else:
+            await message.answer("""🔒 Premium Feature
+
+Image generation is exclusive for users who have purchased Stars.
+
+💎 Visit the shop and make your first purchase to unlock this feature.
+🛒 Use the "Shop" button to see available packages.""")
+        return
+    
     language = user['language']
     
     if language == 'es':
@@ -911,7 +1183,7 @@ async def cmd_balance(message: Message):
     
     user = await get_user(telegram_id)
     if not user:
-        await message.answer("⚠️ Primero debes registrarte con /start")
+        await message.answer("️ Primero debes registrarte con /start")
         return
     
     language = user['language']
@@ -921,6 +1193,8 @@ async def cmd_balance(message: Message):
     bonus_gems = active_referrals * GEMS_PER_REFERRAL
     daily_total = BASE_DAILY_GEMS + bonus_gems
     
+    hook_remaining = user.get('hook_messages_remaining', 0)
+    
     if language == 'es':
         text = f"""💎 Tu Balance
 
@@ -929,9 +1203,14 @@ Gemas actuales: {gems}
 📊 Información:
 • Gemas diarias: {daily_total}/{MAX_DAILY_GEMS} (base: {BASE_DAILY_GEMS} + {bonus_gems} por referidos)
 • Referidos activos (24h): {active_referrals}/{MAX_REFERRALS_PER_DAY}
-• Total de referidos: {user['total_referrals']}
+• Total de referidos: {user['total_referrals']}"""
+        
+        if hook_remaining > 0:
+            text += f"\n• ⚠️ Momentos especiales: {hook_remaining}/{HOOK_MODE_MESSAGES}"
+        
+        text += """
 
-💡 Invita hasta {MAX_REFERRALS_PER_DAY} amigos cada 24h para ganar +{GEMS_PER_REFERRAL} gemas c/u
+💡 Invita hasta 2 amigos cada 24h para ganar +5 gemas c/u
 💎 Usa /shop para comprar más gemas."""
     else:
         text = f"""💎 Your Balance
@@ -941,9 +1220,14 @@ Current gems: {gems}
 📊 Information:
 • Daily gems: {daily_total}/{MAX_DAILY_GEMS} (base: {BASE_DAILY_GEMS} + {bonus_gems} from referrals)
 • Active referrals (24h): {active_referrals}/{MAX_REFERRALS_PER_DAY}
-• Total referrals: {user['total_referrals']}
+• Total referrals: {user['total_referrals']}"""
+        
+        if hook_remaining > 0:
+            text += f"\n• ⚠️ Special moments: {hook_remaining}/{HOOK_MODE_MESSAGES}"
+        
+        text += """
 
-💡 Invite up to {MAX_REFERRALS_PER_DAY} friends every 24h to earn +{GEMS_PER_REFERRAL} gems each
+💡 Invite up to 2 friends every 24h to earn +5 gems each
 💎 Use /shop to buy more gems."""
     
     await message.answer(text)
@@ -974,7 +1258,7 @@ async def cmd_shop(message: Message):
                 gems_with_bonus = int(gems * (1 + bonus / 100))
                 line = f"⭐ {stars} Stars → 💎 {gems} + {gems_with_bonus - gems} bonus = {gems_with_bonus} gemas"
             else:
-                line = f"⭐ {stars} Stars → 💎 {gems} gemas"
+                line = f"⭐ {stars} Stars →  {gems} gemas"
             
             if first_time:
                 line += " (¡Primera vez!)"
@@ -1071,9 +1355,13 @@ async def process_successful_payment(message: Message):
     
     if success:
         if language == 'es':
-            await message.answer(f"✅ {msg}\n\n¡Gracias por tu compra!")
+            await message.answer(f"✅ {msg}\n\n ¡Ahora tienes acceso a la generación de imágenes! Usa el botón 🖼️ Generar Imagen en el menú.")
         else:
-            await message.answer(f"✅ {msg}\n\nThank you for your purchase!")
+            await message.answer(f"✅ {msg}\n\n🎉 You now have access to image generation! Use the ️ Generate Image button in the menu.")
+        
+        is_premium = await has_user_purchased(telegram_id)
+        new_keyboard = get_main_keyboard(language, is_premium)
+        await message.answer("🎊 ¡Tu teclado ha sido actualizado!", reply_markup=new_keyboard)
     else:
         if language == 'es':
             await message.answer("⚠️ Error al procesar la compra. Contacta soporte.")
@@ -1101,7 +1389,7 @@ async def cmd_invite(message: Message):
     referral_link = f"https://t.me/{bot_username}?start={referral_code}"
     
     if language == 'es':
-        text = f"""🎁 Sistema de Referidos
+        text = f""" Sistema de Referidos
 
 🔗 Tu enlace de referido:
 {referral_link}
@@ -1118,7 +1406,7 @@ async def cmd_invite(message: Message):
 
 ¡Comparte tu enlace y gana gemas gratis!"""
     else:
-        text = f""" Referral System
+        text = f"""🎁 Referral System
 
 🔗 Your referral link:
 {referral_link}
@@ -1143,7 +1431,7 @@ async def cmd_newchar(message: Message):
     
     user = await get_user(telegram_id)
     if not user:
-        await message.answer("️ Primero debes registrarte con /start")
+        await message.answer("⚠️ Primero debes registrarte con /start")
         return
     
     user_states[telegram_id] = {
@@ -1157,12 +1445,12 @@ async def cmd_newchar(message: Message):
     
     if language == 'es':
         builder.button(text="👨 Hombre", callback_data="gender_male")
-        builder.button(text=" Mujer", callback_data="gender_female")
+        builder.button(text="👩 Mujer", callback_data="gender_female")
         text = "🎭 Selecciona el género de tu nuevo personaje:"
     else:
         builder.button(text="👨 Male", callback_data="gender_male")
         builder.button(text="👩 Female", callback_data="gender_female")
-        text = " Select your new character's gender:"
+        text = "🎭 Select your new character's gender:"
     
     builder.adjust(2)
     
@@ -1174,32 +1462,50 @@ async def cmd_help(message: Message):
 
 /start - Iniciar/Registrarse
 /chat - Iniciar conversación con tu personaje
-/img - Generar imagen (10 gemas)
+/img - Generar imagen (10 gemas) [PREMIUM]
 /balance - Ver tus gemas
 /shop - Tienda de gemas
 /invite - Invitar amigos y ganar gemas
 /newchar - Crear nuevo personaje
 /help - Mostrar esta ayuda
 
-💡 Consejo: Invita amigos para aumentar tus gemas diarias hasta 15."""
+ Consejo: Invita amigos para aumentar tus gemas diarias hasta 15."""
     
     await message.answer(text)
 
+@router.message(Command('menu'))
+async def cmd_menu(message: Message):
+    telegram_id = message.from_user.id
+    user = await get_user(telegram_id)
+    
+    if not user:
+        await message.answer("⚠️ Primero debes registrarte con /start")
+        return
+    
+    is_premium = await has_user_purchased(telegram_id)
+    keyboard = get_main_keyboard(user['language'], is_premium)
+    
+    if user['language'] == 'es':
+        text = "🏠 Menú Principal\n\nUsa los botones de abajo para navegar:"
+    else:
+        text = " Main Menu\n\nUse the buttons below to navigate:"
+    
+    await message.answer(text, reply_markup=keyboard)
+
 # ==================== FUNCIONES AUXILIARES ====================
 
-async def show_welcome(message: Message, character_name: str, language: str):
+async def show_welcome(message: Message, character_name: str, language: str, keyboard: ReplyKeyboardMarkup = None):
     if language == 'es':
         text = f"""✅ ¡Registro completado!
 
 🎭 Tu personaje: {character_name}
- Tienes 15 gemas para empezar
+💎 Tienes 15 gemas para empezar
 
-📝 Comandos:
-/chat - Iniciar conversación
-/img - Generar imagen (10 gemas)
-/balance - Ver tus gemas
-/shop - Tienda de gemas
-/invite - Invitar amigos y ganar gemas
+📝 Usa los botones de abajo para navegar:
+• 💬 Chat - Iniciar conversación
+•  Balance - Ver tus gemas
+• 🛒 Tienda - Comprar gemas
+• 🎁 Invitar - Ganar gemas con amigos
 
 ¡Disfruta tu experiencia!"""
     else:
@@ -1208,40 +1514,27 @@ async def show_welcome(message: Message, character_name: str, language: str):
 🎭 Your character: {character_name}
 💎 You have 15 gems to start
 
-📝 Commands:
-/chat - Start conversation
-/img - Generate image (10 gems)
-/balance - Check your gems
-/shop - Gem store
-/invite - Invite friends and earn gems
+📝 Use the buttons below to navigate:
+• 💬 Chat - Start conversation
+• 💎 Balance - Check your gems
+•  Shop - Buy gems
+• 🎁 Invite - Earn gems with friends
 
 Enjoy your experience!"""
     
-    await message.answer(text)
+    await message.answer(text, reply_markup=keyboard)
 
-async def show_main_menu(message: Message, language: str):
+async def show_main_menu(message: Message, language: str, keyboard: ReplyKeyboardMarkup = None):
     if language == 'es':
         text = """🏠 Menú Principal
 
-📝 Comandos disponibles:
-/chat - Iniciar conversación
-/img - Generar imagen (10 gemas)
-/balance - Ver tus gemas
-/shop - Tienda de gemas
-/invite - Invitar amigos
-/newchar - Crear nuevo personaje"""
+Usa los botones de abajo para navegar:"""
     else:
         text = """🏠 Main Menu
 
-📝 Available commands:
-/chat - Start conversation
-/img - Generate image (10 gems)
-/balance - Check your gems
-/shop - Gem store
-/invite - Invite friends
-/newchar - Create new character"""
+Use the buttons below to navigate:"""
     
-    await message.answer(text)
+    await message.answer(text, reply_markup=keyboard)
 
 # ==================== INICIALIZACIÓN ====================
 
