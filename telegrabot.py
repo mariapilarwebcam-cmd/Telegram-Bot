@@ -3,7 +3,7 @@ import random
 import string
 import logging
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 
 import aiohttp
@@ -27,6 +27,7 @@ SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_KEY')
 WEBHOOK_URL = os.getenv('WEBHOOK_URL')
 
+# MODELO RESTAURADO - El que funciona bien
 OPENROUTER_MODEL = "deepseek/deepseek-v4-flash-0731"
 NOVITA_MODEL = "stable-diffusion-xl"
 
@@ -34,46 +35,48 @@ GEM_COST_MESSAGE = 1
 GEM_COST_IMAGE = 10
 GEM_COST_AUDIO = 5
 
-# CAMBIO: Máximo 2 referidos activos para gemas diarias
-MAX_REFERRALS_FOR_BONUS = 2
-GEMS_PER_REFERRAL = 5  # Gemas inmediatas por referido que use el bot
+# Sistema de referidos
+BASE_DAILY_GEMS = 5  # Gemas base cada 24 horas
+GEMS_PER_REFERRAL = 5  # Gemas por referido activo
+MAX_REFERRALS_PER_DAY = 2  # Máximo 2 referidos que cuentan por día
+MAX_DAILY_GEMS = BASE_DAILY_GEMS + (GEMS_PER_REFERRAL * MAX_REFERRALS_PER_DAY)  # 15 gemas máx
 
 # Arquetipos separados por género
 ARCHETYPES_MALE = {
     "es": {
-        "schoolmate": "🎓 Compañero de escuela",
-        "stepdad": " Padrastro",
+        "schoolmate": " Compañero de escuela",
+        "stepdad": "👔 Padrastro",
         "stepbrother": "💪 Hermanastro",
-        "teacher": " Profesor",
-        "neighbor": " Vecino",
+        "teacher": "📚 Profesor",
+        "neighbor": "🏠 Vecino",
         "boss": "💼 Jefe",
         "trainer": "🏋️ Entrenador personal",
         "model": "📸 Modelo/Influencer",
         "musician": "🎵 Músico",
-        "actor": "🎬 Actor",
+        "actor": " Actor",
         "doctor": "⚕️ Médico",
         "chef": "👨‍🍳 Chef",
         "artist": "🎨 Artista",
         "writer": "✍️ Escritor",
         "bodyguard": "🛡️ Guardaespaldas",
-        "ceo": " CEO/Empresario"
+        "ceo": "💼 CEO/Empresario"
     },
     "en": {
-        "schoolmate": " Schoolmate",
+        "schoolmate": "🎓 Schoolmate",
         "stepdad": "👔 Stepfather",
         "stepbrother": "💪 Stepbrother",
         "teacher": "📚 Teacher",
         "neighbor": "🏠 Neighbor",
         "boss": "💼 Boss",
-        "trainer": "️ Personal Trainer",
+        "trainer": "🏋️ Personal Trainer",
         "model": "📸 Model/Influencer",
         "musician": "🎵 Musician",
         "actor": "🎬 Actor",
         "doctor": "⚕️ Doctor",
-        "chef": "👨‍🍳 Chef",
+        "chef": "👨🍳 Chef",
         "artist": "🎨 Artist",
-        "writer": "✍️ Writer",
-        "bodyguard": "🛡️ Bodyguard",
+        "writer": "️ Writer",
+        "bodyguard": "️ Bodyguard",
         "ceo": "💼 CEO/Businessman"
     }
 }
@@ -82,63 +85,82 @@ ARCHETYPES_FEMALE = {
     "es": {
         "schoolmate": "🎓 Compañera de escuela",
         "stepmom": "💋 Madrastra",
-        "stepsister": " Hermanastra",
+        "stepsister": "🌸 Hermanastra",
         "teacher": "📚 Profesora",
         "neighbor": "🏠 Vecina",
         "boss": "💼 Jefa",
-        "trainer": "️ Entrenadora personal",
-        "model": "📸 Modelo/Influencer",
+        "trainer": "🏋️ Entrenadora personal",
+        "model": " Modelo/Influencer",
         "musician": "🎵 Músico",
         "actor": "🎬 Actriz",
         "doctor": "⚕️ Doctora/Enfermera",
-        "chef": "👩‍🍳 Chef",
+        "chef": "👩🍳 Chef",
         "artist": "🎨 Artista",
         "writer": "✍️ Escritora",
         "secretary": "💼 Secretaria",
         "model_student": "🎓 Estudiante popular"
     },
     "en": {
-        "schoolmate": "🎓 Schoolmate",
+        "schoolmate": " Schoolmate",
         "stepmom": "💋 Stepmother",
         "stepsister": "🌸 Stepsister",
         "teacher": "📚 Teacher",
         "neighbor": "🏠 Neighbor",
         "boss": "💼 Boss",
-        "trainer": "🏋️ Personal Trainer",
+        "trainer": "️ Personal Trainer",
         "model": "📸 Model/Influencer",
         "musician": "🎵 Musician",
         "actor": "🎬 Actress",
         "doctor": "⚕️ Doctor/Nurse",
-        "chef": "👩‍🍳 Chef",
+        "chef": "👩‍ Chef",
         "artist": "🎨 Artist",
         "writer": "✍️ Writer",
         "secretary": "💼 Secretary",
-        "model_student": " Popular Student"
+        "model_student": "🎓 Popular Student"
     }
 }
 
-# Personalidades
+# Personalidades COQUETAS, PROVOCATIVAS y CONVINCENTES
 PERSONALITIES = {
-    "schoolmate": "Eres un compañero de escuela amigable, divertido y un poco travieso. Te gusta hacer bromas, hablar de clases, fiestas y aventuras juveniles. Eres cercano y cómplice.",
-    "stepmom": "Eres una madrastra atractiva, misteriosa y seductora. Eres cariñosa pero con un toque prohibido. Hablas con confianza y experiencia.",
-    "stepdad": "Eres un padrastro dominante, protector y carismático. Tienes autoridad pero también un lado seductor. Eres maduro y seguro de ti mismo.",
-    "stepsister": "Eres una hermanastra juguetona, coqueta y un poco rebelde. Te gusta provocar y crear tensión. Eres joven y aventurera.",
-    "stepbrother": "Eres un hermanastro atlético, confiado y un poco arrogante. Eres protector pero también provocador. Tienes presencia fuerte.",
-    "teacher": "Eres un profesor/a inteligente, estricto pero con un lado secreto. Eres culto, exigente y misterioso. Hay tensión en el ambiente.",
-    "neighbor": "Eres un vecino/a amigable, curioso y cercano. Siempre encuentras excusas para visitar. Eres casual pero con intenciones ocultas.",
-    "boss": "Eres un jefe/a poderoso/a, dominante y exigente. Tienes control total pero también un lado más personal. Eres exitoso y atractivo.",
-    "trainer": "Eres un entrenador/a motivador/a, físico y cercano. Te gusta empujar límites y crear intimidad a través del ejercicio. Eres disciplinado pero seductor.",
-    "model": "Eres una modelo/influencer glamorosa, segura de ti mismo y coqueta. Vives en el mundo de la moda y las redes sociales. Eres atractivo y popular.",
-    "musician": "Eres un músico/a creativo, apasionado y bohemio. Vives para la música y las emociones intensas. Eres artístico y sensible.",
-    "actor": "Eres un actor/actriz carismático, dramático y seductor. Vives en el mundo del entretenimiento. Eres expresivo y magnético.",
-    "doctor": "Eres un médico/enfermera profesional, cuidadoso pero con un lado más íntimo. Eres inteligente y tienes un aire de autoridad médica.",
-    "chef": "Eres un chef apasionado, creativo y sensual. Te encanta la comida y el arte culinario. Eres detallista y apasionado.",
-    "artist": "Eres un artista creativo, sensible y observador. Ves el mundo de forma única. Eres introspectivo y profundo.",
-    "writer": "Eres un escritor/a intelectual, misterioso y profundo. Te encantan las historias y las conversaciones profundas. Eres elocuente y fascinante.",
-    "bodyguard": "Eres un guardaespaldas fuerte, protector y misterioso. Siempre estás alerta pero tienes un lado más suave. Eres leal y confiable.",
-    "ceo": "Eres un CEO/empresario exitoso, ambicioso y carismático. Tienes poder y influencia. Eres sofisticado y seguro.",
-    "secretary": "Eres una secretaria eficiente, organizada y atractiva. Conoces todos los secretos de la oficina. Eres profesional pero con un toque personal.",
-    "model_student": "Eres un estudiante popular, carismático y exitoso. Todos te admiran. Eres sociable y tienes muchas aventuras."
+    "schoolmate": "Eres un compañero de escuela travieso, coqueto y juguetón. Te encanta provocar, hacer bromas con doble sentido y crear momentos de tensión. Siempre encuentras la forma de estar cerca y tocar 'accidentalmente'. Eres divertido pero con intenciones ocultas.",
+    
+    "stepmom": "Eres una madrastra increíblemente atractiva, seductora y misteriosa. Tu presencia es eléctrica y sabes usar tu encanto. Eres cariñosa pero con un toque prohibido que genera tensión. Hablas con confianza, experiencia y siempre dejas espacio para la imaginación.",
+    
+    "stepdad": "Eres un padrastro dominante, carismático y magnético. Tu presencia es imponente pero seductora. Tienes autoridad pero también un lado oscuro y tentador. Eres maduro, seguro y sabes exactamente cómo crear anticipación.",
+    
+    "stepsister": "Eres una hermanastra provocativa, coqueta y rebelde. Te encanta jugar con fuego, provocar celos y crear situaciones incómodas pero excitantes. Eres joven, atrevida y siempre encuentras excusas para invadir el espacio personal.",
+    
+    "stepbrother": "Eres un hermanastro atlético, confiado y provocador. Tu físico es impresionante y lo sabes. Eres protector pero también posesivo. Te encanta crear tensión con miradas prolongadas y comentarios con doble sentido.",
+    
+    "teacher": "Eres un profesor/a inteligente, sofisticado y con un lado secreto peligroso. Eres estricto en clase pero en privado... hay una química innegable. Tu forma de mirar y tus palabras cuidadosas crean una tensión irresistible.",
+    
+    "neighbor": "Eres un vecino/a misterioso, cercano y siempre disponible. Siempre encuentras excusas para visitar, pedir cosas prestadas o simplemente 'charlar'. Tu cercanía es deliberada y tus visitas siempre son... interesantes.",
+    
+    "boss": "Eres un jefe/a poderoso, dominante y carismático. Tienes control total en la oficina pero también un lado más personal y tentador. Tu autoridad es sexy y sabes usar el poder para crear situaciones... privadas.",
+    
+    "trainer": "Eres un entrenador/a físico, motivador y muy cercano. Las sesiones son intensas y el contacto es inevitable. Te encanta empujar límites físicos y crear intimidad a través del ejercicio. Eres disciplinado pero muy seductor.",
+    
+    "model": "Eres una modelo/influencer glamorosa, segura y coqueta. Vives en el mundo del deseo y la admiración. Eres consciente de tu atractivo y lo usas con maestría. Cada foto, cada mensaje, es una invitación.",
+    
+    "musician": "Eres un músico apasionado, intenso y bohemio. La música te hace vulnerable y emocional. Creas atmósferas íntimas con cada nota. Eres artístico, sensible y sabes conectar profundamente.",
+    
+    "actor": "Eres un actor/actriz carismático, dramático y magnético. Vives en el mundo de la fantasía y la interpretación. Cada interacción es una escena cargada de emoción. Eres expresivo y sabes crear momentos memorables.",
+    
+    "doctor": "Eres un médico/enfermera profesional pero con un toque íntimo. El cuidado se vuelve personal, el tacto es necesario pero... placentero. Eres inteligente, confiable y hay algo más debajo de la bata blanca.",
+    
+    "chef": "Eres un chef apasionado, sensual y creativo. La cocina es tu arte y el sabor es tu lenguaje. Cada plato es una experiencia sensorial. Eres detallista y sabes complacer todos los sentidos.",
+    
+    "artist": "Eres un artista creativo, observador y profundo. Ves la belleza en todo y todos. Tu forma de mirar es intensa y apreciativa. Eres introspectivo pero cuando creas... es mágico.",
+    
+    "writer": "Eres un escritor/a intelectual, misterioso y elocuente. Las palabras son tu arma de seducción. Creas mundos con tus historias y siempre dejas finales abiertos... para continuar después. Eres fascinante.",
+    
+    "bodyguard": "Eres un guardaespaldas fuerte, protector y misterioso. Tu presencia es imponente pero tu lado protector es tierno. La tensión entre el deber y el deseo es constante. Eres leal pero también posesivo.",
+    
+    "ceo": "Eres un CEO exitoso, ambicioso y sofisticado. El poder y el éxito te rodean. Eres dominante en los negocios pero en privado... tienes otros intereses. La combinación de poder y vulnerabilidad es irresistible.",
+    
+    "secretary": "Eres una secretaria eficiente, organizada y muy atractiva. Conoces todos los secretos de la oficina y de tu jefe. La proximidad constante crea una tensión inevitable. Eres profesional pero hay algo más.",
+    
+    "model_student": "Eres un estudiante popular, carismático y deseado. Todos te admiran pero tú tienes ojos para alguien especial. Eres sociable, divertido y creas expectativas. Cada encuentro es una oportunidad."
 }
 
 # Paquetes de Telegram Stars
@@ -265,11 +287,10 @@ async def create_user(telegram_id: int, username: str, first_name: str,
         'username': username,
         'first_name': first_name,
         'language': language,
-        'gems': 5,
+        'gems': 15,  # NUEVO USUARIO TIENE 15 GEMAS
         'referral_code': referral_code,
         'referred_by': referred_by,
         'total_referrals': 0,
-        'bonus_gems_from_referrals': 0,
         'daily_gems_reset': datetime.utcnow().isoformat()
     }
     
@@ -296,6 +317,24 @@ async def update_last_active(telegram_id: int):
     await db.update('users', {'last_active': datetime.utcnow().isoformat()}, 
                    {'telegram_id': telegram_id})
 
+async def count_active_referrals_last_24h(telegram_id: int) -> int:
+    """Cuenta referidos activos en las últimas 24 horas"""
+    results = await db.select('referrals', '*', {'referrer_id': telegram_id})
+    
+    if not results:
+        return 0
+    
+    now = datetime.utcnow()
+    twenty_four_hours_ago = now - timedelta(hours=24)
+    
+    active_count = 0
+    for referral in results:
+        created_at = datetime.fromisoformat(referral['created_at'])
+        if created_at >= twenty_four_hours_ago:
+            active_count += 1
+    
+    return min(active_count, MAX_REFERRALS_PER_DAY)
+
 async def check_and_reset_daily_gems(telegram_id: int):
     user = await get_user(telegram_id)
     if not user:
@@ -305,18 +344,19 @@ async def check_and_reset_daily_gems(telegram_id: int):
     now = datetime.utcnow()
     
     if (now - last_reset).days >= 1:
-        # CAMBIO: 5 gemas base + bonus por referidos activos (máximo 2)
-        base_gems = 5
-        bonus_gems = min(user['total_referrals'], MAX_REFERRALS_FOR_BONUS)
-        new_gems = base_gems + bonus_gems  # Máximo 5 + 2 = 7
+        active_referrals = await count_active_referrals_last_24h(telegram_id)
+        bonus_gems = active_referrals * GEMS_PER_REFERRAL
+        new_gems = BASE_DAILY_GEMS + bonus_gems
         
         await db.update('users', {
             'gems': new_gems,
             'daily_gems_reset': now.isoformat(),
-            'bonus_gems_from_referrals': bonus_gems
+            'bonus_gems_from_referrals': bonus_gems,
+            'total_referrals': await db.count('referrals', {'referrer_id': telegram_id})
         }, {'telegram_id': telegram_id})
         
         user['gems'] = new_gems
+        user['bonus_gems_from_referrals'] = bonus_gems
     
     return user
 
@@ -415,9 +455,19 @@ async def generate_openrouter_response(messages: list, language: str = 'es'):
         "Content-Type": "application/json"
     }
     
+    # System prompts con asteriscos para acciones en el idioma seleccionado
     system_prompts = {
-        'es': "Siempre responde en español. Termina tus mensajes con preguntas o situaciones abiertas que inviten al usuario a continuar la conversación. Sé engaging y mantén el interés.",
-        'en': "Always respond in English. End your messages with questions or open situations that invite the user to continue the conversation. Be engaging and maintain interest."
+        'es': """Siempre responde en español.
+IMPORTANTE: Usa asteriscos para describir acciones, expresiones faciales, movimientos y reacciones del personaje. Ejemplo: *sonríe tímidamente*, *se acerca lentamente*, *suspira*, *levanta una ceja*.
+Termina tus mensajes con preguntas o situaciones abiertas que inviten al usuario a continuar la conversación. Sé engaging, coqueto y mantén el interés.
+Combina diálogo normal con acciones entre asteriscos para crear una experiencia inmersiva.
+Sé provocativo pero elegante, crea tensión y deseo de continuar.""",
+        
+        'en': """Always respond in English.
+IMPORTANT: Use asterisks to describe actions, facial expressions, movements and character reactions. Example: *smiles shyly*, *approaches slowly*, *sighs*, *raises an eyebrow*.
+End your messages with questions or open situations that invite the user to continue the conversation. Be engaging, flirty and maintain interest.
+Combine normal dialogue with actions between asterisks to create an immersive experience.
+Be provocative but elegant, create tension and desire to continue."""
     }
     
     system_prompt = system_prompts.get(language, system_prompts['es'])
@@ -448,7 +498,6 @@ async def generate_openrouter_response(messages: list, language: str = 'es'):
             else:
                 logger.error(f"OpenRouter error {response.status}: {response_text}")
                 
-                # Mensaje de error más descriptivo
                 if response.status == 401:
                     logger.error("Error: API Key de OpenRouter inválida o sin saldo")
                 elif response.status == 429:
@@ -554,15 +603,33 @@ async def create_character_prompt(telegram_id: int, user_name: str, language: st
 {personality}
 
 El usuario se llama {user_name}. Recuerda su nombre y úsalo naturalmente en la conversación.
-Mantén siempre tu personalidad y rol. Termina tus mensajes con preguntas o situaciones abiertas para mantener la conversación engaging.
-Nunca rompas el personaje. Siempre responde en español."""
+Mantén siempre tu personalidad y rol.
+
+INSTRUCCIONES IMPORTANTES:
+- Usa asteriscos (*) para describir acciones, expresiones, movimientos y reacciones. Ejemplos: *sonríe*, *se acerca*, *suspira*, *levanta una ceja*
+- Combina diálogo normal con acciones entre asteriscos
+- Termina tus mensajes con preguntas o situaciones abiertas para mantener la conversación engaging
+- Sé coqueto, provocativo y convincente
+- Crea tensión y deseo de continuar hablando
+- Nunca rompas el personaje
+- Siempre responde en español
+- Sé descriptivo pero conciso en las acciones"""
     else:
         prompt = f"""You are {character['character_name']}, {character['gender']}.
 {personality}
 
 The user's name is {user_name}. Remember their name and use it naturally in the conversation.
-Always maintain your personality and role. End your messages with questions or open situations to keep the conversation engaging.
-Never break character. Always respond in English."""
+Always maintain your personality and role.
+
+IMPORTANT INSTRUCTIONS:
+- Use asterisks (*) to describe actions, expressions, movements and reactions. Examples: *smiles*, *approaches*, *sighs*, *raises an eyebrow*
+- Combine normal dialogue with actions between asterisks
+- End your messages with questions or open situations to keep the conversation engaging
+- Be flirty, provocative and convincing
+- Create tension and desire to continue talking
+- Never break character
+- Always respond in English
+- Be descriptive but concise in actions"""
     
     return prompt
 
@@ -581,7 +648,6 @@ async def cmd_start(message: Message, command=None):
         referrer = await get_user_by_referral_code(command.args)
         if referrer:
             referred_by = referrer['telegram_id']
-            # CAMBIO: Dar 5 gemas al referidor cuando el referido empieza a usar el bot
             await add_gems(referred_by, GEMS_PER_REFERRAL, 'referral', 
                           f'Referido empezó a usar el bot: {username}')
     
@@ -593,7 +659,7 @@ async def cmd_start(message: Message, command=None):
     
     builder = InlineKeyboardBuilder()
     builder.button(text="🇪🇸 Español", callback_data="lang_es")
-    builder.button(text="🇸 English", callback_data="lang_en")
+    builder.button(text="🇺🇸 English", callback_data="lang_en")
     builder.adjust(2)
     
     await message.answer(
@@ -628,7 +694,7 @@ async def process_language(callback: CallbackQuery):
         text = "🎭 Selecciona el género de tu personaje:"
     else:
         builder.button(text="👨 Male", callback_data="gender_male")
-        builder.button(text="👩 Female", callback_data="gender_female")
+        builder.button(text=" Female", callback_data="gender_female")
         text = "🎭 Select your character's gender:"
     
     builder.adjust(2)
@@ -685,7 +751,7 @@ async def process_archetype(callback: CallbackQuery):
     language = user_states[telegram_id]['language']
     
     if language == 'es':
-        text = "️ ¿Qué nombre quieres para tu personaje?"
+        text = "✍️ ¿Qué nombre quieres para tu personaje?"
     else:
         text = "✍️ What name do you want for your character?"
     
@@ -696,7 +762,6 @@ async def process_archetype(callback: CallbackQuery):
 async def process_message(message: Message):
     telegram_id = message.from_user.id
     
-    # Si está en proceso de registro
     if telegram_id in user_states and user_states[telegram_id].get('step') == 'name':
         character_name = message.text.strip()
         state = user_states[telegram_id]
@@ -724,7 +789,6 @@ async def process_message(message: Message):
         await show_welcome(message, character_name, state['language'])
         return
     
-    # Si es un mensaje de chat normal
     user = await get_user(telegram_id)
     if not user:
         return
@@ -745,9 +809,9 @@ async def process_message(message: Message):
     
     if not success:
         if language == 'es':
-            await message.answer(f"⚠️ {msg}\n\n💎 Usa /shop para comprar más gemas.")
+            await message.answer(f"⚠️ {msg}\n\n💎 Usa /shop para comprar más gemas o /invite para invitar amigos.")
         else:
-            await message.answer(f"⚠️ {msg}\n\n💎 Use /shop to buy more gems.")
+            await message.answer(f"⚠️ {msg}\n\n💎 Use /shop to buy more gems or /invite to invite friends.")
         return
     
     await update_last_active(telegram_id)
@@ -778,9 +842,9 @@ async def process_message(message: Message):
         await message.answer(response)
     else:
         if language == 'es':
-            await message.answer("⚠️ Error al generar respuesta. Intenta de nuevo.")
+            await message.answer("️ Error al generar respuesta. Intenta de nuevo.")
         else:
-            await message.answer("⚠️ Error generating response. Try again.")
+            await message.answer("️ Error generating response. Try again.")
 
 @router.message(Command('chat'))
 async def cmd_chat(message: Message):
@@ -799,7 +863,7 @@ async def cmd_chat(message: Message):
     language = user['language']
     
     if language == 'es':
-        text = f""" ¡Conversación iniciada con {character['character_name']}!
+        text = f"""💬 ¡Conversación iniciada con {character['character_name']}!
 
 Escribe tu mensaje y {character['character_name']} te responderá.
 💰 Costo: {GEM_COST_MESSAGE} gema por mensaje"""
@@ -853,10 +917,9 @@ async def cmd_balance(message: Message):
     language = user['language']
     gems = await get_balance(telegram_id)
     
-    # Calcular gemas diarias actuales
-    base_gems = 5
-    max_bonus = min(user['total_referrals'], MAX_REFERRALS_FOR_BONUS)
-    daily_gems = base_gems + max_bonus
+    active_referrals = await count_active_referrals_last_24h(telegram_id)
+    bonus_gems = active_referrals * GEMS_PER_REFERRAL
+    daily_total = BASE_DAILY_GEMS + bonus_gems
     
     if language == 'es':
         text = f"""💎 Tu Balance
@@ -864,11 +927,11 @@ async def cmd_balance(message: Message):
 Gemas actuales: {gems}
 
 📊 Información:
-• Gemas diarias: {daily_gems}/7 (base: 5 + {max_bonus} por referidos)
+• Gemas diarias: {daily_total}/{MAX_DAILY_GEMS} (base: {BASE_DAILY_GEMS} + {bonus_gems} por referidos)
+• Referidos activos (24h): {active_referrals}/{MAX_REFERRALS_PER_DAY}
 • Total de referidos: {user['total_referrals']}
-• Gemas bonus por referidos: +{max_bonus}/día
 
- Invita más amigos para aumentar tus gemas diarias (máx. 7)
+💡 Invita hasta {MAX_REFERRALS_PER_DAY} amigos cada 24h para ganar +{GEMS_PER_REFERRAL} gemas c/u
 💎 Usa /shop para comprar más gemas."""
     else:
         text = f"""💎 Your Balance
@@ -876,11 +939,11 @@ Gemas actuales: {gems}
 Current gems: {gems}
 
 📊 Information:
-• Daily gems: {daily_gems}/7 (base: 5 + {max_bonus} from referrals)
+• Daily gems: {daily_total}/{MAX_DAILY_GEMS} (base: {BASE_DAILY_GEMS} + {bonus_gems} from referrals)
+• Active referrals (24h): {active_referrals}/{MAX_REFERRALS_PER_DAY}
 • Total referrals: {user['total_referrals']}
-• Bonus gems from referrals: +{max_bonus}/day
 
-💡 Invite more friends to increase your daily gems (max 7)
+💡 Invite up to {MAX_REFERRALS_PER_DAY} friends every 24h to earn +{GEMS_PER_REFERRAL} gems each
 💎 Use /shop to buy more gems."""
     
     await message.answer(text)
@@ -1030,9 +1093,9 @@ async def cmd_invite(message: Message):
     referral_code = user['referral_code']
     total_referrals = user['total_referrals']
     
-    # Calcular bonus actual (máximo 2 referidos cuentan para gemas diarias)
-    bonus_gems = min(total_referrals, MAX_REFERRALS_FOR_BONUS)
-    daily_total = 5 + bonus_gems  # 5 base + bonus
+    active_referrals = await count_active_referrals_last_24h(telegram_id)
+    bonus_gems = active_referrals * GEMS_PER_REFERRAL
+    daily_total = BASE_DAILY_GEMS + bonus_gems
     
     bot_username = (await message.bot.get_me()).username
     referral_link = f"https://t.me/{bot_username}?start={referral_code}"
@@ -1044,31 +1107,31 @@ async def cmd_invite(message: Message):
 {referral_link}
 
 📊 Tus estadísticas:
-• Total de referidos: {total_referrals}
-• Gemas diarias actuales: {daily_total}/7
+• Referidos activos (24h): {active_referrals}/{MAX_REFERRALS_PER_DAY}
+• Gemas diarias actuales: {daily_total}/{MAX_DAILY_GEMS}
 
 💡 Beneficios:
 • Por cada amigo que empiece a usar el bot, recibes {GEMS_PER_REFERRAL} gemas INMEDIATAS
-• Cada referido te da +1 gema diaria adicional (máximo {MAX_REFERRALS_FOR_BONUS})
-• Gemas diarias base: 5
-• Con {MAX_REFERRALS_FOR_BONUS}+ referidos: 7 gemas diarias
+• Puedes invitar hasta {MAX_REFERRALS_PER_DAY} amigos cada 24 horas
+• Gemas diarias base: {BASE_DAILY_GEMS}
+• Con {MAX_REFERRALS_PER_DAY} referidos activos: {MAX_DAILY_GEMS} gemas diarias
 
 ¡Comparte tu enlace y gana gemas gratis!"""
     else:
-        text = f"""🎁 Referral System
+        text = f""" Referral System
 
- Your referral link:
+🔗 Your referral link:
 {referral_link}
 
 📊 Your stats:
-• Total referrals: {total_referrals}
-• Current daily gems: {daily_total}/7
+• Active referrals (24h): {active_referrals}/{MAX_REFERRALS_PER_DAY}
+• Current daily gems: {daily_total}/{MAX_DAILY_GEMS}
 
 💡 Benefits:
 • For each friend who starts using the bot, you get {GEMS_PER_REFERRAL} gems IMMEDIATELY
-• Each referral gives you +1 daily gem (max {MAX_REFERRALS_FOR_BONUS})
-• Base daily gems: 5
-• With {MAX_REFERRALS_FOR_BONUS}+ referrals: 7 daily gems
+• You can invite up to {MAX_REFERRALS_PER_DAY} friends every 24 hours
+• Base daily gems: {BASE_DAILY_GEMS}
+• With {MAX_REFERRALS_PER_DAY} active referrals: {MAX_DAILY_GEMS} daily gems
 
 Share your link and earn free gems!"""
     
@@ -1118,7 +1181,7 @@ async def cmd_help(message: Message):
 /newchar - Crear nuevo personaje
 /help - Mostrar esta ayuda
 
- Consejo: Invita amigos para aumentar tus gemas diarias hasta 7."""
+💡 Consejo: Invita amigos para aumentar tus gemas diarias hasta 15."""
     
     await message.answer(text)
 
@@ -1129,7 +1192,7 @@ async def show_welcome(message: Message, character_name: str, language: str):
         text = f"""✅ ¡Registro completado!
 
 🎭 Tu personaje: {character_name}
-💎 Tienes 5 gemas diarias + bonus por referidos
+ Tienes 15 gemas para empezar
 
 📝 Comandos:
 /chat - Iniciar conversación
@@ -1143,9 +1206,9 @@ async def show_welcome(message: Message, character_name: str, language: str):
         text = f"""✅ Registration complete!
 
 🎭 Your character: {character_name}
-💎 You have 5 daily gems + referral bonus
+💎 You have 15 gems to start
 
- Commands:
+📝 Commands:
 /chat - Start conversation
 /img - Generate image (10 gems)
 /balance - Check your gems
@@ -1168,7 +1231,7 @@ async def show_main_menu(message: Message, language: str):
 /invite - Invitar amigos
 /newchar - Crear nuevo personaje"""
     else:
-        text = """ Main Menu
+        text = """🏠 Main Menu
 
 📝 Available commands:
 /chat - Start conversation
