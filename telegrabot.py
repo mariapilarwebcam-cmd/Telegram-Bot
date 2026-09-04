@@ -26,22 +26,23 @@ load_dotenv()
 # Configuración
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY')
-DEEPINFRA_TOKEN = os.getenv('DEEPINFRA_TOKEN')  # <-- Token para Kokoro-82M
+DEEPINFRA_TOKEN = os.getenv('DEEPINFRA_TOKEN')
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_KEY')
 WEBHOOK_URL = os.getenv('WEBHOOK_URL')
 
 OPENROUTER_MODEL = "deepseek/deepseek-v4-flash-0731"
-DEEPINFRA_MODEL = "hexgrad/Kokoro-82M"  # Fallback (voces limitadas en español)
-
-# --- Chatterbox Multilingual (proveedor principal de TTS) ---
+DEEPINFRA_MODEL = "hexgrad/Kokoro-82M"
+DEEPINFRA_IMG_MODEL = "black-forest-labs/FLUX-1-schnell"  # Modelo de imagen rápido
 CHATTERBOX_MODEL = "ResembleAI/chatterbox-multilingual"
-TTS_PROVIDER = os.getenv('TTS_PROVIDER', 'chatterbox')  # 'chatterbox' o 'kokoro'
-DEEPINFRA_VOICE_ES = os.getenv('DEEPINFRA_VOICE_ES', '')  # voice_id clonado (español/latino)
-DEEPINFRA_VOICE_EN = os.getenv('DEEPINFRA_VOICE_EN', '')  # voice_id clonado (inglés), opcional
+
+TTS_PROVIDER = os.getenv('TTS_PROVIDER', 'chatterbox')
+DEEPINFRA_VOICE_ES = os.getenv('DEEPINFRA_VOICE_ES', '')
+DEEPINFRA_VOICE_EN = os.getenv('DEEPINFRA_VOICE_EN', '')
 
 GEM_COST_MESSAGE = 1
-GEM_COST_AUDIO = 5  # <-- El audio cuesta 5 gemas
+GEM_COST_AUDIO = 5
+GEM_COST_IMAGE = 10  # <-- Costo por selfie
 GEM_COST_NEW_CHARACTER = 5
 
 # Sistema de referidos
@@ -82,6 +83,30 @@ ARCHETYPES_FEMALE = {
         "model": "📸 Model/Influencer", "musician": "🎵 Musician", "actor": "🎬 Actress", "doctor": "⚕️ Doctor/Nurse",
         "chef": "👩‍🍳 Chef", "artist": "🎨 Artist", "writer": "✍️ Writer", "secretary": "💼 Secretary", "model_student": "🎓 Popular Student"
     }
+}
+
+# Descripción facial específica para cada arquetipo (en inglés para mejor calidad de imagen)
+CHARACTER_FACES = {
+    "schoolmate": "19 year old, messy hair, casual hoodie, playful mischievous eyes, cute natural look",
+    "stepmom": "38 year old mature woman, elegant long dark hair, sharp green eyes, luxurious silk robe, sultry expression",
+    "stepdad": "40 year old mature man, salt and pepper stubble, broad shoulders, unbuttoned dress shirt, dominant aura",
+    "stepsister": "20 year old girl, edgy blonde bob cut, blue eyes, nose ring, oversized t-shirt, playful smirk",
+    "stepbrother": "21 year old athletic man, short buzz cut, strong jawline, muscular arms in tank top, confident smirk",
+    "teacher": "32 year old, sophisticated updo, rectangular glasses, piercing blue eyes, professional blouse, strict but alluring",
+    "neighbor": "26 year old, wavy hair, warm brown eyes, casual summer clothes, friendly approachable smile",
+    "boss": "38 year old, sharp power haircut, intense dark eyes, tailored expensive business suit, confident commanding look",
+    "trainer": "28 year old athletic, high ponytail, tanned skin, toned body, sports bra, energetic glowing skin",
+    "model": "24 year old glamorous, flawless skin, long hair, pouty lips, designer sunglasses on head, high fashion",
+    "musician": "25 year old bohemian, messy dark curls, smudged eyeliner, leather jacket, holding instrument, mysterious vibe",
+    "actor": "27 year old dramatic, classic hollywood waves, red lips, elegant dress, captivating intense gaze",
+    "doctor": "30 year old professional, neat bun, stethoscope around neck, kind brown eyes, white coat, gentle smile",
+    "chef": "29 year old, messy hair tied back, flour on cheek, warm inviting smile, apron, passionate eyes",
+    "artist": "26 year old creative, paint smudges on face, short dyed hair, artistic unique earrings, deep thoughtful eyes",
+    "writer": "28 year old intellectual, long dark hair, reading glasses, cozy oversized sweater, holding notebook, soft smile",
+    "bodyguard": "35 year old huge man, shaved head, scar on eyebrow, massive muscles, dark suit, stern protective stoic look",
+    "ceo": "38 year old ambitious, perfect tailored suit, expensive watch, sharp haircut, confident smirk",
+    "secretary": "27 year old efficient woman, sleek pencil skirt, glasses on chain, neat blouse, holding pen, subtle smirk",
+    "model_student": "19 year old popular girl, perfect beach waves, bright white smile, trendy crop top, confident popular vibe"
 }
 
 PERSONALITIES = {
@@ -348,12 +373,14 @@ def get_main_keyboard(language: str, is_premium: bool = False) -> ReplyKeyboardM
     builder = ReplyKeyboardBuilder()
     if language == 'es':
         builder.row(KeyboardButton(text="💬 Chat"), KeyboardButton(text="💎 Balance"))
-        builder.row(KeyboardButton(text="🎵 Generar Audio"), KeyboardButton(text="🛒 Tienda"))
-        builder.row(KeyboardButton(text="🎁 Invitar Amigos"), KeyboardButton(text="💬 Nuevo Chat"), KeyboardButton(text="❓ Ayuda"))
+        builder.row(KeyboardButton(text="🎙️ Grabar Audio"), KeyboardButton(text="📸 Selfie (10💎)"))
+        builder.row(KeyboardButton(text="🛒 Tienda"), KeyboardButton(text="🎁 Invitar"))
+        builder.row(KeyboardButton(text="💬 Nuevo Chat"), KeyboardButton(text="❓ Ayuda"))
     else:
         builder.row(KeyboardButton(text="💬 Chat"), KeyboardButton(text="💎 Balance"))
-        builder.row(KeyboardButton(text="🎵 Generate Audio"), KeyboardButton(text="🛒 Shop"))
-        builder.row(KeyboardButton(text="🎁 Invite Friends"), KeyboardButton(text="💬 New Chat"), KeyboardButton(text="❓ Help"))
+        builder.row(KeyboardButton(text="🎙️ Record Audio"), KeyboardButton(text="📸 Selfie (10💎)"))
+        builder.row(KeyboardButton(text="🛒 Shop"), KeyboardButton(text="🎁 Invite"))
+        builder.row(KeyboardButton(text="💬 New Chat"), KeyboardButton(text="❓ Help"))
 
     clean_builder = ReplyKeyboardBuilder()
     for row in builder.export():
@@ -442,8 +469,6 @@ async def generate_chatterbox_audio(text: str, language: str = 'es'):
     if voice_id:
         data["voice_id"] = voice_id
 
-    logger.info(f"🎙️ Chatterbox request (idioma: {lang_code}, voice_id: {voice_id or 'default'})")
-    
     try:
         async with aiohttp.ClientSession() as session:
             async with session.post(
@@ -468,19 +493,16 @@ async def generate_chatterbox_audio(text: str, language: str = 'es'):
         return None
 
 async def generate_tts_audio(text: str, language: str = 'es', gender: str = 'female'):
-    """Punto único de entrada para generar audio."""
     if TTS_PROVIDER == 'chatterbox':
         audio = await generate_chatterbox_audio(text, language)
         if audio:
             return audio
         logger.warning("⚠️ Chatterbox falló, probando con Kokoro como respaldo...")
     
-    # Intentamos Kokoro con el idioma correspondiente
     audio = await generate_deepinfra_audio(text, language, gender)
     
-    # Si falla en español, NO caemos a inglés (sonaría horrible). Retornamos None para que sea solo texto.
     if not audio and language == 'es':
-        logger.warning("⚠️ No se pudo generar audio en español. No se usará voz en inglés para texto en español. Se devolverá solo texto.")
+        logger.warning("⚠️ No se pudo generar audio en español.")
         
     return audio
 
@@ -527,6 +549,46 @@ async def generate_deepinfra_audio(text: str, language: str = 'es', gender: str 
         logger.error(f"⚠️ Excepción en DeepInfra: {str(e)}", exc_info=True)
         return None
 
+async def generate_image(prompt: str):
+    if not DEEPINFRA_TOKEN:
+        logger.error("❌ DEEPINFRA_TOKEN no está configurada")
+        return None
+
+    headers = {
+        "Authorization": f"Bearer {DEEPINFRA_TOKEN}",
+        "Content-Type": "application/json"
+    }
+
+    data = {
+        "prompt": prompt,
+        "width": 1024,
+        "height": 1024,
+        "num_images": 1
+    }
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"https://api.deepinfra.com/v1/inference/{DEEPINFRA_IMG_MODEL}",
+                headers=headers,
+                json=data
+            ) as response:
+                status = response.status
+                if status == 200:
+                    result = await response.json()
+                    if 'images' in result and result['images']:
+                        return result['images'][0].get('url') or result['images'][0].get('image')
+                    if 'image' in result:
+                        return result['image']
+                    logger.error(f"❌ Estructura de imagen inesperada: {result}")
+                    return None
+                else:
+                    logger.error(f"❌ DeepInfra Image API error {status}: {await response.text()}")
+                    return None
+    except Exception as e:
+        logger.error(f"⚠️ Excepción en generación de imagen: {str(e)}", exc_info=True)
+        return None
+
 async def send_generated_audio(bot: Bot, chat_id: int, audio_data: str, caption: str):
     try:
         if audio_data.startswith("data:audio"):
@@ -537,7 +599,6 @@ async def send_generated_audio(bot: Bot, chat_id: int, audio_data: str, caption:
         logger.info(f"🔎 Formato de audio detectado: {fmt} ({len(audio_bytes)} bytes)")
 
         if len(audio_bytes) == 0:
-            logger.error("❌ El audio decodificado tiene 0 bytes")
             return False
 
         if fmt == 'ogg':
@@ -551,6 +612,22 @@ async def send_generated_audio(bot: Bot, chat_id: int, audio_data: str, caption:
         return True
     except Exception as e:
         logger.error(f"Error al decodificar/enviar audio: {e}", exc_info=True)
+        return False
+
+async def send_generated_image(bot: Bot, chat_id: int, image_url: str, caption: str):
+    try:
+        if image_url.startswith('http'):
+            await bot.send_photo(chat_id, photo=image_url, caption=caption, parse_mode="HTML")
+        else:
+            # Si es base64 o bytes
+            if image_url.startswith("data:image"):
+                image_url = image_url.split(",")[1]
+            img_bytes = base64.b64decode(image_url)
+            input_file = BufferedInputFile(img_bytes, filename="selfie.jpg")
+            await bot.send_photo(chat_id, photo=input_file, caption=caption, parse_mode="HTML")
+        return True
+    except Exception as e:
+        logger.error(f"Error enviando imagen: {e}", exc_info=True)
         return False
 
 async def check_and_deduct_gems(telegram_id: int, cost: int, transaction_type: str, description: str = ''):
@@ -670,13 +747,16 @@ async def btn_chat(message: Message): await cmd_chat(message)
 @router.message(F.text == "💎 Balance")
 async def btn_balance(message: Message): await cmd_balance(message)
 
-@router.message(F.text.in_(["🎵 Generar Audio", "🎵 Generate Audio"]))
+@router.message(F.text.in_(["🎙️ Grabar Audio", "🎙️ Record Audio", "🎵 Generar Audio", "🎵 Generate Audio"]))
 async def btn_audio(message: Message): await cmd_audio(message)
+
+@router.message(F.text.in_(["📸 Selfie (10💎)", "📸 Selfie"]))
+async def btn_selfie(message: Message): await cmd_selfie(message)
 
 @router.message(F.text.in_(["🛒 Tienda", "🛒 Shop"]))
 async def btn_shop(message: Message): await cmd_shop(message)
 
-@router.message(F.text.in_(["🎁 Invitar Amigos", "🎁 Invite Friends"]))
+@router.message(F.text.in_(["🎁 Invitar Amigos", "🎁 Invitar", "🎁 Invite Friends", "🎁 Invite"]))
 async def btn_invite(message: Message): await cmd_invite(message)
 
 @router.message(F.text.in_(["💬 Nuevo Chat", "💬 New Chat"]))
@@ -684,76 +764,6 @@ async def btn_newchat(message: Message): await show_character_menu(message)
 
 @router.message(F.text.in_(["❓ Ayuda", "❓ Help"]))
 async def btn_help(message: Message): await cmd_help(message)
-
-# ==================== COMANDO DE DIAGNÓSTICO: CHATTERBOX ====================
-@router.message(Command('testchatterbox'))
-async def test_chatterbox(message: Message):
-    telegram_id = message.from_user.id
-    if not DEEPINFRA_TOKEN:
-        return await message.answer("❌ DEEPINFRA_TOKEN no está configurada")
-
-    voice_info = f"voice_id clonado: {DEEPINFRA_VOICE_ES}" if DEEPINFRA_VOICE_ES else "voz por defecto (sin clonar)"
-    await message.answer(f"🧪 Probando Chatterbox Multilingual en español...\n🎙️ Usando {voice_info}")
-
-    audio_data = await generate_chatterbox_audio("Hola, ¿cómo estás? Esta es una prueba de acento en español.", "es")
-    if not audio_data:
-        return await message.answer("❌ Chatterbox no devolvió audio. Revisa los logs.")
-
-    await message.answer(f"✅ Audio recibido. Longitud Base64: {len(audio_data)}")
-    ok = await send_generated_audio(message.bot, telegram_id, audio_data, "✅ Prueba de Chatterbox Multilingual")
-    if ok:
-        await message.answer("🎉 ¡Enviado!")
-    else:
-        await message.answer("❌ Error al decodificar/enviar el audio. Revisa los logs.")
-
-# ==================== COMANDO DE DIAGNÓSTICO ====================
-@router.message(Command('testaudio'))
-async def test_audio(message: Message):
-    telegram_id = message.from_user.id
-    if not DEEPINFRA_TOKEN:
-        return await message.answer("❌ DEEPINFRA_TOKEN no está configurada")
-
-    await message.answer("🧪 Probando generación de audio con DeepInfra (Kokoro-82M)...")
-
-    try:
-        headers = {
-            "Authorization": f"Bearer {DEEPINFRA_TOKEN}",
-            "Content-Type": "application/json"
-        }
-
-        data = {
-            "text": "Hola, ¿cómo estás? Soy un bot de pruebas.",
-            "voice": get_kokoro_voice("es", "female")
-        }
-
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f"https://api.deepinfra.com/v1/inference/{DEEPINFRA_MODEL}",
-                headers=headers,
-                json=data
-            ) as response:
-                status = response.status
-                res_text = await response.text()
-
-                await message.answer(f"📊 Status: {status}\n\nRespuesta (primeros 500 chars):\n{res_text[:500]}")
-
-                if status == 200:
-                    result = await response.json()
-                    audio_data = result.get('audio') or result.get('result', {}).get('audio')
-
-                    if audio_data:
-                        ok = await send_generated_audio(message.bot, telegram_id, audio_data, "✅ ¡Audio de prueba exitoso!")
-                        if ok:
-                            await message.answer("🎉 ¡El audio se envió correctamente!")
-                        else:
-                            await message.answer("❌ Error al decodificar/enviar el audio. Revisa los logs.")
-                    else:
-                        await message.answer(f"❌ No se encontró audio en la respuesta. Estructura completa:\n{result}")
-                else:
-                    await message.answer(f"❌ Error de DeepInfra (Status {status})")
-
-    except Exception as e:
-        await message.answer(f"⚠️ Excepción: {str(e)}")
 
 # ==================== COMANDOS NORMALES ====================
 @router.message(Command('chat'))
@@ -777,11 +787,23 @@ async def cmd_audio(message: Message):
         return await message.answer("⚠️ No tienes un personaje activo. Usa /newchat")
 
     lang = user['language']
-    text = f"🎵 Generador de Audio\n\n💰 Costo: {GEM_COST_AUDIO} gemas\n\nEnvía el texto que quieres que {character['character_name']} diga en audio." if lang == 'es' else f"🎵 Audio Generator\n\n💰 Cost: {GEM_COST_AUDIO} gems\n\nSend the text you want {character['character_name']} to say in audio."
-    if lang == 'es':
-        text += "\n\nNota: Solo se genera audio si el modelo en español funciona correctamente. Si falla, se te reembolsarán las gemas y se mostrará el texto."
-    await message.answer(text)
+    text = f"🎙️ <b>Grabadora de Audio</b>\n\n💰 Costo: {GEM_COST_AUDIO} gemas\n\nEscribe lo que quieres que {character['character_name']} te diga." if lang == 'es' else f"🎙️ <b>Audio Recorder</b>\n\n💰 Cost: {GEM_COST_AUDIO} gems\n\nWrite what you want {character['character_name']} to say."
+    await message.answer(text, parse_mode="HTML")
     user_states[telegram_id] = {'step': 'audio_prompt', 'language': lang, 'created_at': datetime.utcnow()}
+
+@router.message(Command('selfie'))
+async def cmd_selfie(message: Message):
+    telegram_id = message.from_user.id
+    user = await get_user(telegram_id)
+    if not user: return await message.answer("⚠️ Primero debes registrarte con /start")
+
+    character = await get_active_character(telegram_id)
+    if not character:
+        return await message.answer("⚠️ No tienes un personaje activo. Usa /newchat")
+
+    lang = user['language']
+    text = f"📸 <b>Enviar Selfie</b>\n\n💰 Costo: {GEM_COST_IMAGE} gemas\n\nPresiona el botón 📸 o pide una foto en el chat para que te envíe un selfie de lo que está haciendo." if lang == 'es' else f"📸 <b>Send Selfie</b>\n\n💰 Cost: {GEM_COST_IMAGE} gems\n\nPress the 📸 button or ask for a photo in the chat."
+    await message.answer(text, parse_mode="HTML")
 
 @router.message(Command('balance'))
 async def cmd_balance(message: Message):
@@ -891,7 +913,7 @@ async def process_successful_payment(message: Message):
     success, msg = await process_star_purchase(telegram_id, pkg_idx, message.successful_payment.telegram_payment_charge_id)
     lang = (await get_user(telegram_id))['language']
     if success:
-        await message.answer(f"✅ {msg}\n\n🎉 ¡Ahora puedes generar audios de alta calidad con Kokoro!" if lang == 'es' else f"✅ {msg}\n\n🎉 You can now generate high-quality audios with Kokoro!")
+        await message.answer(f"✅ {msg}\n\n🎉 ¡Ahora puedes generar audios de alta calidad!" if lang == 'es' else f"✅ {msg}\n\n🎉 You can now generate high-quality audios!")
         await message.answer("🎊 ¡Tu teclado ha sido actualizado!", reply_markup=get_main_keyboard(lang, True))
     else:
         await message.answer("⚠️ Error al procesar la compra." if lang == 'es' else "⚠️ Error processing purchase.")
@@ -973,7 +995,7 @@ async def cmd_newchat(message: Message):
 
 @router.message(Command('help'))
 async def cmd_help(message: Message):
-    await message.answer("📚 Comandos:\n/start - Registrarse\n/chat - Conversar\n/audio - Generar audio del personaje (5 gemas)\n/balance - Ver gemas\n/shop - Tienda\n/invite - Invitar amigos\n/newchat - Cambiar/Crear personaje (5 gemas)\n/help - Ayuda\n\n💡 Consejo: Invita amigos para aumentar tus gemas diarias hasta 15.")
+    await message.answer("📚 Comandos:\n/start - Registrarse\n/chat - Conversar\n/audio - Grabar audio del personaje (5 gemas)\n/selfie - Pedir foto (10 gemas)\n/balance - Ver gemas\n/shop - Tienda\n/invite - Invitar amigos\n/newchat - Cambiar/Crear personaje (5 gemas)\n/help - Ayuda\n\n💡 Consejo: Pide 'mándame una foto' en el chat para recibir un selfie.")
 
 @router.message(Command('menu'))
 async def cmd_menu(message: Message):
@@ -983,7 +1005,7 @@ async def cmd_menu(message: Message):
     text = "🏠 Menú Principal\n\nUsa los botones de abajo para navegar:" if lang == 'es' else "🏠 Main Menu\n\nUse the buttons below to navigate:"
     await message.answer(text, reply_markup=get_main_keyboard(lang, await has_user_purchased(message.from_user.id)))
 
-# ==================== MANEJADOR GENERAL DE MENSAJES (AL FINAL PARA NO BLOQUEAR BOTONES) ====================
+# ==================== MANEJADOR GENERAL DE MENSAJES ====================
 @router.message(F.text & ~F.text.startswith('/'))
 async def process_message(message: Message):
     telegram_id = message.from_user.id
@@ -1008,7 +1030,7 @@ async def process_message(message: Message):
             text = f"✅ ¡Nuevo personaje creado!\n\n🎭 Nombre: {message.text.strip()}\n\nPuedes empezar a chatear con el botón 💬 Chat." if lang == 'es' else f"✅ New character created!\n\n🎭 Name: {message.text.strip()}\n\nYou can start chatting with the 💬 Chat button."
             return await message.answer(text)
 
-    # PASO 2: Generación de AUDIO
+    # Generación de AUDIO
     if telegram_id in user_states and user_states[telegram_id].get('step') == 'audio_prompt':
         lang = user_states[telegram_id]['language']
         prompt = message.text.strip()
@@ -1020,21 +1042,24 @@ async def process_message(message: Message):
             del user_states[telegram_id]
             return
 
-        await message.bot.send_chat_action(telegram_id, 'record_voice')
-        await message.answer("🎵 Generando audio... (esto puede tomar unos segundos)")
+        # Audio inmersivo de preparación
+        prep_text = "*sonido de respiración suave* Un momento, estoy ajustando el micrófono para grabar esto solo para ti..." if lang == 'es' else "*soft breathing sound* Hold on, I'm adjusting the mic to record this just for you..."
+        prep_audio = await generate_tts_audio(prep_text, lang, character['gender'] if character else 'female')
+        if prep_audio:
+            await send_generated_audio(message.bot, telegram_id, prep_audio, "")
 
-        audio_data = await generate_tts_audio(prompt, lang, character['gender'] if character else 'female')
-        if audio_data:
-            caption = f"🎵 Audio generado.\n💰 Costo: {GEM_COST_AUDIO} gemas"
-            sent_ok = await send_generated_audio(message.bot, telegram_id, audio_data, caption)
+        # Audio principal
+        main_audio = await generate_tts_audio(prompt, lang, character['gender'] if character else 'female')
+        if main_audio:
+            caption = f"🎙️ Audio listo."
+            sent_ok = await send_generated_audio(message.bot, telegram_id, main_audio, caption)
             if not sent_ok:
                 await add_gems(telegram_id, GEM_COST_AUDIO, 'refund', 'Reembolso por fallo en audio')
                 await message.answer("⚠️ Error al enviar el audio. Se te han reembolsado las gemas.")
         else:
-            # Fallback a texto si falla la generación
             await add_gems(telegram_id, GEM_COST_AUDIO, 'refund', 'Reembolso por fallo en TTS')
             if lang == 'es':
-                await message.answer(f"⚠️ <b>Audio no disponible en español</b>\n\nEl modelo de voz en inglés no pronuncia bien el español, por lo que no se ha generado audio para evitar una mala experiencia.\n\nSe te han reembolsado las {GEM_COST_AUDIO} gemas.\n\n<b>Texto solicitado:</b>\n<i>{prompt}</i>", parse_mode="HTML")
+                await message.answer(f"⚠️ <b>Audio no disponible</b>\n\nSe te han reembolsado las {GEM_COST_AUDIO} gemas.\n\n<b>Texto:</b>\n<i>{prompt}</i>", parse_mode="HTML")
             else:
                 await message.answer("⚠️ Error al generar el audio. Se te han reembolsado las gemas.")
 
@@ -1051,6 +1076,47 @@ async def process_message(message: Message):
 
     lang = user['language']
     hook_remaining = user.get('hook_messages_remaining', 0)
+
+    # Detección de intención de imagen (Selfie)
+    image_intent_pattern = re.compile(r'\b(foto|fotografia|imagen|selfie|pict|pic|picture|photo|image|enseñame|quiero verte|muestra|mandame una foto|enviame una foto|toma una foto)\b', re.IGNORECASE)
+    if image_intent_pattern.search(message.text):
+        success, msg, _ = await check_and_deduct_gems(telegram_id, GEM_COST_IMAGE, 'image', f'Selfie')
+        if not success:
+            return await message.answer(f"⚠️ {msg}")
+
+        await message.bot.send_chat_action(telegram_id, 'upload_photo')
+        
+        # Mensaje inmersivo antes de la foto
+        char_name = escape_html(character['character_name'])
+        prep_msg = f"*{char_name} saca su teléfono y te guiña un ojo*\n\n\"Voy a tomarme una foto para ti, no te muevas...\"" if lang == 'es' else f"*{char_name} takes out their phone and winks at you*\n\n\"I'm going to take a picture for you, don't move...\""
+        await message.answer(prep_msg, parse_mode="HTML")
+
+        # Construir prompt de imagen
+        history = await get_conversation_history(telegram_id, character['id'], limit=5)
+        last_action = "looking at camera, smiling"
+        for msg in reversed(history):
+            if msg['role'] == 'assistant':
+                action_match = re.findall(r'\*([^*]+)\*', msg['content'])
+                if action_match:
+                    last_action = action_match[-1]
+                break
+
+        face_prompt = CHARACTER_FACES.get(character['archetype'], "beautiful person")
+        image_prompt = f"{face_prompt}, selfie style, {last_action}, POV, realistic, smartphone photo, high detail, candid, beautiful lighting"
+        
+        logger.info(f"Generando imagen con prompt: {image_prompt}")
+        image_url = await generate_image(image_prompt)
+        
+        if image_url:
+            caption = f"📸 <b>{char_name}</b> te envía una foto."
+            sent_ok = await send_generated_image(message.bot, telegram_id, image_url, caption)
+            if not sent_ok:
+                await add_gems(telegram_id, GEM_COST_IMAGE, 'refund', 'Reembolso por fallo en imagen')
+                await message.answer("⚠️ Error al enviar la imagen. Se te han reembolsado las gemas.")
+        else:
+            await add_gems(telegram_id, GEM_COST_IMAGE, 'refund', 'Reembolso por fallo en generación')
+            await message.answer("⚠️ Error al generar la imagen. Se te han reembolsado las gemas.")
+        return
 
     if user['gems'] <= 0 and hook_remaining <= 0:
         char_name = escape_html(character['character_name'])
