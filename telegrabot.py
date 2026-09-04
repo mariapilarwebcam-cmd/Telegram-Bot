@@ -44,7 +44,7 @@ MAX_DAILY_GEMS = BASE_DAILY_GEMS + (GEMS_PER_REFERRAL * MAX_REFERRALS_PER_DAY)
 
 HOOK_MODE_MESSAGES = 5
 
-# -------------------- ARQUETIPOS (estándar y premium) --------------------
+# -------------------- ARQUETIPOS --------------------
 ARCHETYPES_MALE = {
     "es": {
         "schoolmate": "🎓 Compañero de escuela",
@@ -123,7 +123,7 @@ ARCHETYPES_FEMALE = {
     }
 }
 
-# Arquetipos premium (se agregan al final de la lista si el usuario es premium)
+# Arquetipos premium
 ARCHETYPES_PREMIUM_MALE = {
     "es": {
         "vampire": "🧛 Vampiro seductor",
@@ -150,7 +150,7 @@ ARCHETYPES_PREMIUM_FEMALE = {
     }
 }
 
-# Personalidades (incluir las nuevas)
+# Personalidades (incluyendo premium)
 PERSONALITIES = {
     "schoolmate": "Eres un compañero de escuela travieso, coqueto y juguetón. Te encanta provocar, hacer bromas con doble sentido y crear momentos de tensión. Siempre encuentras la forma de estar cerca y tocar 'accidentalmente'. Eres divertido pero con intenciones ocultas.",
     "stepmom": "Eres una madrastra increíblemente atractiva, seductora y misteriosa. Tu presencia es eléctrica y sabes usar tu encanto. Eres cariñosa pero con un toque prohibido que genera tensión. Hablas con confianza, experiencia y siempre dejas espacio para la imaginación.",
@@ -178,15 +178,15 @@ PERSONALITIES = {
     "spy": "Eres un agente secreto, hábil, letal y extremadamente seductor. Vives en el filo de la navaja, y cada encuentro es una misión. Sabes leer a las personas, anticipar sus deseos y usarlos a tu favor. Eres peligroso, fascinante y tienes un encanto irresistible que desarma a cualquiera."
 }
 
-# Paquetes de Telegram Stars con bonos graduales (5% al más barato, 25% al más caro)
+# Paquetes con bonos graduales
 STAR_PACKAGES = [
-    {"stars": 50, "gems": 200, "bonus": 5, "first_time": True},    # +5%
-    {"stars": 75, "gems": 300, "bonus": 10, "first_time": False},   # +10%
-    {"stars": 150, "gems": 600, "bonus": 15, "first_time": False},  # +15%
-    {"stars": 300, "gems": 1200, "bonus": 20, "first_time": False}, # +20%
-    {"stars": 500, "gems": 2000, "bonus": 25, "first_time": False}, # +25%
+    {"stars": 50, "gems": 200, "bonus": 5, "first_time": True},
+    {"stars": 75, "gems": 300, "bonus": 10, "first_time": False},
+    {"stars": 150, "gems": 600, "bonus": 15, "first_time": False},
+    {"stars": 300, "gems": 1200, "bonus": 20, "first_time": False},
+    {"stars": 500, "gems": 2000, "bonus": 25, "first_time": False},
 ]
-DAILY_OFFER_BONUS = 20  # % extra si es la primera compra del día
+DAILY_OFFER_BONUS = 20  # 20% extra en primera compra del día
 
 # Logging
 logging.basicConfig(
@@ -195,7 +195,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Estados, caché y locks
+# Estados, caché, locks
 user_states: Dict[int, Dict[str, Any]] = {}
 user_cache: Dict[int, Dict[str, Any]] = {}
 CACHE_TTL = 300
@@ -366,7 +366,7 @@ async def create_user(telegram_id: int, username: str, first_name: str,
         'total_referrals': 0,
         'daily_gems_reset': datetime.utcnow().isoformat(),
         'hook_messages_remaining': 0,
-        'last_purchase_date': None  # Nuevo campo para control de oferta diaria
+        'last_purchase_date': None
     }
     result = await db.insert('users', user_data)
     if referred_by and result:
@@ -499,7 +499,7 @@ async def record_star_purchase(telegram_id: int, stars: int, gems: int,
         'is_first_purchase': is_first_purchase,
         'telegram_charge_id': charge_id
     })
-    # Actualizar fecha de última compra para control de oferta diaria
+    # Actualizar fecha de última compra
     await db.update('users', {'last_purchase_date': datetime.utcnow().isoformat()}, {'telegram_id': telegram_id})
     await add_gems(telegram_id, gems, 'purchase', f'Compra con {stars} stars')
 
@@ -508,7 +508,6 @@ async def has_user_purchased(telegram_id: int) -> bool:
     return len(results) > 0
 
 async def has_purchased_today(telegram_id: int) -> bool:
-    """Retorna True si el usuario ya compró hoy (para la oferta diaria)."""
     user = await get_user(telegram_id)
     if not user or not user.get('last_purchase_date'):
         return False
@@ -747,7 +746,6 @@ async def process_star_purchase(telegram_id: int, package_index: int, charge_id:
     # Aplicar oferta diaria (20% extra) si es la primera compra del día
     if not await has_purchased_today(telegram_id):
         gems = int(gems * (1 + DAILY_OFFER_BONUS / 100))
-        # Guardar fecha de compra para que no se repita la oferta hoy
     await record_star_purchase(
         telegram_id,
         package['stars'],
@@ -755,7 +753,6 @@ async def process_star_purchase(telegram_id: int, package_index: int, charge_id:
         package.get('first_time', False),
         charge_id
     )
-    # El hook mode se resetea tras comprar (ya se hace en record_star_purchase?)
     await db.update('users', {'hook_messages_remaining': 0}, {'telegram_id': telegram_id})
     return True, f"¡Compra exitosa! Has recibido {gems} gemas."
 
@@ -878,7 +875,6 @@ async def process_gender(callback: CallbackQuery):
     archetypes = {}
     if gender == 'male':
         archetypes.update(ARCHETYPES_MALE[language])
-        # Si es premium, agregar los premium
         if await has_user_purchased(telegram_id):
             archetypes.update(ARCHETYPES_PREMIUM_MALE[language])
     else:
