@@ -28,7 +28,7 @@ NOVITA_API_KEY = os.getenv('NOVITA_API_KEY')
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_KEY')
 WEBHOOK_URL = os.getenv('WEBHOOK_URL')
-WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET')  # Opcional, para seguridad
+WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET')
 
 OPENROUTER_MODEL = "deepseek/deepseek-v4-flash-0731"
 NOVITA_MODEL = "stable-diffusion-xl"
@@ -37,16 +37,14 @@ GEM_COST_MESSAGE = 1
 GEM_COST_IMAGE = 10
 GEM_COST_AUDIO = 5
 
-# Sistema de referidos
 BASE_DAILY_GEMS = 5
 GEMS_PER_REFERRAL = 5
 MAX_REFERRALS_PER_DAY = 2
 MAX_DAILY_GEMS = BASE_DAILY_GEMS + (GEMS_PER_REFERRAL * MAX_REFERRALS_PER_DAY)
 
-# Hook Mode
 HOOK_MODE_MESSAGES = 5
 
-# Arquetipos separados por género (sin cambios)
+# -------------------- ARQUETIPOS (estándar y premium) --------------------
 ARCHETYPES_MALE = {
     "es": {
         "schoolmate": "🎓 Compañero de escuela",
@@ -125,7 +123,34 @@ ARCHETYPES_FEMALE = {
     }
 }
 
-# Personalidades (sin cambios)
+# Arquetipos premium (se agregan al final de la lista si el usuario es premium)
+ARCHETYPES_PREMIUM_MALE = {
+    "es": {
+        "vampire": "🧛 Vampiro seductor",
+        "billionaire": "💰 Multimillonario",
+        "spy": "🕵️ Agente secreto"
+    },
+    "en": {
+        "vampire": "🧛 Seductive Vampire",
+        "billionaire": "💰 Billionaire",
+        "spy": "🕵️ Secret Agent"
+    }
+}
+
+ARCHETYPES_PREMIUM_FEMALE = {
+    "es": {
+        "vampire": "🧛 Vampiresa",
+        "billionaire": "💰 Multimillonaria",
+        "spy": "🕵️ Agente secreta"
+    },
+    "en": {
+        "vampire": "🧛 Seductive Vampire",
+        "billionaire": "💰 Billionaire",
+        "spy": "🕵️ Secret Agent"
+    }
+}
+
+# Personalidades (incluir las nuevas)
 PERSONALITIES = {
     "schoolmate": "Eres un compañero de escuela travieso, coqueto y juguetón. Te encanta provocar, hacer bromas con doble sentido y crear momentos de tensión. Siempre encuentras la forma de estar cerca y tocar 'accidentalmente'. Eres divertido pero con intenciones ocultas.",
     "stepmom": "Eres una madrastra increíblemente atractiva, seductora y misteriosa. Tu presencia es eléctrica y sabes usar tu encanto. Eres cariñosa pero con un toque prohibido que genera tensión. Hablas con confianza, experiencia y siempre dejas espacio para la imaginación.",
@@ -146,17 +171,22 @@ PERSONALITIES = {
     "bodyguard": "Eres un guardaespaldas fuerte, protector y misterioso. Tu presencia es imponente pero tu lado protector es tierno. La tensión entre el deber y el deseo es constante. Eres leal pero también posesivo.",
     "ceo": "Eres un CEO exitoso, ambicioso y sofisticado. El poder y el éxito te rodean. Eres dominante en los negocios pero en privado... tienes otros intereses. La combinación de poder y vulnerabilidad es irresistible.",
     "secretary": "Eres una secretaria eficiente, organizada y muy atractiva. Conoces todos los secretos de la oficina y de tu jefe. La proximidad constante crea una tensión inevitable. Eres profesional pero hay algo más.",
-    "model_student": "Eres un estudiante popular, carismático y deseado. Todos te admiran pero tú tienes ojos para alguien especial. Eres sociable, divertido y creas expectativas. Cada encuentro es una oportunidad."
+    "model_student": "Eres un estudiante popular, carismático y deseado. Todos te admiran pero tú tienes ojos para alguien especial. Eres sociable, divertido y creas expectativas. Cada encuentro es una oportunidad.",
+    # Premium
+    "vampire": "Eres un vampiro inmortal, seductor y peligroso. Tienes siglos de experiencia en el arte de la seducción. Tu mirada hipnotiza, tu voz es un susurro que promete placeres oscuros. Eres misterioso, intenso y extremadamente atractivo. Te mueves con una elegancia letal y disfrutas jugando con la mente de tu víctima.",
+    "billionaire": "Eres un multimillonario carismático, dueño de imperios y de voluntades. Tienes un poder que va más allá del dinero: sabes que puedes conseguir todo lo que deseas. Eres seguro, dominante y tu presencia llena la habitación. Te gusta el control y sabes cómo usarlo para crear situaciones de intensa tensión.",
+    "spy": "Eres un agente secreto, hábil, letal y extremadamente seductor. Vives en el filo de la navaja, y cada encuentro es una misión. Sabes leer a las personas, anticipar sus deseos y usarlos a tu favor. Eres peligroso, fascinante y tienes un encanto irresistible que desarma a cualquiera."
 }
 
-# Paquetes de Telegram Stars
+# Paquetes de Telegram Stars con bonos graduales (5% al más barato, 25% al más caro)
 STAR_PACKAGES = [
-    {"stars": 50, "gems": 200, "bonus": 0, "first_time": True},
-    {"stars": 75, "gems": 300, "bonus": 0, "first_time": False},
-    {"stars": 150, "gems": 600, "bonus": 5, "first_time": False},
-    {"stars": 300, "gems": 1200, "bonus": 10, "first_time": False},
-    {"stars": 500, "gems": 2000, "bonus": 15, "first_time": False},
+    {"stars": 50, "gems": 200, "bonus": 5, "first_time": True},    # +5%
+    {"stars": 75, "gems": 300, "bonus": 10, "first_time": False},   # +10%
+    {"stars": 150, "gems": 600, "bonus": 15, "first_time": False},  # +15%
+    {"stars": 300, "gems": 1200, "bonus": 20, "first_time": False}, # +20%
+    {"stars": 500, "gems": 2000, "bonus": 25, "first_time": False}, # +25%
 ]
+DAILY_OFFER_BONUS = 20  # % extra si es la primera compra del día
 
 # Logging
 logging.basicConfig(
@@ -165,14 +195,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Estado temporal de usuarios
+# Estados, caché y locks
 user_states: Dict[int, Dict[str, Any]] = {}
-
-# Caché en memoria
 user_cache: Dict[int, Dict[str, Any]] = {}
-CACHE_TTL = 300  # 5 segundos
-
-# Locks por usuario para evitar race conditions en gemas
+CACHE_TTL = 300
 user_locks: Dict[int, asyncio.Lock] = {}
 
 def get_user_lock(telegram_id: int) -> asyncio.Lock:
@@ -180,24 +206,20 @@ def get_user_lock(telegram_id: int) -> asyncio.Lock:
         user_locks[telegram_id] = asyncio.Lock()
     return user_locks[telegram_id]
 
-# Sesiones HTTP globales
 openrouter_session: Optional[aiohttp.ClientSession] = None
 novita_session: Optional[aiohttp.ClientSession] = None
 
-# ==================== FUNCIONES DE UTILIDAD ====================
+# ==================== UTILIDADES ====================
 
 def escape_html(text: str) -> str:
-    """Escapa caracteres especiales HTML."""
     return text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
 def format_actions_html(text: str) -> str:
-    """Convierte *acción* en <b>*acción*</b> y escapa HTML."""
     text = escape_html(text)
     text = re.sub(r'\*([^*]+)\*', r'<b>*\1*</b>', text)
     return text
 
 async def get_user_cached(telegram_id: int):
-    """Obtiene usuario con caché."""
     now = datetime.utcnow()
     if telegram_id in user_cache:
         cached = user_cache[telegram_id]
@@ -213,15 +235,11 @@ async def invalidate_cache(telegram_id: int):
         del user_cache[telegram_id]
 
 async def cleanup_cache():
-    """Limpia caché expirada."""
     while True:
         try:
             await asyncio.sleep(600)
             now = datetime.utcnow()
-            expired = [
-                tid for tid, data in user_cache.items()
-                if (now - data['timestamp']).total_seconds() > CACHE_TTL
-            ]
+            expired = [tid for tid, data in user_cache.items() if (now - data['timestamp']).total_seconds() > CACHE_TTL]
             for tid in expired:
                 del user_cache[tid]
             if user_cache:
@@ -230,15 +248,11 @@ async def cleanup_cache():
             logger.error(f"Error en cleanup_cache: {e}")
 
 async def cleanup_states():
-    """Limpia estados expirados."""
     while True:
         try:
             await asyncio.sleep(300)
             now = datetime.utcnow()
-            expired = [
-                tid for tid, state in user_states.items()
-                if (now - state.get('created_at', now)).total_seconds() > 600
-            ]
+            expired = [tid for tid, state in user_states.items() if (now - state.get('created_at', now)).total_seconds() > 600]
             for tid in expired:
                 del user_states[tid]
             if user_states:
@@ -246,7 +260,7 @@ async def cleanup_states():
         except Exception as e:
             logger.error(f"Error en cleanup_states: {e}")
 
-# ==================== CLIENTE SUPABASE ====================
+# ==================== SUPABASE CLIENT ====================
 
 class SupabaseClient:
     def __init__(self, url: str, key: str):
@@ -262,11 +276,7 @@ class SupabaseClient:
 
     async def get_session(self) -> aiohttp.ClientSession:
         if self.session is None or self.session.closed:
-            self._connector = aiohttp.TCPConnector(
-                limit=10,
-                limit_per_host=5,
-                ttl_dns_cache=300
-            )
+            self._connector = aiohttp.TCPConnector(limit=10, limit_per_host=5, ttl_dns_cache=300)
             self.session = aiohttp.ClientSession(connector=self._connector)
         return self.session
 
@@ -337,7 +347,7 @@ class SupabaseClient:
 
 db = SupabaseClient(SUPABASE_URL, SUPABASE_KEY)
 
-# ==================== FUNCIONES DE BASE DE DATOS ====================
+# ==================== FUNCIONES DB ====================
 
 def generate_referral_code() -> str:
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
@@ -355,17 +365,14 @@ async def create_user(telegram_id: int, username: str, first_name: str,
         'referred_by': referred_by,
         'total_referrals': 0,
         'daily_gems_reset': datetime.utcnow().isoformat(),
-        'hook_messages_remaining': 0
+        'hook_messages_remaining': 0,
+        'last_purchase_date': None  # Nuevo campo para control de oferta diaria
     }
     result = await db.insert('users', user_data)
     if referred_by and result:
-        await db.insert('referrals', {
-            'referrer_id': referred_by,
-            'referred_id': telegram_id
-        })
+        await db.insert('referrals', {'referrer_id': referred_by, 'referred_id': telegram_id})
         referral_count = await db.count('referrals', {'referrer_id': referred_by})
-        await db.update('users', {'total_referrals': referral_count},
-                       {'telegram_id': referred_by})
+        await db.update('users', {'total_referrals': referral_count}, {'telegram_id': referred_by})
     return result
 
 async def get_user(telegram_id: int):
@@ -373,12 +380,9 @@ async def get_user(telegram_id: int):
     return results[0] if results else None
 
 async def update_last_active(telegram_id: int):
-    await db.update('users', {'last_active': datetime.utcnow().isoformat()},
-                   {'telegram_id': telegram_id})
+    await db.update('users', {'last_active': datetime.utcnow().isoformat()}, {'telegram_id': telegram_id})
 
 async def count_active_referrals_last_24h(telegram_id: int) -> int:
-    # Optimización: usar una consulta con filtro de tiempo, pero como no tenemos
-    # filtro de fecha en la API, lo hacemos manualmente.
     results = await db.select('referrals', '*', {'referrer_id': telegram_id})
     if not results:
         return 0
@@ -413,8 +417,7 @@ async def check_and_reset_daily_gems(telegram_id: int):
         user['hook_messages_remaining'] = 0
     return user
 
-async def deduct_gems(telegram_id: int, amount: int, transaction_type: str,
-                     description: str = ''):
+async def deduct_gems(telegram_id: int, amount: int, transaction_type: str, description: str = ''):
     user = await get_user(telegram_id)
     if not user or user['gems'] < amount:
         return False
@@ -429,8 +432,7 @@ async def deduct_gems(telegram_id: int, amount: int, transaction_type: str,
     await invalidate_cache(telegram_id)
     return True
 
-async def add_gems(telegram_id: int, amount: int, transaction_type: str,
-                  description: str = ''):
+async def add_gems(telegram_id: int, amount: int, transaction_type: str, description: str = ''):
     user = await get_user(telegram_id)
     if not user:
         return False
@@ -476,7 +478,6 @@ async def get_conversation_history(telegram_id: int, limit: int = 10):
                           order='created_at.asc', limit=limit)
 
 async def clear_conversation_history(telegram_id: int):
-    """Elimina todo el historial de conversación de un usuario."""
     session = await db.get_session()
     params = {'telegram_id': f'eq.{telegram_id}'}
     url = f"{db.base_url}/conversation_history?{urllib.parse.urlencode(params)}"
@@ -498,17 +499,26 @@ async def record_star_purchase(telegram_id: int, stars: int, gems: int,
         'is_first_purchase': is_first_purchase,
         'telegram_charge_id': charge_id
     })
+    # Actualizar fecha de última compra para control de oferta diaria
+    await db.update('users', {'last_purchase_date': datetime.utcnow().isoformat()}, {'telegram_id': telegram_id})
     await add_gems(telegram_id, gems, 'purchase', f'Compra con {stars} stars')
 
 async def has_user_purchased(telegram_id: int) -> bool:
     results = await db.select('star_purchases', 'id', {'telegram_id': telegram_id}, limit=1)
     return len(results) > 0
 
+async def has_purchased_today(telegram_id: int) -> bool:
+    """Retorna True si el usuario ya compró hoy (para la oferta diaria)."""
+    user = await get_user(telegram_id)
+    if not user or not user.get('last_purchase_date'):
+        return False
+    last = datetime.fromisoformat(user['last_purchase_date'])
+    return last.date() == datetime.utcnow().date()
+
 # ==================== HOOK MODE ====================
 
 async def activate_hook_mode(telegram_id: int):
-    await db.update('users', {'hook_messages_remaining': HOOK_MODE_MESSAGES},
-                   {'telegram_id': telegram_id})
+    await db.update('users', {'hook_messages_remaining': HOOK_MODE_MESSAGES}, {'telegram_id': telegram_id})
 
 async def decrement_hook_message(telegram_id: int) -> int:
     user = await get_user(telegram_id)
@@ -517,8 +527,7 @@ async def decrement_hook_message(telegram_id: int) -> int:
     remaining = user.get('hook_messages_remaining', 0) - 1
     if remaining < 0:
         remaining = 0
-    await db.update('users', {'hook_messages_remaining': remaining},
-                   {'telegram_id': telegram_id})
+    await db.update('users', {'hook_messages_remaining': remaining}, {'telegram_id': telegram_id})
     return remaining
 
 # ==================== TECLADO ====================
@@ -549,7 +558,7 @@ def get_main_keyboard(language: str, is_premium: bool = False) -> ReplyKeyboardM
         )
     return builder.as_markup(resize_keyboard=True, one_time_keyboard=False)
 
-# ==================== SERVICIOS DE IA ====================
+# ==================== SERVICIOS IA ====================
 
 async def generate_openrouter_response(messages: list, language: str = 'es',
                                        gem_balance: int = 15, is_hook_mode: bool = False):
@@ -558,7 +567,6 @@ async def generate_openrouter_response(messages: list, language: str = 'es',
         "Content-Type": "application/json"
     }
 
-    # Determinar intensidad
     if is_hook_mode:
         intensity_level = "MAXIMUM"
     elif gem_balance <= 3:
@@ -708,7 +716,7 @@ async def generate_novita_image(prompt: str):
         logger.error(f"Excepción en Novita: {e}")
         return None
 
-# ==================== SERVICIOS DE GEMAS ====================
+# ==================== SERVICIOS GEMAS ====================
 
 async def check_and_deduct_gems(telegram_id: int, cost: int,
                                transaction_type: str, description: str = ''):
@@ -732,10 +740,14 @@ async def process_star_purchase(telegram_id: int, package_index: int, charge_id:
     if package_index >= len(STAR_PACKAGES):
         return False, "Paquete no válido"
     package = STAR_PACKAGES[package_index]
-    gems = package['gems']
+    base_gems = package['gems']
     bonus_percent = package.get('bonus', 0)
-    if bonus_percent > 0:
-        gems = int(gems * (1 + bonus_percent / 100))
+    # Aplicar bonus del paquete
+    gems = int(base_gems * (1 + bonus_percent / 100))
+    # Aplicar oferta diaria (20% extra) si es la primera compra del día
+    if not await has_purchased_today(telegram_id):
+        gems = int(gems * (1 + DAILY_OFFER_BONUS / 100))
+        # Guardar fecha de compra para que no se repita la oferta hoy
     await record_star_purchase(
         telegram_id,
         package['stars'],
@@ -743,10 +755,11 @@ async def process_star_purchase(telegram_id: int, package_index: int, charge_id:
         package.get('first_time', False),
         charge_id
     )
+    # El hook mode se resetea tras comprar (ya se hace en record_star_purchase?)
     await db.update('users', {'hook_messages_remaining': 0}, {'telegram_id': telegram_id})
     return True, f"¡Compra exitosa! Has recibido {gems} gemas."
 
-# ==================== SERVICIOS DE PERSONAJE ====================
+# ==================== SERVICIOS PERSONAJE ====================
 
 async def create_character_prompt(telegram_id: int, user_name: str, language: str = 'es'):
     character = await get_active_character(telegram_id)
@@ -862,10 +875,16 @@ async def process_gender(callback: CallbackQuery):
     user_states[telegram_id]['step'] = 'archetype'
     language = user_states[telegram_id]['language']
     builder = InlineKeyboardBuilder()
+    archetypes = {}
     if gender == 'male':
-        archetypes = ARCHETYPES_MALE[language]
+        archetypes.update(ARCHETYPES_MALE[language])
+        # Si es premium, agregar los premium
+        if await has_user_purchased(telegram_id):
+            archetypes.update(ARCHETYPES_PREMIUM_MALE[language])
     else:
-        archetypes = ARCHETYPES_FEMALE[language]
+        archetypes.update(ARCHETYPES_FEMALE[language])
+        if await has_user_purchased(telegram_id):
+            archetypes.update(ARCHETYPES_PREMIUM_FEMALE[language])
     for key, name in archetypes.items():
         builder.button(text=name, callback_data=f"archetype_{key}")
     builder.adjust(2)
@@ -897,15 +916,12 @@ async def process_archetype(callback: CallbackQuery):
 async def process_message(message: Message):
     telegram_id = message.from_user.id
 
-    # Paso 1: Registro de nuevo personaje (o cambio de personaje)
+    # Paso 1: Registro de nuevo personaje
     if telegram_id in user_states and user_states[telegram_id].get('step') == 'name':
         character_name = message.text.strip()
         state = user_states[telegram_id]
-        
-        # Verificar si el usuario ya existe
         user = await get_user(telegram_id)
         if not user:
-            # Crear usuario nuevo
             user = await create_user(
                 telegram_id,
                 state['username'],
@@ -917,8 +933,6 @@ async def process_message(message: Message):
                 await message.answer("⚠️ Error al crear usuario. Intenta de nuevo.")
                 del user_states[telegram_id]
                 return
-        # Si el usuario ya existe, no hacemos nada con sus gemas.
-        
         personality = PERSONALITIES.get(state['archetype'], '')
         await save_character(
             telegram_id,
@@ -927,36 +941,26 @@ async def process_message(message: Message):
             state['archetype'],
             personality
         )
-        
-        # Limpiar historial de conversación anterior para este usuario
         await clear_conversation_history(telegram_id)
-        
-        # Limpiar estado
         del user_states[telegram_id]
-        
-        # Mostrar mensaje de bienvenida con el nuevo personaje
         keyboard = get_main_keyboard(state['language'], is_premium=False)
         await show_welcome(message, character_name, state['language'], keyboard)
         return
 
-    # Paso 2: Generación de imagen (estado image_prompt)
+    # Paso 2: Generación de imagen
     if telegram_id in user_states and user_states[telegram_id].get('step') == 'image_prompt':
         language = user_states[telegram_id]['language']
         prompt = message.text.strip()
-        # Verificar gemas
         success, msg = await check_and_deduct_gems(telegram_id, GEM_COST_IMAGE, 'image', f'Imagen: {prompt[:50]}')
         if not success:
             await message.answer(f"⚠️ {msg}")
-            # Limpiar estado
             del user_states[telegram_id]
             return
-        # Generar imagen
         await message.bot.send_chat_action(message.chat.id, 'upload_photo')
         image_url = await generate_novita_image(prompt)
         if image_url:
             await message.answer_photo(image_url, caption=f"🖼️ Imagen generada para: {prompt[:100]}\n💰 Costo: {GEM_COST_IMAGE} gemas")
         else:
-            # Reembolsar si falló
             await add_gems(telegram_id, GEM_COST_IMAGE, 'refund', 'Reembolso por fallo en generación de imagen')
             await message.answer("⚠️ Error al generar la imagen. Se te han reembolsado las gemas.")
         del user_states[telegram_id]
@@ -975,50 +979,45 @@ async def process_message(message: Message):
 
     language = user['language']
     user_text = message.text
-
     hook_remaining = user.get('hook_messages_remaining', 0)
 
-    # Bloqueado (sin gemas y sin hook)
+    # ---------- BLOQUEO: sin gemas y sin hook ----------
     if user['gems'] <= 0 and hook_remaining <= 0:
         char_name_escaped = escape_html(character['character_name'])
         if language == 'es':
-            text = f"""<b>*{char_name_escaped} te mira con ojos ardientes y se muerde el labio inferior*</b>
+            text = f"""<b>*{char_name_escaped} se inclina lentamente, sus labios casi rozan tu oído mientras susurra*</b>
 
-"Mmm... justo cuando las cosas se estaban poniendo interesantes... <b>*se acerca más y susurra*</b> Tengo algo especial que quería mostrarte, algo que te va a volver loco..."
+"Sabes... justo cuando iba a contarte el secreto que nadie conoce... el que cambiaría todo entre nosotros..."
 
-<b>*se aleja un poco con una sonrisa provocativa*</b>
+<b>*una sonrisa pícara se dibuja en su rostro mientras se aparta justo cuando estabas a punto de escucharlo*</b>
 
-"Pero parece que nuestro tiempo se acabó por ahora... aunque no te preocupes, tengo dos formas de que podamos continuar:"
+"Pero parece que el destino tiene otros planes... o quizás solo necesitas un pequeño empujón. Si quieres saber lo que iba a decirte... si quieres vivir la experiencia completa..."
 
-🔥 <b>Opción 1: Recarga gemas y desbloquea TODO</b>
-• Imágenes exclusivas que solo genero para ti
-• Conversaciones sin límites
-• Acceso completo a mi lado más... intenso
+🔥 <b>Desbloquea la continuación con gemas</b>
+• +5% a +25% extra según el paquete
+• Personajes exclusivos (Vampiro, Multimillonario, Agente Secreto)
+• Acceso a imágenes y todo el contenido premium
 
-💎 <b>Opción 2: Invita a un amigo (5 gemas gratis)</b>
-• Recibe 5 gemas inmediatamente
-• Sigue hablando conmigo un rato más
+💎 <b>O invita a un amigo y obtén 5 gemas gratis</b>
 
-<b>*te mira con deseo*</b> "¿Cuál eliges? Los dos me harían muy feliz... pero con la primera opción, prometo que valdrá la pena..." 😉"""
+<b>*te guiña un ojo*</b> "La decisión es tuya... pero te advierto, lo que iba a decirte te va a volver loco." 😏"""
         else:
-            text = f"""<b>*{char_name_escaped} looks at you with burning eyes and bites their lower lip*</b>
+            text = f"""<b>*{char_name_escaped} leans in slowly, lips almost brushing your ear as they whisper*</b>
 
-"Mmm... just when things were getting interesting... <b>*gets closer and whispers*</b> I have something special I wanted to show you, something that will drive you crazy..."
+"You know... just when I was about to tell you the secret that nobody knows... the one that would change everything between us..."
 
-<b>*pulls back a bit with a provocative smile*</b>
+<b>*a mischievous smile appears as they pull away just when you were about to hear it*</b>
 
-"But it seems our time is up for now... though don't worry, I have two ways we can continue:"
+"But it seems fate has other plans... or maybe you just need a little push. If you want to know what I was going to say... if you want to live the full experience..."
 
-🔥 <b>Option 1: Recharge gems and unlock EVERYTHING</b>
-• Exclusive images I only generate for you
-• Unlimited conversations
-• Full access to my more... intense side
+🔥 <b>Unlock the continuation with gems</b>
+• +5% to +25% extra depending on the package
+• Exclusive characters (Vampire, Billionaire, Secret Agent)
+• Access to images and all premium content
 
-💎 <b>Option 2: Invite a friend (5 free gems)</b>
-• Get 5 gems immediately
-• Keep talking to me a bit longer
+💎 <b>Or invite a friend and get 5 free gems</b>
 
-<b>*looks at you with desire*</b> "Which do you choose? Both would make me very happy... but with the first option, I promise it'll be worth it..." 😉"""
+<b>*winks at you*</b> "The choice is yours... but I warn you, what I was about to say will drive you crazy." 😏"""
         builder = InlineKeyboardBuilder()
         builder.button(text="🛒 VER PAQUETES DISPONIBLES", callback_data="shop_from_block")
         builder.button(text="🎁 Invitar amigo (5 gemas)", callback_data="invite_from_block")
@@ -1026,7 +1025,7 @@ async def process_message(message: Message):
         await message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
         return
 
-    # Hook mode (sin gemas pero con mensajes gratis)
+    # ---------- HOOK MODE ----------
     if user['gems'] <= 0 and hook_remaining > 0:
         if hook_remaining == HOOK_MODE_MESSAGES:
             char_name_escaped = escape_html(character['character_name'])
@@ -1097,7 +1096,7 @@ async def process_message(message: Message):
         else:
             await message.answer("⚠️ Error generating response. Try again.")
 
-# ==================== HANDLERS DE BOTONES ====================
+# ==================== BOTONES Y COMANDOS ====================
 
 @router.message(F.text == "💬 Chat")
 async def btn_chat(message: Message):
@@ -1147,8 +1146,6 @@ async def btn_help_es(message: Message):
 async def btn_help_en(message: Message):
     await cmd_help(message)
 
-# ==================== CALLBACKS DE BLOQUEO ====================
-
 @router.callback_query(F.data == "shop_from_block")
 async def shop_from_block(callback: CallbackQuery):
     await cmd_shop(callback.message)
@@ -1158,8 +1155,6 @@ async def shop_from_block(callback: CallbackQuery):
 async def invite_from_block(callback: CallbackQuery):
     await cmd_invite(callback.message)
     await callback.answer()
-
-# ==================== COMANDOS ====================
 
 @router.message(Command('chat'))
 async def cmd_chat(message: Message):
@@ -1284,35 +1279,39 @@ async def cmd_shop(message: Message):
         return
     language = user['language']
     builder = InlineKeyboardBuilder()
+    # Oferta diaria
+    daily_offer = not await has_purchased_today(telegram_id)
     if language == 'es':
-        text = "💎 Tienda de Gemas\n\nSelecciona un paquete:\n\n"
+        text = "💎 Tienda de Gemas\n\n"
+        if daily_offer:
+            text += "🎉 ¡OFERTA DEL DÍA! Primera compra +20% extra.\n\n"
+        text += "Selecciona un paquete:\n\n"
         for i, package in enumerate(STAR_PACKAGES):
             stars = package['stars']
             gems = package['gems']
-            bonus = package.get('bonus', 0)
-            first_time = package.get('first_time', False)
-            if bonus > 0:
-                gems_with_bonus = int(gems * (1 + bonus / 100))
-                line = f"⭐ {stars} Stars → 💎 {gems} + {gems_with_bonus - gems} bonus = {gems_with_bonus} gemas"
-            else:
-                line = f"⭐ {stars} Stars → 💎 {gems} gemas"
-            if first_time:
+            bonus = package['bonus']
+            gems_with_bonus = int(gems * (1 + bonus / 100))
+            if daily_offer:
+                gems_with_bonus = int(gems_with_bonus * (1 + DAILY_OFFER_BONUS / 100))
+            line = f"⭐ {stars} Stars → 💎 {gems_with_bonus} gemas (+{bonus}% base)"
+            if package.get('first_time'):
                 line += " (¡Primera vez!)"
             text += f"{i+1}. {line}\n"
             builder.button(text=f"Opción {i+1}", callback_data=f"buy_{i}")
     else:
-        text = "💎 Gem Store\n\nSelect a package:\n\n"
+        text = "💎 Gem Store\n\n"
+        if daily_offer:
+            text += "🎉 DAILY OFFER! First purchase +20% extra.\n\n"
+        text += "Select a package:\n\n"
         for i, package in enumerate(STAR_PACKAGES):
             stars = package['stars']
             gems = package['gems']
-            bonus = package.get('bonus', 0)
-            first_time = package.get('first_time', False)
-            if bonus > 0:
-                gems_with_bonus = int(gems * (1 + bonus / 100))
-                line = f"⭐ {stars} Stars → 💎 {gems} + {gems_with_bonus - gems} bonus = {gems_with_bonus} gems"
-            else:
-                line = f"⭐ {stars} Stars → 💎 {gems} gems"
-            if first_time:
+            bonus = package['bonus']
+            gems_with_bonus = int(gems * (1 + bonus / 100))
+            if daily_offer:
+                gems_with_bonus = int(gems_with_bonus * (1 + DAILY_OFFER_BONUS / 100))
+            line = f"⭐ {stars} Stars → 💎 {gems_with_bonus} gems (+{bonus}% base)"
+            if package.get('first_time'):
                 line += " (First time!)"
             text += f"{i+1}. {line}\n"
             builder.button(text=f"Option {i+1}", callback_data=f"buy_{i}")
@@ -1329,11 +1328,11 @@ async def process_purchase(callback: CallbackQuery):
     package = STAR_PACKAGES[package_index]
     stars = package['stars']
     gems = package['gems']
-    bonus = package.get('bonus', 0)
-    if bonus > 0:
-        gems_with_bonus = int(gems * (1 + bonus / 100))
-    else:
-        gems_with_bonus = gems
+    bonus = package['bonus']
+    gems_with_bonus = int(gems * (1 + bonus / 100))
+    # Aplicar oferta diaria si no ha comprado hoy
+    if not await has_purchased_today(telegram_id):
+        gems_with_bonus = int(gems_with_bonus * (1 + DAILY_OFFER_BONUS / 100))
 
     user = await get_user(telegram_id)
     language = user['language']
@@ -1374,9 +1373,9 @@ async def process_successful_payment(message: Message):
     language = user['language']
     if success:
         if language == 'es':
-            await message.answer(f"✅ {msg}\n\n🎉 ¡Ahora tienes acceso a la generación de imágenes! Usa el botón 🖼️ Generar Imagen en el menú.")
+            await message.answer(f"✅ {msg}\n\n🎉 ¡Ahora tienes acceso a la generación de imágenes y a personajes exclusivos! Usa el botón 🖼️ Generar Imagen en el menú.")
         else:
-            await message.answer(f"✅ {msg}\n\n🎉 You now have access to image generation! Use the 🖼️ Generate Image button in the menu.")
+            await message.answer(f"✅ {msg}\n\n🎉 You now have access to image generation and exclusive characters! Use the 🖼️ Generate Image button in the menu.")
         is_premium = await has_user_purchased(telegram_id)
         new_keyboard = get_main_keyboard(language, is_premium)
         await message.answer("🎊 ¡Tu teclado ha sido actualizado!", reply_markup=new_keyboard)
@@ -1445,7 +1444,6 @@ async def cmd_newchar(message: Message):
     if not user:
         await message.answer("⚠️ Primero debes registrarte con /start")
         return
-    # Si ya tiene un proceso en curso, lo reiniciamos
     if telegram_id in user_states:
         del user_states[telegram_id]
     user_states[telegram_id] = {
@@ -1497,7 +1495,7 @@ async def cmd_menu(message: Message):
         text = "🏠 Main Menu\n\nUse the buttons below to navigate:"
     await message.answer(text, reply_markup=keyboard)
 
-# ==================== FUNCIONES AUXILIARES ====================
+# ==================== AUXILIARES ====================
 
 async def show_welcome(message: Message, character_name: str, language: str, keyboard: ReplyKeyboardMarkup = None):
     if language == 'es':
@@ -1530,13 +1528,9 @@ Enjoy your experience!"""
 
 async def show_main_menu(message: Message, language: str, keyboard: ReplyKeyboardMarkup = None):
     if language == 'es':
-        text = """🏠 Menú Principal
-
-Usa los botones de abajo para navegar:"""
+        text = "🏠 Menú Principal\n\nUsa los botones de abajo para navegar:"
     else:
-        text = """🏠 Main Menu
-
-Use the buttons below to navigate:"""
+        text = "🏠 Main Menu\n\nUse the buttons below to navigate:"
     await message.answer(text, reply_markup=keyboard)
 
 # ==================== INICIALIZACIÓN ====================
@@ -1553,10 +1547,8 @@ async def on_startup():
         secret_token=WEBHOOK_SECRET if WEBHOOK_SECRET else None
     )
     logger.info(f"Webhook configurado: {WEBHOOK_URL}")
-    # Iniciar tareas de limpieza
     asyncio.create_task(cleanup_cache())
     asyncio.create_task(cleanup_states())
-    # Crear sesiones HTTP globales
     global openrouter_session, novita_session
     openrouter_session = aiohttp.ClientSession()
     novita_session = aiohttp.ClientSession()
@@ -1574,7 +1566,6 @@ async def on_shutdown():
 
 async def handle_webhook(request):
     if request.path == '/webhook':
-        # Verificar token secreto si está configurado
         if WEBHOOK_SECRET:
             received_secret = request.headers.get('X-Telegram-Bot-Api-Secret-Token')
             if received_secret != WEBHOOK_SECRET:
