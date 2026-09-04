@@ -30,7 +30,7 @@ SUPABASE_KEY = os.getenv('SUPABASE_KEY')
 WEBHOOK_URL = os.getenv('WEBHOOK_URL')
 WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET')
 
-OPENROUTER_MODEL = "deepseek/deepseek-v4-flash-0731"
+OPENROUTER_MODEL = "deepseek/deepseek-v4-flash-0731"  # Cambia si es necesario
 NOVITA_MODEL = "stable-diffusion-xl"
 
 GEM_COST_MESSAGE = 1
@@ -186,7 +186,7 @@ STAR_PACKAGES = [
     {"stars": 300, "gems": 1200, "bonus": 20, "first_time": False},
     {"stars": 500, "gems": 2000, "bonus": 25, "first_time": False},
 ]
-DAILY_OFFER_BONUS = 20  # 20% extra en primera compra del día
+DAILY_OFFER_BONUS = 20
 
 # Logging
 logging.basicConfig(
@@ -499,7 +499,6 @@ async def record_star_purchase(telegram_id: int, stars: int, gems: int,
         'is_first_purchase': is_first_purchase,
         'telegram_charge_id': charge_id
     })
-    # Actualizar fecha de última compra
     await db.update('users', {'last_purchase_date': datetime.utcnow().isoformat()}, {'telegram_id': telegram_id})
     await add_gems(telegram_id, gems, 'purchase', f'Compra con {stars} stars')
 
@@ -741,9 +740,7 @@ async def process_star_purchase(telegram_id: int, package_index: int, charge_id:
     package = STAR_PACKAGES[package_index]
     base_gems = package['gems']
     bonus_percent = package.get('bonus', 0)
-    # Aplicar bonus del paquete
     gems = int(base_gems * (1 + bonus_percent / 100))
-    # Aplicar oferta diaria (20% extra) si es la primera compra del día
     if not await has_purchased_today(telegram_id):
         gems = int(gems * (1 + DAILY_OFFER_BONUS / 100))
     await record_star_purchase(
@@ -908,6 +905,11 @@ async def process_archetype(callback: CallbackQuery):
     await callback.message.edit_text(text)
     await callback.answer()
 
+# --- NUEVOS HANDLERS PARA PALABRAS CLAVE (sin emoji) ---
+@router.message(F.text.lower().in_(["nuevo personaje", "new character"]))
+async def text_newchar(message: Message):
+    await cmd_newchar(message)
+
 @router.message(F.text & ~F.text.startswith('/'))
 async def process_message(message: Message):
     telegram_id = message.from_user.id
@@ -1067,6 +1069,10 @@ async def process_message(message: Message):
         user['first_name'],
         language
     )
+    if not system_prompt:
+        await message.answer("⚠️ No se pudo crear el prompt del personaje. Intenta recrear el personaje con /newchar.")
+        return
+
     messages = [{"role": "system", "content": system_prompt}]
     for msg in history:
         messages.append({
@@ -1075,7 +1081,12 @@ async def process_message(message: Message):
         })
 
     await message.bot.send_chat_action(message.chat.id, 'typing')
-    response = await generate_openrouter_response(messages, language, user['gems'], is_hook_mode)
+    try:
+        response = await generate_openrouter_response(messages, language, user['gems'], is_hook_mode)
+    except Exception as e:
+        logger.error(f"Error inesperado al llamar a OpenRouter: {e}")
+        await message.answer("⚠️ Error al generar respuesta. Intenta de nuevo más tarde.")
+        return
 
     if response:
         await save_message(telegram_id, 'assistant', response)
@@ -1087,10 +1098,11 @@ async def process_message(message: Message):
         response = format_actions_html(response)
         await message.answer(response, parse_mode="HTML")
     else:
+        # Mensaje más específico
         if language == 'es':
-            await message.answer("⚠️ Error al generar respuesta. Intenta de nuevo.")
+            await message.answer("⚠️ No se pudo obtener respuesta de la IA. Verifica tu conexión o el modelo configurado. Si el problema persiste, contacta soporte.")
         else:
-            await message.answer("⚠️ Error generating response. Try again.")
+            await message.answer("⚠️ Could not get response from AI. Check your connection or the configured model. If the problem persists, contact support.")
 
 # ==================== BOTONES Y COMANDOS ====================
 
@@ -1275,7 +1287,6 @@ async def cmd_shop(message: Message):
         return
     language = user['language']
     builder = InlineKeyboardBuilder()
-    # Oferta diaria
     daily_offer = not await has_purchased_today(telegram_id)
     if language == 'es':
         text = "💎 Tienda de Gemas\n\n"
@@ -1326,7 +1337,6 @@ async def process_purchase(callback: CallbackQuery):
     gems = package['gems']
     bonus = package['bonus']
     gems_with_bonus = int(gems * (1 + bonus / 100))
-    # Aplicar oferta diaria si no ha comprado hoy
     if not await has_purchased_today(telegram_id):
         gems_with_bonus = int(gems_with_bonus * (1 + DAILY_OFFER_BONUS / 100))
 
