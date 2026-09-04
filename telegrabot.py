@@ -36,6 +36,7 @@ NOVITA_MODEL = "stable-diffusion-xl"
 GEM_COST_MESSAGE = 1
 GEM_COST_IMAGE = 10
 GEM_COST_AUDIO = 5
+GEM_COST_NEW_CHARACTER = 5   # Costo en gemas para crear nuevo personaje
 
 # Sistema de referidos
 BASE_DAILY_GEMS = 5
@@ -459,6 +460,7 @@ async def add_gems(telegram_id: int, amount: int, transaction_type: str,
 
 async def save_character(telegram_id: int, character_name: str, gender: str,
                         archetype: str, personality: str):
+    """Desactiva todos los personajes del usuario y crea uno nuevo activo."""
     await db.update('user_characters', {'is_active': False}, {'telegram_id': telegram_id})
     result = await db.insert('user_characters', {
         'telegram_id': telegram_id,
@@ -475,21 +477,27 @@ async def get_active_character(telegram_id: int):
                              {'telegram_id': telegram_id, 'is_active': True})
     return results[0] if results else None
 
-async def delete_conversation_history(telegram_id: int):
-    """Elimina todo el historial de conversación de un usuario."""
-    await db.delete('conversation_history', {'telegram_id': telegram_id})
+async def get_all_characters(telegram_id: int):
+    """Obtiene todos los personajes del usuario."""
+    return await db.select('user_characters', '*', {'telegram_id': telegram_id})
 
-async def save_message(telegram_id: int, role: str, content: str):
+async def set_active_character(telegram_id: int, character_id: int):
+    """Cambia el personaje activo."""
+    await db.update('user_characters', {'is_active': False}, {'telegram_id': telegram_id})
+    await db.update('user_characters', {'is_active': True},
+                   {'telegram_id': telegram_id, 'id': character_id})
+
+async def save_message(telegram_id: int, role: str, content: str, character_id: int):
     await db.insert('conversation_history', {
         'telegram_id': telegram_id,
         'role': role,
-        'content': content
+        'content': content,
+        'character_id': character_id
     })
 
-async def get_conversation_history(telegram_id: int, limit: int = 10):
-    # Obtener los últimos 'limit' mensajes en orden cronológico ascendente
+async def get_conversation_history(telegram_id: int, character_id: int, limit: int = 10):
     results = await db.select('conversation_history', '*',
-                              {'telegram_id': telegram_id},
+                              {'telegram_id': telegram_id, 'character_id': character_id},
                               order='created_at.desc', limit=limit)
     results.reverse()
     return results
@@ -542,7 +550,7 @@ def get_main_keyboard(language: str, is_premium: bool = False) -> ReplyKeyboardM
             builder.row(KeyboardButton(text="🛒 Tienda"))
         builder.row(
             KeyboardButton(text="🎁 Invitar Amigos"),
-            KeyboardButton(text="🎭 Nuevo Personaje"),
+            KeyboardButton(text="💬 Nuevo Chat"),
             KeyboardButton(text="❓ Ayuda")
         )
     else:
@@ -553,7 +561,7 @@ def get_main_keyboard(language: str, is_premium: bool = False) -> ReplyKeyboardM
             builder.row(KeyboardButton(text="🛒 Shop"))
         builder.row(
             KeyboardButton(text="🎁 Invite Friends"),
-            KeyboardButton(text="🎭 New Character"),
+            KeyboardButton(text="💬 New Chat"),
             KeyboardButton(text="❓ Help")
         )
     return builder.as_markup(resize_keyboard=True, one_time_keyboard=False)
@@ -568,7 +576,6 @@ async def generate_openrouter_response(messages: list, language: str = 'es',
         "Content-Type": "application/json"
     }
 
-    # Determinar intensidad
     if is_hook_mode:
         intensity_level = "MAXIMUM"
     elif gem_balance <= 3:
@@ -648,23 +655,20 @@ IMPORTANT:
     }
 
     intensity_prompt = system_prompts.get(language, system_prompts['es']).get(intensity_level, system_prompts['es']['NORMAL'])
-    # Fusionar el prompt de intensidad con el prompt del personaje en un solo system message
     if character_prompt:
         combined_system = f"{intensity_prompt}\n\n{character_prompt}"
     else:
         combined_system = intensity_prompt
 
-    # Refuerzo de idioma adicional
     if language == 'es':
         combined_system = "IMPORTANTE: Responde ÚNICAMENTE en español. No uses ningún otro idioma.\n\n" + combined_system + "\n\nRecuerda: Solo español."
     else:
         combined_system = "IMPORTANT: Respond ONLY in English. Do not use any other language.\n\n" + combined_system + "\n\nRemember: Only English."
 
-    # Nueva instrucción para limitar la longitud y evitar cortes
     if language == 'es':
-        combined_system += "\n\nIMPORTANTE: Mantén tu respuesta dentro de 300 tokens (aprox. 200-250 palabras). Termina tus frases y no cortes a mitad de palabra."
+        combined_system += "\n\nIMPORTANTE: Mantén tu respuesta dentro de 400 tokens (aprox. 300 palabras). Termina tus frases y no cortes a mitad de palabra."
     else:
-        combined_system += "\n\nIMPORTANT: Keep your response within 300 tokens (about 200-250 words). Finish your sentences and do not cut off mid-word."
+        combined_system += "\n\nIMPORTANT: Keep your response within 400 tokens (about 300 words). Finish your sentences and do not cut off mid-word."
 
     full_messages = [{"role": "system", "content": combined_system}] + messages
 
@@ -680,7 +684,7 @@ IMPORTANT:
         "model": OPENROUTER_MODEL,
         "messages": full_messages,
         "temperature": temperature,
-        "max_tokens": 300  # Mantenemos 300 como solicitó
+        "max_tokens": 400
     }
 
     try:
@@ -955,8 +959,7 @@ async def process_message(message: Message):
             keyboard = get_main_keyboard(state['language'], is_premium=False)
             await show_welcome(message, character_name, state['language'], keyboard)
         else:
-            # Usuario existente que cambia de personaje
-            await delete_conversation_history(telegram_id)
+            # Usuario existente que crea personaje nuevo (ya pagó)
             await save_character(
                 telegram_id,
                 character_name,
@@ -1000,7 +1003,7 @@ async def process_message(message: Message):
 
     character = await get_active_character(telegram_id)
     if not character:
-        await message.answer("⚠️ No tienes un personaje activo. Usa /newchar para crear uno.")
+        await message.answer("⚠️ No tienes un personaje activo. Usa /newchat para crear uno.")
         return
 
     language = user['language']
@@ -1097,14 +1100,13 @@ async def process_message(message: Message):
         current_gems = new_balance
 
     await update_last_active(telegram_id)
-    await save_message(telegram_id, 'user', user_text)
-    history = await get_conversation_history(telegram_id, limit=10)
+    await save_message(telegram_id, 'user', user_text, character['id'])
+    history = await get_conversation_history(telegram_id, character['id'], limit=10)
     system_prompt = await create_character_prompt(
         telegram_id,
         user['first_name'],
         language
     )
-    # Construir mensajes sin system (se añadirá dentro de generate_openrouter_response)
     messages = []
     for msg in history:
         messages.append({
@@ -1118,7 +1120,7 @@ async def process_message(message: Message):
     )
 
     if response:
-        await save_message(telegram_id, 'assistant', response)
+        await save_message(telegram_id, 'assistant', response, character['id'])
         if is_hook_mode:
             if language == 'es':
                 response += f"\n\n⚠️ <b>*Momentos especiales restantes: {hook_remaining}*</b>"
@@ -1166,13 +1168,13 @@ async def btn_invite_es(message: Message):
 async def btn_invite_en(message: Message):
     await cmd_invite(message)
 
-@router.message(F.text == "🎭 Nuevo Personaje")
-async def btn_newchar_es(message: Message):
-    await cmd_newchar(message)
+@router.message(F.text == "💬 Nuevo Chat")
+async def btn_newchat_es(message: Message):
+    await show_character_menu(message)
 
-@router.message(F.text == "🎭 New Character")
-async def btn_newchar_en(message: Message):
-    await cmd_newchar(message)
+@router.message(F.text == "💬 New Chat")
+async def btn_newchat_en(message: Message):
+    await show_character_menu(message)
 
 @router.message(F.text == "❓ Ayuda")
 async def btn_help_es(message: Message):
@@ -1182,16 +1184,90 @@ async def btn_help_es(message: Message):
 async def btn_help_en(message: Message):
     await cmd_help(message)
 
-# ==================== CALLBACKS DE BLOQUEO ====================
+# ==================== CALLBACKS DE MENÚ DE PERSONAJES ====================
 
-@router.callback_query(F.data == "shop_from_block")
-async def shop_from_block(callback: CallbackQuery):
-    await cmd_shop(callback.message)
+async def show_character_menu(message: Message):
+    telegram_id = message.from_user.id
+    user = await get_user(telegram_id)
+    if not user:
+        await message.answer("⚠️ Primero debes registrarte con /start")
+        return
+    characters = await get_all_characters(telegram_id)
+    builder = InlineKeyboardBuilder()
+    if characters:
+        for char in characters:
+            label = char['character_name']
+            if char['is_active']:
+                label += " ✅"
+            builder.button(text=label, callback_data=f"switch_{char['id']}")
+    builder.button(
+        text="➕ Crear nuevo personaje" if user['language'] == 'es' else "➕ Create new character",
+        callback_data="create_new_character"
+    )
+    builder.adjust(1)
+    if user['language'] == 'es':
+        text = "Selecciona un personaje para cambiar, o crea uno nuevo:"
+    else:
+        text = "Select a character to switch, or create a new one:"
+    await message.answer(text, reply_markup=builder.as_markup())
+
+@router.callback_query(F.data.startswith('switch_'))
+async def process_switch(callback: CallbackQuery):
+    telegram_id = callback.from_user.id
+    character_id = int(callback.data.split('_')[1])
+    await set_active_character(telegram_id, character_id)
+    char = await db.select('user_characters', '*', {'id': character_id})
+    if char:
+        name = char[0]['character_name']
+        user = await get_user(telegram_id)
+        if user['language'] == 'es':
+            await callback.message.answer(f"✅ Has cambiado al personaje: {name}")
+        else:
+            await callback.message.answer(f"✅ Switched to character: {name}")
     await callback.answer()
 
-@router.callback_query(F.data == "invite_from_block")
-async def invite_from_block(callback: CallbackQuery):
-    await cmd_invite(callback.message)
+@router.callback_query(F.data == "create_new_character")
+async def create_new_character(callback: CallbackQuery):
+    telegram_id = callback.from_user.id
+    user = await get_user(telegram_id)
+    if not user:
+        await callback.answer("Primero regístrate")
+        return
+    gems = await get_balance(telegram_id)
+    if gems < GEM_COST_NEW_CHARACTER:
+        if user['language'] == 'es':
+            await callback.message.answer(f"❌ No tienes suficientes gemas. Crear un personaje cuesta {GEM_COST_NEW_CHARACTER} gemas. Tienes {gems}.")
+        else:
+            await callback.message.answer(f"❌ You don't have enough gems. Creating a character costs {GEM_COST_NEW_CHARACTER} gems. You have {gems}.")
+        await callback.answer()
+        return
+
+    success, msg, _ = await check_and_deduct_gems(
+        telegram_id, GEM_COST_NEW_CHARACTER, 'new_character', 'Creación de personaje'
+    )
+    if not success:
+        await callback.message.answer(f"⚠️ {msg}")
+        await callback.answer()
+        return
+
+    user_states[telegram_id] = {
+        'step': 'gender',
+        'language': user['language'],
+        'is_new_user': False,
+        'created_at': datetime.utcnow()
+    }
+    language = user['language']
+    builder = InlineKeyboardBuilder()
+    if language == 'es':
+        builder.button(text="👨 Hombre", callback_data="gender_male")
+        builder.button(text="👩 Mujer", callback_data="gender_female")
+        text = "🎭 Selecciona el género de tu nuevo personaje:"
+    else:
+        builder.button(text="👨 Male", callback_data="gender_male")
+        builder.button(text="👩 Female", callback_data="gender_female")
+        text = "🎭 Select your new character's gender:"
+    builder.adjust(2)
+    await callback.message.answer(text, reply_markup=builder.as_markup())
     await callback.answer()
 
 # ==================== COMANDOS ====================
@@ -1205,7 +1281,7 @@ async def cmd_chat(message: Message):
         return
     character = await get_active_character(telegram_id)
     if not character:
-        await message.answer("⚠️ No tienes un personaje activo. Usa /newchar para crear uno.")
+        await message.answer("⚠️ No tienes un personaje activo. Usa /newchat para crear uno.")
         return
     language = user['language']
     if language == 'es':
@@ -1473,31 +1549,10 @@ async def cmd_invite(message: Message):
 Share your link and earn free gems!"""
     await message.answer(text)
 
-@router.message(Command('newchar'))
-async def cmd_newchar(message: Message):
-    telegram_id = message.from_user.id
-    user = await get_user(telegram_id)
-    if not user:
-        await message.answer("⚠️ Primero debes registrarte con /start")
-        return
-    user_states[telegram_id] = {
-        'step': 'gender',
-        'language': user['language'],
-        'is_new_user': False,
-        'created_at': datetime.utcnow()
-    }
-    language = user['language']
-    builder = InlineKeyboardBuilder()
-    if language == 'es':
-        builder.button(text="👨 Hombre", callback_data="gender_male")
-        builder.button(text="👩 Mujer", callback_data="gender_female")
-        text = "🎭 Selecciona el género de tu nuevo personaje:"
-    else:
-        builder.button(text="👨 Male", callback_data="gender_male")
-        builder.button(text="👩 Female", callback_data="gender_female")
-        text = "🎭 Select your new character's gender:"
-    builder.adjust(2)
-    await message.answer(text, reply_markup=builder.as_markup())
+@router.message(Command('newchat'))
+async def cmd_newchat(message: Message):
+    # Este comando muestra el menú de personajes (cambiar o crear)
+    await show_character_menu(message)
 
 @router.message(Command('help'))
 async def cmd_help(message: Message):
@@ -1509,7 +1564,7 @@ async def cmd_help(message: Message):
 /balance - Ver tus gemas
 /shop - Tienda de gemas
 /invite - Invitar amigos y ganar gemas
-/newchar - Crear nuevo personaje
+/newchat - Cambiar o crear personaje (5 gemas)
 /help - Mostrar esta ayuda
 
 💡 Consejo: Invita amigos para aumentar tus gemas diarias hasta 15."""
