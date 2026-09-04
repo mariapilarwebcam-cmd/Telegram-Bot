@@ -660,6 +660,12 @@ IMPORTANT:
     else:
         combined_system = "IMPORTANT: Respond ONLY in English. Do not use any other language.\n\n" + combined_system + "\n\nRemember: Only English."
 
+    # Nueva instrucción para limitar la longitud y evitar cortes
+    if language == 'es':
+        combined_system += "\n\nIMPORTANTE: Mantén tu respuesta dentro de 300 tokens (aprox. 200-250 palabras). Termina tus frases y no cortes a mitad de palabra."
+    else:
+        combined_system += "\n\nIMPORTANT: Keep your response within 300 tokens (about 200-250 words). Finish your sentences and do not cut off mid-word."
+
     full_messages = [{"role": "system", "content": combined_system}] + messages
 
     temperature = 0.8
@@ -674,7 +680,7 @@ IMPORTANT:
         "model": OPENROUTER_MODEL,
         "messages": full_messages,
         "temperature": temperature,
-        "max_tokens": 300
+        "max_tokens": 300  # Mantenemos 300 como solicitó
     }
 
     try:
