@@ -16,7 +16,7 @@ from aiogram import Bot, Dispatcher, Router, F
 from aiogram.filters import Command, CommandStart
 from aiogram.types import (
     Message, CallbackQuery, LabeledPrice, PreCheckoutQuery, Update,
-    ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton
+    ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, BufferedInputFile
 )
 from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 
@@ -486,18 +486,22 @@ async def send_generated_audio(bot: Bot, chat_id: int, audio_data: str, caption:
 
         audio_bytes = base64.b64decode(audio_data)
         fmt = detect_audio_format(audio_bytes)
-        logger.info(f"🔎 Formato de audio detectado: {fmt}")
+        logger.info(f"🔎 Formato de audio detectado: {fmt} ({len(audio_bytes)} bytes)")
 
-        audio_file = io.BytesIO(audio_bytes)
+        if len(audio_bytes) == 0:
+            logger.error("❌ El audio decodificado tiene 0 bytes")
+            return False
 
+        # aiogram 3.x NO acepta io.BytesIO "pelado" para send_voice/send_audio.
+        # Hay que envolver los bytes en BufferedInputFile.
         if fmt == 'ogg':
-            audio_file.name = "audio.ogg"
-            await bot.send_voice(chat_id, voice=audio_file, caption=caption)
+            input_file = BufferedInputFile(audio_bytes, filename="audio.ogg")
+            await bot.send_voice(chat_id, voice=input_file, caption=caption)
         else:
             # wav / mp3 / flac / desconocido: se envía como archivo de audio normal
             ext = fmt if fmt != 'unknown' else 'mp3'
-            audio_file.name = f"audio.{ext}"
-            await bot.send_audio(chat_id, audio=audio_file, caption=caption)
+            input_file = BufferedInputFile(audio_bytes, filename=f"audio.{ext}")
+            await bot.send_audio(chat_id, audio=input_file, caption=caption)
 
         return True
     except Exception as e:
