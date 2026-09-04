@@ -30,7 +30,7 @@ SUPABASE_KEY = os.getenv('SUPABASE_KEY')
 WEBHOOK_URL = os.getenv('WEBHOOK_URL')
 WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET')
 
-OPENROUTER_MODEL = "deepseek/deepseek-v4-flash-0731"  # Cambia si es necesario
+OPENROUTER_MODEL = "deepseek/deepseek-v4-flash-0731"  # Se mantiene el modelo original
 NOVITA_MODEL = "stable-diffusion-xl"
 
 GEM_COST_MESSAGE = 1
@@ -1069,9 +1069,9 @@ async def process_message(message: Message):
         user['first_name'],
         language
     )
+    # --- CORRECCIÓN: si system_prompt es None, usar uno por defecto ---
     if not system_prompt:
-        await message.answer("⚠️ No se pudo crear el prompt del personaje. Intenta recrear el personaje con /newchar.")
-        return
+        system_prompt = "Eres un personaje misterioso y seductor. Responde con estilo y creatividad."
 
     messages = [{"role": "system", "content": system_prompt}]
     for msg in history:
@@ -1081,12 +1081,7 @@ async def process_message(message: Message):
         })
 
     await message.bot.send_chat_action(message.chat.id, 'typing')
-    try:
-        response = await generate_openrouter_response(messages, language, user['gems'], is_hook_mode)
-    except Exception as e:
-        logger.error(f"Error inesperado al llamar a OpenRouter: {e}")
-        await message.answer("⚠️ Error al generar respuesta. Intenta de nuevo más tarde.")
-        return
+    response = await generate_openrouter_response(messages, language, user['gems'], is_hook_mode)
 
     if response:
         await save_message(telegram_id, 'assistant', response)
@@ -1098,11 +1093,10 @@ async def process_message(message: Message):
         response = format_actions_html(response)
         await message.answer(response, parse_mode="HTML")
     else:
-        # Mensaje más específico
         if language == 'es':
-            await message.answer("⚠️ No se pudo obtener respuesta de la IA. Verifica tu conexión o el modelo configurado. Si el problema persiste, contacta soporte.")
+            await message.answer("⚠️ Error al generar respuesta. Intenta de nuevo.")
         else:
-            await message.answer("⚠️ Could not get response from AI. Check your connection or the configured model. If the problem persists, contact support.")
+            await message.answer("⚠️ Error generating response. Try again.")
 
 # ==================== BOTONES Y COMANDOS ====================
 
