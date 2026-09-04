@@ -549,6 +549,7 @@ async def generate_deepinfra_audio(text: str, language: str = 'es', gender: str 
         logger.error(f"⚠️ Excepción en DeepInfra: {str(e)}", exc_info=True)
         return None
 
+# =========== FUNCIÓN DE GENERACIÓN DE IMAGEN CORREGIDA ===========
 async def generate_image(prompt: str):
     if not DEEPINFRA_TOKEN:
         logger.error("❌ DEEPINFRA_TOKEN no está configurada")
@@ -576,12 +577,38 @@ async def generate_image(prompt: str):
                 status = response.status
                 if status == 200:
                     result = await response.json()
-                    if 'images' in result and result['images']:
-                        return result['images'][0].get('url') or result['images'][0].get('image')
-                    if 'image' in result:
-                        return result['image']
-                    logger.error(f"❌ Estructura de imagen inesperada: {result}")
-                    return None
+                    logger.info(f"Respuesta de imagen: {result}")
+
+                    # Intentar extraer la imagen de varias estructuras posibles
+                    image_data = None
+
+                    # Caso 1: 'images' es una lista de objetos con 'url' o 'image'
+                    if 'images' in result and isinstance(result['images'], list) and len(result['images']) > 0:
+                        first_image = result['images'][0]
+                        if isinstance(first_image, dict):
+                            image_data = first_image.get('url') or first_image.get('image')
+                        elif isinstance(first_image, str):
+                            image_data = first_image  # podría ser una URL o base64
+
+                    # Caso 2: 'image' directo
+                    if not image_data and 'image' in result:
+                        image_data = result['image']
+
+                    # Caso 3: 'output' anidado (común en algunos modelos)
+                    if not image_data and 'output' in result:
+                        output = result['output']
+                        if isinstance(output, dict) and 'images' in output and output['images']:
+                            first_image = output['images'][0]
+                            if isinstance(first_image, dict):
+                                image_data = first_image.get('url') or first_image.get('image')
+                            else:
+                                image_data = first_image
+
+                    if image_data:
+                        return image_data
+                    else:
+                        logger.error(f"❌ No se pudo extraer la imagen de la respuesta: {result}")
+                        return None
                 else:
                     logger.error(f"❌ DeepInfra Image API error {status}: {await response.text()}")
                     return None
@@ -747,6 +774,7 @@ async def btn_chat(message: Message): await cmd_chat(message)
 @router.message(F.text == "💎 Balance")
 async def btn_balance(message: Message): await cmd_balance(message)
 
+# MODIFICACIÓN: Botón de audio ahora genera el audio de la última respuesta del personaje
 @router.message(F.text.in_(["🎙️ Grabar Audio", "🎙️ Record Audio", "🎵 Generar Audio", "🎵 Generate Audio"]))
 async def btn_audio(message: Message): await cmd_audio(message)
 
@@ -765,7 +793,7 @@ async def btn_newchat(message: Message): await show_character_menu(message)
 @router.message(F.text.in_(["❓ Ayuda", "❓ Help"]))
 async def btn_help(message: Message): await cmd_help(message)
 
-# ==================== COMANDOS NORMALES ====================
+# ==================== COMANDOS ====================
 @router.message(Command('chat'))
 async def cmd_chat(message: Message):
     user = await get_user(message.from_user.id)
@@ -776,20 +804,55 @@ async def cmd_chat(message: Message):
     text = f"💬 ¡Conversación iniciada con {character['character_name']}!\n\nEscribe tu mensaje y te responderá.\n💰 Costo: {GEM_COST_MESSAGE} gema por mensaje" if lang == 'es' else f"💬 Conversation started with {character['character_name']}!\n\nWrite your message.\n💰 Cost: {GEM_COST_MESSAGE} gem per message"
     await message.answer(text)
 
+# COMANDO AUDIO MODIFICADO: Genera audio de la última respuesta del asistente
 @router.message(Command('audio'))
 async def cmd_audio(message: Message):
     telegram_id = message.from_user.id
     user = await get_user(telegram_id)
-    if not user: return await message.answer("⚠️ Primero debes registrarte con /start")
+    if not user:
+        return await message.answer("⚠️ Primero debes registrarte con /start")
 
     character = await get_active_character(telegram_id)
     if not character:
         return await message.answer("⚠️ No tienes un personaje activo. Usa /newchat")
 
     lang = user['language']
-    text = f"🎙️ <b>Grabadora de Audio</b>\n\n💰 Costo: {GEM_COST_AUDIO} gemas\n\nEscribe lo que quieres que {character['character_name']} te diga." if lang == 'es' else f"🎙️ <b>Audio Recorder</b>\n\n💰 Cost: {GEM_COST_AUDIO} gems\n\nWrite what you want {character['character_name']} to say."
-    await message.answer(text, parse_mode="HTML")
-    user_states[telegram_id] = {'step': 'audio_prompt', 'language': lang, 'created_at': datetime.utcnow()}
+
+    # Obtener la última respuesta del asistente
+    history = await get_conversation_history(telegram_id, character['id'], limit=2)  # buscamos la última
+    last_assistant_msg = None
+    for msg in reversed(history):
+        if msg['role'] == 'assistant':
+            last_assistant_msg = msg['content']
+            break
+
+    if not last_assistant_msg:
+        # Si no hay mensaje previo, usamos un mensaje por defecto
+        if lang == 'es':
+            last_assistant_msg = "Hola, soy tu personaje. ¿Qué te gustaría que dijera?"
+        else:
+            last_assistant_msg = "Hello, I'm your character. What would you like me to say?"
+
+    # Cobrar gemas
+    success, msg, _ = await check_and_deduct_gems(telegram_id, GEM_COST_AUDIO, 'audio', f'Audio de respuesta')
+    if not success:
+        await message.answer(f"⚠️ {msg}")
+        return
+
+    # Generar audio de ese texto
+    audio_data = await generate_tts_audio(last_assistant_msg, lang, character['gender'] if character else 'female')
+    if audio_data:
+        caption = f"🎙️ Audio de {character['character_name']}" if lang == 'es' else f"🎙️ Audio from {character['character_name']}"
+        sent_ok = await send_generated_audio(message.bot, telegram_id, audio_data, caption)
+        if not sent_ok:
+            await add_gems(telegram_id, GEM_COST_AUDIO, 'refund', 'Reembolso por fallo en audio')
+            await message.answer("⚠️ Error al enviar el audio. Se te han reembolsado las gemas.")
+    else:
+        await add_gems(telegram_id, GEM_COST_AUDIO, 'refund', 'Reembolso por fallo en TTS')
+        if lang == 'es':
+            await message.answer(f"⚠️ <b>Audio no disponible</b>\n\nSe te han reembolsado las {GEM_COST_AUDIO} gemas.\n\n<b>Texto:</b>\n<i>{last_assistant_msg}</i>", parse_mode="HTML")
+        else:
+            await message.answer("⚠️ Error al generar el audio. Se te han reembolsado las gemas.")
 
 @router.message(Command('selfie'))
 async def cmd_selfie(message: Message):
@@ -1030,41 +1093,7 @@ async def process_message(message: Message):
             text = f"✅ ¡Nuevo personaje creado!\n\n🎭 Nombre: {message.text.strip()}\n\nPuedes empezar a chatear con el botón 💬 Chat." if lang == 'es' else f"✅ New character created!\n\n🎭 Name: {message.text.strip()}\n\nYou can start chatting with the 💬 Chat button."
             return await message.answer(text)
 
-    # Generación de AUDIO
-    if telegram_id in user_states and user_states[telegram_id].get('step') == 'audio_prompt':
-        lang = user_states[telegram_id]['language']
-        prompt = message.text.strip()
-        character = await get_active_character(telegram_id)
-
-        success, msg, _ = await check_and_deduct_gems(telegram_id, GEM_COST_AUDIO, 'audio', f'Audio: {prompt[:50]}')
-        if not success:
-            await message.answer(f"⚠️ {msg}")
-            del user_states[telegram_id]
-            return
-
-        # Audio inmersivo de preparación
-        prep_text = "*sonido de respiración suave* Un momento, estoy ajustando el micrófono para grabar esto solo para ti..." if lang == 'es' else "*soft breathing sound* Hold on, I'm adjusting the mic to record this just for you..."
-        prep_audio = await generate_tts_audio(prep_text, lang, character['gender'] if character else 'female')
-        if prep_audio:
-            await send_generated_audio(message.bot, telegram_id, prep_audio, "")
-
-        # Audio principal
-        main_audio = await generate_tts_audio(prompt, lang, character['gender'] if character else 'female')
-        if main_audio:
-            caption = f"🎙️ Audio listo."
-            sent_ok = await send_generated_audio(message.bot, telegram_id, main_audio, caption)
-            if not sent_ok:
-                await add_gems(telegram_id, GEM_COST_AUDIO, 'refund', 'Reembolso por fallo en audio')
-                await message.answer("⚠️ Error al enviar el audio. Se te han reembolsado las gemas.")
-        else:
-            await add_gems(telegram_id, GEM_COST_AUDIO, 'refund', 'Reembolso por fallo en TTS')
-            if lang == 'es':
-                await message.answer(f"⚠️ <b>Audio no disponible</b>\n\nSe te han reembolsado las {GEM_COST_AUDIO} gemas.\n\n<b>Texto:</b>\n<i>{prompt}</i>", parse_mode="HTML")
-            else:
-                await message.answer("⚠️ Error al generar el audio. Se te han reembolsado las gemas.")
-
-        del user_states[telegram_id]
-        return
+    # Ya no hay estado para audio_prompt porque ahora se genera automáticamente
 
     user = await get_user_cached(telegram_id)
     if not user:
