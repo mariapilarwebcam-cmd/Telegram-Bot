@@ -391,8 +391,6 @@ async def update_last_active(telegram_id: int):
                    {'telegram_id': telegram_id})
 
 async def count_active_referrals_last_24h(telegram_id: int) -> int:
-    # Optimización: usar una consulta con filtro de tiempo, pero como no tenemos
-    # filtro de fecha en la API, lo hacemos manualmente.
     results = await db.select('referrals', '*', {'referrer_id': telegram_id})
     if not results:
         return 0
@@ -493,7 +491,7 @@ async def get_conversation_history(telegram_id: int, limit: int = 10):
     results = await db.select('conversation_history', '*',
                               {'telegram_id': telegram_id},
                               order='created_at.desc', limit=limit)
-    results.reverse()  # invertir para que queden en orden ascendente
+    results.reverse()
     return results
 
 async def get_user_by_referral_code(referral_code: str):
@@ -563,7 +561,8 @@ def get_main_keyboard(language: str, is_premium: bool = False) -> ReplyKeyboardM
 # ==================== SERVICIOS DE IA ====================
 
 async def generate_openrouter_response(messages: list, language: str = 'es',
-                                       gem_balance: int = 15, is_hook_mode: bool = False):
+                                       gem_balance: int = 15, is_hook_mode: bool = False,
+                                       character_prompt: str = None):
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json"
@@ -648,8 +647,20 @@ IMPORTANT:
         }
     }
 
-    system_prompt = system_prompts.get(language, system_prompts['es']).get(intensity_level, system_prompts['es']['NORMAL'])
-    full_messages = [{"role": "system", "content": system_prompt}] + messages
+    intensity_prompt = system_prompts.get(language, system_prompts['es']).get(intensity_level, system_prompts['es']['NORMAL'])
+    # Fusionar el prompt de intensidad con el prompt del personaje en un solo system message
+    if character_prompt:
+        combined_system = f"{intensity_prompt}\n\n{character_prompt}"
+    else:
+        combined_system = intensity_prompt
+
+    # Refuerzo de idioma adicional
+    if language == 'es':
+        combined_system = "IMPORTANTE: Responde ÚNICAMENTE en español. No uses ningún otro idioma.\n\n" + combined_system + "\n\nRecuerda: Solo español."
+    else:
+        combined_system = "IMPORTANT: Respond ONLY in English. Do not use any other language.\n\n" + combined_system + "\n\nRemember: Only English."
+
+    full_messages = [{"role": "system", "content": combined_system}] + messages
 
     temperature = 0.8
     if intensity_level == 'HIGH':
@@ -916,7 +927,6 @@ async def process_message(message: Message):
         is_new_user = state.get('is_new_user', False)
 
         if is_new_user:
-            # Crear usuario nuevo
             user = await create_user(
                 telegram_id,
                 state['username'],
@@ -940,7 +950,6 @@ async def process_message(message: Message):
             await show_welcome(message, character_name, state['language'], keyboard)
         else:
             # Usuario existente que cambia de personaje
-            # Eliminar historial anterior para empezar limpio
             await delete_conversation_history(telegram_id)
             await save_character(
                 telegram_id,
@@ -958,7 +967,7 @@ async def process_message(message: Message):
             await message.answer(text)
         return
 
-    # Paso 2: Generación de imagen (estado image_prompt)
+    # Paso 2: Generación de imagen
     if telegram_id in user_states and user_states[telegram_id].get('step') == 'image_prompt':
         language = user_states[telegram_id]['language']
         prompt = message.text.strip()
@@ -993,7 +1002,7 @@ async def process_message(message: Message):
 
     hook_remaining = user.get('hook_messages_remaining', 0)
 
-    # Bloqueado (sin gemas y sin hook)
+    # Bloqueado
     if user['gems'] <= 0 and hook_remaining <= 0:
         char_name_escaped = escape_html(character['character_name'])
         if language == 'es':
@@ -1041,7 +1050,7 @@ async def process_message(message: Message):
         await message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
         return
 
-    # Hook mode (sin gemas pero con mensajes gratis)
+    # Hook mode
     if user['gems'] <= 0 and hook_remaining > 0:
         if hook_remaining == HOOK_MODE_MESSAGES:
             char_name_escaped = escape_html(character['character_name'])
@@ -1064,9 +1073,9 @@ async def process_message(message: Message):
             await message.answer(hook_msg, parse_mode="HTML")
         hook_remaining = await decrement_hook_message(telegram_id)
         is_hook_mode = True
-        current_gems = 0  # no tiene gemas
+        current_gems = 0
     else:
-        # Modo normal: deducir gema
+        # Modo normal
         lock = get_user_lock(telegram_id)
         async with lock:
             success, msg, new_balance = await check_and_deduct_gems(
@@ -1089,7 +1098,8 @@ async def process_message(message: Message):
         user['first_name'],
         language
     )
-    messages = [{"role": "system", "content": system_prompt}]
+    # Construir mensajes sin system (se añadirá dentro de generate_openrouter_response)
+    messages = []
     for msg in history:
         messages.append({
             "role": msg['role'],
@@ -1097,7 +1107,9 @@ async def process_message(message: Message):
         })
 
     await message.bot.send_chat_action(message.chat.id, 'typing')
-    response = await generate_openrouter_response(messages, language, current_gems, is_hook_mode)
+    response = await generate_openrouter_response(
+        messages, language, current_gems, is_hook_mode, system_prompt
+    )
 
     if response:
         await save_message(telegram_id, 'assistant', response)
@@ -1568,10 +1580,8 @@ async def on_startup():
         secret_token=WEBHOOK_SECRET if WEBHOOK_SECRET else None
     )
     logger.info(f"Webhook configurado: {WEBHOOK_URL}")
-    # Iniciar tareas de limpieza
     asyncio.create_task(cleanup_cache())
     asyncio.create_task(cleanup_states())
-    # Crear sesiones HTTP globales
     global openrouter_session, novita_session
     openrouter_session = aiohttp.ClientSession()
     novita_session = aiohttp.ClientSession()
@@ -1589,7 +1599,6 @@ async def on_shutdown():
 
 async def handle_webhook(request):
     if request.path == '/webhook':
-        # Verificar token secreto si está configurado
         if WEBHOOK_SECRET:
             received_secret = request.headers.get('X-Telegram-Bot-Api-Secret-Token')
             if received_secret != WEBHOOK_SECRET:
