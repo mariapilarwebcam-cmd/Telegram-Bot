@@ -28,7 +28,7 @@ NOVITA_API_KEY = os.getenv('NOVITA_API_KEY')
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_KEY')
 WEBHOOK_URL = os.getenv('WEBHOOK_URL')
-WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET')  # Opcional, para seguridad
+WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET')
 
 OPENROUTER_MODEL = "deepseek/deepseek-v4-flash-0731"
 NOVITA_MODEL = "stable-diffusion-xl"
@@ -1456,16 +1456,21 @@ async def process_purchase(callback: CallbackQuery):
         description = f"Package of {gems_with_bonus} gems"
 
     prices = [LabeledPrice(label="Gems", amount=stars)]
-    await callback.bot.send_invoice(
-        callback.message.chat.id,
-        title=title,
-        description=description,
-        provider_token="",
-        currency="XTR",
-        prices=prices,
-        payload=f"gem_purchase_{package_index}"
-    )
-    await callback.answer()
+
+    try:
+        await callback.bot.send_invoice(
+            callback.message.chat.id,
+            title=title,
+            description=description,
+            provider_token="",
+            currency="XTR",
+            prices=prices,
+            payload=f"gem_purchase_{package_index}"
+        )
+        await callback.answer("✅ Factura enviada")
+    except Exception as e:
+        logger.error(f"Error al enviar invoice: {e}")
+        await callback.answer("❌ Error al enviar la factura. Inténtalo de nuevo más tarde.", show_alert=True)
 
 @router.pre_checkout_query()
 async def process_pre_checkout(pre_checkout_query: PreCheckoutQuery):
