@@ -29,11 +29,12 @@ SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_KEY')
 WEBHOOK_URL = os.getenv('WEBHOOK_URL')
 
-# MODO PRUEBA: Cambia a False cuando termines de probar
+# MODO PRUEBA: Cambia a False cuando termines de probar y todo funcione
 TEST_MODE = True
 
 OPENROUTER_MODEL = "deepseek/deepseek-v4-flash-0731"
-NOVITA_MODEL = "stable-diffusion-xl"
+# CAMBIO CLAVE: Usar el modelo de imagen disponible en tu cuenta de Novita
+NOVITA_MODEL = "qwen-image-txt2img"
 
 GEM_COST_MESSAGE = 1
 GEM_COST_IMAGE = 10
@@ -52,79 +53,31 @@ HOOK_MODE_MESSAGES = 5
 # Arquetipos
 ARCHETYPES_MALE = {
     "es": {
-        "schoolmate": "🎓 Compañero de escuela",
-        "stepdad": "👔 Padrastro",
-        "stepbrother": "💪 Hermanastro",
-        "teacher": "📚 Profesor",
-        "neighbor": "🏠 Vecino",
-        "boss": "💼 Jefe",
-        "trainer": "🏋️ Entrenador personal",
-        "model": "📸 Modelo/Influencer",
-        "musician": "🎵 Músico",
-        "actor": "🎬 Actor",
-        "doctor": "⚕️ Médico",
-        "chef": "👨‍🍳 Chef",
-        "artist": "🎨 Artista",
-        "writer": "✍️ Escritor",
-        "bodyguard": "🛡️ Guardaespaldas",
-        "ceo": "💼 CEO/Empresario"
+        "schoolmate": "🎓 Compañero de escuela", "stepdad": "👔 Padrastro", "stepbrother": "💪 Hermanastro",
+        "teacher": "📚 Profesor", "neighbor": "🏠 Vecino", "boss": "💼 Jefe", "trainer": "🏋️ Entrenador personal",
+        "model": "📸 Modelo/Influencer", "musician": "🎵 Músico", "actor": "🎬 Actor", "doctor": "⚕️ Médico",
+        "chef": "👨‍🍳 Chef", "artist": "🎨 Artista", "writer": "✍️ Escritor", "bodyguard": "🛡️ Guardaespaldas", "ceo": "💼 CEO/Empresario"
     },
     "en": {
-        "schoolmate": "🎓 Schoolmate",
-        "stepdad": "👔 Stepfather",
-        "stepbrother": "💪 Stepbrother",
-        "teacher": "📚 Teacher",
-        "neighbor": "🏠 Neighbor",
-        "boss": "💼 Boss",
-        "trainer": "🏋️ Personal Trainer",
-        "model": "📸 Model/Influencer",
-        "musician": "🎵 Musician",
-        "actor": "🎬 Actor",
-        "doctor": "⚕️ Doctor",
-        "chef": "👨‍🍳 Chef",
-        "artist": "🎨 Artist",
-        "writer": "✍️ Writer",
-        "bodyguard": "🛡️ Bodyguard",
-        "ceo": "💼 CEO/Businessman"
+        "schoolmate": "🎓 Schoolmate", "stepdad": "👔 Stepfather", "stepbrother": "💪 Stepbrother",
+        "teacher": "📚 Teacher", "neighbor": "🏠 Neighbor", "boss": "💼 Boss", "trainer": "🏋️ Personal Trainer",
+        "model": "📸 Model/Influencer", "musician": "🎵 Musician", "actor": "🎬 Actor", "doctor": "⚕️ Doctor",
+        "chef": "👨‍🍳 Chef", "artist": "🎨 Artist", "writer": "✍️ Writer", "bodyguard": "🛡️ Bodyguard", "ceo": "💼 CEO/Businessman"
     }
 }
 
 ARCHETYPES_FEMALE = {
     "es": {
-        "schoolmate": "🎓 Compañera de escuela",
-        "stepmom": "💋 Madrastra",
-        "stepsister": "🌸 Hermanastra",
-        "teacher": "📚 Profesora",
-        "neighbor": "🏠 Vecina",
-        "boss": "💼 Jefa",
-        "trainer": "🏋️ Entrenadora personal",
-        "model": "📸 Modelo/Influencer",
-        "musician": "🎵 Músico",
-        "actor": "🎬 Actriz",
-        "doctor": "⚕️ Doctora/Enfermera",
-        "chef": "👩‍🍳 Chef",
-        "artist": "🎨 Artista",
-        "writer": "✍️ Escritora",
-        "secretary": "💼 Secretaria",
-        "model_student": "🎓 Estudiante popular"
+        "schoolmate": "🎓 Compañera de escuela", "stepmom": "💋 Madrastra", "stepsister": "🌸 Hermanastra",
+        "teacher": "📚 Profesora", "neighbor": "🏠 Vecina", "boss": "💼 Jefa", "trainer": "🏋️ Entrenadora personal",
+        "model": "📸 Modelo/Influencer", "musician": "🎵 Músico", "actor": "🎬 Actriz", "doctor": "⚕️ Doctora/Enfermera",
+        "chef": "👩‍🍳 Chef", "artist": "🎨 Artista", "writer": "✍️ Escritora", "secretary": "💼 Secretaria", "model_student": "🎓 Estudiante popular"
     },
     "en": {
-        "schoolmate": "🎓 Schoolmate",
-        "stepmom": "💋 Stepmother",
-        "stepsister": "🌸 Stepsister",
-        "teacher": "📚 Teacher",
-        "neighbor": "🏠 Neighbor",
-        "boss": "💼 Boss",
-        "trainer": "🏋️ Personal Trainer",
-        "model": "📸 Model/Influencer",
-        "musician": "🎵 Musician",
-        "actor": "🎬 Actress",
-        "doctor": "⚕️ Doctor/Nurse",
-        "chef": "👩‍🍳 Chef",
-        "artist": "🎨 Artist",
-        "writer": "✍️ Writer",
-        "secretary": "💼 Secretary",
-        "model_student": "🎓 Popular Student"
+        "schoolmate": "🎓 Schoolmate", "stepmom": "💋 Stepmother", "stepsister": "🌸 Stepsister",
+        "teacher": "📚 Teacher", "neighbor": "🏠 Neighbor", "boss": "💼 Boss", "trainer": "🏋️ Personal Trainer",
+        "model": "📸 Model/Influencer", "musician": "🎵 Musician", "actor": "🎬 Actress", "doctor": "⚕️ Doctor/Nurse",
+        "chef": "👩‍🍳 Chef", "artist": "🎨 Artist", "writer": "✍️ Writer", "secretary": "💼 Secretary", "model_student": "🎓 Popular Student"
     }
 }
 
@@ -273,15 +226,6 @@ class SupabaseClient:
         async with session.patch(url, headers=self.headers, json=data) as response:
             if response.status in [200, 204]: return True
             logger.error(f"Supabase UPDATE error: {await response.text()}")
-            return False
-
-    async def delete(self, table: str, filters: Dict[str, Any]) -> bool:
-        session = await self.get_session()
-        params = {key: f'eq.{value}' for key, value in filters.items()}
-        url = f"{self.base_url}/{table}?{urllib.parse.urlencode(params)}"
-        async with session.delete(url, headers=self.headers) as response:
-            if response.status in [200, 204]: return True
-            logger.error(f"Supabase DELETE error: {await response.text()}")
             return False
 
     async def count(self, table: str, filters: Dict[str, Any] = None) -> int:
@@ -463,7 +407,7 @@ async def generate_openrouter_response(messages: list, language: str = 'es', gem
         return None
 
 async def generate_novita_image(prompt: str):
-    """Genera imagen usando Novita AI con mejor manejo de errores"""
+    """Genera imagen usando Novita AI con el modelo qwen-image-txt2img y polling asíncrono"""
     if not NOVITA_API_KEY:
         logger.error("NOVITA_API_KEY no está configurada")
         return None
@@ -473,17 +417,14 @@ async def generate_novita_image(prompt: str):
         "Content-Type": "application/json"
     }
     
-    enhanced_prompt = f"{prompt}, high quality, detailed, masterpiece"
-    
+    # CAMBIO CLAVE: Usar el modelo disponible en tu cuenta
     data = {
-        "model_name": "stable-diffusion-xl",
-        "prompt": enhanced_prompt,
-        "negative_prompt": "low quality, blurry, distorted",
-        "steps": 30,
-        "cfg_scale": 7.5,
+        "model_name": NOVITA_MODEL,
+        "prompt": prompt,
         "width": 1024,
         "height": 1024,
-        "sampler_name": "DPM++ 2M Karras"
+        "steps": 30,
+        "cfg_scale": 7.5
     }
     
     try:
@@ -491,8 +432,9 @@ async def generate_novita_image(prompt: str):
         if novita_session is None or novita_session.closed:
             novita_session = aiohttp.ClientSession()
         
-        logger.info(f"Enviando request a Novita AI: {prompt[:50]}...")
+        logger.info(f"Enviando request a Novita AI ({NOVITA_MODEL}): {prompt[:50]}...")
         
+        # 1. Iniciar tarea asíncrona
         async with novita_session.post(
             "https://api.novita.ai/v3/async/txt2img",
             headers=headers,
@@ -505,9 +447,10 @@ async def generate_novita_image(prompt: str):
                 result = await response.json()
                 if 'task_id' in result:
                     task_id = result['task_id']
-                    logger.info(f"Task ID: {task_id}")
+                    logger.info(f"Task ID recibido: {task_id}")
                     
-                    for attempt in range(30):
+                    # 2. Polling: Esperar a que la imagen se genere
+                    for attempt in range(30):  # Esperar hasta 60 segundos (30 intentos * 2s)
                         await asyncio.sleep(2)
                         
                         async with novita_session.get(
@@ -516,20 +459,25 @@ async def generate_novita_image(prompt: str):
                         ) as check_response:
                             if check_response.status == 200:
                                 task_result = await check_response.json()
-                                if task_result.get('status') == 'succeed':
+                                status = task_result.get('status')
+                                
+                                if status == 'succeed':
                                     if 'images' in task_result and len(task_result['images']) > 0:
                                         image_url = task_result['images'][0].get('url') or task_result['images'][0].get('image_url')
                                         if image_url:
                                             logger.info(f"Imagen generada exitosamente: {image_url}")
                                             return image_url
-                                    logger.error(f"No se encontró URL de imagen en: {task_result}")
-                                elif task_result.get('status') == 'failed':
-                                    logger.error(f"Task failed: {task_result}")
+                                    logger.error(f"No se encontró URL de imagen en la respuesta: {task_result}")
                                     return None
-                    logger.error("Timeout esperando resultado de Novita")
+                                elif status == 'failed':
+                                    logger.error(f"La tarea de imagen falló: {task_result}")
+                                    return None
+                                # Si está 'running' o 'pending', el loop continúa
+                    
+                    logger.error("Timeout: Se agotó el tiempo de espera para la generación de la imagen")
                     return None
                 else:
-                    logger.error(f"Respuesta inesperada de Novita: {result}")
+                    logger.error(f"Respuesta inesperada de Novita (sin task_id): {result}")
                     return None
             else:
                 logger.error(f"Novita API error {response.status}: {response_text}")
@@ -697,13 +645,13 @@ async def process_message(message: Message):
             return
         
         await message.bot.send_chat_action(telegram_id, 'upload_photo')
-        await message.answer("🖼️ Generando imagen...")
+        await message.answer("🖼️ Generando imagen con Qwen... (esto puede tomar unos segundos)")
         
         img_url = await generate_novita_image(prompt)
         if img_url:
             await message.answer_photo(img_url, caption=f"🖼️ Imagen generada.\n💰 Costo: {GEM_COST_IMAGE} gemas")
         else:
-            await add_gems(telegram_id, GEM_COST_IMAGE, 'refund', 'Reembolso por fallo')
+            await add_gems(telegram_id, GEM_COST_IMAGE, 'refund', 'Reembolso por fallo en Novita')
             await message.answer("⚠️ Error al generar la imagen. Se te han reembolsado las gemas.")
         del user_states[telegram_id]
         return
@@ -770,7 +718,6 @@ async def process_message(message: Message):
         await message.answer("⚠️ Error al generar respuesta. Intenta de nuevo." if lang == 'es' else "⚠️ Error generating response. Try again.")
 
 # ==================== HANDLERS DE BOTONES ====================
-
 @router.message(F.text == "💬 Chat")
 async def btn_chat(message: Message): await cmd_chat(message)
 
@@ -793,18 +740,14 @@ async def btn_newchat(message: Message): await show_character_menu(message)
 async def btn_help(message: Message): await cmd_help(message)
 
 # ==================== COMANDOS DE PRUEBA ====================
-
 @router.message(Command('testimg'))
 async def cmd_test_image(message: Message):
     telegram_id = message.from_user.id
-    
     if telegram_id in user_states and user_states[telegram_id].get('step') == 'test_image_prompt':
         prompt = message.text.strip()
         del user_states[telegram_id]
-        
         await message.bot.send_chat_action(telegram_id, 'upload_photo')
-        await message.answer("🧪 Generando imagen de prueba...")
-        
+        await message.answer("🧪 Generando imagen de prueba con Qwen...")
         image_url = await generate_novita_image(prompt)
         if image_url:
             await message.answer_photo(image_url, caption=f"🖼️ [PRUEBA] Imagen generada: {prompt[:100]}")
@@ -813,41 +756,23 @@ async def cmd_test_image(message: Message):
         return
     
     user_states[telegram_id] = {'step': 'test_image_prompt', 'created_at': datetime.utcnow()}
-    
-    await message.answer(
-        "🧪 MODO PRUEBA DE IMAGEN\n\n"
-        "Envía la descripción de la imagen que quieres generar.\n"
-        "Ejemplo: 'Una playa al atardecer con palmeras'\n\n"
-        "⚠️ Esta imagen es GRATIS (no consume gemas)"
-    )
+    await message.answer("🧪 MODO PRUEBA DE IMAGEN\n\nEnvía la descripción de la imagen.\nEjemplo: 'Un gato cute sentado en una nube'\n\n⚠️ Esta imagen es GRATIS (no consume gemas)")
 
 @router.message(Command('testbuy'))
 async def cmd_test_buy(message: Message):
     telegram_id = message.from_user.id
     user = await get_user(telegram_id)
-    if not user:
-        return await message.answer("⚠️ Primero debes registrarte con /start")
-    
+    if not user: return await message.answer("⚠️ Primero debes registrarte con /start")
     await add_gems(telegram_id, 200, 'test_purchase', 'Compra de prueba')
     await db.update('users', {'hook_messages_remaining': 0}, {'telegram_id': telegram_id})
-    
-    await db.insert('star_purchases', {
-        'telegram_id': telegram_id,
-        'stars_amount': 50,
-        'gems_amount': 200,
-        'is_first_purchase': True,
-        'telegram_charge_id': 'test_charge'
-    })
-    
-    await message.answer("✅ [TEST] Compra simulada exitosa!\n\n💎 Has recibido 200 gemas de prueba\n🎉 Ahora tienes acceso a generación de imágenes\n\nUsa /balance para ver tus gemas")
+    await db.insert('star_purchases', {'telegram_id': telegram_id, 'stars_amount': 50, 'gems_amount': 200, 'is_first_purchase': True, 'telegram_charge_id': 'test_charge'})
+    await message.answer("✅ [TEST] Compra simulada exitosa!\n\n💎 Has recibido 200 gemas de prueba\n🎉 Ahora tienes acceso a generación de imágenes")
 
 @router.message(Command('addgems'))
 async def cmd_add_gems(message: Message):
     telegram_id = message.from_user.id
     user = await get_user(telegram_id)
-    if not user:
-        return await message.answer("⚠️ Primero debes registrarte con /start")
-    
+    if not user: return await message.answer("⚠️ Primero debes registrarte con /start")
     await add_gems(telegram_id, 50, 'test_add', 'Gemas de prueba')
     await message.answer(f"✅ [TEST] 50 gemas agregadas. Balance actual: {await get_balance(telegram_id)}")
 
@@ -862,58 +787,33 @@ async def cmd_reset(message: Message):
 async def cmd_status(message: Message):
     telegram_id = message.from_user.id
     user = await get_user(telegram_id)
-    
-    if not user:
-        return await message.answer("⚠️ No estás registrado. Usa /start")
-    
+    if not user: return await message.answer("⚠️ No estás registrado. Usa /start")
     hook_remaining = user.get('hook_messages_remaining', 0)
     is_premium = await has_user_purchased(telegram_id)
-    
     text = f"""📊 ESTADO DEL BOT (TEST_MODE={TEST_MODE})
-
 👤 Usuario: {user['first_name']}
 💎 Gemas: {user['gems']}
 ✅ Premium: {'Sí' if is_premium else 'No'}
 ⚠️ Hook mode: {hook_remaining} mensajes restantes
-
 ⚙️ Configuración:
 • MODO PRUEBA: {'ACTIVO' if TEST_MODE else 'INACTIVO'}
-• Costo mensaje: {GEM_COST_MESSAGE} gema(s)
-• Costo imagen: {GEM_COST_IMAGE} gemas
-• Hook mode: {HOOK_MODE_MESSAGES} mensajes gratis"""
-    
+• Modelo de Imagen: {NOVITA_MODEL}
+• Costo imagen: {GEM_COST_IMAGE} gemas"""
     await message.answer(text)
 
 @router.message(Command('testnovita'))
 async def test_novita(message: Message):
     """Diagnóstico directo de Novita AI"""
-    await message.answer("🧪 Probando conexión con Novita AI...")
-    
+    await message.answer("🧪 Probando conexión directa con Novita AI...")
     if not NOVITA_API_KEY:
         return await message.answer("❌ NOVITA_API_KEY no está configurada en las variables de entorno.")
     
     try:
-        headers = {
-            "Authorization": f"Bearer {NOVITA_API_KEY}",
-            "Content-Type": "application/json"
-        }
-        data = {
-            "model_name": "stable-diffusion-xl",
-            "prompt": "a cute cat sitting on a cloud, high quality, masterpiece",
-            "negative_prompt": "low quality, blurry, distorted",
-            "steps": 30,
-            "cfg_scale": 7.5,
-            "width": 1024,
-            "height": 1024,
-            "sampler_name": "DPM++ 2M Karras"
-        }
+        headers = {"Authorization": f"Bearer {NOVITA_API_KEY}", "Content-Type": "application/json"}
+        data = {"model_name": NOVITA_MODEL, "prompt": "a cute cat sitting on a cloud, high quality, masterpiece", "width": 1024, "height": 1024}
         
         async with aiohttp.ClientSession() as session:
-            async with session.post(
-                "https://api.novita.ai/v3/async/txt2img", 
-                headers=headers, 
-                json=data
-            ) as response:
+            async with session.post("https://api.novita.ai/v3/async/txt2img", headers=headers, json=data) as response:
                 status = response.status
                 res_text = await response.text()
                 
@@ -921,38 +821,33 @@ async def test_novita(message: Message):
                     result = await response.json()
                     if 'task_id' in result:
                         task_id = result['task_id']
-                        await message.answer(f"✅ Novita aceptó la solicitud (Status 200).\nTask ID: {task_id}\nEsperando resultado...")
+                        await message.answer(f"✅ Novita aceptó la solicitud (Status 200).\nTask ID: {task_id}\n⏳ Esperando resultado (esto puede tomar ~10-20s)...")
                         
-                        for attempt in range(15):
+                        for attempt in range(20):
                             await asyncio.sleep(2)
-                            async with session.get(
-                                f"https://api.novita.ai/v3/async/task-result?task_id={task_id}",
-                                headers=headers
-                            ) as check_response:
+                            async with session.get(f"https://api.novita.ai/v3/async/task-result?task_id={task_id}", headers=headers) as check_response:
                                 if check_response.status == 200:
                                     task_result = await check_response.json()
                                     if task_result.get('status') == 'succeed':
                                         if 'images' in task_result and len(task_result['images']) > 0:
                                             image_url = task_result['images'][0].get('url') or task_result['images'][0].get('image_url')
                                             if image_url:
-                                                await message.answer_photo(image_url, caption="✅ ¡Novita AI funciona correctamente!")
+                                                await message.answer_photo(image_url, caption="✅ ¡Novita AI (Qwen) funciona correctamente!")
                                                 return
                                         await message.answer(f"❌ Error: No se encontró URL de imagen en la respuesta:\n{task_result}")
                                         return
                                     elif task_result.get('status') == 'failed':
                                         await message.answer(f"❌ La tarea falló:\n{task_result}")
                                         return
-                        await message.answer("⚠️ Timeout esperando resultado de Novita (tardó más de 30s).")
+                        await message.answer("⚠️ Timeout esperando resultado de Novita (tardó más de 40s).")
                     else:
                         await message.answer(f"❌ Respuesta inesperada de Novita (sin task_id):\n{res_text[:500]}")
                 else:
                     await message.answer(f"❌ Error de Novita (Status {status}):\n{res_text[:500]}")
-                    
     except Exception as e:
         await message.answer(f"⚠️ Excepción al conectar: {str(e)}")
 
 # ==================== COMANDOS NORMALES ====================
-
 @router.message(Command('chat'))
 async def cmd_chat(message: Message):
     user = await get_user(message.from_user.id)
@@ -968,13 +863,10 @@ async def cmd_image(message: Message):
     telegram_id = message.from_user.id
     user = await get_user(telegram_id)
     if not user: return await message.answer("⚠️ Primero debes registrarte con /start")
-    
     is_premium = await has_user_purchased(telegram_id)
-    
     if not TEST_MODE and not is_premium:
         lang = user['language']
         return await message.answer("🔒 Función Premium\n\nLa generación de imágenes es exclusiva para usuarios que han comprado Stars.\n\n💎 Visita la tienda para desbloquearla." if lang == 'es' else "🔒 Premium Feature\n\nImage generation is exclusive for users who have purchased Stars.\n\n💎 Visit the shop to unlock it.")
-    
     lang = user['language']
     text = f"🖼️ Generador de Imágenes\n\n💰 Costo: {GEM_COST_IMAGE} gemas\n\nEnvía la descripción de la imagen." if lang == 'es' else f"🖼️ Image Generator\n\n💰 Cost: {GEM_COST_IMAGE} gems\n\nSend the description of the image."
     await message.answer(text)
@@ -990,7 +882,6 @@ async def cmd_balance(message: Message):
     bonus = active_ref * GEMS_PER_REFERRAL
     daily_total = BASE_DAILY_GEMS + bonus
     hook_rem = user.get('hook_messages_remaining', 0)
-    
     text = f"💎 Tu Balance\n\nGemas actuales: {gems}\n\n📊 Información:\n• Gemas diarias: {daily_total}/{MAX_DAILY_GEMS}\n• Referidos activos (24h): {active_ref}/{MAX_REFERRALS_PER_DAY}"
     if hook_rem > 0: text += f"\n• ⚠️ Momentos especiales: {hook_rem}/{HOOK_MODE_MESSAGES}"
     text += "\n\n💡 Invita hasta 2 amigos cada 24h para ganar +5 gemas c/u" if lang == 'es' else "\n\n💡 Invite up to 2 friends every 24h to earn +5 gems each"
@@ -1000,19 +891,13 @@ async def cmd_balance(message: Message):
 async def cmd_shop(message: Message):
     telegram_id = message.from_user.id
     user = await get_user(telegram_id)
-    if not user:
-        return await message.answer("⚠️ Primero debes registrarte con /start")
-    
+    if not user: return await message.answer("⚠️ Primero debes registrarte con /start")
     language = user['language']
     builder = InlineKeyboardBuilder()
-    
     if language == 'es':
         text = "💎 Tienda de Gemas\n\nSelecciona un paquete:\n\n"
         for i, package in enumerate(STAR_PACKAGES):
-            stars = package['stars']
-            gems = package['gems']
-            bonus = package.get('bonus', 0)
-            first_time = package.get('first_time', False)
+            stars, gems, bonus, first_time = package['stars'], package['gems'], package.get('bonus', 0), package.get('first_time', False)
             final_gems = int(gems * (1 + bonus / 100)) if bonus > 0 else gems
             line = f"⭐ {stars} Stars → 💎 {final_gems} gemas" + (" (¡Primera vez!)" if first_time else "")
             text += f"{i+1}. {line}\n"
@@ -1020,35 +905,24 @@ async def cmd_shop(message: Message):
     else:
         text = "💎 Gem Store\n\nSelect a package:\n\n"
         for i, package in enumerate(STAR_PACKAGES):
-            stars = package['stars']
-            gems = package['gems']
-            bonus = package.get('bonus', 0)
-            first_time = package.get('first_time', False)
+            stars, gems, bonus, first_time = package['stars'], package['gems'], package.get('bonus', 0), package.get('first_time', False)
             final_gems = int(gems * (1 + bonus / 100)) if bonus > 0 else gems
             line = f"⭐ {stars} Stars → 💎 {final_gems} gems" + (" (First time!)" if first_time else "")
             text += f"{i+1}. {line}\n"
             builder.button(text=f"Option {i+1}", callback_data=f"buy_{i}")
-            
     builder.adjust(1)
     await message.answer(text, reply_markup=builder.as_markup())
 
 @router.callback_query(F.data == "shop_from_block")
 async def shop_from_block(callback: CallbackQuery):
-    telegram_id = callback.from_user.id
-    user = await get_user(telegram_id)
-    if not user:
-        return await callback.answer("⚠️ Primero debes registrarte con /start", show_alert=True)
-    
+    user = await get_user(callback.from_user.id)
+    if not user: return await callback.answer("⚠️ Primero debes registrarte con /start", show_alert=True)
     language = user['language']
     builder = InlineKeyboardBuilder()
-    
     if language == 'es':
         text = "💎 Tienda de Gemas\n\nSelecciona un paquete:\n\n"
         for i, package in enumerate(STAR_PACKAGES):
-            stars = package['stars']
-            gems = package['gems']
-            bonus = package.get('bonus', 0)
-            first_time = package.get('first_time', False)
+            stars, gems, bonus, first_time = package['stars'], package['gems'], package.get('bonus', 0), package.get('first_time', False)
             final_gems = int(gems * (1 + bonus / 100)) if bonus > 0 else gems
             line = f"⭐ {stars} Stars → 💎 {final_gems} gemas" + (" (¡Primera vez!)" if first_time else "")
             text += f"{i+1}. {line}\n"
@@ -1056,15 +930,11 @@ async def shop_from_block(callback: CallbackQuery):
     else:
         text = "💎 Gem Store\n\nSelect a package:\n\n"
         for i, package in enumerate(STAR_PACKAGES):
-            stars = package['stars']
-            gems = package['gems']
-            bonus = package.get('bonus', 0)
-            first_time = package.get('first_time', False)
+            stars, gems, bonus, first_time = package['stars'], package['gems'], package.get('bonus', 0), package.get('first_time', False)
             final_gems = int(gems * (1 + bonus / 100)) if bonus > 0 else gems
             line = f"⭐ {stars} Stars → 💎 {final_gems} gems" + (" (First time!)" if first_time else "")
             text += f"{i+1}. {line}\n"
             builder.button(text=f"Option {i+1}", callback_data=f"buy_{i}")
-            
     builder.adjust(1)
     await callback.message.answer(text, reply_markup=builder.as_markup())
     await callback.answer()
@@ -1081,34 +951,19 @@ async def process_purchase(callback: CallbackQuery):
         package_index = int(callback.data.split('_')[1])
     except (ValueError, IndexError):
         return await callback.answer("❌ Paquete no válido", show_alert=True)
-        
     if package_index >= len(STAR_PACKAGES):
         return await callback.answer("❌ Paquete no válido", show_alert=True)
-        
     pkg = STAR_PACKAGES[package_index]
     stars = pkg['stars']
     gems = int(pkg['gems'] * (1 + pkg.get('bonus', 0) / 100)) if pkg.get('bonus', 0) > 0 else pkg['gems']
-
     user = await get_user(telegram_id)
-    if not user:
-        return await callback.answer("⚠️ Usuario no encontrado", show_alert=True)
-        
+    if not user: return await callback.answer("⚠️ Usuario no encontrado", show_alert=True)
     language = user['language']
     title = f"{gems} Gemas" if language == 'es' else f"{gems} Gems"
     description = f"Paquete de {gems} gemas" if language == 'es' else f"Package of {gems} gems"
-
     prices = [LabeledPrice(label="Gems", amount=stars)]
-
     try:
-        await callback.bot.send_invoice(
-            chat_id=telegram_id,
-            title=title,
-            description=description,
-            provider_token="",
-            currency="XTR",
-            prices=prices,
-            payload=f"gem_purchase_{package_index}"
-        )
+        await callback.bot.send_invoice(chat_id=telegram_id, title=title, description=description, provider_token="", currency="XTR", prices=prices, payload=f"gem_purchase_{package_index}")
         await callback.answer("✅ Factura enviada")
     except Exception as e:
         logger.error(f"Error al enviar invoice: {e}")
@@ -1124,7 +979,6 @@ async def process_successful_payment(message: Message):
     pkg_idx = int(message.successful_payment.invoice_payload.split('_')[-1])
     success, msg = await process_star_purchase(telegram_id, pkg_idx, message.successful_payment.telegram_payment_charge_id)
     lang = (await get_user(telegram_id))['language']
-    
     if success:
         await message.answer(f"✅ {msg}\n\n🎉 ¡Ahora tienes acceso a la generación de imágenes!" if lang == 'es' else f"✅ {msg}\n\n🎉 You now have access to image generation!")
         await message.answer("🎊 ¡Tu teclado ha sido actualizado!", reply_markup=get_main_keyboard(lang, True))
@@ -1140,7 +994,6 @@ async def cmd_invite(message: Message):
     bonus = active_ref * GEMS_PER_REFERRAL
     daily_total = BASE_DAILY_GEMS + bonus
     link = f"https://t.me/{(await message.bot.get_me()).username}?start={user['referral_code']}"
-    
     text = f"🎁 Sistema de Referidos\n\n🔗 Tu enlace:\n{link}\n\n📊 Estadísticas:\n• Referidos activos (24h): {active_ref}/{MAX_REFERRALS_PER_DAY}\n• Gemas diarias: {daily_total}/{MAX_DAILY_GEMS}\n\n💡 ¡Comparte tu enlace y gana gemas gratis!" if lang == 'es' else f"🎁 Referral System\n\n🔗 Your link:\n{link}\n\n📊 Stats:\n• Active referrals (24h): {active_ref}/{MAX_REFERRALS_PER_DAY}\n• Daily gems: {daily_total}/{MAX_DAILY_GEMS}\n\n💡 Share your link and earn free gems!"
     await message.answer(text)
 
@@ -1177,21 +1030,17 @@ async def process_switch(callback: CallbackQuery):
 async def create_new_character(callback: CallbackQuery):
     telegram_id = callback.from_user.id
     user = await get_user(telegram_id)
-    if not user:
-        return await callback.answer("Primero regístrate", show_alert=True)
-    
+    if not user: return await callback.answer("Primero regístrate", show_alert=True)
     gems = await get_balance(telegram_id)
     if gems < GEM_COST_NEW_CHARACTER:
         lang = user['language']
         msg = f"❌ No tienes suficientes gemas. Crear un personaje cuesta {GEM_COST_NEW_CHARACTER} gemas. Tienes {gems}." if lang == 'es' else f"❌ You don't have enough gems. Creating a character costs {GEM_COST_NEW_CHARACTER} gems. You have {gems}."
         await callback.message.answer(msg)
         return await callback.answer()
-
     success, msg, _ = await check_and_deduct_gems(telegram_id, GEM_COST_NEW_CHARACTER, 'new_character', 'Creación de personaje')
     if not success:
         await callback.message.answer(f"⚠️ {msg}")
         return await callback.answer()
-
     user_states[telegram_id] = {'step': 'gender', 'language': user['language'], 'is_new_user': False, 'created_at': datetime.utcnow()}
     lang = user['language']
     builder = InlineKeyboardBuilder()
@@ -1213,16 +1062,7 @@ async def cmd_newchat(message: Message):
 
 @router.message(Command('help'))
 async def cmd_help(message: Message):
-    test_commands = """
-🧪 COMANDOS DE PRUEBA:
-/testimg - Generar imagen gratis
-/testbuy - Simular compra (200 gemas + premium)
-/addgems - Agregar 50 gemas
-/reset - Resetear estado
-/status - Ver estado del bot
-/testnovita - Probar conexión directa con Novita AI
-""" if TEST_MODE else ""
-    
+    test_commands = "\n🧪 COMANDOS DE PRUEBA:\n/testimg - Generar imagen gratis\n/testbuy - Simular compra (200 gemas + premium)\n/addgems - Agregar 50 gemas\n/reset - Resetear estado\n/status - Ver estado del bot\n/testnovita - Probar conexión directa con Novita AI" if TEST_MODE else ""
     await message.answer(f"📚 Comandos:\n/start - Registrarse\n/chat - Conversar\n/img - Generar imagen [PREMIUM]\n/balance - Ver gemas\n/shop - Tienda\n/invite - Invitar amigos\n/newchat - Cambiar/Crear personaje (5 gemas)\n/help - Ayuda{test_commands}\n\n💡 Consejo: Invita amigos para aumentar tus gemas diarias hasta 15.")
 
 @router.message(Command('menu'))
@@ -1234,7 +1074,6 @@ async def cmd_menu(message: Message):
     await message.answer(text, reply_markup=get_main_keyboard(lang, await has_user_purchased(message.from_user.id)))
 
 # ==================== FUNCIONES AUXILIARES ====================
-
 async def show_welcome(message: Message, character_name: str, language: str, keyboard: ReplyKeyboardMarkup = None):
     text = f"✅ ¡Registro completado!\n\n🎭 Tu personaje: {escape_html(character_name)}\n💎 Tienes 15 gemas para empezar\n\n📝 Usa los botones de abajo para navegar." if language == 'es' else f"✅ Registration complete!\n\n🎭 Your character: {escape_html(character_name)}\n💎 You have 15 gems to start\n\n📝 Use the buttons below to navigate."
     await message.answer(text, reply_markup=keyboard)
@@ -1244,7 +1083,6 @@ async def show_main_menu(message: Message, language: str, keyboard: ReplyKeyboar
     await message.answer(text, reply_markup=keyboard)
 
 # ==================== INICIALIZACIÓN ====================
-
 bot = Bot(token=TELEGRAM_BOT_TOKEN)
 dp = Dispatcher()
 dp.include_router(router)
@@ -1283,16 +1121,13 @@ def create_app():
     app = web.Application()
     app.router.add_post('/webhook', handle_webhook)
     app.router.add_get('/', lambda r: web.Response(text='Bot is running'))
-    
     async def start_background_tasks(app):
         app['on_startup_task'] = asyncio.create_task(on_startup())
-    
     async def cleanup_background_tasks(app):
         await on_shutdown()
         app['on_startup_task'].cancel()
         try: await app['on_startup_task']
         except asyncio.CancelledError: pass
-    
     app.on_startup.append(start_background_tasks)
     app.on_cleanup.append(cleanup_background_tasks)
     return app
