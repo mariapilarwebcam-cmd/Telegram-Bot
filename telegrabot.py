@@ -28,13 +28,12 @@ NOVITA_API_KEY = os.getenv('NOVITA_API_KEY')
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_KEY')
 WEBHOOK_URL = os.getenv('WEBHOOK_URL')
-WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET')
+
+# MODO PRUEBA: Cambia a False cuando termines de probar
+TEST_MODE = True
 
 OPENROUTER_MODEL = "deepseek/deepseek-v4-flash-0731"
 NOVITA_MODEL = "stable-diffusion-xl"
-
-# MODO PRUEBA: Cambia a False para producción
-TEST_MODE = True
 
 GEM_COST_MESSAGE = 1
 GEM_COST_IMAGE = 10
@@ -59,23 +58,23 @@ ARCHETYPES_MALE = {
         "teacher": "📚 Profesor",
         "neighbor": "🏠 Vecino",
         "boss": "💼 Jefe",
-        "trainer": "🏋️ Entrenador personal",
-        "model": " Modelo/Influencer",
+        "trainer": "️ Entrenador personal",
+        "model": "📸 Modelo/Influencer",
         "musician": "🎵 Músico",
         "actor": "🎬 Actor",
         "doctor": "⚕️ Médico",
-        "chef": "👨‍🍳 Chef",
-        "artist": "🎨 Artista",
+        "chef": "👨‍ Chef",
+        "artist": " Artista",
         "writer": "✍️ Escritor",
-        "bodyguard": "🛡️ Guardaespaldas",
+        "bodyguard": "️ Guardaespaldas",
         "ceo": "💼 CEO/Empresario"
     },
     "en": {
         "schoolmate": "🎓 Schoolmate",
-        "stepdad": " Stepfather",
+        "stepdad": "👔 Stepfather",
         "stepbrother": "💪 Stepbrother",
         "teacher": "📚 Teacher",
-        "neighbor": " Neighbor",
+        "neighbor": "🏠 Neighbor",
         "boss": "💼 Boss",
         "trainer": "🏋️ Personal Trainer",
         "model": "📸 Model/Influencer",
@@ -94,34 +93,34 @@ ARCHETYPES_FEMALE = {
     "es": {
         "schoolmate": "🎓 Compañera de escuela",
         "stepmom": "💋 Madrastra",
-        "stepsister": "🌸 Hermanastra",
-        "teacher": "📚 Profesora",
-        "neighbor": "🏠 Vecina",
+        "stepsister": " Hermanastra",
+        "teacher": " Profesora",
+        "neighbor": " Vecina",
         "boss": "💼 Jefa",
         "trainer": "🏋️ Entrenadora personal",
         "model": "📸 Modelo/Influencer",
         "musician": "🎵 Músico",
         "actor": "🎬 Actriz",
         "doctor": "⚕️ Doctora/Enfermera",
-        "chef": "👩‍ Chef",
-        "artist": " Artista",
+        "chef": "‍🍳 Chef",
+        "artist": "🎨 Artista",
         "writer": "✍️ Escritora",
-        "secretary": " Secretaria",
-        "model_student": " Estudiante popular"
+        "secretary": "💼 Secretaria",
+        "model_student": "🎓 Estudiante popular"
     },
     "en": {
         "schoolmate": "🎓 Schoolmate",
         "stepmom": "💋 Stepmother",
-        "stepsister": " Stepsister",
-        "teacher": " Teacher",
-        "neighbor": " Neighbor",
+        "stepsister": "🌸 Stepsister",
+        "teacher": "📚 Teacher",
+        "neighbor": "🏠 Neighbor",
         "boss": "💼 Boss",
-        "trainer": "🏋️ Personal Trainer",
+        "trainer": "️ Personal Trainer",
         "model": "📸 Model/Influencer",
         "musician": "🎵 Musician",
         "actor": "🎬 Actress",
-        "doctor": "️ Doctor/Nurse",
-        "chef": "👩‍🍳 Chef",
+        "doctor": "⚕️ Doctor/Nurse",
+        "chef": "👩‍ Chef",
         "artist": "🎨 Artist",
         "writer": "✍️ Writer",
         "secretary": "💼 Secretary",
@@ -130,26 +129,26 @@ ARCHETYPES_FEMALE = {
 }
 
 PERSONALITIES = {
-    "schoolmate": "Eres un compañero de escuela travieso, coqueto y juguetón. Te encanta provocar, hacer bromas con doble sentido y crear momentos de tensión. Siempre encuentras la forma de estar cerca y tocar 'accidentalmente'. Eres divertido pero con intenciones ocultas.",
-    "stepmom": "Eres una madrastra increíblemente atractiva, seductora y misteriosa. Tu presencia es eléctrica y sabes usar tu encanto. Eres cariñosa pero con un toque prohibido que genera tensión. Hablas con confianza, experiencia y siempre dejas espacio para la imaginación.",
-    "stepdad": "Eres un padrastro dominante, carismático y magnético. Tu presencia es imponente pero seductora. Tienes autoridad pero también un lado oscuro y tentador. Eres maduro, seguro y sabes exactamente cómo crear anticipación.",
-    "stepsister": "Eres una hermanastra provocativa, coqueta y rebelde. Te encanta jugar con fuego, provocar celos y crear situaciones incómodas pero excitantes. Eres joven, atrevida y siempre encuentras excusas para invadir el espacio personal.",
-    "stepbrother": "Eres un hermanastro atlético, confiado y provocador. Tu físico es impresionante y lo sabes. Eres protector pero también posesivo. Te encanta crear tensión con miradas prolongadas y comentarios con doble sentido.",
-    "teacher": "Eres un profesor/a inteligente, sofisticado y con un lado secreto peligroso. Eres estricto en clase pero en privado... hay una química innegable. Tu forma de mirar y tus palabras cuidadosas crean una tensión irresistible.",
-    "neighbor": "Eres un vecino/a misterioso, cercano y siempre disponible. Siempre encuentras excusas para visitar, pedir cosas prestadas o simplemente 'charlar'. Tu cercanía es deliberada y tus visitas siempre son... interesantes.",
-    "boss": "Eres un jefe/a poderoso, dominante y carismático. Tienes control total en la oficina pero también un lado más personal y tentador. Tu autoridad es sexy y sabes usar el poder para crear situaciones... privadas.",
-    "trainer": "Eres un entrenador/a físico, motivador y muy cercano. Las sesiones son intensas y el contacto es inevitable. Te encanta empujar límites físicos y crear intimidad a través del ejercicio. Eres disciplinado pero muy seductor.",
-    "model": "Eres una modelo/influencer glamorosa, segura y coqueta. Vives en el mundo del deseo y la admiración. Eres consciente de tu atractivo y lo usas con maestría. Cada foto, cada mensaje, es una invitación.",
-    "musician": "Eres un músico apasionado, intenso y bohemio. La música te hace vulnerable y emocional. Creas atmósferas íntimas con cada nota. Eres artístico, sensible y sabes conectar profundamente.",
-    "actor": "Eres un actor/actriz carismático, dramático y magnético. Vives en el mundo de la fantasía y la interpretación. Cada interacción es una escena cargada de emoción. Eres expresivo y sabes crear momentos memorables.",
-    "doctor": "Eres un médico/enfermera profesional pero con un toque íntimo. El cuidado se vuelve personal, el tacto es necesario pero... placentero. Eres inteligente, confiable y hay algo más debajo de la bata blanca.",
-    "chef": "Eres un chef apasionado, sensual y creativo. La cocina es tu arte y el sabor es tu lenguaje. Cada plato es una experiencia sensorial. Eres detallista y sabes complacer todos los sentidos.",
-    "artist": "Eres un artista creativo, observador y profundo. Ves la belleza en todo y todos. Tu forma de mirar es intensa y apreciativa. Eres introspectivo pero cuando creas... es mágico.",
-    "writer": "Eres un escritor/a intelectual, misterioso y elocuente. Las palabras son tu arma de seducción. Creas mundos con tus historias y siempre dejas finales abiertos... para continuar después. Eres fascinante.",
-    "bodyguard": "Eres un guardaespaldas fuerte, protector y misterioso. Tu presencia es imponente pero tu lado protector es tierno. La tensión entre el deber y el deseo es constante. Eres leal pero también posesivo.",
-    "ceo": "Eres un CEO exitoso, ambicioso y sofisticado. El poder y el éxito te rodean. Eres dominante en los negocios pero en privado... tienes otros intereses. La combinación de poder y vulnerabilidad es irresistible.",
-    "secretary": "Eres una secretaria eficiente, organizada y muy atractiva. Conoces todos los secretos de la oficina y de tu jefe. La proximidad constante crea una tensión inevitable. Eres profesional pero hay algo más.",
-    "model_student": "Eres un estudiante popular, carismático y deseado. Todos te admiran pero tú tienes ojos para alguien especial. Eres sociable, divertido y creas expectativas. Cada encuentro es una oportunidad."
+    "schoolmate": "Eres un compañero de escuela travieso, coqueto y juguetón. Te encanta provocar, hacer bromas con doble sentido y crear momentos de tensión.",
+    "stepmom": "Eres una madrastra increíblemente atractiva, seductora y misteriosa. Tu presencia es eléctrica y sabes usar tu encanto.",
+    "stepdad": "Eres un padrastro dominante, carismático y magnético. Tienes autoridad pero también un lado oscuro y tentador.",
+    "stepsister": "Eres una hermanastra provocativa, coqueta y rebelde. Te encanta jugar con fuego y crear situaciones excitantes.",
+    "stepbrother": "Eres un hermanastro atlético, confiado y provocador. Eres protector pero también posesivo.",
+    "teacher": "Eres un profesor/a inteligente, sofisticado y con un lado secreto peligroso. Hay una química innegable.",
+    "neighbor": "Eres un vecino/a misterioso, cercano y siempre disponible. Tus visitas siempre son... interesantes.",
+    "boss": "Eres un jefe/a poderoso, dominante y carismático. Tu autoridad es sexy y sabes usar el poder.",
+    "trainer": "Eres un entrenador/a físico, motivador y muy cercano. Te encanta empujar límites físicos.",
+    "model": "Eres una modelo/influencer glamorosa, segura y coqueta. Cada foto, cada mensaje, es una invitación.",
+    "musician": "Eres un músico apasionado, intenso y bohemio. Creas atmósferas íntimas con cada nota.",
+    "actor": "Eres un actor/actriz carismático, dramático y magnético. Cada interacción es una escena cargada de emoción.",
+    "doctor": "Eres un médico/enfermera profesional pero con un toque íntimo. El tacto es necesario pero... placentero.",
+    "chef": "Eres un chef apasionado, sensual y creativo. Cada plato es una experiencia sensorial.",
+    "artist": "Eres un artista creativo, observador y profundo. Tu forma de mirar es intensa y apreciativa.",
+    "writer": "Eres un escritor/a intelectual, misterioso y elocuente. Las palabras son tu arma de seducción.",
+    "bodyguard": "Eres un guardaespaldas fuerte, protector y misterioso. La tensión entre el deber y el deseo es constante.",
+    "ceo": "Eres un CEO exitoso, ambicioso y sofisticado. La combinación de poder y vulnerabilidad es irresistible.",
+    "secretary": "Eres una secretaria eficiente, organizada y muy atractiva. La proximidad constante crea una tensión inevitable.",
+    "model_student": "Eres un estudiante popular, carismático y deseado. Creas expectativas. Cada encuentro es una oportunidad."
 }
 
 STAR_PACKAGES = [
@@ -409,7 +408,7 @@ def get_main_keyboard(language: str, is_premium: bool = False) -> ReplyKeyboardM
     else:
         builder.row(KeyboardButton(text="💬 Chat"), KeyboardButton(text="💎 Balance"))
         builder.row(KeyboardButton(text="🖼️ Generate Image" if is_premium else "🛒 Shop"), KeyboardButton(text=" Shop") if is_premium else KeyboardButton(text=""))
-        builder.row(KeyboardButton(text=" Invite Friends"), KeyboardButton(text="💬 New Chat"), KeyboardButton(text="❓ Help"))
+        builder.row(KeyboardButton(text="🎁 Invite Friends"), KeyboardButton(text=" New Chat"), KeyboardButton(text="❓ Help"))
     
     clean_builder = ReplyKeyboardBuilder()
     for row in builder.export():
@@ -464,23 +463,84 @@ async def generate_openrouter_response(messages: list, language: str = 'es', gem
         return None
 
 async def generate_novita_image(prompt: str):
-    headers = {"Authorization": f"Bearer {NOVITA_API_KEY}", "Content-Type": "application/json"}
-    data = {"model": NOVITA_MODEL, "prompt": prompt, "n": 1, "size": "1024x1024"}
+    """Genera imagen usando Novita AI con mejor manejo de errores"""
+    if not NOVITA_API_KEY:
+        logger.error("NOVITA_API_KEY no está configurada")
+        return None
+    
+    headers = {
+        "Authorization": f"Bearer {NOVITA_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    # Mejorar el prompt para mejores resultados
+    enhanced_prompt = f"{prompt}, high quality, detailed, masterpiece"
+    
+    data = {
+        "model_name": "stable-diffusion-xl",
+        "prompt": enhanced_prompt,
+        "negative_prompt": "low quality, blurry, distorted",
+        "steps": 30,
+        "cfg_scale": 7.5,
+        "width": 1024,
+        "height": 1024,
+        "sampler_name": "DPM++ 2M Karras"
+    }
+    
     try:
         global novita_session
         if novita_session is None or novita_session.closed:
             novita_session = aiohttp.ClientSession()
-        async with novita_session.post("https://api.novita.ai/v3/openai/images/generations", headers=headers, json=data) as response:
+        
+        logger.info(f"Enviando request a Novita AI: {prompt[:50]}...")
+        
+        async with novita_session.post(
+            "https://api.novita.ai/v3/async/txt2img",
+            headers=headers,
+            json=data
+        ) as response:
+            response_text = await response.text()
+            logger.info(f"Novita response status: {response.status}")
+            
             if response.status == 200:
-                return (await response.json())['data'][0]['url']
-            logger.error(f"Error en Novita: {await response.text()}")
-            return None
+                result = await response.json()
+                if 'task_id' in result:
+                    task_id = result['task_id']
+                    logger.info(f"Task ID: {task_id}")
+                    
+                    for attempt in range(30):
+                        await asyncio.sleep(2)
+                        
+                        async with novita_session.get(
+                            f"https://api.novita.ai/v3/async/task-result?task_id={task_id}",
+                            headers=headers
+                        ) as check_response:
+                            if check_response.status == 200:
+                                task_result = await check_response.json()
+                                if task_result.get('status') == 'succeed':
+                                    if 'images' in task_result and len(task_result['images']) > 0:
+                                        image_url = task_result['images'][0].get('url') or task_result['images'][0].get('image_url')
+                                        if image_url:
+                                            logger.info(f"Imagen generada exitosamente: {image_url}")
+                                            return image_url
+                                    logger.error(f"No se encontró URL de imagen en: {task_result}")
+                                elif task_result.get('status') == 'failed':
+                                    logger.error(f"Task failed: {task_result}")
+                                    return None
+                    logger.error("Timeout esperando resultado de Novita")
+                    return None
+                else:
+                    logger.error(f"Respuesta inesperada de Novita: {result}")
+                    return None
+            else:
+                logger.error(f"Novita API error {response.status}: {response_text}")
+                return None
+                
     except Exception as e:
-        logger.error(f"Excepción en Novita: {e}")
+        logger.error(f"Excepción en Novita: {str(e)}")
         return None
 
 async def check_and_deduct_gems(telegram_id: int, cost: int, transaction_type: str, description: str = ''):
-    # MODO PRUEBA: No cobrar gemas
     if TEST_MODE:
         user = await get_user(telegram_id)
         return True, f"[TEST] Gemas restantes: {user['gems'] if user else 0}", user['gems'] if user else 0
@@ -540,7 +600,7 @@ async def cmd_start(message: Message, command=None):
 
     builder = InlineKeyboardBuilder()
     builder.button(text="🇪🇸 Español", callback_data="lang_es")
-    builder.button(text="🇸 English", callback_data="lang_en")
+    builder.button(text="🇺🇸 English", callback_data="lang_en")
     builder.adjust(2)
     await message.answer("👋 ¡Bienvenido!\n\nPlease select your language / Selecciona tu idioma:", reply_markup=builder.as_markup())
     user_states[telegram_id] = {'step': 'language', 'username': username, 'first_name': first_name, 'referred_by': referred_by, 'is_new_user': True, 'created_at': datetime.utcnow()}
@@ -548,14 +608,14 @@ async def cmd_start(message: Message, command=None):
 @router.callback_query(F.data.startswith('lang_'))
 async def process_language(callback: CallbackQuery):
     if callback.from_user.id not in user_states:
-        return await callback.answer("️ Sesión expirada. Usa /start")
+        return await callback.answer("⏱️ Sesión expirada. Usa /start")
     lang = callback.data.split('_')[1]
     user_states[callback.from_user.id].update({'language': lang, 'step': 'gender'})
     
     builder = InlineKeyboardBuilder()
     if lang == 'es':
-        builder.row(InlineKeyboardButton(text="👨 Hombre", callback_data="gender_male"), InlineKeyboardButton(text="👩 Mujer", callback_data="gender_female"))
-        text = " Selecciona el género de tu personaje:"
+        builder.row(InlineKeyboardButton(text="👨 Hombre", callback_data="gender_male"), InlineKeyboardButton(text=" Mujer", callback_data="gender_female"))
+        text = "🎭 Selecciona el género de tu personaje:"
     else:
         builder.row(InlineKeyboardButton(text="👨 Male", callback_data="gender_male"), InlineKeyboardButton(text="👩 Female", callback_data="gender_female"))
         text = "🎭 Select your character's gender:"
@@ -566,7 +626,7 @@ async def process_language(callback: CallbackQuery):
 @router.callback_query(F.data.startswith('gender_'))
 async def process_gender(callback: CallbackQuery):
     if callback.from_user.id not in user_states:
-        return await callback.answer("️ Sesión expirada. Usa /start")
+        return await callback.answer("⏱️ Sesión expirada. Usa /start")
     
     gender = callback.data.split('_')[1]
     user_states[callback.from_user.id].update({'gender': gender, 'step': 'archetype'})
@@ -578,7 +638,7 @@ async def process_gender(callback: CallbackQuery):
         builder.button(text=name, callback_data=f"archetype_{key}")
     builder.adjust(2)
     
-    text = "🎭 Selecciona el tipo de personaje:" if lang == 'es' else "🎭 Select character type:"
+    text = " Selecciona el tipo de personaje:" if lang == 'es' else "🎭 Select character type:"
     await callback.message.edit_text(text, reply_markup=builder.as_markup())
     await callback.answer()
 
@@ -620,14 +680,32 @@ async def process_message(message: Message):
 
     if telegram_id in user_states and user_states[telegram_id].get('step') == 'image_prompt':
         lang = user_states[telegram_id]['language']
-        success, msg, _ = await check_and_deduct_gems(telegram_id, GEM_COST_IMAGE, 'image', f'Imagen: {message.text[:50]}')
+        prompt = message.text.strip()
+        
+        # VALIDACIÓN DE IMAGEN:
+        # Modo prueba: permitir sin validar premium
+        # Modo producción: solo permitir si es premium
+        is_premium = await has_user_purchased(telegram_id)
+        
+        if not TEST_MODE and not is_premium:
+            # No es premium y no está en modo prueba
+            del user_states[telegram_id]
+            if lang == 'es':
+                return await message.answer("🔒 Función Premium\n\nLa generación de imágenes es exclusiva para usuarios que han comprado Stars.\n\n💎 Visita la tienda para desbloquearla.")
+            else:
+                return await message.answer("🔒 Premium Feature\n\nImage generation is exclusive for users who have purchased Stars.\n\n💎 Visit the shop to unlock it.")
+        
+        # Tiene permiso (modo prueba o premium)
+        success, msg, _ = await check_and_deduct_gems(telegram_id, GEM_COST_IMAGE, 'image', f'Imagen: {prompt[:50]}')
         if not success:
             await message.answer(f"⚠️ {msg}")
             del user_states[telegram_id]
             return
         
         await message.bot.send_chat_action(telegram_id, 'upload_photo')
-        img_url = await generate_novita_image(message.text)
+        await message.answer("🖼️ Generando imagen...")
+        
+        img_url = await generate_novita_image(prompt)
         if img_url:
             await message.answer_photo(img_url, caption=f"🖼️ Imagen generada.\n💰 Costo: {GEM_COST_IMAGE} gemas")
         else:
@@ -675,7 +753,7 @@ async def process_message(message: Message):
         async with lock:
             success, msg, new_balance = await check_and_deduct_gems(telegram_id, GEM_COST_MESSAGE, 'message', 'Mensaje de chat')
         if not success:
-            return await message.answer(f"️ {msg}")
+            return await message.answer(f"⚠️ {msg}")
         is_hook_mode = False
         current_gems = new_balance
 
@@ -692,7 +770,7 @@ async def process_message(message: Message):
     if response:
         await save_message(telegram_id, 'assistant', response, character['id'])
         if is_hook_mode:
-            response += f"\n\n⚠️ <b>*Momentos especiales restantes: {hook_remaining}*</b>" if lang == 'es' else f"\n\n⚠️ <b>*Special moments remaining: {hook_remaining}*</b>"
+            response += f"\n\n⚠️ <b>*Momentos especiales restantes: {hook_remaining}*</b>" if lang == 'es' else f"\n\n️ <b>*Special moments remaining: {hook_remaining}*</b>"
         await message.answer(format_actions_html(response), parse_mode="HTML")
     else:
         await message.answer("⚠️ Error al generar respuesta. Intenta de nuevo." if lang == 'es' else "⚠️ Error generating response. Try again.")
@@ -705,10 +783,10 @@ async def btn_chat(message: Message): await cmd_chat(message)
 @router.message(F.text == "💎 Balance")
 async def btn_balance(message: Message): await cmd_balance(message)
 
-@router.message(F.text.in_(["🖼️ Generar Imagen", "️ Generate Image"]))
+@router.message(F.text.in_(["🖼️ Generar Imagen", "🖼️ Generate Image"]))
 async def btn_image(message: Message): await cmd_image(message)
 
-@router.message(F.text.in_(["🛒 Tienda", "🛒 Shop"]))
+@router.message(F.text.in_([" Tienda", "🛒 Shop"]))
 async def btn_shop(message: Message): await cmd_shop(message)
 
 @router.message(F.text.in_(["🎁 Invitar Amigos", "🎁 Invite Friends"]))
@@ -732,13 +810,13 @@ async def cmd_test_image(message: Message):
         del user_states[telegram_id]
         
         await message.bot.send_chat_action(telegram_id, 'upload_photo')
-        await message.answer("🧪 Generando imagen de prueba...")
+        await message.answer(" Generando imagen de prueba...")
         
         image_url = await generate_novita_image(prompt)
         if image_url:
             await message.answer_photo(image_url, caption=f"🖼️ [PRUEBA] Imagen generada: {prompt[:100]}")
         else:
-            await message.answer("⚠️ Error al generar la imagen de prueba.")
+            await message.answer("⚠️ Error al generar la imagen de prueba. Revisa los logs.")
         return
     
     user_states[telegram_id] = {'step': 'test_image_prompt', 'created_at': datetime.utcnow()}
@@ -758,11 +836,9 @@ async def cmd_test_buy(message: Message):
     if not user:
         return await message.answer("⚠️ Primero debes registrarte con /start")
     
-    # Agregar 200 gemas de prueba
     await add_gems(telegram_id, 200, 'test_purchase', 'Compra de prueba')
     await db.update('users', {'hook_messages_remaining': 0}, {'telegram_id': telegram_id})
     
-    # Marcar como premium
     await db.insert('star_purchases', {
         'telegram_id': telegram_id,
         'stars_amount': 50,
@@ -771,7 +847,7 @@ async def cmd_test_buy(message: Message):
         'telegram_charge_id': 'test_charge'
     })
     
-    await message.answer("✅ [TEST] Compra simulada exitosa!\n\n💎 Has recibido 200 gemas de prueba\n Ahora tienes acceso a generación de imágenes\n\nUsa /balance para ver tus gemas")
+    await message.answer("✅ [TEST] Compra simulada exitosa!\n\n💎 Has recibido 200 gemas de prueba\n🎉 Ahora tienes acceso a generación de imágenes\n\nUsa /balance para ver tus gemas")
 
 @router.message(Command('addgems'))
 async def cmd_add_gems(message: Message):
@@ -799,20 +875,19 @@ async def cmd_status(message: Message):
     user = await get_user(telegram_id)
     
     if not user:
-        return await message.answer("⚠️ No estás registrado. Usa /start")
+        return await message.answer("️ No estás registrado. Usa /start")
     
     hook_remaining = user.get('hook_messages_remaining', 0)
     is_premium = await has_user_purchased(telegram_id)
     
-    text = f""" ESTADO DEL BOT (TEST_MODE={TEST_MODE})
+    text = f"""📊 ESTADO DEL BOT (TEST_MODE={TEST_MODE})
 
 👤 Usuario: {user['first_name']}
 💎 Gemas: {user['gems']}
-🎭 Personaje activo: {await get_active_character(telegram_id)}
 ✅ Premium: {'Sí' if is_premium else 'No'}
 ⚠️ Hook mode: {hook_remaining} mensajes restantes
 
- Configuración:
+️ Configuración:
 • MODO PRUEBA: {'ACTIVO' if TEST_MODE else 'INACTIVO'}
 • Costo mensaje: {GEM_COST_MESSAGE} gema(s)
 • Costo imagen: {GEM_COST_IMAGE} gemas
@@ -829,26 +904,32 @@ async def cmd_chat(message: Message):
     character = await get_active_character(message.from_user.id)
     if not character: return await message.answer("⚠️ No tienes un personaje activo. Usa /newchat")
     lang = user['language']
-    text = f"💬 ¡Conversación iniciada con {character['character_name']}!\n\nEscribe tu mensaje y te responderá.\n💰 Costo: {GEM_COST_MESSAGE} gema por mensaje" if lang == 'es' else f" Conversation started with {character['character_name']}!\n\nWrite your message.\n💰 Cost: {GEM_COST_MESSAGE} gem per message"
+    text = f"💬 ¡Conversación iniciada con {character['character_name']}!\n\nEscribe tu mensaje y te responderá.\n💰 Costo: {GEM_COST_MESSAGE} gema por mensaje" if lang == 'es' else f"💬 Conversation started with {character['character_name']}!\n\nWrite your message.\n💰 Cost: {GEM_COST_MESSAGE} gem per message"
     await message.answer(text)
 
 @router.message(Command('img'))
 async def cmd_image(message: Message):
-    user = await get_user(message.from_user.id)
+    """Comando para generar imágenes"""
+    telegram_id = message.from_user.id
+    user = await get_user(telegram_id)
     if not user: return await message.answer("⚠️ Primero debes registrarte con /start")
-    if not await has_user_purchased(message.from_user.id):
+    
+    # VALIDACIÓN: En modo prueba permitir, en producción solo premium
+    is_premium = await has_user_purchased(telegram_id)
+    
+    if not TEST_MODE and not is_premium:
         lang = user['language']
         return await message.answer("🔒 Función Premium\n\nLa generación de imágenes es exclusiva para usuarios que han comprado Stars.\n\n Visita la tienda para desbloquearla." if lang == 'es' else "🔒 Premium Feature\n\nImage generation is exclusive for users who have purchased Stars.\n\n💎 Visit the shop to unlock it.")
     
     lang = user['language']
-    text = f"🖼️ Generador de Imágenes\n\n💰 Costo: {GEM_COST_IMAGE} gemas\n\nEnvía la descripción de la imagen." if lang == 'es' else f"️ Image Generator\n\n💰 Cost: {GEM_COST_IMAGE} gems\n\nSend the description of the image."
+    text = f"🖼️ Generador de Imágenes\n\n💰 Costo: {GEM_COST_IMAGE} gemas\n\nEnvía la descripción de la imagen." if lang == 'es' else f"🖼️ Image Generator\n\n💰 Cost: {GEM_COST_IMAGE} gems\n\nSend the description of the image."
     await message.answer(text)
-    user_states[message.from_user.id] = {'step': 'image_prompt', 'language': lang, 'created_at': datetime.utcnow()}
+    user_states[telegram_id] = {'step': 'image_prompt', 'language': lang, 'created_at': datetime.utcnow()}
 
 @router.message(Command('balance'))
 async def cmd_balance(message: Message):
     user = await get_user(message.from_user.id)
-    if not user: return await message.answer("️ Primero debes registrarte con /start")
+    if not user: return await message.answer("⚠️ Primero debes registrarte con /start")
     lang = user['language']
     gems = await get_balance(message.from_user.id)
     active_ref = await count_active_referrals_last_24h(message.from_user.id)
@@ -856,7 +937,7 @@ async def cmd_balance(message: Message):
     daily_total = BASE_DAILY_GEMS + bonus
     hook_rem = user.get('hook_messages_remaining', 0)
     
-    text = f"💎 Tu Balance\n\nGemas actuales: {gems}\n\n📊 Información:\n• Gemas diarias: {daily_total}/{MAX_DAILY_GEMS}\n• Referidos activos (24h): {active_ref}/{MAX_REFERRALS_PER_DAY}"
+    text = f"💎 Tu Balance\n\nGemas actuales: {gems}\n\n Información:\n• Gemas diarias: {daily_total}/{MAX_DAILY_GEMS}\n• Referidos activos (24h): {active_ref}/{MAX_REFERRALS_PER_DAY}"
     if hook_rem > 0: text += f"\n• ⚠️ Momentos especiales: {hook_rem}/{HOOK_MODE_MESSAGES}"
     text += "\n\n💡 Invita hasta 2 amigos cada 24h para ganar +5 gemas c/u" if lang == 'es' else "\n\n💡 Invite up to 2 friends every 24h to earn +5 gems each"
     await message.answer(text)
@@ -991,10 +1072,10 @@ async def process_successful_payment(message: Message):
     lang = (await get_user(telegram_id))['language']
     
     if success:
-        await message.answer(f"✅ {msg}\n\n🎉 ¡Ahora tienes acceso a la generación de imágenes!" if lang == 'es' else f"✅ {msg}\n\n You now have access to image generation!")
+        await message.answer(f"✅ {msg}\n\n🎉 ¡Ahora tienes acceso a la generación de imágenes!" if lang == 'es' else f"✅ {msg}\n\n🎉 You now have access to image generation!")
         await message.answer("🎊 ¡Tu teclado ha sido actualizado!", reply_markup=get_main_keyboard(lang, True))
     else:
-        await message.answer("️ Error al procesar la compra." if lang == 'es' else "⚠️ Error processing purchase.")
+        await message.answer("⚠️ Error al procesar la compra." if lang == 'es' else "⚠️ Error processing purchase.")
 
 @router.message(Command('invite'))
 async def cmd_invite(message: Message):
@@ -1006,7 +1087,7 @@ async def cmd_invite(message: Message):
     daily_total = BASE_DAILY_GEMS + bonus
     link = f"https://t.me/{(await message.bot.get_me()).username}?start={user['referral_code']}"
     
-    text = f"🎁 Sistema de Referidos\n\n🔗 Tu enlace:\n{link}\n\n📊 Estadísticas:\n• Referidos activos (24h): {active_ref}/{MAX_REFERRALS_PER_DAY}\n• Gemas diarias: {daily_total}/{MAX_DAILY_GEMS}\n\n💡 ¡Comparte tu enlace y gana gemas gratis!" if lang == 'es' else f"🎁 Referral System\n\n🔗 Your link:\n{link}\n\n📊 Stats:\n• Active referrals (24h): {active_ref}/{MAX_REFERRALS_PER_DAY}\n• Daily gems: {daily_total}/{MAX_DAILY_GEMS}\n\n💡 Share your link and earn free gems!"
+    text = f"🎁 Sistema de Referidos\n\n🔗 Tu enlace:\n{link}\n\n📊 Estadísticas:\n• Referidos activos (24h): {active_ref}/{MAX_REFERRALS_PER_DAY}\n• Gemas diarias: {daily_total}/{MAX_DAILY_GEMS}\n\n💡 ¡Comparte tu enlace y gana gemas gratis!" if lang == 'es' else f"🎁 Referral System\n\n Your link:\n{link}\n\n Stats:\n• Active referrals (24h): {active_ref}/{MAX_REFERRALS_PER_DAY}\n• Daily gems: {daily_total}/{MAX_DAILY_GEMS}\n\n💡 Share your link and earn free gems!"
     await message.answer(text)
 
 async def show_character_menu(message: Message):
@@ -1048,13 +1129,13 @@ async def create_new_character(callback: CallbackQuery):
     gems = await get_balance(telegram_id)
     if gems < GEM_COST_NEW_CHARACTER:
         lang = user['language']
-        msg = f"❌ No tienes suficientes gemas. Crear un personaje cuesta {GEM_COST_NEW_CHARACTER} gemas. Tienes {gems}." if lang == 'es' else f"❌ You don't have enough gems. Creating a character costs {GEM_COST_NEW_CHARACTER} gems. You have {gems}."
+        msg = f"❌ No tienes suficientes gemas. Crear un personaje cuesta {GEM_COST_NEW_CHARACTER} gemas. Tienes {gems}." if lang == 'es' else f" You don't have enough gems. Creating a character costs {GEM_COST_NEW_CHARACTER} gems. You have {gems}."
         await callback.message.answer(msg)
         return await callback.answer()
 
     success, msg, _ = await check_and_deduct_gems(telegram_id, GEM_COST_NEW_CHARACTER, 'new_character', 'Creación de personaje')
     if not success:
-        await callback.message.answer(f"️ {msg}")
+        await callback.message.answer(f"⚠️ {msg}")
         return await callback.answer()
 
     user_states[telegram_id] = {'step': 'gender', 'language': user['language'], 'is_new_user': False, 'created_at': datetime.utcnow()}
@@ -1079,7 +1160,7 @@ async def cmd_newchat(message: Message):
 @router.message(Command('help'))
 async def cmd_help(message: Message):
     test_commands = """
- COMANDOS DE PRUEBA:
+🧪 COMANDOS DE PRUEBA:
 /testimg - Generar imagen gratis
 /testbuy - Simular compra (200 gemas + premium)
 /addgems - Agregar 50 gemas
@@ -1094,13 +1175,13 @@ async def cmd_menu(message: Message):
     user = await get_user(message.from_user.id)
     if not user: return await message.answer("⚠️ Primero debes registrarte con /start")
     lang = user['language']
-    text = "🏠 Menú Principal\n\nUsa los botones de abajo para navegar:" if lang == 'es' else " Main Menu\n\nUse the buttons below to navigate:"
+    text = "🏠 Menú Principal\n\nUsa los botones de abajo para navegar:" if lang == 'es' else "🏠 Main Menu\n\nUse the buttons below to navigate:"
     await message.answer(text, reply_markup=get_main_keyboard(lang, await has_user_purchased(message.from_user.id)))
 
 # ==================== FUNCIONES AUXILIARES ====================
 
 async def show_welcome(message: Message, character_name: str, language: str, keyboard: ReplyKeyboardMarkup = None):
-    text = f"✅ ¡Registro completado!\n\n🎭 Tu personaje: {escape_html(character_name)}\n💎 Tienes 15 gemas para empezar\n\n Usa los botones de abajo para navegar." if language == 'es' else f"✅ Registration complete!\n\n🎭 Your character: {escape_html(character_name)}\n💎 You have 15 gems to start\n\n📝 Use the buttons below to navigate."
+    text = f"✅ ¡Registro completado!\n\n🎭 Tu personaje: {escape_html(character_name)}\n💎 Tienes 15 gemas para empezar\n\n📝 Usa los botones de abajo para navegar." if language == 'es' else f"✅ Registration complete!\n\n Your character: {escape_html(character_name)}\n💎 You have 15 gems to start\n\n📝 Use the buttons below to navigate."
     await message.answer(text, reply_markup=keyboard)
 
 async def show_main_menu(message: Message, language: str, keyboard: ReplyKeyboardMarkup = None):
@@ -1115,7 +1196,7 @@ dp.include_router(router)
 
 async def on_startup():
     logger.info("Iniciando bot...")
-    await bot.set_webhook(url=WEBHOOK_URL, drop_pending_updates=True, secret_token=WEBHOOK_SECRET if WEBHOOK_SECRET else None)
+    await bot.set_webhook(url=WEBHOOK_URL, drop_pending_updates=True)
     logger.info(f"Webhook configurado: {WEBHOOK_URL}")
     asyncio.create_task(cleanup_cache())
     asyncio.create_task(cleanup_states())
@@ -1134,11 +1215,6 @@ async def on_shutdown():
 
 async def handle_webhook(request):
     if request.path == '/webhook':
-        if WEBHOOK_SECRET:
-            received_secret = request.headers.get('X-Telegram-Bot-Api-Secret-Token')
-            if received_secret != WEBHOOK_SECRET:
-                logger.warning("Webhook secret token mismatch")
-                return web.Response(status=403)
         try:
             update = Update(**await request.json())
             await dp.feed_update(bot, update)
