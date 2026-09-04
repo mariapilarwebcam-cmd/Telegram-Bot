@@ -401,6 +401,19 @@ async def generate_openrouter_response(messages: list, language: str = 'es', gem
         logger.error(f"Excepción en OpenRouter: {str(e)}")
         return None
 
+# Voces de Kokoro-82M por idioma y género (ver VOICES.md del modelo).
+# Español ('es') usa las únicas 3 voces entrenadas en español (espeak-ng "es"),
+# en vez de forzar una voz de inglés americano a leer texto en español.
+KOKORO_VOICES = {
+    "es": {"male": "em_alex", "female": "ef_dora"},
+    "en": {"male": "am_michael", "female": "af_bella"},
+}
+
+def get_kokoro_voice(language: str, gender: str) -> str:
+    is_male = 'male' in gender.lower() or 'hombre' in gender.lower()
+    lang_key = "es" if language == "es" else "en"
+    return KOKORO_VOICES[lang_key]["male" if is_male else "female"]
+
 def detect_audio_format(audio_bytes: bytes) -> str:
     """Detecta el formato real del audio a partir de sus primeros bytes (magic bytes)."""
     if audio_bytes[:4] == b'RIFF':
@@ -424,11 +437,8 @@ async def generate_deepinfra_audio(text: str, language: str = 'es', gender: str 
         "Content-Type": "application/json"
     }
 
-    # Selección de voz para Kokoro-82M
-    if 'male' in gender.lower() or 'hombre' in gender.lower():
-        voice = "am"
-    else:
-        voice = "af"
+    # Selección de voz para Kokoro-82M según idioma y género
+    voice = get_kokoro_voice(language, gender)
 
     data = {
         "text": text,
@@ -774,7 +784,7 @@ async def test_audio(message: Message):
 
         data = {
             "text": "Hola, ¿cómo estás? Soy un bot de pruebas.",
-            "voice": "af"  # Voz femenina
+            "voice": get_kokoro_voice("es", "female")  # ef_dora
         }
 
         logger.info(f"🧪 /testaudio iniciado. Modelo: {DEEPINFRA_MODEL}")
