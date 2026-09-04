@@ -33,10 +33,13 @@ WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET')
 OPENROUTER_MODEL = "deepseek/deepseek-v4-flash-0731"
 NOVITA_MODEL = "stable-diffusion-xl"
 
+# MODO PRUEBA: Cambia a False para producción
+TEST_MODE = True
+
 GEM_COST_MESSAGE = 1
 GEM_COST_IMAGE = 10
 GEM_COST_AUDIO = 5
-GEM_COST_NEW_CHARACTER = 5   # Costo en gemas para crear nuevo personaje
+GEM_COST_NEW_CHARACTER = 5
 
 # Sistema de referidos
 BASE_DAILY_GEMS = 5
@@ -47,34 +50,82 @@ MAX_DAILY_GEMS = BASE_DAILY_GEMS + (GEMS_PER_REFERRAL * MAX_REFERRALS_PER_DAY)
 # Hook Mode
 HOOK_MODE_MESSAGES = 5
 
-# Arquetipos separados por género
+# Arquetipos
 ARCHETYPES_MALE = {
     "es": {
-        "schoolmate": "🎓 Compañero de escuela", "stepdad": "👔 Padrastro", "stepbrother": "💪 Hermanastro",
-        "teacher": "📚 Profesor", "neighbor": "🏠 Vecino", "boss": "💼 Jefe", "trainer": "🏋️ Entrenador personal",
-        "model": "📸 Modelo/Influencer", "musician": "🎵 Músico", "actor": "🎬 Actor", "doctor": "⚕️ Médico",
-        "chef": "👨‍🍳 Chef", "artist": "🎨 Artista", "writer": "✍️ Escritor", "bodyguard": "🛡️ Guardaespaldas", "ceo": "💼 CEO/Empresario"
+        "schoolmate": "🎓 Compañero de escuela",
+        "stepdad": "👔 Padrastro",
+        "stepbrother": "💪 Hermanastro",
+        "teacher": "📚 Profesor",
+        "neighbor": "🏠 Vecino",
+        "boss": "💼 Jefe",
+        "trainer": "🏋️ Entrenador personal",
+        "model": " Modelo/Influencer",
+        "musician": "🎵 Músico",
+        "actor": "🎬 Actor",
+        "doctor": "⚕️ Médico",
+        "chef": "👨‍🍳 Chef",
+        "artist": "🎨 Artista",
+        "writer": "✍️ Escritor",
+        "bodyguard": "🛡️ Guardaespaldas",
+        "ceo": "💼 CEO/Empresario"
     },
     "en": {
-        "schoolmate": "🎓 Schoolmate", "stepdad": "👔 Stepfather", "stepbrother": "💪 Stepbrother",
-        "teacher": "📚 Teacher", "neighbor": "🏠 Neighbor", "boss": "💼 Boss", "trainer": "🏋️ Personal Trainer",
-        "model": "📸 Model/Influencer", "musician": "🎵 Musician", "actor": "🎬 Actor", "doctor": "⚕️ Doctor",
-        "chef": "👨‍🍳 Chef", "artist": "🎨 Artist", "writer": "✍️ Writer", "bodyguard": "🛡️ Bodyguard", "ceo": "💼 CEO/Businessman"
+        "schoolmate": "🎓 Schoolmate",
+        "stepdad": " Stepfather",
+        "stepbrother": "💪 Stepbrother",
+        "teacher": "📚 Teacher",
+        "neighbor": " Neighbor",
+        "boss": "💼 Boss",
+        "trainer": "🏋️ Personal Trainer",
+        "model": "📸 Model/Influencer",
+        "musician": "🎵 Musician",
+        "actor": "🎬 Actor",
+        "doctor": "⚕️ Doctor",
+        "chef": "👨‍🍳 Chef",
+        "artist": "🎨 Artist",
+        "writer": "✍️ Writer",
+        "bodyguard": "🛡️ Bodyguard",
+        "ceo": "💼 CEO/Businessman"
     }
 }
 
 ARCHETYPES_FEMALE = {
     "es": {
-        "schoolmate": "🎓 Compañera de escuela", "stepmom": "💋 Madrastra", "stepsister": "🌸 Hermanastra",
-        "teacher": "📚 Profesora", "neighbor": "🏠 Vecina", "boss": "💼 Jefa", "trainer": "🏋️ Entrenadora personal",
-        "model": "📸 Modelo/Influencer", "musician": "🎵 Músico", "actor": "🎬 Actriz", "doctor": "⚕️ Doctora/Enfermera",
-        "chef": "👩‍🍳 Chef", "artist": "🎨 Artista", "writer": "✍️ Escritora", "secretary": "💼 Secretaria", "model_student": "🎓 Estudiante popular"
+        "schoolmate": "🎓 Compañera de escuela",
+        "stepmom": "💋 Madrastra",
+        "stepsister": "🌸 Hermanastra",
+        "teacher": "📚 Profesora",
+        "neighbor": "🏠 Vecina",
+        "boss": "💼 Jefa",
+        "trainer": "🏋️ Entrenadora personal",
+        "model": "📸 Modelo/Influencer",
+        "musician": "🎵 Músico",
+        "actor": "🎬 Actriz",
+        "doctor": "⚕️ Doctora/Enfermera",
+        "chef": "👩‍ Chef",
+        "artist": " Artista",
+        "writer": "✍️ Escritora",
+        "secretary": " Secretaria",
+        "model_student": " Estudiante popular"
     },
     "en": {
-        "schoolmate": "🎓 Schoolmate", "stepmom": "💋 Stepmother", "stepsister": "🌸 Stepsister",
-        "teacher": "📚 Teacher", "neighbor": "🏠 Neighbor", "boss": "💼 Boss", "trainer": "🏋️ Personal Trainer",
-        "model": "📸 Model/Influencer", "musician": "🎵 Musician", "actor": "🎬 Actress", "doctor": "⚕️ Doctor/Nurse",
-        "chef": "👩‍🍳 Chef", "artist": "🎨 Artist", "writer": "✍️ Writer", "secretary": "💼 Secretary", "model_student": "🎓 Popular Student"
+        "schoolmate": "🎓 Schoolmate",
+        "stepmom": "💋 Stepmother",
+        "stepsister": " Stepsister",
+        "teacher": " Teacher",
+        "neighbor": " Neighbor",
+        "boss": "💼 Boss",
+        "trainer": "🏋️ Personal Trainer",
+        "model": "📸 Model/Influencer",
+        "musician": "🎵 Musician",
+        "actor": "🎬 Actress",
+        "doctor": "️ Doctor/Nurse",
+        "chef": "👩‍🍳 Chef",
+        "artist": "🎨 Artist",
+        "writer": "✍️ Writer",
+        "secretary": "💼 Secretary",
+        "model_student": "🎓 Popular Student"
     }
 }
 
@@ -109,7 +160,11 @@ STAR_PACKAGES = [
     {"stars": 500, "gems": 2000, "bonus": 15, "first_time": False},
 ]
 
-logging.basicConfig(level=logging.WARNING, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+# Logging en INFO para modo prueba
+logging.basicConfig(
+    level=logging.INFO if TEST_MODE else logging.WARNING,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 user_states: Dict[int, Dict[str, Any]] = {}
@@ -349,12 +404,12 @@ def get_main_keyboard(language: str, is_premium: bool = False) -> ReplyKeyboardM
     builder = ReplyKeyboardBuilder()
     if language == 'es':
         builder.row(KeyboardButton(text="💬 Chat"), KeyboardButton(text="💎 Balance"))
-        builder.row(KeyboardButton(text="🖼️ Generar Imagen" if is_premium else "🛒 Tienda"), KeyboardButton(text="🛒 Tienda") if is_premium else KeyboardButton(text=""))
+        builder.row(KeyboardButton(text="️ Generar Imagen" if is_premium else "🛒 Tienda"), KeyboardButton(text=" Tienda") if is_premium else KeyboardButton(text=""))
         builder.row(KeyboardButton(text="🎁 Invitar Amigos"), KeyboardButton(text="💬 Nuevo Chat"), KeyboardButton(text="❓ Ayuda"))
     else:
         builder.row(KeyboardButton(text="💬 Chat"), KeyboardButton(text="💎 Balance"))
-        builder.row(KeyboardButton(text="🖼️ Generate Image" if is_premium else "🛒 Shop"), KeyboardButton(text="🛒 Shop") if is_premium else KeyboardButton(text=""))
-        builder.row(KeyboardButton(text="🎁 Invite Friends"), KeyboardButton(text="💬 New Chat"), KeyboardButton(text="❓ Help"))
+        builder.row(KeyboardButton(text="🖼️ Generate Image" if is_premium else "🛒 Shop"), KeyboardButton(text=" Shop") if is_premium else KeyboardButton(text=""))
+        builder.row(KeyboardButton(text=" Invite Friends"), KeyboardButton(text="💬 New Chat"), KeyboardButton(text="❓ Help"))
     
     clean_builder = ReplyKeyboardBuilder()
     for row in builder.export():
@@ -385,9 +440,9 @@ async def generate_openrouter_response(messages: list, language: str = 'es', gem
     combined_system = f"{intensity_prompt}\n\n{character_prompt}" if character_prompt else intensity_prompt
     
     if language == 'es':
-        combined_system = "IMPORTANTE: Responde ÚNICAMENTE en español. No uses ningún otro idioma.\n\n" + combined_system + "\n\nRecuerda: Solo español.\n\nIMPORTANTE: Mantén tu respuesta dentro de 400 tokens (aprox. 300 palabras). Termina tus frases y no cortes a mitad de palabra."
+        combined_system = "IMPORTANTE: Responde ÚNICAMENTE en español.\n\n" + combined_system + "\n\nIMPORTANTE: Mantén tu respuesta dentro de 400 tokens."
     else:
-        combined_system = "IMPORTANT: Respond ONLY in English. Do not use any other language.\n\n" + combined_system + "\n\nRemember: Only English.\n\nIMPORTANT: Keep your response within 400 tokens (about 300 words). Finish your sentences and do not cut off mid-word."
+        combined_system = "IMPORTANT: Respond ONLY in English.\n\n" + combined_system + "\n\nIMPORTANT: Keep your response within 400 tokens."
 
     full_messages = [{"role": "system", "content": combined_system}] + messages
     temperature = 0.8 if intensity_level == 'NORMAL' else (0.85 if intensity_level == 'HIGH' else (0.9 if intensity_level == 'VERY_HIGH' else 0.95))
@@ -425,6 +480,11 @@ async def generate_novita_image(prompt: str):
         return None
 
 async def check_and_deduct_gems(telegram_id: int, cost: int, transaction_type: str, description: str = ''):
+    # MODO PRUEBA: No cobrar gemas
+    if TEST_MODE:
+        user = await get_user(telegram_id)
+        return True, f"[TEST] Gemas restantes: {user['gems'] if user else 0}", user['gems'] if user else 0
+    
     user = await check_and_reset_daily_gems(telegram_id)
     if not user: return False, "Usuario no encontrado", 0
     if user['gems'] < cost: return False, f"No tienes suficientes gemas. Necesitas {cost} gemas pero solo tienes {user['gems']}.", user['gems']
@@ -480,7 +540,7 @@ async def cmd_start(message: Message, command=None):
 
     builder = InlineKeyboardBuilder()
     builder.button(text="🇪🇸 Español", callback_data="lang_es")
-    builder.button(text="🇺🇸 English", callback_data="lang_en")
+    builder.button(text="🇸 English", callback_data="lang_en")
     builder.adjust(2)
     await message.answer("👋 ¡Bienvenido!\n\nPlease select your language / Selecciona tu idioma:", reply_markup=builder.as_markup())
     user_states[telegram_id] = {'step': 'language', 'username': username, 'first_name': first_name, 'referred_by': referred_by, 'is_new_user': True, 'created_at': datetime.utcnow()}
@@ -488,14 +548,14 @@ async def cmd_start(message: Message, command=None):
 @router.callback_query(F.data.startswith('lang_'))
 async def process_language(callback: CallbackQuery):
     if callback.from_user.id not in user_states:
-        return await callback.answer("⏱️ Sesión expirada. Usa /start")
+        return await callback.answer("️ Sesión expirada. Usa /start")
     lang = callback.data.split('_')[1]
     user_states[callback.from_user.id].update({'language': lang, 'step': 'gender'})
     
     builder = InlineKeyboardBuilder()
     if lang == 'es':
         builder.row(InlineKeyboardButton(text="👨 Hombre", callback_data="gender_male"), InlineKeyboardButton(text="👩 Mujer", callback_data="gender_female"))
-        text = "🎭 Selecciona el género de tu personaje:"
+        text = " Selecciona el género de tu personaje:"
     else:
         builder.row(InlineKeyboardButton(text="👨 Male", callback_data="gender_male"), InlineKeyboardButton(text="👩 Female", callback_data="gender_female"))
         text = "🎭 Select your character's gender:"
@@ -506,7 +566,7 @@ async def process_language(callback: CallbackQuery):
 @router.callback_query(F.data.startswith('gender_'))
 async def process_gender(callback: CallbackQuery):
     if callback.from_user.id not in user_states:
-        return await callback.answer("⏱️ Sesión expirada. Usa /start")
+        return await callback.answer("️ Sesión expirada. Usa /start")
     
     gender = callback.data.split('_')[1]
     user_states[callback.from_user.id].update({'gender': gender, 'step': 'archetype'})
@@ -615,7 +675,7 @@ async def process_message(message: Message):
         async with lock:
             success, msg, new_balance = await check_and_deduct_gems(telegram_id, GEM_COST_MESSAGE, 'message', 'Mensaje de chat')
         if not success:
-            return await message.answer(f"⚠️ {msg}")
+            return await message.answer(f"️ {msg}")
         is_hook_mode = False
         current_gems = new_balance
 
@@ -645,7 +705,7 @@ async def btn_chat(message: Message): await cmd_chat(message)
 @router.message(F.text == "💎 Balance")
 async def btn_balance(message: Message): await cmd_balance(message)
 
-@router.message(F.text.in_(["🖼️ Generar Imagen", "🖼️ Generate Image"]))
+@router.message(F.text.in_(["🖼️ Generar Imagen", "️ Generate Image"]))
 async def btn_image(message: Message): await cmd_image(message)
 
 @router.message(F.text.in_(["🛒 Tienda", "🛒 Shop"]))
@@ -660,11 +720,185 @@ async def btn_newchat(message: Message): await show_character_menu(message)
 @router.message(F.text.in_(["❓ Ayuda", "❓ Help"]))
 async def btn_help(message: Message): await cmd_help(message)
 
-# ==================== CORRECCIÓN PRINCIPAL: TIENDA DESDE CALLBACK ====================
+# ==================== COMANDOS DE PRUEBA ====================
+
+@router.message(Command('testimg'))
+async def cmd_test_image(message: Message):
+    """Comando de prueba para generar imágenes sin costo ni validación premium"""
+    telegram_id = message.from_user.id
+    
+    if telegram_id in user_states and user_states[telegram_id].get('step') == 'test_image_prompt':
+        prompt = message.text.strip()
+        del user_states[telegram_id]
+        
+        await message.bot.send_chat_action(telegram_id, 'upload_photo')
+        await message.answer("🧪 Generando imagen de prueba...")
+        
+        image_url = await generate_novita_image(prompt)
+        if image_url:
+            await message.answer_photo(image_url, caption=f"🖼️ [PRUEBA] Imagen generada: {prompt[:100]}")
+        else:
+            await message.answer("⚠️ Error al generar la imagen de prueba.")
+        return
+    
+    user_states[telegram_id] = {'step': 'test_image_prompt', 'created_at': datetime.utcnow()}
+    
+    await message.answer(
+        "🧪 MODO PRUEBA DE IMAGEN\n\n"
+        "Envía la descripción de la imagen que quieres generar.\n"
+        "Ejemplo: 'Una playa al atardecer con palmeras'\n\n"
+        "⚠️ Esta imagen es GRATIS (no consume gemas)"
+    )
+
+@router.message(Command('testbuy'))
+async def cmd_test_buy(message: Message):
+    """Simula una compra de gemas sin pagar"""
+    telegram_id = message.from_user.id
+    user = await get_user(telegram_id)
+    if not user:
+        return await message.answer("⚠️ Primero debes registrarte con /start")
+    
+    # Agregar 200 gemas de prueba
+    await add_gems(telegram_id, 200, 'test_purchase', 'Compra de prueba')
+    await db.update('users', {'hook_messages_remaining': 0}, {'telegram_id': telegram_id})
+    
+    # Marcar como premium
+    await db.insert('star_purchases', {
+        'telegram_id': telegram_id,
+        'stars_amount': 50,
+        'gems_amount': 200,
+        'is_first_purchase': True,
+        'telegram_charge_id': 'test_charge'
+    })
+    
+    await message.answer("✅ [TEST] Compra simulada exitosa!\n\n💎 Has recibido 200 gemas de prueba\n Ahora tienes acceso a generación de imágenes\n\nUsa /balance para ver tus gemas")
+
+@router.message(Command('addgems'))
+async def cmd_add_gems(message: Message):
+    """Agrega gemas de prueba"""
+    telegram_id = message.from_user.id
+    user = await get_user(telegram_id)
+    if not user:
+        return await message.answer("⚠️ Primero debes registrarte con /start")
+    
+    await add_gems(telegram_id, 50, 'test_add', 'Gemas de prueba')
+    await message.answer(f"✅ [TEST] 50 gemas agregadas. Balance actual: {await get_balance(telegram_id)}")
+
+@router.message(Command('reset'))
+async def cmd_reset(message: Message):
+    """Resetea el estado del usuario para pruebas"""
+    telegram_id = message.from_user.id
+    if telegram_id in user_states:
+        del user_states[telegram_id]
+    await message.answer("✅ [TEST] Estado reseteado")
+
+@router.message(Command('status'))
+async def cmd_status(message: Message):
+    """Muestra el estado actual del bot y del usuario"""
+    telegram_id = message.from_user.id
+    user = await get_user(telegram_id)
+    
+    if not user:
+        return await message.answer("⚠️ No estás registrado. Usa /start")
+    
+    hook_remaining = user.get('hook_messages_remaining', 0)
+    is_premium = await has_user_purchased(telegram_id)
+    
+    text = f""" ESTADO DEL BOT (TEST_MODE={TEST_MODE})
+
+👤 Usuario: {user['first_name']}
+💎 Gemas: {user['gems']}
+🎭 Personaje activo: {await get_active_character(telegram_id)}
+✅ Premium: {'Sí' if is_premium else 'No'}
+⚠️ Hook mode: {hook_remaining} mensajes restantes
+
+ Configuración:
+• MODO PRUEBA: {'ACTIVO' if TEST_MODE else 'INACTIVO'}
+• Costo mensaje: {GEM_COST_MESSAGE} gema(s)
+• Costo imagen: {GEM_COST_IMAGE} gemas
+• Hook mode: {HOOK_MODE_MESSAGES} mensajes gratis"""
+    
+    await message.answer(text)
+
+# ==================== COMANDOS NORMALES ====================
+
+@router.message(Command('chat'))
+async def cmd_chat(message: Message):
+    user = await get_user(message.from_user.id)
+    if not user: return await message.answer("⚠️ Primero debes registrarte con /start")
+    character = await get_active_character(message.from_user.id)
+    if not character: return await message.answer("⚠️ No tienes un personaje activo. Usa /newchat")
+    lang = user['language']
+    text = f"💬 ¡Conversación iniciada con {character['character_name']}!\n\nEscribe tu mensaje y te responderá.\n💰 Costo: {GEM_COST_MESSAGE} gema por mensaje" if lang == 'es' else f" Conversation started with {character['character_name']}!\n\nWrite your message.\n💰 Cost: {GEM_COST_MESSAGE} gem per message"
+    await message.answer(text)
+
+@router.message(Command('img'))
+async def cmd_image(message: Message):
+    user = await get_user(message.from_user.id)
+    if not user: return await message.answer("⚠️ Primero debes registrarte con /start")
+    if not await has_user_purchased(message.from_user.id):
+        lang = user['language']
+        return await message.answer("🔒 Función Premium\n\nLa generación de imágenes es exclusiva para usuarios que han comprado Stars.\n\n Visita la tienda para desbloquearla." if lang == 'es' else "🔒 Premium Feature\n\nImage generation is exclusive for users who have purchased Stars.\n\n💎 Visit the shop to unlock it.")
+    
+    lang = user['language']
+    text = f"🖼️ Generador de Imágenes\n\n💰 Costo: {GEM_COST_IMAGE} gemas\n\nEnvía la descripción de la imagen." if lang == 'es' else f"️ Image Generator\n\n💰 Cost: {GEM_COST_IMAGE} gems\n\nSend the description of the image."
+    await message.answer(text)
+    user_states[message.from_user.id] = {'step': 'image_prompt', 'language': lang, 'created_at': datetime.utcnow()}
+
+@router.message(Command('balance'))
+async def cmd_balance(message: Message):
+    user = await get_user(message.from_user.id)
+    if not user: return await message.answer("️ Primero debes registrarte con /start")
+    lang = user['language']
+    gems = await get_balance(message.from_user.id)
+    active_ref = await count_active_referrals_last_24h(message.from_user.id)
+    bonus = active_ref * GEMS_PER_REFERRAL
+    daily_total = BASE_DAILY_GEMS + bonus
+    hook_rem = user.get('hook_messages_remaining', 0)
+    
+    text = f"💎 Tu Balance\n\nGemas actuales: {gems}\n\n📊 Información:\n• Gemas diarias: {daily_total}/{MAX_DAILY_GEMS}\n• Referidos activos (24h): {active_ref}/{MAX_REFERRALS_PER_DAY}"
+    if hook_rem > 0: text += f"\n• ⚠️ Momentos especiales: {hook_rem}/{HOOK_MODE_MESSAGES}"
+    text += "\n\n💡 Invita hasta 2 amigos cada 24h para ganar +5 gemas c/u" if lang == 'es' else "\n\n💡 Invite up to 2 friends every 24h to earn +5 gems each"
+    await message.answer(text)
+
+@router.message(Command('shop'))
+async def cmd_shop(message: Message):
+    telegram_id = message.from_user.id
+    user = await get_user(telegram_id)
+    if not user:
+        return await message.answer("⚠️ Primero debes registrarte con /start")
+    
+    language = user['language']
+    builder = InlineKeyboardBuilder()
+    
+    if language == 'es':
+        text = "💎 Tienda de Gemas\n\nSelecciona un paquete:\n\n"
+        for i, package in enumerate(STAR_PACKAGES):
+            stars = package['stars']
+            gems = package['gems']
+            bonus = package.get('bonus', 0)
+            first_time = package.get('first_time', False)
+            final_gems = int(gems * (1 + bonus / 100)) if bonus > 0 else gems
+            line = f"⭐ {stars} Stars → 💎 {final_gems} gemas" + (" (¡Primera vez!)" if first_time else "")
+            text += f"{i+1}. {line}\n"
+            builder.button(text=f"Opción {i+1}", callback_data=f"buy_{i}")
+    else:
+        text = "💎 Gem Store\n\nSelect a package:\n\n"
+        for i, package in enumerate(STAR_PACKAGES):
+            stars = package['stars']
+            gems = package['gems']
+            bonus = package.get('bonus', 0)
+            first_time = package.get('first_time', False)
+            final_gems = int(gems * (1 + bonus / 100)) if bonus > 0 else gems
+            line = f"⭐ {stars} Stars → 💎 {final_gems} gems" + (" (First time!)" if first_time else "")
+            text += f"{i+1}. {line}\n"
+            builder.button(text=f"Option {i+1}", callback_data=f"buy_{i}")
+            
+    builder.adjust(1)
+    await message.answer(text, reply_markup=builder.as_markup())
 
 @router.callback_query(F.data == "shop_from_block")
 async def shop_from_block(callback: CallbackQuery):
-    """Genera la tienda directamente desde el callback para evitar errores de enrutamiento"""
     telegram_id = callback.from_user.id
     user = await get_user(telegram_id)
     if not user:
@@ -705,8 +939,6 @@ async def invite_from_block(callback: CallbackQuery):
     await cmd_invite(callback.message)
     await callback.answer()
 
-# ==================== PROCESO DE COMPRA ROBUSTO ====================
-
 @router.callback_query(F.data.startswith('buy_'))
 async def process_purchase(callback: CallbackQuery):
     telegram_id = callback.from_user.id
@@ -733,7 +965,6 @@ async def process_purchase(callback: CallbackQuery):
     prices = [LabeledPrice(label="Gems", amount=stars)]
 
     try:
-        # Usar chat_id=telegram_id es más seguro que callback.message.chat.id
         await callback.bot.send_invoice(
             chat_id=telegram_id,
             title=title,
@@ -760,55 +991,10 @@ async def process_successful_payment(message: Message):
     lang = (await get_user(telegram_id))['language']
     
     if success:
-        await message.answer(f"✅ {msg}\n\n🎉 ¡Ahora tienes acceso a la generación de imágenes!" if lang == 'es' else f"✅ {msg}\n\n🎉 You now have access to image generation!")
+        await message.answer(f"✅ {msg}\n\n🎉 ¡Ahora tienes acceso a la generación de imágenes!" if lang == 'es' else f"✅ {msg}\n\n You now have access to image generation!")
         await message.answer("🎊 ¡Tu teclado ha sido actualizado!", reply_markup=get_main_keyboard(lang, True))
     else:
-        await message.answer("⚠️ Error al procesar la compra." if lang == 'es' else "⚠️ Error processing purchase.")
-
-# ==================== COMANDOS ====================
-
-@router.message(Command('chat'))
-async def cmd_chat(message: Message):
-    user = await get_user(message.from_user.id)
-    if not user: return await message.answer("⚠️ Primero debes registrarte con /start")
-    character = await get_active_character(message.from_user.id)
-    if not character: return await message.answer("⚠️ No tienes un personaje activo. Usa /newchat")
-    lang = user['language']
-    text = f"💬 ¡Conversación iniciada con {character['character_name']}!\n\nEscribe tu mensaje y te responderá.\n💰 Costo: {GEM_COST_MESSAGE} gema por mensaje" if lang == 'es' else f"💬 Conversation started with {character['character_name']}!\n\nWrite your message.\n💰 Cost: {GEM_COST_MESSAGE} gem per message"
-    await message.answer(text)
-
-@router.message(Command('img'))
-async def cmd_image(message: Message):
-    user = await get_user(message.from_user.id)
-    if not user: return await message.answer("⚠️ Primero debes registrarte con /start")
-    if not await has_user_purchased(message.from_user.id):
-        lang = user['language']
-        return await message.answer("🔒 Función Premium\n\nLa generación de imágenes es exclusiva para usuarios que han comprado Stars.\n\n💎 Visita la tienda para desbloquearla." if lang == 'es' else "🔒 Premium Feature\n\nImage generation is exclusive for users who have purchased Stars.\n\n💎 Visit the shop to unlock it.")
-    
-    lang = user['language']
-    text = f"🖼️ Generador de Imágenes\n\n💰 Costo: {GEM_COST_IMAGE} gemas\n\nEnvía la descripción de la imagen." if lang == 'es' else f"🖼️ Image Generator\n\n💰 Cost: {GEM_COST_IMAGE} gems\n\nSend the description of the image."
-    await message.answer(text)
-    user_states[message.from_user.id] = {'step': 'image_prompt', 'language': lang, 'created_at': datetime.utcnow()}
-
-@router.message(Command('balance'))
-async def cmd_balance(message: Message):
-    user = await get_user(message.from_user.id)
-    if not user: return await message.answer("⚠️ Primero debes registrarte con /start")
-    lang = user['language']
-    gems = await get_balance(message.from_user.id)
-    active_ref = await count_active_referrals_last_24h(message.from_user.id)
-    bonus = active_ref * GEMS_PER_REFERRAL
-    daily_total = BASE_DAILY_GEMS + bonus
-    hook_rem = user.get('hook_messages_remaining', 0)
-    
-    text = f"💎 Tu Balance\n\nGemas actuales: {gems}\n\n📊 Información:\n• Gemas diarias: {daily_total}/{MAX_DAILY_GEMS}\n• Referidos activos (24h): {active_ref}/{MAX_REFERRALS_PER_DAY}"
-    if hook_rem > 0: text += f"\n• ⚠️ Momentos especiales: {hook_rem}/{HOOK_MODE_MESSAGES}"
-    text += "\n\n💡 Invita hasta 2 amigos cada 24h para ganar +5 gemas c/u" if lang == 'es' else "\n\n💡 Invite up to 2 friends every 24h to earn +5 gems each"
-    await message.answer(text)
-
-@router.message(Command('shop'))
-async def cmd_shop(message: Message):
-    await shop_from_block(type('FakeCallback', (), {'from_user': message.from_user, 'message': message, 'answer': lambda self, *args, **kwargs: None})())
+        await message.answer("️ Error al procesar la compra." if lang == 'es' else "⚠️ Error processing purchase.")
 
 @router.message(Command('invite'))
 async def cmd_invite(message: Message):
@@ -868,7 +1054,7 @@ async def create_new_character(callback: CallbackQuery):
 
     success, msg, _ = await check_and_deduct_gems(telegram_id, GEM_COST_NEW_CHARACTER, 'new_character', 'Creación de personaje')
     if not success:
-        await callback.message.answer(f"⚠️ {msg}")
+        await callback.message.answer(f"️ {msg}")
         return await callback.answer()
 
     user_states[telegram_id] = {'step': 'gender', 'language': user['language'], 'is_new_user': False, 'created_at': datetime.utcnow()}
@@ -892,20 +1078,29 @@ async def cmd_newchat(message: Message):
 
 @router.message(Command('help'))
 async def cmd_help(message: Message):
-    await message.answer("📚 Comandos:\n/start - Registrarse\n/chat - Conversar\n/img - Generar imagen [PREMIUM]\n/balance - Ver gemas\n/shop - Tienda\n/invite - Invitar amigos\n/newchat - Cambiar/Crear personaje (5 gemas)\n/help - Ayuda\n\n💡 Consejo: Invita amigos para aumentar tus gemas diarias hasta 15.")
+    test_commands = """
+ COMANDOS DE PRUEBA:
+/testimg - Generar imagen gratis
+/testbuy - Simular compra (200 gemas + premium)
+/addgems - Agregar 50 gemas
+/reset - Resetear estado
+/status - Ver estado del bot
+""" if TEST_MODE else ""
+    
+    await message.answer(f"📚 Comandos:\n/start - Registrarse\n/chat - Conversar\n/img - Generar imagen [PREMIUM]\n/balance - Ver gemas\n/shop - Tienda\n/invite - Invitar amigos\n/newchat - Cambiar/Crear personaje (5 gemas)\n/help - Ayuda{test_commands}\n\n💡 Consejo: Invita amigos para aumentar tus gemas diarias hasta 15.")
 
 @router.message(Command('menu'))
 async def cmd_menu(message: Message):
     user = await get_user(message.from_user.id)
     if not user: return await message.answer("⚠️ Primero debes registrarte con /start")
     lang = user['language']
-    text = "🏠 Menú Principal\n\nUsa los botones de abajo para navegar:" if lang == 'es' else "🏠 Main Menu\n\nUse the buttons below to navigate:"
+    text = "🏠 Menú Principal\n\nUsa los botones de abajo para navegar:" if lang == 'es' else " Main Menu\n\nUse the buttons below to navigate:"
     await message.answer(text, reply_markup=get_main_keyboard(lang, await has_user_purchased(message.from_user.id)))
 
 # ==================== FUNCIONES AUXILIARES ====================
 
 async def show_welcome(message: Message, character_name: str, language: str, keyboard: ReplyKeyboardMarkup = None):
-    text = f"✅ ¡Registro completado!\n\n🎭 Tu personaje: {escape_html(character_name)}\n💎 Tienes 15 gemas para empezar\n\n📝 Usa los botones de abajo para navegar." if language == 'es' else f"✅ Registration complete!\n\n🎭 Your character: {escape_html(character_name)}\n💎 You have 15 gems to start\n\n📝 Use the buttons below to navigate."
+    text = f"✅ ¡Registro completado!\n\n🎭 Tu personaje: {escape_html(character_name)}\n💎 Tienes 15 gemas para empezar\n\n Usa los botones de abajo para navegar." if language == 'es' else f"✅ Registration complete!\n\n🎭 Your character: {escape_html(character_name)}\n💎 You have 15 gems to start\n\n📝 Use the buttons below to navigate."
     await message.answer(text, reply_markup=keyboard)
 
 async def show_main_menu(message: Message, language: str, keyboard: ReplyKeyboardMarkup = None):
