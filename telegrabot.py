@@ -42,7 +42,7 @@ DEEPINFRA_VOICE_EN = os.getenv('DEEPINFRA_VOICE_EN', '')
 
 GEM_COST_MESSAGE = 1
 GEM_COST_AUDIO = 5
-GEM_COST_IMAGE = 10  # <-- Costo por selfie
+GEM_COST_IMAGE = 10  # Costo por selfie
 GEM_COST_NEW_CHARACTER = 5
 
 # Sistema de referidos
@@ -165,15 +165,8 @@ def format_actions_html(text: str) -> str:
     text = escape_html(text)
     return re.sub(r'\*([^*]+)\*', r'<b>*\1*</b>', text)
 
-# =========== NUEVA FUNCIÓN: Extraer solo el diálogo (sin acciones entre *) ===========
 def extract_dialogue(text: str) -> str:
-    """
-    Elimina todo el texto entre asteriscos (incluidos los asteriscos) y devuelve solo el diálogo.
-    Ejemplo: "*sonríe* Hola, ¿cómo estás? *se acerca*" -> "Hola, ¿cómo estás?"
-    """
-    # Eliminar contenido entre asteriscos (no greedy)
     cleaned = re.sub(r'\*[^*]*\*', '', text)
-    # Eliminar espacios múltiples
     cleaned = re.sub(r'\s+', ' ', cleaned).strip()
     return cleaned
 
@@ -385,9 +378,7 @@ def get_main_keyboard(language: str, is_premium: bool = False) -> ReplyKeyboardM
     builder = ReplyKeyboardBuilder()
     if language == 'es':
         builder.row(KeyboardButton(text="💬 Chat"), KeyboardButton(text="💎 Balance"))
-        # En español NO mostramos el botón de audio (solo en inglés)
-        # builder.row(KeyboardButton(text="🎙️ Grabar Audio"), KeyboardButton(text="📸 Selfie (10💎)"))
-        builder.row(KeyboardButton(text="📸 Selfie (10💎)"))  # Solo selfie
+        builder.row(KeyboardButton(text="📸 Selfie (10💎)"))
         builder.row(KeyboardButton(text="🛒 Tienda"), KeyboardButton(text="🎁 Invitar"))
         builder.row(KeyboardButton(text="💬 Nuevo Chat"), KeyboardButton(text="❓ Ayuda"))
     else:
@@ -563,7 +554,6 @@ async def generate_deepinfra_audio(text: str, language: str = 'es', gender: str 
         logger.error(f"⚠️ Excepción en DeepInfra: {str(e)}", exc_info=True)
         return None
 
-# =========== FUNCIÓN DE GENERACIÓN DE IMAGEN CORREGIDA ===========
 async def generate_image(prompt: str):
     if not DEEPINFRA_TOKEN:
         logger.error("❌ DEEPINFRA_TOKEN no está configurada")
@@ -593,22 +583,17 @@ async def generate_image(prompt: str):
                     result = await response.json()
                     logger.info(f"Respuesta de imagen: {result}")
 
-                    # Intentar extraer la imagen de varias estructuras posibles
                     image_data = None
-
-                    # Caso 1: 'images' es una lista de objetos con 'url' o 'image'
                     if 'images' in result and isinstance(result['images'], list) and len(result['images']) > 0:
                         first_image = result['images'][0]
                         if isinstance(first_image, dict):
                             image_data = first_image.get('url') or first_image.get('image')
                         elif isinstance(first_image, str):
-                            image_data = first_image  # podría ser una URL o base64
+                            image_data = first_image
 
-                    # Caso 2: 'image' directo
                     if not image_data and 'image' in result:
                         image_data = result['image']
 
-                    # Caso 3: 'output' anidado (común en algunos modelos)
                     if not image_data and 'output' in result:
                         output = result['output']
                         if isinstance(output, dict) and 'images' in output and output['images']:
@@ -660,7 +645,6 @@ async def send_generated_image(bot: Bot, chat_id: int, image_url: str, caption: 
         if image_url.startswith('http'):
             await bot.send_photo(chat_id, photo=image_url, caption=caption, parse_mode="HTML")
         else:
-            # Si es base64 o bytes
             if image_url.startswith("data:image"):
                 image_url = image_url.split(",")[1]
             img_bytes = base64.b64decode(image_url)
@@ -788,7 +772,6 @@ async def btn_chat(message: Message): await cmd_chat(message)
 @router.message(F.text == "💎 Balance")
 async def btn_balance(message: Message): await cmd_balance(message)
 
-# MODIFICACIÓN: Botón de audio solo disponible en inglés
 @router.message(F.text.in_(["🎙️ Grabar Audio", "🎙️ Record Audio", "🎵 Generar Audio", "🎵 Generate Audio"]))
 async def btn_audio(message: Message): await cmd_audio(message)
 
@@ -818,7 +801,6 @@ async def cmd_chat(message: Message):
     text = f"💬 ¡Conversación iniciada con {character['character_name']}!\n\nEscribe tu mensaje y te responderá.\n💰 Costo: {GEM_COST_MESSAGE} gema por mensaje" if lang == 'es' else f"💬 Conversation started with {character['character_name']}!\n\nWrite your message.\n💰 Cost: {GEM_COST_MESSAGE} gem per message"
     await message.answer(text)
 
-# COMANDO AUDIO MODIFICADO: Solo disponible en inglés, extrae diálogo y genera audio en inglés
 @router.message(Command('audio'))
 async def cmd_audio(message: Message):
     telegram_id = message.from_user.id
@@ -826,7 +808,6 @@ async def cmd_audio(message: Message):
     if not user:
         return await message.answer("⚠️ Primero debes registrarte con /start")
 
-    # Verificar idioma: solo permitir si es inglés
     if user['language'] != 'en':
         await message.answer("⚠️ El audio solo está disponible en inglés. Cambia tu idioma a inglés para usar esta función.\n\n⚠️ Audio is only available in English. Change your language to English to use this feature.")
         return
@@ -835,9 +816,8 @@ async def cmd_audio(message: Message):
     if not character:
         return await message.answer("⚠️ No tienes un personaje activo. Usa /newchat")
 
-    lang = user['language']  # será 'en'
+    lang = user['language']
 
-    # Obtener la última respuesta del asistente
     history = await get_conversation_history(telegram_id, character['id'], limit=2)
     last_assistant_msg = None
     for msg in reversed(history):
@@ -846,22 +826,17 @@ async def cmd_audio(message: Message):
             break
 
     if not last_assistant_msg:
-        # Si no hay mensaje previo, usamos un mensaje genérico en inglés
         last_assistant_msg = "Hello, I'm your character. What would you like me to say?"
 
-    # Extraer solo el diálogo (sin acciones entre *)
     dialogue = extract_dialogue(last_assistant_msg)
     if not dialogue.strip():
-        # Si no hay diálogo (solo acciones), usar un mensaje por defecto
         dialogue = "I'm here, ready to talk."
 
-    # Cobrar gemas
     success, msg, _ = await check_and_deduct_gems(telegram_id, GEM_COST_AUDIO, 'audio', f'Audio de respuesta')
     if not success:
         await message.answer(f"⚠️ {msg}")
         return
 
-    # Generar audio en inglés con la voz del personaje (según género)
     audio_data = await generate_tts_audio(dialogue, language='en', gender=character['gender'] if character else 'female')
     if audio_data:
         caption = f"🎙️ Audio from {character['character_name']}"
@@ -873,6 +848,7 @@ async def cmd_audio(message: Message):
         await add_gems(telegram_id, GEM_COST_AUDIO, 'refund', 'Reembolso por fallo en TTS')
         await message.answer(f"⚠️ <b>Audio not available</b>\n\nYour gems have been refunded.\n\n<b>Dialogue:</b>\n<i>{dialogue}</i>", parse_mode="HTML")
 
+# COMANDO SELFIE MODIFICADO: Pregunta cómo quiere la foto
 @router.message(Command('selfie'))
 async def cmd_selfie(message: Message):
     telegram_id = message.from_user.id
@@ -884,8 +860,37 @@ async def cmd_selfie(message: Message):
         return await message.answer("⚠️ No tienes un personaje activo. Usa /newchat")
 
     lang = user['language']
-    text = f"📸 <b>Enviar Selfie</b>\n\n💰 Costo: {GEM_COST_IMAGE} gemas\n\nPresiona el botón 📸 o pide una foto en el chat para que te envíe un selfie de lo que está haciendo." if lang == 'es' else f"📸 <b>Send Selfie</b>\n\n💰 Cost: {GEM_COST_IMAGE} gems\n\nPress the 📸 button or ask for a photo in the chat."
+
+    # Verificar gemas primero
+    if user['gems'] < GEM_COST_IMAGE:
+        await message.answer(f"⚠️ No tienes suficientes gemas. Necesitas {GEM_COST_IMAGE} gemas.")
+        return
+
+    # Mensaje inmersivo y coqueto pidiendo descripción
+    if lang == 'es':
+        text = (
+            f"📸 <b>{character['character_name']} sonríe con picardía y levanta su teléfono</b>\n\n"
+            f"\"Mmm... ¿cómo quieres que me tome la foto? ¿Con una sonrisa pícara, una mirada profunda, o algo más atrevido?\"\n\n"
+            f"<i>Escribe lo que deseas y haré que la foto sea perfecta para ti.</i>\n\n"
+            f"💰 Costo: {GEM_COST_IMAGE} gemas"
+        )
+    else:
+        text = (
+            f"📸 <b>{character['character_name']} smirks and raises their phone</b>\n\n"
+            f"\"Mmm... how do you want me to take the photo? With a mischievous smile, a deep gaze, or something bolder?\"\n\n"
+            f"<i>Type what you desire and I'll make the photo perfect for you.</i>\n\n"
+            f"💰 Cost: {GEM_COST_IMAGE} gems"
+        )
+
     await message.answer(text, parse_mode="HTML")
+
+    # Guardar estado esperando descripción
+    user_states[telegram_id] = {
+        'step': 'awaiting_photo_desc',
+        'language': lang,
+        'character_id': character['id'],
+        'created_at': datetime.utcnow()
+    }
 
 @router.message(Command('balance'))
 async def cmd_balance(message: Message):
@@ -1077,7 +1082,7 @@ async def cmd_newchat(message: Message):
 
 @router.message(Command('help'))
 async def cmd_help(message: Message):
-    await message.answer("📚 Comandos:\n/start - Registrarse\n/chat - Conversar\n/audio - Grabar audio del personaje (5 gemas) [SOLO INGLÉS]\n/selfie - Pedir foto (10 gemas)\n/balance - Ver gemas\n/shop - Tienda\n/invite - Invitar amigos\n/newchat - Cambiar/Crear personaje (5 gemas)\n/help - Ayuda\n\n💡 Consejo: Pide 'mándame una foto' en el chat para recibir un selfie.")
+    await message.answer("📚 Comandos:\n/start - Registrarse\n/chat - Conversar\n/audio - Grabar audio del personaje (5 gemas) [SOLO INGLÉS]\n/selfie - Pedir foto (10 gemas)\n/balance - Ver gemas\n/shop - Tienda\n/invite - Invitar amigos\n/newchat - Cambiar/Crear personaje (5 gemas)\n/help - Ayuda\n\n💡 Consejo: Pide 'mándame una foto' en el chat para recibir un selfie personalizado.")
 
 @router.message(Command('menu'))
 async def cmd_menu(message: Message):
@@ -1092,6 +1097,7 @@ async def cmd_menu(message: Message):
 async def process_message(message: Message):
     telegram_id = message.from_user.id
 
+    # --- Manejo de estado de creación de personaje ---
     if telegram_id in user_states and user_states[telegram_id].get('step') == 'name':
         state = user_states[telegram_id]
         is_new_user = state.get('is_new_user', False)
@@ -1112,6 +1118,78 @@ async def process_message(message: Message):
             text = f"✅ ¡Nuevo personaje creado!\n\n🎭 Nombre: {message.text.strip()}\n\nPuedes empezar a chatear con el botón 💬 Chat." if lang == 'es' else f"✅ New character created!\n\n🎭 Name: {message.text.strip()}\n\nYou can start chatting with the 💬 Chat button."
             return await message.answer(text)
 
+    # --- NUEVO: Manejo de descripción de foto (selfie personalizado) ---
+    if telegram_id in user_states and user_states[telegram_id].get('step') == 'awaiting_photo_desc':
+        state = user_states[telegram_id]
+        lang = state['language']
+        character_id = state['character_id']
+        description = message.text.strip()
+
+        # Obtener personaje
+        character = await get_active_character(telegram_id)
+        if not character or character['id'] != character_id:
+            await message.answer("⚠️ Personaje no encontrado. Usa /newchat para seleccionar uno.")
+            del user_states[telegram_id]
+            return
+
+        # Verificar gemas y cobrar
+        success, msg, _ = await check_and_deduct_gems(telegram_id, GEM_COST_IMAGE, 'image', f'Selfie personalizado: {description[:50]}')
+        if not success:
+            await message.answer(f"⚠️ {msg}")
+            del user_states[telegram_id]
+            return
+
+        await message.bot.send_chat_action(telegram_id, 'upload_photo')
+
+        # Mensaje inmersivo mientras se genera
+        char_name = escape_html(character['character_name'])
+        if lang == 'es':
+            await message.answer(f"*{char_name} sonríe y ajusta su teléfono*\n\n\"Perfecto, haré que esta foto sea exactamente como lo pediste...\"")
+        else:
+            await message.answer(f"*{char_name} smiles and adjusts the phone*\n\n\"Perfect, I'll make this photo just as you asked...\"")
+
+        # Obtener contexto de la conversación
+        history = await get_conversation_history(telegram_id, character['id'], limit=5)
+        last_action = "looking at camera, smiling"
+        last_user_msg = ""
+        last_assistant_msg = ""
+        for msg in reversed(history):
+            if msg['role'] == 'user' and not last_user_msg:
+                last_user_msg = msg['content']
+            if msg['role'] == 'assistant' and not last_assistant_msg:
+                last_assistant_msg = msg['content']
+                action_match = re.findall(r'\*([^*]+)\*', msg['content'])
+                if action_match:
+                    last_action = action_match[-1]
+            if last_user_msg and last_assistant_msg:
+                break
+
+        # Construir prompt en inglés con la descripción del usuario
+        face_prompt = CHARACTER_FACES.get(character['archetype'], "beautiful person")
+        context = f"Context: User said '{last_user_msg[:100]}' and character responded '{last_assistant_msg[:100]}'." if last_user_msg and last_assistant_msg else ""
+        # El prompt incluye la descripción del usuario, la personalidad del personaje y la acción
+        image_prompt = (
+            f"{face_prompt}, selfie style, {last_action}, POV, realistic, smartphone photo, high detail, candid, beautiful lighting. "
+            f"User request: {description}. Make it sensual, flirty, and immersive. {context}"
+        )
+
+        logger.info(f"Generando imagen con prompt: {image_prompt}")
+        image_url = await generate_image(image_prompt)
+
+        if image_url:
+            caption = f"📸 <b>{char_name}</b> te envía la foto que pediste."
+            sent_ok = await send_generated_image(message.bot, telegram_id, image_url, caption)
+            if not sent_ok:
+                await add_gems(telegram_id, GEM_COST_IMAGE, 'refund', 'Reembolso por fallo en imagen')
+                await message.answer("⚠️ Error al enviar la imagen. Se te han reembolsado las gemas.")
+        else:
+            await add_gems(telegram_id, GEM_COST_IMAGE, 'refund', 'Reembolso por fallo en generación')
+            await message.answer("⚠️ Error al generar la imagen. Se te han reembolsado las gemas.")
+
+        del user_states[telegram_id]
+        return
+
+    # --- Flujo normal de chat ---
     user = await get_user_cached(telegram_id)
     if not user:
         return await message.answer("⚠️ Primero debes registrarte con /start")
@@ -1123,57 +1201,14 @@ async def process_message(message: Message):
     lang = user['language']
     hook_remaining = user.get('hook_messages_remaining', 0)
 
-    # Detección de intención de imagen (Selfie) - disponible en ambos idiomas
+    # Detección de intención de foto (pero ahora redirigimos a la experiencia de personalización)
     image_intent_pattern = re.compile(r'\b(foto|fotografia|imagen|selfie|pict|pic|picture|photo|image|enseñame|quiero verte|muestra|mandame una foto|enviame una foto|toma una foto)\b', re.IGNORECASE)
     if image_intent_pattern.search(message.text):
-        success, msg, _ = await check_and_deduct_gems(telegram_id, GEM_COST_IMAGE, 'image', f'Selfie')
-        if not success:
-            return await message.answer(f"⚠️ {msg}")
-
-        await message.bot.send_chat_action(telegram_id, 'upload_photo')
-        
-        # Mensaje inmersivo antes de la foto
-        char_name = escape_html(character['character_name'])
-        prep_msg = f"*{char_name} saca su teléfono y te guiña un ojo*\n\n\"Voy a tomarme una foto para ti, no te muevas...\"" if lang == 'es' else f"*{char_name} takes out their phone and winks at you*\n\n\"I'm going to take a picture for you, don't move...\""
-        await message.answer(prep_msg, parse_mode="HTML")
-
-        # Construir prompt de imagen más contextual
-        history = await get_conversation_history(telegram_id, character['id'], limit=5)
-        last_action = "looking at camera, smiling"
-        last_user_msg = ""
-        last_assistant_msg = ""
-        for msg in reversed(history):
-            if msg['role'] == 'user' and not last_user_msg:
-                last_user_msg = msg['content']
-            if msg['role'] == 'assistant' and not last_assistant_msg:
-                last_assistant_msg = msg['content']
-                # Extraer acción de la última respuesta
-                action_match = re.findall(r'\*([^*]+)\*', msg['content'])
-                if action_match:
-                    last_action = action_match[-1]
-            if last_user_msg and last_assistant_msg:
-                break
-
-        # Crear prompt en inglés (mejor para generación)
-        face_prompt = CHARACTER_FACES.get(character['archetype'], "beautiful person")
-        # Incluir contexto de la conversación
-        context = f"Context: User said '{last_user_msg[:100]}' and character responded '{last_assistant_msg[:100]}'." if last_user_msg and last_assistant_msg else ""
-        image_prompt = f"{face_prompt}, selfie style, {last_action}, POV, realistic, smartphone photo, high detail, candid, beautiful lighting. {context}"
-        
-        logger.info(f"Generando imagen con prompt: {image_prompt}")
-        image_url = await generate_image(image_prompt)
-        
-        if image_url:
-            caption = f"📸 <b>{char_name}</b> te envía una foto."
-            sent_ok = await send_generated_image(message.bot, telegram_id, image_url, caption)
-            if not sent_ok:
-                await add_gems(telegram_id, GEM_COST_IMAGE, 'refund', 'Reembolso por fallo en imagen')
-                await message.answer("⚠️ Error al enviar la imagen. Se te han reembolsado las gemas.")
-        else:
-            await add_gems(telegram_id, GEM_COST_IMAGE, 'refund', 'Reembolso por fallo en generación')
-            await message.answer("⚠️ Error al generar la imagen. Se te han reembolsado las gemas.")
+        # En lugar de generar automáticamente, redirigimos al comando selfie personalizado
+        await cmd_selfie(message)
         return
 
+    # Resto del chat normal
     if user['gems'] <= 0 and hook_remaining <= 0:
         char_name = escape_html(character['character_name'])
         text = (f"<b>*{char_name} te mira con ojos ardientes y se muerde el labio inferior*</b>\n\n"
