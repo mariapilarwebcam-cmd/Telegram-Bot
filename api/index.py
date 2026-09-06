@@ -5,21 +5,27 @@ from aiogram.types import Update
 import os
 from dotenv import load_dotenv
 
+# Cargar variables de entorno
 load_dotenv()
 
+# Importar router del bot
 from telegrabot import router, TELEGRAM_BOT_TOKEN
 
+# Configurar logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Inicializar bot y dispatcher
 bot = Bot(token=TELEGRAM_BOT_TOKEN)
 dp = Dispatcher()
 dp.include_router(router)
 
+# Crear aplicación FastAPI
 app = FastAPI()
 
 @app.post("/api/webhook")
 async def webhook_endpoint(request: Request):
+    """Endpoint principal que recibe los updates de Telegram"""
     try:
         body = await request.json()
         update = Update(**body)
@@ -31,4 +37,10 @@ async def webhook_endpoint(request: Request):
 
 @app.get("/")
 async def root():
+    """Endpoint para verificar que el bot está funcionando"""
     return {"message": "Bot is running ✨"}
+
+@app.get("/health")
+async def health_check():
+    """Endpoint de health check"""
+    return {"status": "healthy"}
