@@ -5,11 +5,9 @@ from aiogram.types import Update
 import os
 from telegrabot import router, TELEGRAM_BOT_TOKEN
 
-# Configuración de logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Inicializar bot y dispatcher
 bot = Bot(token=TELEGRAM_BOT_TOKEN)
 dp = Dispatcher()
 dp.include_router(router)
