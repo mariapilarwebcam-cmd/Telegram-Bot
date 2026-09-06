@@ -21,17 +21,14 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 from aiogram.enums import ParseMode, ChatAction
 import libsql_client
 
-# Cargar variables de entorno
 load_dotenv()
 
-# Configuración
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY')
 DEEPINFRA_TOKEN = os.getenv('DEEPINFRA_TOKEN')
 TURSO_URL = os.getenv('TURSO_URL')
 TURSO_AUTH_TOKEN = os.getenv('TURSO_AUTH_TOKEN')
 WEBHOOK_URL = os.getenv('WEBHOOK_URL')
-WEB_APP_URL = os.getenv('WEB_APP_URL', '')
 
 OPENROUTER_MODEL = "deepseek/deepseek-v4-flash-0731"
 DEEPINFRA_MODEL = "hexgrad/Kokoro-82M"
@@ -51,8 +48,6 @@ MAX_REFERRALS_PER_DAY = 2
 MAX_DAILY_GEMS = BASE_DAILY_GEMS + (GEMS_PER_REFERRAL * MAX_REFERRALS_PER_DAY)
 HOOK_MODE_MESSAGES = 5
 
-# ==================== NUEVOS SISTEMAS ====================
-
 AFFINITY_LEVELS = {
     'stranger': {'min': 0, 'max': 20, 'emoji': '👤', 'name_es': 'Desconocido', 'name_en': 'Stranger'},
     'acquaintance': {'min': 20, 'max': 40, 'emoji': '🙂', 'name_es': 'Conocido', 'name_en': 'Acquaintance'},
@@ -68,73 +63,24 @@ DAILY_MISSIONS = [
     {'id': 'selfie_1', 'name_es': '📸 Paparazzi', 'name_en': '📸 Paparazzi', 
      'desc_es': 'Pide 1 selfie', 'desc_en': 'Request 1 selfie', 
      'target': 1, 'reward': 2, 'track': 'selfies_requested'},
-    {'id': 'luxbox_1', 'name_es': '📦 Suertudo', 'name_en': '📦 Lucky One', 
-     'desc_es': 'Abre 1 LuxBox', 'desc_en': 'Open 1 LuxBox', 
-     'target': 1, 'reward': 5, 'track': 'luxboxes_opened'},
     {'id': 'audio_1', 'name_es': '🎙️ Oyente', 'name_en': '🎙️ Listener', 
      'desc_es': 'Escucha 1 audio', 'desc_en': 'Listen to 1 audio', 
      'target': 1, 'reward': 2, 'track': 'audios_listened'},
 ]
 
-LUXBOX_DISPLAY_PRIZES = [
-    {'gems': 10000, 'emoji': '👑', 'label': 'JACKPOT 10,000'},
-    {'gems': 5000, 'emoji': '💎🔥', 'label': 'MEGA 5,000'},
-    {'gems': 2500, 'emoji': '⭐', 'label': '2,500'},
-    {'gems': 1000, 'emoji': '🌟', 'label': '1,000'},
-    {'gems': 500, 'emoji': '💎💎💎', 'label': '500'},
-    {'gems': 200, 'emoji': '💎💎', 'label': '200'},
-    {'gems': 100, 'emoji': '💎', 'label': '100'},
-    {'gems': 75, 'emoji': '✨', 'label': '75'}
-]
-
-LUXBOX_REAL_PROBABILITIES = [
-    {'gems': 75, 'probability': 0.35, 'emoji': '✨', 'label': '75 Gemas'},
-    {'gems': 100, 'probability': 0.30, 'emoji': '💎', 'label': '100 Gemas'},
-    {'gems': 150, 'probability': 0.20, 'emoji': '💎💎', 'label': '150 Gemas'},
-    {'gems': 200, 'probability': 0.10, 'emoji': '💎💎💎', 'label': '200 Gemas'},
-    {'gems': 300, 'probability': 0.04, 'emoji': '🌟', 'label': '300 Gemas'},
-    {'gems': 500, 'probability': 0.01, 'emoji': '⭐', 'label': '500 Gemas'}
-]
-
-LUXBOX_COST_STARS = 75
-LUXBOX_BULK_DISCOUNTS = {1: 75, 3: 200, 5: 325, 10: 600}
-
-FAKE_LUXBOX_WINNERS = [
-    {'name': 'Usuario***283', 'prize': '10,000', 'time': '5 min'},
-    {'name': 'Usuario***746', 'prize': '5,000', 'time': '12 min'},
-    {'name': 'Usuario***194', 'prize': '2,500', 'time': '28 min'},
-    {'name': 'Usuario***851', 'prize': '5,000', 'time': '1 hora'},
-    {'name': 'Usuario***327', 'prize': '10,000', 'time': '2 horas'}
-]
-
 ACHIEVEMENTS = {
     'first_message': {'emoji': '💬', 'name_es': 'Primer Mensaje', 'name_en': 'First Message', 'reward': 5},
-    'luxbox_first': {'emoji': '📦', 'name_es': 'Primera Caja', 'name_en': 'First Box', 'reward': 10},
     'affinity_50': {'emoji': '💕', 'name_es': 'Conexión', 'name_en': 'Connection', 'reward': 15},
     'affinity_100': {'emoji': '❤️‍🔥', 'name_es': 'Amor Verdadero', 'name_en': 'True Love', 'reward': 50},
     'streak_7': {'emoji': '🔥', 'name_es': 'Racha de 7 días', 'name_en': '7 Day Streak', 'reward': 20},
-    'luxbox_10': {'emoji': '🎁', 'name_es': 'Coleccionista', 'name_en': 'Collector', 'reward': 25},
 }
 
-# ==================== CONFIGURACIÓN DE LOGGING MEJORADA ====================
-
 logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler('bot.log', encoding='utf-8')
-    ]
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
-# Reducir logs de librerías externas
-logging.getLogger('aiohttp').setLevel(logging.WARNING)
-logging.getLogger('aiogram').setLevel(logging.INFO)
-logging.getLogger('httpx').setLevel(logging.WARNING)
-logging.getLogger('libsql_client').setLevel(logging.WARNING)
-
-# Conexión a Turso
 client = libsql_client.Client(url=TURSO_URL, auth_token=TURSO_AUTH_TOKEN)
 
 ARCHETYPES_MALE = {
@@ -331,16 +277,29 @@ async def update_last_active(telegram_id: int):
                     """UPDATE users SET last_active = ? WHERE telegram_id = ?""",
                     (datetime.utcnow().isoformat(), telegram_id)
                 )
-        except:
-            await execute_query(
-                """UPDATE users SET last_active = ? WHERE telegram_id = ?""",
-                (datetime.utcnow().isoformat(), telegram_id)
-            )
+        except Exception as e:
+            logger.warning(f"Error updating streak: {e}")
+            try:
+                await execute_query(
+                    """UPDATE users SET last_active = ? WHERE telegram_id = ?""",
+                    (datetime.utcnow().isoformat(), telegram_id)
+                )
+            except:
+                pass
     else:
-        await execute_query(
-            """UPDATE users SET streak_days = 1, last_login_date = ?, last_active = ? WHERE telegram_id = ?""",
-            (today, datetime.utcnow().isoformat(), telegram_id)
-        )
+        try:
+            await execute_query(
+                """UPDATE users SET streak_days = 1, last_login_date = ?, last_active = ? WHERE telegram_id = ?""",
+                (today, datetime.utcnow().isoformat(), telegram_id)
+            )
+        except:
+            try:
+                await execute_query(
+                    """UPDATE users SET last_active = ? WHERE telegram_id = ?""",
+                    (datetime.utcnow().isoformat(), telegram_id)
+                )
+            except:
+                pass
 
 async def count_active_referrals_last_24h(telegram_id: int) -> int:
     twenty_four_hours_ago = (datetime.utcnow() - timedelta(hours=24)).isoformat()
@@ -553,34 +512,41 @@ def generate_referral_code() -> str:
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
 
 async def get_character_affinity(character_id: int) -> int:
-    result = await execute_query(
-        """SELECT affinity FROM user_characters WHERE id = ?""",
-        (character_id,)
-    )
-    return result[0]['affinity'] if result else 0
+    try:
+        result = await execute_query(
+            """SELECT affinity FROM user_characters WHERE id = ?""",
+            (character_id,)
+        )
+        return result[0]['affinity'] if result else 0
+    except:
+        return 0
 
 async def add_affinity(telegram_id: int, character_id: int, points: int) -> int:
-    current = await get_character_affinity(character_id)
-    new_affinity = min(100, current + points)
-    
-    new_level = 'stranger'
-    for level, data in AFFINITY_LEVELS.items():
-        if data['min'] <= new_affinity <= data['max']:
-            new_level = level
-            break
-    
-    await execute_query(
-        """UPDATE user_characters SET affinity = ?, affinity_level = ?, total_messages = total_messages + 1 
-           WHERE id = ?""",
-        (new_affinity, new_level, character_id)
-    )
-    
-    if current < 50 and new_affinity >= 50:
-        await unlock_achievement(telegram_id, 'affinity_50')
-    if current < 100 and new_affinity >= 100:
-        await unlock_achievement(telegram_id, 'affinity_100')
-    
-    return new_affinity
+    try:
+        current = await get_character_affinity(character_id)
+        new_affinity = min(100, current + points)
+        
+        new_level = 'stranger'
+        for level, data in AFFINITY_LEVELS.items():
+            if data['min'] <= new_affinity <= data['max']:
+                new_level = level
+                break
+        
+        await execute_query(
+            """UPDATE user_characters SET affinity = ?, affinity_level = ?, total_messages = total_messages + 1 
+               WHERE id = ?""",
+            (new_affinity, new_level, character_id)
+        )
+        
+        if current < 50 and new_affinity >= 50:
+            await unlock_achievement(telegram_id, 'affinity_50')
+        if current < 100 and new_affinity >= 100:
+            await unlock_achievement(telegram_id, 'affinity_100')
+        
+        return new_affinity
+    except Exception as e:
+        logger.error(f"Error adding affinity: {e}")
+        return 0
 
 async def get_affinity_display(character_id: int, language: str = 'es') -> str:
     affinity = await get_character_affinity(character_id)
@@ -600,174 +566,147 @@ async def get_affinity_display(character_id: int, language: str = 'es') -> str:
 async def get_daily_missions(telegram_id: int) -> List[Dict]:
     today = date.today().isoformat()
     
-    result = await execute_query(
-        """SELECT * FROM daily_missions WHERE telegram_id = ? AND mission_date = ?""",
-        (telegram_id, today)
-    )
-    
-    if not result:
-        await reset_daily_missions(telegram_id)
-        return await get_daily_missions(telegram_id)
-    
-    return result
+    try:
+        result = await execute_query(
+            """SELECT * FROM daily_missions WHERE telegram_id = ? AND mission_date = ?""",
+            (telegram_id, today)
+        )
+        
+        if not result:
+            await reset_daily_missions(telegram_id)
+            return await get_daily_missions(telegram_id)
+        
+        return result
+    except Exception as e:
+        logger.error(f"Error getting missions: {e}")
+        return []
 
 async def reset_daily_missions(telegram_id: int):
     today = date.today().isoformat()
     
-    await execute_query(
-        """DELETE FROM daily_missions WHERE telegram_id = ? AND mission_date < ?""",
-        (telegram_id, today)
-    )
-    
-    for mission in DAILY_MISSIONS:
+    try:
         await execute_query(
-            """INSERT OR IGNORE INTO daily_missions (telegram_id, mission_id, progress, target, reward_gems, mission_date) 
-               VALUES (?, ?, 0, ?, ?, ?)""",
-            (telegram_id, mission['id'], mission['target'], mission['reward'], today)
+            """DELETE FROM daily_missions WHERE telegram_id = ? AND mission_date < ?""",
+            (telegram_id, today)
         )
+        
+        for mission in DAILY_MISSIONS:
+            await execute_query(
+                """INSERT OR IGNORE INTO daily_missions (telegram_id, mission_id, progress, target, reward_gems, mission_date) 
+                   VALUES (?, ?, 0, ?, ?, ?)""",
+                (telegram_id, mission['id'], mission['target'], mission['reward'], today)
+            )
+    except Exception as e:
+        logger.error(f"Error resetting missions: {e}")
 
 async def update_mission_progress(telegram_id: int, track_type: str, amount: int = 1):
     today = date.today().isoformat()
     
-    for mission in DAILY_MISSIONS:
-        if mission['track'] == track_type:
-            result = await execute_query(
-                """SELECT * FROM daily_missions 
-                   WHERE telegram_id = ? AND mission_id = ? AND mission_date = ?""",
-                (telegram_id, mission['id'], today)
-            )
-            
-            if result and not result[0]['completed']:
-                current_progress = result[0]['progress']
-                new_progress = min(current_progress + amount, mission['target'])
-                
-                completed = 1 if new_progress >= mission['target'] else 0
-                
-                await execute_query(
-                    """UPDATE daily_missions SET progress = ?, completed = ? 
+    try:
+        for mission in DAILY_MISSIONS:
+            if mission['track'] == track_type:
+                result = await execute_query(
+                    """SELECT * FROM daily_missions 
                        WHERE telegram_id = ? AND mission_id = ? AND mission_date = ?""",
-                    (new_progress, completed, telegram_id, mission['id'], today)
+                    (telegram_id, mission['id'], today)
                 )
+                
+                if result and not result[0]['completed']:
+                    current_progress = result[0]['progress']
+                    new_progress = min(current_progress + amount, mission['target'])
+                    
+                    completed = 1 if new_progress >= mission['target'] else 0
+                    
+                    await execute_query(
+                        """UPDATE daily_missions SET progress = ?, completed = ? 
+                           WHERE telegram_id = ? AND mission_id = ? AND mission_date = ?""",
+                        (new_progress, completed, telegram_id, mission['id'], today)
+                    )
+    except Exception as e:
+        logger.error(f"Error updating mission: {e}")
 
 async def claim_mission_reward(telegram_id: int, mission_id: str):
     today = date.today().isoformat()
     
-    result = await execute_query(
-        """SELECT * FROM daily_missions 
-           WHERE telegram_id = ? AND mission_id = ? AND mission_date = ?""",
-        (telegram_id, mission_id, today)
-    )
-    
-    if result and result[0]['completed'] and not result[0]['claimed']:
-        mission_def = next((m for m in DAILY_MISSIONS if m['id'] == mission_id), None)
-        if mission_def:
-            await execute_query(
-                """UPDATE daily_missions SET claimed = 1 
-                   WHERE telegram_id = ? AND mission_id = ? AND mission_date = ?""",
-                (telegram_id, mission_id, today)
-            )
-            await add_gems(telegram_id, mission_def['reward'], 'mission', f'Misión: {mission_id}')
-            return mission_def['reward']
+    try:
+        result = await execute_query(
+            """SELECT * FROM daily_missions 
+               WHERE telegram_id = ? AND mission_id = ? AND mission_date = ?""",
+            (telegram_id, mission_id, today)
+        )
+        
+        if result and result[0]['completed'] and not result[0]['claimed']:
+            mission_def = next((m for m in DAILY_MISSIONS if m['id'] == mission_id), None)
+            if mission_def:
+                await execute_query(
+                    """UPDATE daily_missions SET claimed = 1 
+                       WHERE telegram_id = ? AND mission_id = ? AND mission_date = ?""",
+                    (telegram_id, mission_id, today)
+                )
+                await add_gems(telegram_id, mission_def['reward'], 'mission', f'Misión: {mission_id}')
+                return mission_def['reward']
+    except Exception as e:
+        logger.error(f"Error claiming mission: {e}")
     return 0
-
-async def calculate_luxbox_prize() -> Dict:
-    random_value = random.random()
-    cumulative = 0
-    
-    for prize in LUXBOX_REAL_PROBABILITIES:
-        cumulative += prize['probability']
-        if random_value <= cumulative:
-            return prize
-    
-    return LUXBOX_REAL_PROBABILITIES[0]
-
-async def open_luxbox(telegram_id: int, box_count: int = 1) -> Dict:
-    total_gems = 0
-    results = []
-    
-    for _ in range(box_count):
-        prize = await calculate_luxbox_prize()
-        results.append(prize)
-        total_gems += prize['gems']
-    
-    await add_gems(telegram_id, total_gems, 'luxbox', f'LuxBox x{box_count}')
-    
-    await execute_query(
-        """UPDATE users SET total_luxboxes_opened = total_luxboxes_opened + ? WHERE telegram_id = ?""",
-        (box_count, telegram_id)
-    )
-    
-    user = await get_user(telegram_id)
-    if user and user.get('total_luxboxes_opened', 0) == box_count:
-        await unlock_achievement(telegram_id, 'luxbox_first')
-    
-    if user and user.get('total_luxboxes_opened', 0) >= 10:
-        await unlock_achievement(telegram_id, 'luxbox_10')
-    
-    await update_mission_progress(telegram_id, 'luxboxes_opened', box_count)
-    
-    stars_spent = LUXBOX_BULK_DISCOUNTS.get(box_count, LUXBOX_COST_STARS * box_count)
-    await execute_query(
-        """INSERT INTO luxbox_history (telegram_id, gems_won, box_count, stars_spent) 
-           VALUES (?, ?, ?, ?)""",
-        (telegram_id, total_gems, box_count, stars_spent)
-    )
-    
-    return {'total_gems': total_gems, 'results': results}
 
 async def unlock_achievement(telegram_id: int, achievement_id: str) -> bool:
     if achievement_id not in ACHIEVEMENTS:
         return False
     
-    existing = await execute_query(
-        """SELECT id FROM achievements WHERE telegram_id = ? AND achievement_id = ?""",
-        (telegram_id, achievement_id)
-    )
-    
-    if existing:
+    try:
+        existing = await execute_query(
+            """SELECT id FROM achievements WHERE telegram_id = ? AND achievement_id = ?""",
+            (telegram_id, achievement_id)
+        )
+        
+        if existing:
+            return False
+        
+        await execute_query(
+            """INSERT INTO achievements (telegram_id, achievement_id) VALUES (?, ?)""",
+            (telegram_id, achievement_id)
+        )
+        
+        achievement = ACHIEVEMENTS[achievement_id]
+        await add_gems(telegram_id, achievement['reward'], 'achievement', f'Logro: {achievement_id}')
+        
+        return True
+    except Exception as e:
+        logger.error(f"Error unlocking achievement: {e}")
         return False
-    
-    await execute_query(
-        """INSERT INTO achievements (telegram_id, achievement_id) VALUES (?, ?)""",
-        (telegram_id, achievement_id)
-    )
-    
-    achievement = ACHIEVEMENTS[achievement_id]
-    await add_gems(telegram_id, achievement['reward'], 'achievement', f'Logro: {achievement_id}')
-    
-    return True
 
 async def get_user_achievements(telegram_id: int) -> List[Dict]:
-    result = await execute_query(
-        """SELECT achievement_id FROM achievements WHERE telegram_id = ?""",
-        (telegram_id,)
-    )
-    
-    achievements = []
-    for row in result:
-        ach_id = row['achievement_id']
-        if ach_id in ACHIEVEMENTS:
-            achievements.append({**ACHIEVEMENTS[ach_id], 'id': ach_id})
-    
-    return achievements
+    try:
+        result = await execute_query(
+            """SELECT achievement_id FROM achievements WHERE telegram_id = ?""",
+            (telegram_id,)
+        )
+        
+        achievements = []
+        for row in result:
+            ach_id = row['achievement_id']
+            if ach_id in ACHIEVEMENTS:
+                achievements.append({**ACHIEVEMENTS[ach_id], 'id': ach_id})
+        
+        return achievements
+    except:
+        return []
 
 def get_main_keyboard(language: str, is_premium: bool = False) -> ReplyKeyboardMarkup:
     builder = ReplyKeyboardBuilder()
     
     if language == 'es':
         builder.row(KeyboardButton(text="💬 Chat"), KeyboardButton(text="💎 Balance"))
-        builder.row(KeyboardButton(text="📦 LuxBox"), KeyboardButton(text="📸 Selfie (10💎)"))
-        builder.row(KeyboardButton(text="🎯 Misiones"), KeyboardButton(text="💕 Afinidad"))
+        builder.row(KeyboardButton(text="📸 Selfie (10💎)"), KeyboardButton(text="🎯 Misiones"))
+        builder.row(KeyboardButton(text="💕 Afinidad"), KeyboardButton(text="🏆 Logros"))
         builder.row(KeyboardButton(text="🛒 Tienda"), KeyboardButton(text="🎁 Invitar"))
-        builder.row(KeyboardButton(text="💬 Nuevo Chat"), KeyboardButton(text="🏆 Logros"))
-        builder.row(KeyboardButton(text="❓ Ayuda"))
+        builder.row(KeyboardButton(text="💬 Nuevo Chat"), KeyboardButton(text="❓ Ayuda"))
     else:
         builder.row(KeyboardButton(text="💬 Chat"), KeyboardButton(text="💎 Balance"))
-        builder.row(KeyboardButton(text="📦 LuxBox"), KeyboardButton(text="📸 Selfie (10💎)"))
-        builder.row(KeyboardButton(text="🎯 Missions"), KeyboardButton(text="💕 Affinity"))
+        builder.row(KeyboardButton(text="📸 Selfie (10💎)"), KeyboardButton(text="🎯 Missions"))
+        builder.row(KeyboardButton(text="💕 Affinity"), KeyboardButton(text="🏆 Achievements"))
         builder.row(KeyboardButton(text="🛒 Shop"), KeyboardButton(text="🎁 Invite"))
-        builder.row(KeyboardButton(text="💬 New Chat"), KeyboardButton(text="🏆 Achievements"))
-        builder.row(KeyboardButton(text="❓ Help"))
+        builder.row(KeyboardButton(text="💬 New Chat"), KeyboardButton(text="❓ Help"))
     
     return builder.as_markup(resize_keyboard=True, one_time_keyboard=False)
 
@@ -894,7 +833,6 @@ async def generate_chatterbox_audio(text: str, language: str = 'es'):
                     audio_data = result.get('audio') or result.get('result', {}).get('audio')
                     if audio_data:
                         return audio_data
-                    logger.error(f" No se encontró audio en la respuesta de Chatterbox: {result}")
                     return None
                 else:
                     logger.error(f"❌ Chatterbox API error {status}: {response_text}")
@@ -946,7 +884,7 @@ async def generate_deepinfra_audio(text: str, language: str = 'es', gender: str 
                     if audio_data:
                         return audio_data
                     else:
-                        logger.error(f"❌ No se encontró audio en la respuesta. Estructura completa: {result}")
+                        logger.error(f"❌ No se encontró audio en la respuesta")
                         return None
                 else:
                     logger.error(f"❌ DeepInfra API error {status}: {response_text}")
@@ -982,7 +920,6 @@ async def generate_image(prompt: str):
                 status = response.status
                 if status == 200:
                     result = await response.json()
-                    logger.info(f"Respuesta de imagen: {result}")
                     
                     image_data = None
                     if 'images' in result and isinstance(result['images'], list) and len(result['images']) > 0:
@@ -1007,10 +944,10 @@ async def generate_image(prompt: str):
                     if image_data:
                         return image_data
                     else:
-                        logger.error(f"❌ No se pudo extraer la imagen de la respuesta: {result}")
+                        logger.error(f"❌ No se pudo extraer la imagen de la respuesta")
                         return None
                 else:
-                    logger.error(f"❌ DeepInfra Image API error {status}: {await response.text()}")
+                    logger.error(f"❌ DeepInfra Image API error {status}")
                     return None
     except Exception as e:
         logger.error(f"⚠️ Excepción en generación de imagen: {str(e)}", exc_info=True)
@@ -1023,7 +960,6 @@ async def send_generated_audio(bot: Bot, chat_id: int, audio_data: str, caption:
         
         audio_bytes = base64.b64decode(audio_data)
         fmt = detect_audio_format(audio_bytes)
-        logger.info(f"🔎 Formato de audio detectado: {fmt} ({len(audio_bytes)} bytes)")
         
         if len(audio_bytes) == 0:
             return False
@@ -1238,10 +1174,6 @@ async def btn_newchat(message: Message):
 async def btn_help(message: Message):
     await cmd_help(message)
 
-@router.message(F.text == "📦 LuxBox")
-async def btn_luxbox(message: Message):
-    await cmd_luxbox(message)
-
 @router.message(F.text == "🎯 Misiones")
 async def btn_missions(message: Message):
     await cmd_missions(message)
@@ -1373,7 +1305,6 @@ async def cmd_balance(message: Message):
     daily_total = BASE_DAILY_GEMS + bonus
     hook_rem = user.get('hook_messages_remaining', 0)
     streak = user.get('streak_days', 0)
-    luxboxes = user.get('total_luxboxes_opened', 0)
     
     character = await get_active_character(message.from_user.id)
     affinity_info = ""
@@ -1383,8 +1314,7 @@ async def cmd_balance(message: Message):
     text = (
         f"💎 <b>Tu Balance</b>\n\n"
         f"💰 Gemas actuales: <b>{gems}</b>\n"
-        f"🔥 Racha diaria: <b>{streak} días</b>\n"
-        f"📦 LuxBoxes abiertas: <b>{luxboxes}</b>"
+        f"🔥 Racha diaria: <b>{streak} días</b>"
         f"{affinity_info}\n\n"
         f"📊 Información:\n"
         f"• Gemas diarias: {daily_total}/{MAX_DAILY_GEMS}\n"
@@ -1396,152 +1326,6 @@ async def cmd_balance(message: Message):
     text += "\n\n💡 Invita hasta 2 amigos cada 24h para ganar +5 gemas c/u" if lang == 'es' else "\n\n💡 Invite up to 2 friends every 24h to earn +5 gems each"
     await message.answer(text, parse_mode="HTML")
 
-# ==================== LUXBOX ====================
-
-@router.message(Command('luxbox'))
-async def cmd_luxbox(message: Message):
-    telegram_id = message.from_user.id
-    user = await get_user(telegram_id)
-    if not user:
-        return await message.answer("⚠️ Primero debes registrarte con /start")
-    
-    language = user['language']
-    
-    if language == 'es':
-        text = (
-            "📦 <b>CAJA MISTERIOSA DE LUJO</b> 📦\n\n"
-            "💫 <b>¡GANA HASTA 10,000 GEMAS!</b> 💫\n\n"
-            "🔥 <b>PREMIOS POSIBLES:</b>\n"
-            "👑 10,000 gemas (JACKPOT)\n"
-            "💎🔥 5,000 gemas (MEGA)\n"
-            "⭐ 2,500 gemas\n"
-            "🌟 1,000 gemas\n"
-            "💎💎💎 500 gemas\n"
-            "💎💎 200 gemas\n"
-            "💎 100 gemas\n"
-            "✨ 75 gemas\n\n"
-            "🏆 <b>ÚLTIMOS GANADORES:</b>\n"
-        )
-        for winner in FAKE_LUXBOX_WINNERS[:3]:
-            text += f"• {winner['name']} ganó <b>{winner['prize']} gemas</b> (hace {winner['time']})\n"
-        
-        text += (
-            f"\n💰 <b>PRECIO:</b> {LUXBOX_COST_STARS} Stars\n"
-            f"⚡ <b>OFERTAS:</b> Compra 3 o más y ahorra\n\n"
-            f"❓ <i>¿Qué misterios guarda esta caja?</i>"
-        )
-    else:
-        text = (
-            "📦 <b>LUXURY MYSTERY BOX</b> 📦\n\n"
-            "💫 <b>WIN UP TO 10,000 GEMS!</b> 💫\n\n"
-            "🔥 <b>POSSIBLE PRIZES:</b>\n"
-            "👑 10,000 gems (JACKPOT)\n"
-            "💎🔥 5,000 gems (MEGA)\n"
-            "⭐ 2,500 gems\n"
-            "🌟 1,000 gems\n"
-            "💎💎💎 500 gems\n"
-            "💎💎 200 gems\n"
-            "💎 100 gems\n"
-            "✨ 75 gems\n\n"
-            "🏆 <b>RECENT WINNERS:</b>\n"
-        )
-        for winner in FAKE_LUXBOX_WINNERS[:3]:
-            text += f"• {winner['name']} won <b>{winner['prize']} gems</b> ({winner['time']} ago)\n"
-        
-        text += (
-            f"\n💰 <b>PRICE:</b> {LUXBOX_COST_STARS} Stars\n"
-            f"⚡ <b>OFFERS:</b> Buy 3 or more and save\n\n"
-            f"❓ <i>What mysteries does this box hold?</i>"
-        )
-    
-    builder = InlineKeyboardBuilder()
-    builder.button(text="📦 ABRIR x1 (75 Stars)", callback_data="luxbox_open_1")
-    builder.button(text="📦📦📦 ABRIR x3 (200 Stars)", callback_data="luxbox_open_3")
-    builder.button(text="📦x5 ABRIR x5 (325 Stars)", callback_data="luxbox_open_5")
-    builder.button(text="📦x10 ABRIR x10 (600 Stars)", callback_data="luxbox_open_10")
-    builder.button(text="🏆 Ver Ganadores", callback_data="luxbox_winners")
-    builder.adjust(1)
-    
-    await message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
-
-@router.callback_query(F.data.startswith('luxbox_open_'))
-async def process_luxbox_purchase(callback: CallbackQuery):
-    telegram_id = callback.from_user.id
-    user = await get_user(telegram_id)
-    
-    if not user:
-        return await callback.answer("⚠️ Regístrate primero", show_alert=True)
-    
-    try:
-        box_count = int(callback.data.split('_')[-1])
-        total_cost = LUXBOX_BULK_DISCOUNTS.get(box_count, LUXBOX_COST_STARS * box_count)
-        
-        logger.info(f"🛒 Intento de compra LuxBox: {box_count} cajas, {total_cost} stars, usuario {telegram_id}")
-        
-        language = user['language']
-        title = f"Caja Misteriosa x{box_count}" if language == 'es' else f"Mystery Box x{box_count}"
-        description = f"{box_count} caja(s) con premios de hasta 10,000 gemas" if language == 'es' else f"{box_count} box(es) with prizes up to 10,000 gems"
-        prices = [LabeledPrice(label="Luxury Box", amount=total_cost)]
-        
-        payload = f"luxbox_{box_count}_{telegram_id}"
-        logger.info(f"📤 Enviando invoice - Payload: {payload}, Cost: {total_cost} XTR")
-        
-        try:
-            invoice = await callback.bot.send_invoice(
-                chat_id=telegram_id,
-                title=title,
-                description=description,
-                provider_token="",
-                currency="XTR",
-                prices=prices,
-                payload=payload,
-                start_parameter="luxbox-start"
-            )
-            logger.info(f"✅ Invoice enviada exitosamente: message_id={invoice.message_id}")
-            await callback.answer("✅ Factura enviada - Revisa tu chat")
-        except Exception as e:
-            logger.error(f"❌ Error enviando invoice: {e}", exc_info=True)
-            await callback.answer(f"❌ Error: {str(e)[:50]}", show_alert=True)
-            
-    except Exception as e:
-        logger.error(f"❌ Error en process_luxbox_purchase: {e}", exc_info=True)
-        await callback.answer("❌ Error procesando la compra", show_alert=True)
-
-@router.callback_query(F.data == "luxbox_winners")
-async def show_luxbox_winners(callback: CallbackQuery):
-    language = (await get_user(callback.from_user.id))['language']
-    
-    if language == 'es':
-        text = "🏆 <b>ÚLTIMOS GANADORES</b> 🏆\n\n"
-        for winner in FAKE_LUXBOX_WINNERS:
-            text += f"👤 {winner['name']}\n💎 Ganó: <b>{winner['prize']} gemas</b>\n⏰ hace {winner['time']}\n\n"
-        text += "🔥 ¡Sé el próximo en ganar el JACKPOT!"
-    else:
-        text = "🏆 <b>RECENT WINNERS</b> 🏆\n\n"
-        for winner in FAKE_LUXBOX_WINNERS:
-            text += f"👤 {winner['name']}\n💎 Won: <b>{winner['prize']} gems</b>\n⏰ {winner['time']} ago\n\n"
-        text += "🔥 Be the next to win the JACKPOT!"
-    
-    builder = InlineKeyboardBuilder()
-    builder.button(text="📦 Abrir Caja", callback_data="luxbox_open_1")
-    builder.button(text="◀️ Volver", callback_data="luxbox_back")
-    builder.adjust(2)
-    
-    await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
-    await callback.answer()
-
-@router.callback_query(F.data == "luxbox_back")
-async def luxbox_back(callback: CallbackQuery):
-    await cmd_luxbox(callback.message)
-    await callback.answer()
-
-@router.callback_query(F.data == "check_balance")
-async def check_balance_callback(callback: CallbackQuery):
-    await cmd_balance(callback.message)
-    await callback.answer()
-
-# ==================== TIENDA CON LUXBOX COMO OPCIÓN DESTACADA ====================
-
 @router.message(Command('shop'))
 async def cmd_shop(message: Message):
     telegram_id = message.from_user.id
@@ -1549,31 +1333,11 @@ async def cmd_shop(message: Message):
     if not user:
         return await message.answer("⚠️ Primero debes registrarte con /start")
     
-    logger.info(f"🛒 Tienda abierta por usuario {telegram_id}")
-    
     language = user['language']
     builder = InlineKeyboardBuilder()
     
-    # Botón DESTACADO de LuxBox (el primero y más grande)
     if language == 'es':
-        luxbox_button_text = "🔥 📦 CAJA MISTERIOSA (75⭐) → ¡Hasta 10,000 gemas!"
-    else:
-        luxbox_button_text = "🔥 📦 MYSTERY BOX (75⭐) → Up to 10,000 gems!"
-    
-    builder.button(text=luxbox_button_text, callback_data="luxbox_open_1")
-    
-    # Texto principal
-    if language == 'es':
-        text = (
-            "💎 <b>TIENDA DE GEMAS</b> 💎\n\n"
-            "🔥 <b>⭐ OFERTA ESPECIAL ⭐</b> 🔥\n\n"
-            "📦 <b>CAJA MISTERIOSA DE LUJO</b>\n"
-            "Gana entre <b>75 y 10,000 gemas</b> con cada caja\n"
-            "¡Prueba tu suerte y gana el JACKPOT! 👑\n\n"
-            "───────────────\n\n"
-            "💰 <b>PAQUETES DE GEMAS:</b>\n\n"
-        )
-        
+        text = "💎 <b>Tienda de Gemas</b> 💎\n\nSelecciona un paquete:\n\n"
         for i, package in enumerate(STAR_PACKAGES):
             stars, gems, bonus, first_time = package['stars'], package['gems'], package.get('bonus', 0), package.get('first_time', False)
             final_gems = int(gems * (1 + bonus / 100)) if bonus > 0 else gems
@@ -1585,16 +1349,7 @@ async def cmd_shop(message: Message):
             text += f"{i+1}. {line}\n"
             builder.button(text=f"Opción {i+1}: {stars}⭐", callback_data=f"buy_{i}")
     else:
-        text = (
-            "💎 <b>GEM STORE</b> 💎\n\n"
-            "🔥 <b>⭐ SPECIAL OFFER ⭐</b> 🔥\n\n"
-            "📦 <b>LUXURY MYSTERY BOX</b>\n"
-            "Win between <b>75 and 10,000 gems</b> per box\n"
-            "Test your luck and win the JACKPOT! 👑\n\n"
-            "───────────────\n\n"
-            "💰 <b>GEM PACKAGES:</b>\n\n"
-        )
-        
+        text = "💎 <b>Gem Store</b> 💎\n\nSelect a package:\n\n"
         for i, package in enumerate(STAR_PACKAGES):
             stars, gems, bonus, first_time = package['stars'], package['gems'], package.get('bonus', 0), package.get('first_time', False)
             final_gems = int(gems * (1 + bonus / 100)) if bonus > 0 else gems
@@ -1607,8 +1362,6 @@ async def cmd_shop(message: Message):
             builder.button(text=f"Option {i+1}: {stars}⭐", callback_data=f"buy_{i}")
     
     builder.adjust(1)
-    
-    logger.info(f"📤 Enviando tienda con {len(builder.export())} botones")
     await message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
 
 @router.callback_query(F.data == "shop_from_block")
@@ -1620,25 +1373,8 @@ async def shop_from_block(callback: CallbackQuery):
     language = user['language']
     builder = InlineKeyboardBuilder()
     
-    # Botón DESTACADO de LuxBox
     if language == 'es':
-        luxbox_button_text = "🔥 📦 CAJA MISTERIOSA (75⭐) → ¡Hasta 10,000 gemas!"
-    else:
-        luxbox_button_text = "🔥 📦 MYSTERY BOX (75⭐) → Up to 10,000 gems!"
-    
-    builder.button(text=luxbox_button_text, callback_data="luxbox_open_1")
-    
-    if language == 'es':
-        text = (
-            "💎 <b>TIENDA DE GEMAS</b> 💎\n\n"
-            "🔥 <b>⭐ OFERTA ESPECIAL ⭐</b> 🔥\n\n"
-            "📦 <b>CAJA MISTERIOSA DE LUJO</b>\n"
-            "Gana entre <b>75 y 10,000 gemas</b> con cada caja\n"
-            "¡Prueba tu suerte y gana el JACKPOT! 👑\n\n"
-            "───────────────\n\n"
-            "💰 <b>PAQUETES DE GEMAS:</b>\n\n"
-        )
-        
+        text = "💎 <b>Tienda de Gemas</b> 💎\n\nSelecciona un paquete:\n\n"
         for i, package in enumerate(STAR_PACKAGES):
             stars, gems, bonus, first_time = package['stars'], package['gems'], package.get('bonus', 0), package.get('first_time', False)
             final_gems = int(gems * (1 + bonus / 100)) if bonus > 0 else gems
@@ -1650,16 +1386,7 @@ async def shop_from_block(callback: CallbackQuery):
             text += f"{i+1}. {line}\n"
             builder.button(text=f"Opción {i+1}: {stars}⭐", callback_data=f"buy_{i}")
     else:
-        text = (
-            "💎 <b>GEM STORE</b> 💎\n\n"
-            "🔥 <b>⭐ SPECIAL OFFER ⭐</b> 🔥\n\n"
-            "📦 <b>LUXURY MYSTERY BOX</b>\n"
-            "Win between <b>75 and 10,000 gems</b> per box\n"
-            "Test your luck and win the JACKPOT! 👑\n\n"
-            "───────────────\n\n"
-            "💰 <b>GEM PACKAGES:</b>\n\n"
-        )
-        
+        text = "💎 <b>Gem Store</b> 💎\n\nSelect a package:\n\n"
         for i, package in enumerate(STAR_PACKAGES):
             stars, gems, bonus, first_time = package['stars'], package['gems'], package.get('bonus', 0), package.get('first_time', False)
             final_gems = int(gems * (1 + bonus / 100)) if bonus > 0 else gems
@@ -1723,109 +1450,31 @@ async def process_purchase(callback: CallbackQuery):
 async def process_pre_checkout(pre_checkout_query: PreCheckoutQuery):
     await pre_checkout_query.answer(ok=True)
 
-# ==================== HANDLER UNIFICADO DE PAGOS ====================
-
 @router.message(F.successful_payment)
 async def process_successful_payment(message: Message):
     telegram_id = message.from_user.id
     payload = message.successful_payment.invoice_payload
-    charge_id = message.successful_payment.telegram_payment_charge_id
     
-    logger.info(f"💳 Pago recibido - Payload: {payload}, Charge: {charge_id}")
-    
-    user = await get_user(telegram_id)
-    if not user:
-        return await message.answer("⚠️ Usuario no encontrado")
-    
-    language = user['language']
-    
-    # CASO 1: Pago de LuxBox
-    if payload.startswith('luxbox_'):
-        try:
-            parts = payload.split('_')
-            box_count = int(parts[1])
-            
-            logger.info(f"📦 Procesando LuxBox: {box_count} cajas para usuario {telegram_id}")
-            
-            # Confirmación inicial
-            if language == 'es':
-                await message.answer("📦 ¡Abriendo tu(s) caja(s)! 📦\n\n*La caja tiembla con misterio...*")
-            else:
-                await message.answer("📦 Opening your box(es)! 📦\n\n*The box trembles with mystery...*")
-            
-            await asyncio.sleep(2)
-            
-            # Abrir cajas
-            result = await open_luxbox(telegram_id, box_count)
-            total_gems = result['total_gems']
-            results = result['results']
-            
-            # Mostrar resultados
-            if box_count == 1:
-                prize = results[0]
-                if language == 'es':
-                    summary = (
-                        f"🎊 <b>¡FELICIDADES!</b> 🎊\n\n"
-                        f"{prize['emoji']} <b>Has ganado {prize['gems']} gemas</b>\n\n"
-                        f"💎 Total: <b>{total_gems} gemas</b>"
-                    )
-                else:
-                    summary = (
-                        f"🎊 <b>CONGRATULATIONS!</b> 🎊\n\n"
-                        f"{prize['emoji']} <b>You won {prize['gems']} gems</b>\n\n"
-                        f"💎 Total: <b>{total_gems} gems</b>"
-                    )
-            else:
-                summary = "📦 <b>RESULTADOS</b> 📦\n\n" if language == 'es' else "📦 <b>RESULTS</b> 📦\n\n"
-                for i, r in enumerate(results, 1):
-                    summary += f"#{i}: {r['emoji']} <b>{r['gems']} gemas</b>\n"
-                summary += f"\n🎊 <b>Total: {total_gems} gemas</b>"
-            
-            # FOMO message
-            if total_gems < 150 * box_count:
-                if language == 'es':
-                    summary += "\n\n💡 <i>Casi ganas el premio mayor...</i>\n¡La próxima caja podría ser la ganadora! 👑"
-                else:
-                    summary += "\n\n💡 <i>You almost won the big prize...</i>\nThe next box could be the winner! 👑"
-            
-            builder = InlineKeyboardBuilder()
-            builder.button(text="📦 Abrir otra caja", callback_data="luxbox_open_1")
-            builder.button(text="💎 Ver balance", callback_data="check_balance")
-            builder.adjust(2)
-            
-            await message.answer(summary, reply_markup=builder.as_markup(), parse_mode="HTML")
-            logger.info(f"✅ LuxBox completada: {total_gems} gemas para {telegram_id}")
-            
-        except Exception as e:
-            logger.error(f"❌ Error procesando LuxBox: {e}", exc_info=True)
-            await message.answer("⚠️ Error al procesar la caja. Contacta soporte.")
-    
-    # CASO 2: Pago de gemas normal
-    elif payload.startswith('gem_purchase_'):
+    if payload.startswith('gem_purchase_'):
         try:
             pkg_idx = int(payload.split('_')[-1])
-            logger.info(f"💎 Procesando compra de gemas: paquete {pkg_idx} para usuario {telegram_id}")
+            success, msg = await process_star_purchase(telegram_id, pkg_idx, message.successful_payment.telegram_payment_charge_id)
             
-            success, msg = await process_star_purchase(telegram_id, pkg_idx, charge_id)
-            
+            lang = (await get_user(telegram_id))['language']
             if success:
                 await message.answer(
-                    f"✅ {msg}\n\n🎉 ¡Ahora puedes generar audios de alta calidad!" if language == 'es' 
+                    f"✅ {msg}\n\n🎉 ¡Ahora puedes generar audios de alta calidad!" if lang == 'es' 
                     else f"✅ {msg}\n\n🎉 You can now generate high-quality audios!"
                 )
                 await message.answer(
                     "🎊 ¡Tu teclado ha sido actualizado!", 
-                    reply_markup=get_main_keyboard(language, True)
+                    reply_markup=get_main_keyboard(lang, True)
                 )
-                logger.info(f"✅ Compra de gemas completada para {telegram_id}")
             else:
-                await message.answer("⚠️ Error al procesar la compra." if language == 'es' else "⚠️ Error processing purchase.")
+                await message.answer("⚠️ Error al procesar la compra." if lang == 'es' else "⚠️ Error processing purchase.")
         except Exception as e:
-            logger.error(f"❌ Error procesando compra de gemas: {e}", exc_info=True)
+            logger.error(f"❌ Error procesando compra: {e}", exc_info=True)
             await message.answer("⚠️ Error al procesar el pago.")
-    
-    else:
-        logger.warning(f"⚠️ Payload de pago desconocido: {payload}")
 
 @router.message(Command('missions'))
 async def cmd_missions(message: Message):
@@ -1906,35 +1555,26 @@ async def cmd_affinity(message: Message):
         return await message.answer("⚠️ No tienes un personaje activo. Usa /newchat")
     
     language = user['language']
-    affinity = await get_character_affinity(character['id'])
     affinity_display = await get_affinity_display(character['id'], language)
     
     if language == 'es':
         text = (
             f"💕 <b>Afinidad con {character['character_name']}</b>\n\n"
             f"{affinity_display}\n\n"
-            f"📊 <b>Estadísticas:</b>\n"
-            f"• Mensajes enviados: {character.get('total_messages', 0)}\n"
-            f"• Interacciones totales: {character.get('total_interactions', 0)}\n\n"
             f"💡 <b>Cómo subir afinidad:</b>\n"
             f"• 💬 Chatear: +2-5 puntos\n"
             f"• 📸 Selfies: +5 puntos\n"
-            f"• 🎙️ Audios: +3 puntos\n"
-            f"• 📦 LuxBoxes: +10 puntos\n\n"
+            f"• 🎙️ Audios: +3 puntos\n\n"
             f"<i>Más afinidad = mejores respuestas y contenido exclusivo</i>"
         )
     else:
         text = (
             f"💕 <b>Affinity with {character['character_name']}</b>\n\n"
             f"{affinity_display}\n\n"
-            f"📊 <b>Statistics:</b>\n"
-            f"• Messages sent: {character.get('total_messages', 0)}\n"
-            f"• Total interactions: {character.get('total_interactions', 0)}\n\n"
             f"💡 <b>How to increase affinity:</b>\n"
             f"• 💬 Chat: +2-5 points\n"
             f"• 📸 Selfies: +5 points\n"
-            f"• 🎙️ Audios: +3 points\n"
-            f"• 📦 LuxBoxes: +10 points\n\n"
+            f"• 🎙️ Audios: +3 points\n\n"
             f"<i>More affinity = better responses and exclusive content</i>"
         )
     
@@ -2088,20 +1728,17 @@ async def cmd_help(message: Message):
             "/audio - Audio del personaje (5💎) [SOLO INGLÉS]\n"
             "/selfie - Pedir foto (10💎)\n"
             "/balance - Ver tu balance\n"
-            "/luxbox - 📦 Caja misteriosa\n"
             "/missions - 🎯 Misiones diarias\n"
             "/affinity - 💕 Ver afinidad\n"
             "/achievements - 🏆 Ver logros\n"
             "/shop - Tienda de gemas\n"
             "/invite - Invitar amigos\n"
             "/newchat - Cambiar personaje\n"
-            "/test_luxbox - 🧪 Test LuxBox (solo pruebas)\n"
             "/help - Esta ayuda\n\n"
             "💡 <b>Tips:</b>\n"
             "• Pide 'mándame una foto' en el chat\n"
             "• Completa misiones diarias para gemas gratis\n"
-            "• Sube afinidad para contenido exclusivo\n"
-            "• ¡Abre LuxBoxes para grandes premios!"
+            "• Sube afinidad para contenido exclusivo"
         )
     else:
         text = (
@@ -2111,20 +1748,17 @@ async def cmd_help(message: Message):
             "/audio - Character audio (5💎) [ENGLISH ONLY]\n"
             "/selfie - Request photo (10💎)\n"
             "/balance - Check balance\n"
-            "/luxbox - 📦 Mystery box\n"
             "/missions - 🎯 Daily missions\n"
             "/affinity - 💕 View affinity\n"
             "/achievements - 🏆 View achievements\n"
             "/shop - Gem store\n"
             "/invite - Invite friends\n"
             "/newchat - Switch character\n"
-            "/test_luxbox - 🧪 Test LuxBox (testing only)\n"
             "/help - This help\n\n"
             "💡 <b>Tips:</b>\n"
             "• Ask for 'send me a photo' in chat\n"
             "• Complete daily missions for free gems\n"
-            "• Increase affinity for exclusive content\n"
-            "• Open LuxBoxes for big prizes!"
+            "• Increase affinity for exclusive content"
         )
     
     await message.answer(text, parse_mode="HTML")
@@ -2139,32 +1773,8 @@ async def cmd_menu(message: Message):
     text = "🏠 Menú Principal\n\nUsa los botones de abajo para navegar:" if lang == 'es' else "🏠 Main Menu\n\nUse the buttons below to navigate:"
     await message.answer(text, reply_markup=get_main_keyboard(lang, await has_user_purchased(message.from_user.id)))
 
-# ==================== COMANDO DE TESTING ====================
-
-@router.message(Command('test_luxbox'))
-async def test_luxbox(message: Message):
-    """Comando de testing - NO usar en producción"""
-    telegram_id = message.from_user.id
-    user = await get_user(telegram_id)
-    if not user:
-        return await message.answer("⚠️ Regístrate primero")
-    
-    # Simular apertura gratis
-    result = await open_luxbox(telegram_id, 1)
-    total_gems = result['total_gems']
-    prize = result['results'][0]
-    
-    await message.answer(
-        f"🧪 <b>TEST LUXBOX</b>\n\n"
-        f"{prize['emoji']} <b>Ganaste: {prize['gems']} gemas</b>\n"
-        f"💎 Total: <b>{total_gems} gemas</b>\n\n"
-        f"Balance actual: {await get_balance(telegram_id)} gemas",
-        parse_mode="HTML"
-    )
-
 @router.inline_query()
 async def inline_query_handler(inline_query: InlineQuery):
-    query_text = inline_query.query.lower()
     results = []
     
     telegram_id = inline_query.from_user.id
@@ -2190,7 +1800,7 @@ async def inline_query_handler(inline_query: InlineQuery):
             title="🤖 Chatea con personajes AI",
             description="Personajes únicos que te envían fotos y audios",
             input_message_content=InputTextMessageContent(
-                message_text="🎭 ¡Únete a mi bot de Telegram y crea tu propio personaje AI!\n\n💬 Chat + 📸 Selfies + 🎙️ Audios\n\n👉 @your_bot_username"
+                message_text="🎭 ¡Únete a mi bot de Telegram y crea tu propio personaje AI!\n\n💬 Chat + 📸 Selfies + 🎙️ Audios"
             )
         )
     )
@@ -2272,7 +1882,6 @@ async def process_message(message: Message):
             f"User request: {description}. Make it sensual, flirty, and immersive. {context}"
         )
         
-        logger.info(f"Generando imagen con prompt: {image_prompt}")
         image_url = await generate_image(image_prompt)
         
         if image_url:
@@ -2314,14 +1923,12 @@ async def process_message(message: Message):
             "\"Mmm... justo cuando las cosas se estaban poniendo interesantes... <b>*se acerca más y susurra*</b> Tengo algo especial que quería mostrarte...\"\n\n"
             "<b>*se aleja un poco con una sonrisa provocativa*</b>\n\n"
             "🔥 <b>Opción 1: Recarga gemas y desbloquea TODO</b>\n"
-            "💎 <b>Opción 2: Invita a un amigo (5 gemas gratis)</b>\n"
-            "📦 <b>Opción 3: Abre una LuxBox (¡hasta 10,000 gemas!)</b>\n\n"
+            "💎 <b>Opción 2: Invita a un amigo (5 gemas gratis)</b>\n\n"
             "<b>*te mira con deseo*</b> \"¿Cuál eliges? Prometo que valdrá la pena...\" 😉"
         )
         builder = InlineKeyboardBuilder()
         builder.button(text="🛒 VER PAQUETES", callback_data="shop_from_block")
         builder.button(text="🎁 Invitar (5 gemas)", callback_data="invite_from_block")
-        builder.button(text="📦 LuxBox", callback_data="luxbox_open_1")
         builder.adjust(1)
         return await message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
     
@@ -2387,113 +1994,13 @@ async def show_main_menu(message: Message, language: str, keyboard: ReplyKeyboar
     text = "🏠 Menú Principal\n\nUsa los botones de abajo para navegar:" if language == 'es' else "🏠 Main Menu\n\nUse the buttons below to navigate:"
     await message.answer(text, reply_markup=keyboard)
 
-async def send_proactive_notifications(bot: Bot):
-    while True:
-        try:
-            logger.info("🔔 Buscando usuarios para notificaciones...")
-            
-            inactivity_threshold = (datetime.utcnow() - timedelta(hours=4)).isoformat()
-            
-            result = await execute_query(
-                """SELECT u.telegram_id, u.language, u.first_name, uc.character_name, uc.affinity
-                   FROM users u
-                   INNER JOIN user_characters uc ON u.telegram_id = uc.telegram_id
-                   WHERE uc.is_active = 1 
-                   AND u.last_active < ?
-                   AND uc.affinity > 30
-                   AND u.notifications_enabled = 1
-                   LIMIT 50""",
-                (inactivity_threshold,)
-            )
-            
-            for user in result:
-                try:
-                    telegram_id = user['telegram_id']
-                    language = user['language']
-                    char_name = user['character_name']
-                    affinity = user['affinity']
-                    
-                    if language == 'es':
-                        if affinity >= 80:
-                            messages = [
-                                f"*{char_name} te extraña...*\n\n\"¿Dónde te habías metido? *mira su teléfono con tristeza* Ya me estaba preocupando... 🥺\"",
-                                f"*{char_name} no puede dejar de pensar en ti*\n\n\"*acaricia la pantalla* Volvamos a donde lo dejamos... *sonríe tímidamente*\"",
-                                f"*{char_name} suspira*\"\n\n\"Solo quería saber si estabas bien... *te mira con ojos brillantes* ¿Me extrañaste tanto como yo a ti?\""
-                            ]
-                        else:
-                            messages = [
-                                f"*{char_name} te envía un mensaje*\"\n\n\"Hey... *sonríe* Hace rato que no hablamos. ¿Cómo estás?\"",
-                                f"*{char_name} te recuerda*\"\n\n\"*juega con su cabello* Me acordé de ti hoy... ¿quieres conversar?\""
-                            ]
-                    else:
-                        if affinity >= 80:
-                            messages = [
-                                f"*{char_name} misses you...*\n\n\"Where have you been? *looks at phone sadly* I was getting worried... 🥺\"",
-                                f"*{char_name} can't stop thinking about you*\n\n\"*touches screen* Let's pick up where we left off... *smiles shyly*\""
-                            ]
-                        else:
-                            messages = [
-                                f"*{char_name} sends you a message*\"\n\n\"Hey... *smiles* It's been a while. How are you?\"",
-                                f"*{char_name} remembers you*\"\n\n\"*plays with hair* I thought of you today... want to chat?\""
-                            ]
-                    
-                    message_text = random.choice(messages)
-                    
-                    builder = InlineKeyboardBuilder()
-                    builder.button(text="💬 Responder" if language == 'es' else "💬 Reply", callback_data="notification_reply")
-                    builder.button(text="📦 LuxBox" if language == 'es' else "📦 LuxBox", callback_data="luxbox_open_1")
-                    builder.adjust(2)
-                    
-                    await bot.send_message(
-                        telegram_id,
-                        format_actions_html(message_text),
-                        parse_mode="HTML",
-                        reply_markup=builder.as_markup()
-                    )
-                    
-                    await asyncio.sleep(5)
-                    
-                except Exception as e:
-                    logger.error(f"Error enviando notificación a {telegram_id}: {e}")
-                    continue
-            
-            logger.info(f"✅ Notificaciones enviadas a {len(result)} usuarios")
-            
-        except Exception as e:
-            logger.error(f"Error en notificaciones proactivas: {e}")
-        
-        await asyncio.sleep(6 * 60 * 60)
-
-@router.callback_query(F.data == "notification_reply")
-async def handle_notification_reply(callback: CallbackQuery):
-    await callback.message.delete()
-    language = (await get_user(callback.from_user.id))['language']
-    await callback.message.answer(
-        "💬 ¡Perfecto! Escríbeme algo y seguimos charlando..." if language == 'es' else "💬 Perfect! Write me something and let's keep chatting..."
-    )
-    await callback.answer()
-
 async def main():
     bot = Bot(token=TELEGRAM_BOT_TOKEN)
     dp = Dispatcher()
     
-    if WEB_APP_URL:
-        try:
-            await bot.set_chat_menu_button(
-                menu_button=MenuButtonWebApp(
-                    text="🎮 Abrir App" if True else "🎮 Open App",
-                    web_app=WebAppInfo(url=WEB_APP_URL)
-                )
-            )
-            logger.info("✅ Menu button configurado con Web App")
-        except Exception as e:
-            logger.warning(f"No se pudo configurar Web App: {e}")
-    
     dp.include_router(router)
     
-    asyncio.create_task(send_proactive_notifications(bot))
-    
-    logger.info("🚀 Bot iniciado con todas las mejoras")
+    logger.info("🚀 Bot iniciado - Listo para producción")
     
     if WEBHOOK_URL:
         await bot.set_webhook(WEBHOOK_URL)
