@@ -4,8 +4,6 @@ import string
 import logging
 import asyncio
 import re
-import urllib.parse
-import io
 import base64
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
@@ -18,7 +16,7 @@ from aiogram.types import (
     ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, BufferedInputFile
 )
 from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
-from supabase import create_client, Client
+import libsql_client
 
 # Cargar variables de entorno
 load_dotenv()
@@ -27,8 +25,8 @@ load_dotenv()
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY')
 DEEPINFRA_TOKEN = os.getenv('DEEPINFRA_TOKEN')
-SUPABASE_URL = os.getenv('SUPABASE_URL')
-SUPABASE_KEY = os.getenv('SUPABASE_KEY')
+TURSO_URL = os.getenv('TURSO_URL')
+TURSO_AUTH_TOKEN = os.getenv('TURSO_AUTH_TOKEN')
 WEBHOOK_URL = os.getenv('WEBHOOK_URL')
 
 OPENROUTER_MODEL = "deepseek/deepseek-v4-flash-0731"
@@ -49,37 +47,37 @@ MAX_REFERRALS_PER_DAY = 2
 MAX_DAILY_GEMS = BASE_DAILY_GEMS + (GEMS_PER_REFERRAL * MAX_REFERRALS_PER_DAY)
 HOOK_MODE_MESSAGES = 5
 
-# Inicializar cliente de Supabase (UNA SOLA VEZ)
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+# Conexión a Turso (UNA SOLA VEZ)
+client = libsql_client.Client(url=TURSO_URL, auth_token=TURSO_AUTH_TOKEN)
 
 # Arquetipos
 ARCHETYPES_MALE = {
     "es": {
-        "schoolmate": "🎓 Compañero de escuela", "stepdad": "👔 Padrastro", "stepbrother": "💪 Hermanastro",
-        "teacher": "📚 Profesor", "neighbor": "🏠 Vecino", "boss": "💼 Jefe", "trainer": "️ Entrenador personal",
+        "schoolmate": "🎓 Compañero de escuela", "stepdad": " Padrastro", "stepbrother": "💪 Hermanastro",
+        "teacher": "📚 Profesor", "neighbor": "🏠 Vecino", "boss": "💼 Jefe", "trainer": "🏋️ Entrenador personal",
         "model": "📸 Modelo/Influencer", "musician": "🎵 Músico", "actor": "🎬 Actor", "doctor": "⚕️ Médico",
-        "chef": "👨‍ Chef", "artist": "🎨 Artista", "writer": "✍️ Escritor", "bodyguard": "🛡️ Guardaespaldas", "ceo": " CEO/Empresario"
+        "chef": "👨‍🍳 Chef", "artist": "🎨 Artista", "writer": "✍️ Escritor", "bodyguard": "🛡️ Guardaespaldas", "ceo": "💼 CEO/Empresario"
     },
     "en": {
-        "schoolmate": " Schoolmate", "stepdad": " Stepfather", "stepbrother": "💪 Stepbrother",
-        "teacher": "📚 Teacher", "neighbor": " Neighbor", "boss": "💼 Boss", "trainer": "🏋️ Personal Trainer",
+        "schoolmate": "🎓 Schoolmate", "stepdad": "👔 Stepfather", "stepbrother": "💪 Stepbrother",
+        "teacher": "📚 Teacher", "neighbor": "🏠 Neighbor", "boss": "💼 Boss", "trainer": "🏋️ Personal Trainer",
         "model": "📸 Model/Influencer", "musician": "🎵 Musician", "actor": "🎬 Actor", "doctor": "⚕️ Doctor",
-        "chef": "👨‍ Chef", "artist": "🎨 Artist", "writer": "✍️ Writer", "bodyguard": "🛡️ Bodyguard", "ceo": "💼 CEO/Businessman"
+        "chef": "👨‍🍳 Chef", "artist": "🎨 Artist", "writer": "✍️ Writer", "bodyguard": "️ Bodyguard", "ceo": "💼 CEO/Businessman"
     }
 }
 
 ARCHETYPES_FEMALE = {
     "es": {
         "schoolmate": "🎓 Compañera de escuela", "stepmom": "💋 Madrastra", "stepsister": "🌸 Hermanastra",
-        "teacher": "📚 Profesora", "neighbor": "🏠 Vecina", "boss": "💼 Jefa", "trainer": "️ Entrenadora personal",
+        "teacher": "📚 Profesora", "neighbor": "🏠 Vecina", "boss": "💼 Jefa", "trainer": "🏋️ Entrenadora personal",
         "model": "📸 Modelo/Influencer", "musician": "🎵 Músico", "actor": "🎬 Actriz", "doctor": "⚕️ Doctora/Enfermera",
-        "chef": "👩‍🍳 Chef", "artist": "🎨 Artista", "writer": "️ Escritora", "secretary": " Secretaria", "model_student": " Estudiante popular"
+        "chef": "👩‍🍳 Chef", "artist": " Artista", "writer": "✍️ Escritora", "secretary": "💼 Secretaria", "model_student": "🎓 Estudiante popular"
     },
     "en": {
         "schoolmate": "🎓 Schoolmate", "stepmom": "💋 Stepmother", "stepsister": "🌸 Stepsister",
-        "teacher": "📚 Teacher", "neighbor": "🏠 Neighbor", "boss": "💼 Boss", "trainer": "🏋️ Personal Trainer",
-        "model": "📸 Model/Influencer", "musician": "🎵 Musician", "actor": "🎬 Actress", "doctor": "️ Doctor/Nurse",
-        "chef": "👩‍🍳 Chef", "artist": "🎨 Artist", "writer": "✍️ Writer", "secretary": " Secretary", "model_student": "🎓 Popular Student"
+        "teacher": "📚 Teacher", "neighbor": " Neighbor", "boss": "💼 Boss", "trainer": "🏋️ Personal Trainer",
+        "model": "📸 Model/Influencer", "musician": " Musician", "actor": "🎬 Actress", "doctor": "⚕️ Doctor/Nurse",
+        "chef": "👩‍🍳 Chef", "artist": "🎨 Artist", "writer": "✍️ Writer", "secretary": "💼 Secretary", "model_student": "🎓 Popular Student"
     }
 }
 
@@ -143,7 +141,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Cache en memoria (solo para datos frecuentemente accedidos)
+# Cache en memoria
 user_cache: Dict[int, Dict[str, Any]] = {}
 CACHE_TTL = 300
 
@@ -176,95 +174,80 @@ async def invalidate_cache(telegram_id: int):
     if telegram_id in user_cache:
         del user_cache[telegram_id]
 
-# Funciones de estado en base de datos (REEMPLAZA user_states en memoria)
-async def get_user_state(telegram_id: int) -> Optional[Dict[str, Any]]:
-    """Obtener estado del usuario desde Supabase"""
+# Funciones de base de datos con Turso
+async def execute_query(sql: str, params: tuple = None):
+    """Ejecutar query en Turso"""
     try:
-        result = supabase.table('user_states').select('state_data').eq('telegram_id', telegram_id).execute()
-        if result.data and len(result.data) > 0:
-            return result.data[0]['state_data']
-        return None
+        if params:
+            result = await client.execute(sql, params)
+        else:
+            result = await client.execute(sql)
+        return result
     except Exception as e:
-        logger.error(f"Error getting user state: {e}")
-        return None
-
-async def set_user_state(telegram_id: int, state: Dict[str, Any]):
-    """Guardar/actualizar estado del usuario en Supabase"""
-    try:
-        supabase.table('user_states').upsert({
-            'telegram_id': telegram_id,
-            'state_data': state,
-            'updated_at': datetime.utcnow().isoformat()
-        }).execute()
-    except Exception as e:
-        logger.error(f"Error setting user state: {e}")
-
-async def clear_user_state(telegram_id: int):
-    """Eliminar estado del usuario"""
-    try:
-        supabase.table('user_states').delete().eq('telegram_id', telegram_id).execute()
-    except Exception as e:
-        logger.error(f"Error clearing user state: {e}")
-
-def generate_referral_code() -> str:
-    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+        logger.error(f"Error en query: {e}")
+        raise
 
 async def create_user(telegram_id: int, username: str, first_name: str, language: str = 'es', referred_by: Optional[int] = None):
     referral_code = generate_referral_code()
-    user_data = {
-        'telegram_id': telegram_id,
-        'username': username,
-        'first_name': first_name,
-        'language': language,
-        'gems': 15,
-        'referral_code': referral_code,
-        'referred_by': referred_by,
-        'total_referrals': 0,
-        'daily_gems_reset': datetime.utcnow().isoformat(),
-        'hook_messages_remaining': 0
-    }
     
-    result = supabase.table('users').insert(user_data).execute()
+    await execute_query(
+        """INSERT INTO users (telegram_id, username, first_name, language, gems, referral_code, referred_by, total_referrals, daily_gems_reset, hook_messages_remaining)
+           VALUES (?, ?, ?, ?, 15, ?, ?, 0, ?, 0)""",
+        (telegram_id, username, first_name, language, referral_code, referred_by, datetime.utcnow().isoformat())
+    )
     
-    if referred_by and result.data:
-        supabase.table('referrals').insert({
-            'referrer_id': referred_by,
-            'referred_id': telegram_id
-        }).execute()
+    if referred_by:
+        await execute_query(
+            """INSERT INTO referrals (referrer_id, referred_id) VALUES (?, ?)""",
+            (referred_by, telegram_id)
+        )
         
-        referral_count = supabase.table('referrals').select('*', count='exact').eq('referrer_id', referred_by).execute().count
-        supabase.table('users').update({'total_referrals': referral_count}).eq('telegram_id', referred_by).execute()
+        referral_count_result = await execute_query(
+            """SELECT COUNT(*) as count FROM referrals WHERE referrer_id = ?""",
+            (referred_by,)
+        )
+        referral_count = referral_count_result[0]['count'] if referral_count_result else 0
+        
+        await execute_query(
+            """UPDATE users SET total_referrals = ? WHERE telegram_id = ?""",
+            (referral_count, referred_by)
+        )
+        
+        await add_gems(referred_by, GEMS_PER_REFERRAL, 'referral', f'Referido: {username}')
     
-    return result.data[0] if result.data else None
+    return await get_user(telegram_id)
 
 async def get_user(telegram_id: int):
-    result = supabase.table('users').select('*').eq('telegram_id', telegram_id).execute()
-    return result.data[0] if result.data else None
+    result = await execute_query(
+        """SELECT * FROM users WHERE telegram_id = ?""",
+        (telegram_id,)
+    )
+    return result[0] if result else None
 
 async def update_last_active(telegram_id: int):
-    supabase.table('users').update({
-        'last_active': datetime.utcnow().isoformat()
-    }).eq('telegram_id', telegram_id).execute()
+    await execute_query(
+        """UPDATE users SET last_active = ? WHERE telegram_id = ?""",
+        (datetime.utcnow().isoformat(), telegram_id)
+    )
 
 async def count_active_referrals_last_24h(telegram_id: int) -> int:
-    results = supabase.table('referrals').select('*').eq('referrer_id', telegram_id).execute()
-    if not results.data:
-        return 0
+    twenty_four_hours_ago = (datetime.utcnow() - timedelta(hours=24)).isoformat()
     
-    now = datetime.utcnow()
-    twenty_four_hours_ago = now - timedelta(hours=24)
-    active_count = sum(
-        1 for r in results.data 
-        if datetime.fromisoformat(r['created_at'].replace('Z', '+00:00').replace('+00:00', '')) >= twenty_four_hours_ago
+    result = await execute_query(
+        """SELECT COUNT(*) as count FROM referrals 
+           WHERE referrer_id = ? AND created_at >= ?""",
+        (telegram_id, twenty_four_hours_ago)
     )
-    return min(active_count, MAX_REFERRALS_PER_DAY)
+    
+    count = result[0]['count'] if result else 0
+    return min(count, MAX_REFERRALS_PER_DAY)
 
 async def check_and_reset_daily_gems(telegram_id: int):
     user = await get_user(telegram_id)
     if not user:
         return None
     
-    last_reset = datetime.fromisoformat(user['daily_gems_reset'].replace('Z', '+00:00').replace('+00:00', ''))
+    last_reset = datetime.fromisoformat(user['daily_gems_reset'])
     now = datetime.utcnow()
     
     if (now - last_reset).days >= 1:
@@ -272,13 +255,17 @@ async def check_and_reset_daily_gems(telegram_id: int):
         bonus_gems = active_referrals * GEMS_PER_REFERRAL
         new_gems = BASE_DAILY_GEMS + bonus_gems
         
-        supabase.table('users').update({
-            'gems': new_gems,
-            'daily_gems_reset': now.isoformat(),
-            'bonus_gems_from_referrals': bonus_gems,
-            'total_referrals': supabase.table('referrals').select('*', count='exact').eq('referrer_id', telegram_id).execute().count,
-            'hook_messages_remaining': 0
-        }).eq('telegram_id', telegram_id).execute()
+        total_referrals_result = await execute_query(
+            """SELECT COUNT(*) as count FROM referrals WHERE referrer_id = ?""",
+            (telegram_id,)
+        )
+        total_referrals = total_referrals_result[0]['count'] if total_referrals_result else 0
+        
+        await execute_query(
+            """UPDATE users SET gems = ?, daily_gems_reset = ?, bonus_gems_from_referrals = ?, 
+               total_referrals = ?, hook_messages_remaining = 0 WHERE telegram_id = ?""",
+            (new_gems, now.isoformat(), bonus_gems, total_referrals, telegram_id)
+        )
         
         user.update({
             'gems': new_gems,
@@ -294,16 +281,16 @@ async def deduct_gems(telegram_id: int, amount: int, transaction_type: str, desc
     if not user or user['gems'] < amount:
         return False
     
-    supabase.table('users').update({
-        'gems': user['gems'] - amount
-    }).eq('telegram_id', telegram_id).execute()
+    await execute_query(
+        """UPDATE users SET gems = gems - ? WHERE telegram_id = ?""",
+        (amount, telegram_id)
+    )
     
-    supabase.table('gem_transactions').insert({
-        'telegram_id': telegram_id,
-        'amount': -amount,
-        'transaction_type': transaction_type,
-        'description': description
-    }).execute()
+    await execute_query(
+        """INSERT INTO gem_transactions (telegram_id, amount, transaction_type, description) 
+           VALUES (?, ?, ?, ?)""",
+        (telegram_id, -amount, transaction_type, description)
+    )
     
     await invalidate_cache(telegram_id)
     return True
@@ -313,90 +300,99 @@ async def add_gems(telegram_id: int, amount: int, transaction_type: str, descrip
     if not user:
         return False
     
-    supabase.table('users').update({
-        'gems': user['gems'] + amount
-    }).eq('telegram_id', telegram_id).execute()
+    await execute_query(
+        """UPDATE users SET gems = gems + ? WHERE telegram_id = ?""",
+        (amount, telegram_id)
+    )
     
-    supabase.table('gem_transactions').insert({
-        'telegram_id': telegram_id,
-        'amount': amount,
-        'transaction_type': transaction_type,
-        'description': description
-    }).execute()
+    await execute_query(
+        """INSERT INTO gem_transactions (telegram_id, amount, transaction_type, description) 
+           VALUES (?, ?, ?, ?)""",
+        (telegram_id, amount, transaction_type, description)
+    )
     
     await invalidate_cache(telegram_id)
     return True
 
 async def save_character(telegram_id: int, character_name: str, gender: str, archetype: str, personality: str):
-    supabase.table('user_characters').update({
-        'is_active': False
-    }).eq('telegram_id', telegram_id).execute()
+    await execute_query(
+        """UPDATE user_characters SET is_active = 0 WHERE telegram_id = ?""",
+        (telegram_id,)
+    )
     
-    result = supabase.table('user_characters').insert({
-        'telegram_id': telegram_id,
-        'character_name': character_name,
-        'gender': gender,
-        'archetype': archetype,
-        'personality': personality,
-        'is_active': True
-    }).execute()
+    await execute_query(
+        """INSERT INTO user_characters (telegram_id, character_name, gender, archetype, personality, is_active) 
+           VALUES (?, ?, ?, ?, ?, 1)""",
+        (telegram_id, character_name, gender, archetype, personality)
+    )
     
-    return result.data[0] if result.data else None
+    return await get_active_character(telegram_id)
 
 async def get_active_character(telegram_id: int):
-    result = supabase.table('user_characters').select('*').eq('telegram_id', telegram_id).eq('is_active', True).execute()
-    return result.data[0] if result.data else None
+    result = await execute_query(
+        """SELECT * FROM user_characters WHERE telegram_id = ? AND is_active = 1""",
+        (telegram_id,)
+    )
+    return result[0] if result else None
 
 async def get_all_characters(telegram_id: int):
-    result = supabase.table('user_characters').select('*').eq('telegram_id', telegram_id).execute()
-    return result.data if result.data else []
+    return await execute_query(
+        """SELECT * FROM user_characters WHERE telegram_id = ?""",
+        (telegram_id,)
+    )
 
 async def set_active_character(telegram_id: int, character_id: int):
-    supabase.table('user_characters').update({
-        'is_active': False
-    }).eq('telegram_id', telegram_id).execute()
+    await execute_query(
+        """UPDATE user_characters SET is_active = 0 WHERE telegram_id = ?""",
+        (telegram_id,)
+    )
     
-    supabase.table('user_characters').update({
-        'is_active': True
-    }).eq('telegram_id', telegram_id).eq('id', character_id).execute()
+    await execute_query(
+        """UPDATE user_characters SET is_active = 1 WHERE id = ? AND telegram_id = ?""",
+        (character_id, telegram_id)
+    )
 
 async def save_message(telegram_id: int, role: str, content: str, character_id: int):
-    supabase.table('conversation_history').insert({
-        'telegram_id': telegram_id,
-        'role': role,
-        'content': content,
-        'character_id': character_id
-    }).execute()
+    await execute_query(
+        """INSERT INTO conversation_history (telegram_id, role, content, character_id) 
+           VALUES (?, ?, ?, ?)""",
+        (telegram_id, role, content, character_id)
+    )
 
 async def get_conversation_history(telegram_id: int, character_id: int, limit: int = 10):
-    result = supabase.table('conversation_history').select('*').eq('telegram_id', telegram_id).eq('character_id', character_id).order('created_at', desc=True).limit(limit).execute()
-    if result.data:
-        result.data.reverse()
-    return result.data if result.data else []
+    result = await execute_query(
+        """SELECT * FROM conversation_history 
+           WHERE telegram_id = ? AND character_id = ? 
+           ORDER BY created_at DESC LIMIT ?""",
+        (telegram_id, character_id, limit)
+    )
+    
+    if result:
+        result.reverse()
+    return result
 
 async def get_user_by_referral_code(referral_code: str):
-    result = supabase.table('users').select('*').eq('referral_code', referral_code).execute()
-    return result.data[0] if result.data else None
+    result = await execute_query(
+        """SELECT * FROM users WHERE referral_code = ?""",
+        (referral_code,)
+    )
+    return result[0] if result else None
 
 async def record_star_purchase(telegram_id: int, stars: int, gems: int, is_first_purchase: bool, charge_id: str):
-    supabase.table('star_purchases').insert({
-        'telegram_id': telegram_id,
-        'stars_amount': stars,
-        'gems_amount': gems,
-        'is_first_purchase': is_first_purchase,
-        'telegram_charge_id': charge_id
-    }).execute()
+    await execute_query(
+        """INSERT INTO star_purchases (telegram_id, stars_amount, gems_amount, is_first_purchase, telegram_charge_id) 
+           VALUES (?, ?, ?, ?, ?)""",
+        (telegram_id, stars, gems, is_first_purchase, charge_id)
+    )
     
     await add_gems(telegram_id, gems, 'purchase', f'Compra con {stars} stars')
 
 async def has_user_purchased(telegram_id: int) -> bool:
-    result = supabase.table('star_purchases').select('id').eq('telegram_id', telegram_id).limit(1).execute()
-    return len(result.data) > 0
-
-async def activate_hook_mode(telegram_id: int):
-    supabase.table('users').update({
-        'hook_messages_remaining': HOOK_MODE_MESSAGES
-    }).eq('telegram_id', telegram_id).execute()
+    result = await execute_query(
+        """SELECT id FROM star_purchases WHERE telegram_id = ? LIMIT 1""",
+        (telegram_id,)
+    )
+    return len(result) > 0
 
 async def decrement_hook_message(telegram_id: int) -> int:
     user = await get_user(telegram_id)
@@ -404,24 +400,58 @@ async def decrement_hook_message(telegram_id: int) -> int:
         return 0
     
     remaining = max(0, user.get('hook_messages_remaining', 0) - 1)
-    supabase.table('users').update({
-        'hook_messages_remaining': remaining
-    }).eq('telegram_id', telegram_id).execute()
+    
+    await execute_query(
+        """UPDATE users SET hook_messages_remaining = ? WHERE telegram_id = ?""",
+        (remaining, telegram_id)
+    )
     
     return remaining
+
+# Funciones de estado en base de datos
+async def get_user_state(telegram_id: int) -> Optional[Dict[str, Any]]:
+    result = await execute_query(
+        """SELECT state_data FROM user_states WHERE telegram_id = ?""",
+        (telegram_id,)
+    )
+    
+    if result and result[0]['state_data']:
+        import json
+        return json.loads(result[0]['state_data'])
+    return None
+
+async def set_user_state(telegram_id: int, state: Dict[str, Any]):
+    import json
+    state_json = json.dumps(state)
+    
+    await execute_query(
+        """INSERT INTO user_states (telegram_id, state_data) 
+           VALUES (?, ?)
+           ON CONFLICT(telegram_id) DO UPDATE SET state_data = ?, updated_at = ?""",
+        (telegram_id, state_json, state_json, datetime.utcnow().isoformat())
+    )
+
+async def clear_user_state(telegram_id: int):
+    await execute_query(
+        """DELETE FROM user_states WHERE telegram_id = ?""",
+        (telegram_id,)
+    )
+
+def generate_referral_code() -> str:
+    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
 
 def get_main_keyboard(language: str, is_premium: bool = False) -> ReplyKeyboardMarkup:
     builder = ReplyKeyboardBuilder()
     
     if language == 'es':
         builder.row(KeyboardButton(text="💬 Chat"), KeyboardButton(text="💎 Balance"))
-        builder.row(KeyboardButton(text="🎙️ Grabar Audio"), KeyboardButton(text="📸 Selfie (10💎)"))
-        builder.row(KeyboardButton(text="🛒 Tienda"), KeyboardButton(text="🎁 Invitar"))
-        builder.row(KeyboardButton(text="💬 Nuevo Chat"), KeyboardButton(text="❓ Ayuda"))
+        builder.row(KeyboardButton(text="📸 Selfie (10)"))
+        builder.row(KeyboardButton(text="🛒 Tienda"), KeyboardButton(text=" Invitar"))
+        builder.row(KeyboardButton(text="💬 Nuevo Chat"), KeyboardButton(text=" Ayuda"))
     else:
-        builder.row(KeyboardButton(text=" Chat"), KeyboardButton(text="💎 Balance"))
+        builder.row(KeyboardButton(text="💬 Chat"), KeyboardButton(text="💎 Balance"))
         builder.row(KeyboardButton(text="🎙️ Record Audio"), KeyboardButton(text="📸 Selfie (10💎)"))
-        builder.row(KeyboardButton(text="🛒 Shop"), KeyboardButton(text="🎁 Invite"))
+        builder.row(KeyboardButton(text=" Shop"), KeyboardButton(text="🎁 Invite"))
         builder.row(KeyboardButton(text="💬 New Chat"), KeyboardButton(text="❓ Help"))
     
     clean_builder = ReplyKeyboardBuilder()
@@ -479,7 +509,7 @@ async def generate_openrouter_response(messages: list, language: str = 'es', gem
         "model": OPENROUTER_MODEL,
         "messages": full_messages,
         "temperature": temperature,
-        "max_tokens": 200  # REDUCIDO DE 400 A 200 PARA EVITAR TIMEOUTS
+        "max_tokens": 200
     }
     
     try:
@@ -555,7 +585,7 @@ async def generate_chatterbox_audio(text: str, language: str = 'es'):
                     audio_data = result.get('audio') or result.get('result', {}).get('audio')
                     if audio_data:
                         return audio_data
-                    logger.error(f"❌ No se encontró audio en la respuesta de Chatterbox: {result}")
+                    logger.error(f" No se encontró audio en la respuesta de Chatterbox: {result}")
                     return None
                 else:
                     logger.error(f"❌ Chatterbox API error {status}: {response_text}")
@@ -742,7 +772,10 @@ async def process_star_purchase(telegram_id: int, package_index: int, charge_id:
     gems = int(pkg['gems'] * (1 + pkg.get('bonus', 0) / 100)) if pkg.get('bonus', 0) > 0 else pkg['gems']
     
     await record_star_purchase(telegram_id, pkg['stars'], gems, pkg.get('first_time', False), charge_id)
-    supabase.table('users').update({'hook_messages_remaining': 0}).eq('telegram_id', telegram_id).execute()
+    await execute_query(
+        """UPDATE users SET hook_messages_remaining = 0 WHERE telegram_id = ?""",
+        (telegram_id,)
+    )
     
     return True, f"¡Compra exitosa! Has recibido {gems} gemas."
 
@@ -788,12 +821,11 @@ async def cmd_start(message: Message, command=None):
     
     builder = InlineKeyboardBuilder()
     builder.button(text="🇪🇸 Español", callback_data="lang_es")
-    builder.button(text="🇺🇸 English", callback_data="lang_en")
+    builder.button(text="🇸 English", callback_data="lang_en")
     builder.adjust(2)
     
-    await message.answer(" ¡Bienvenido!\n\nPlease select your language / Selecciona tu idioma:", reply_markup=builder.as_markup())
+    await message.answer("👋 ¡Bienvenido!\n\nPlease select your language / Selecciona tu idioma:", reply_markup=builder.as_markup())
     
-    # GUARDAR ESTADO EN BASE DE DATOS
     await set_user_state(telegram_id, {
         'step': 'language',
         'username': username,
@@ -807,7 +839,7 @@ async def cmd_start(message: Message, command=None):
 async def process_language(callback: CallbackQuery):
     state = await get_user_state(callback.from_user.id)
     if not state:
-        return await callback.answer("️ Sesión expirada. Usa /start")
+        return await callback.answer("⏱️ Sesión expirada. Usa /start")
     
     lang = callback.data.split('_')[1]
     state.update({'language': lang, 'step': 'gender'})
@@ -819,10 +851,10 @@ async def process_language(callback: CallbackQuery):
             InlineKeyboardButton(text="👨 Hombre", callback_data="gender_male"),
             InlineKeyboardButton(text="👩 Mujer", callback_data="gender_female")
         )
-        text = " Selecciona el género de tu personaje:"
+        text = "🎭 Selecciona el género de tu personaje:"
     else:
         builder.row(
-            InlineKeyboardButton(text="👨 Male", callback_data="gender_male"),
+            InlineKeyboardButton(text=" Male", callback_data="gender_male"),
             InlineKeyboardButton(text="👩 Female", callback_data="gender_female")
         )
         text = "🎭 Select your character's gender:"
@@ -872,11 +904,11 @@ async def process_archetype(callback: CallbackQuery):
 async def btn_chat(message: Message):
     await cmd_chat(message)
 
-@router.message(F.text == "💎 Balance")
+@router.message(F.text == " Balance")
 async def btn_balance(message: Message):
     await cmd_balance(message)
 
-@router.message(F.text.in_(["🎙️ Grabar Audio", "🎙️ Record Audio", " Generar Audio", "🎵 Generate Audio"]))
+@router.message(F.text.in_(["🎙️ Grabar Audio", "🎙️ Record Audio", "🎵 Generar Audio", "🎵 Generate Audio"]))
 async def btn_audio(message: Message):
     await cmd_audio(message)
 
@@ -906,7 +938,7 @@ async def btn_help(message: Message):
 async def cmd_chat(message: Message):
     user = await get_user(message.from_user.id)
     if not user:
-        return await message.answer("⚠️ Primero debes registrarte con /start")
+        return await message.answer("️ Primero debes registrarte con /start")
     
     character = await get_active_character(message.from_user.id)
     if not character:
@@ -921,7 +953,7 @@ async def cmd_audio(message: Message):
     telegram_id = message.from_user.id
     user = await get_user(telegram_id)
     if not user:
-        return await message.answer("️ Primero debes registrarte con /start")
+        return await message.answer("⚠️ Primero debes registrarte con /start")
     
     if user['language'] != 'en':
         await message.answer("⚠️ El audio solo está disponible en inglés. Cambia tu idioma a inglés para usar esta función.\n\n⚠️ Audio is only available in English. Change your language to English to use this feature.")
@@ -929,7 +961,7 @@ async def cmd_audio(message: Message):
     
     character = await get_active_character(telegram_id)
     if not character:
-        return await message.answer("️ No tienes un personaje activo. Usa /newchat")
+        return await message.answer("⚠️ No tienes un personaje activo. Usa /newchat")
     
     history = await get_conversation_history(telegram_id, character['id'], limit=2)
     last_assistant_msg = None
@@ -986,7 +1018,7 @@ async def cmd_selfie(message: Message):
         )
     else:
         text = (
-            f" <b>{character['character_name']} smirks and raises their phone</b>\n\n"
+            f"📸 <b>{character['character_name']} smirks and raises their phone</b>\n\n"
             f"\"Mmm... how do you want me to take the photo? With a mischievous smile, a deep gaze, or something bolder?\"\n\n"
             f"<i>Type what you desire and I'll make the photo perfect for you.</i>\n\n"
             f"💰 Cost: {GEM_COST_IMAGE} gems"
@@ -994,7 +1026,6 @@ async def cmd_selfie(message: Message):
     
     await message.answer(text, parse_mode="HTML")
     
-    # GUARDAR ESTADO EN DB
     await set_user_state(telegram_id, {
         'step': 'awaiting_photo_desc',
         'language': lang,
@@ -1017,7 +1048,7 @@ async def cmd_balance(message: Message):
     
     text = f"💎 Tu Balance\n\nGemas actuales: {gems}\n\n📊 Información:\n• Gemas diarias: {daily_total}/{MAX_DAILY_GEMS}\n• Referidos activos (24h): {active_ref}/{MAX_REFERRALS_PER_DAY}"
     if hook_rem > 0:
-        text += f"\n• ️ Momentos especiales: {hook_rem}/{HOOK_MODE_MESSAGES}"
+        text += f"\n• ⚠️ Momentos especiales: {hook_rem}/{HOOK_MODE_MESSAGES}"
     
     text += "\n\n💡 Invita hasta 2 amigos cada 24h para ganar +5 gemas c/u" if lang == 'es' else "\n\n💡 Invite up to 2 friends every 24h to earn +5 gems each"
     await message.answer(text)
@@ -1027,7 +1058,7 @@ async def cmd_shop(message: Message):
     telegram_id = message.from_user.id
     user = await get_user(telegram_id)
     if not user:
-        return await message.answer("⚠️ Primero debes registrarte con /start")
+        return await message.answer("️ Primero debes registrarte con /start")
     
     language = user['language']
     builder = InlineKeyboardBuilder()
@@ -1138,7 +1169,7 @@ async def process_successful_payment(message: Message):
     
     lang = (await get_user(telegram_id))['language']
     if success:
-        await message.answer(f"✅ {msg}\n\n🎉 ¡Ahora puedes generar audios de alta calidad!" if lang == 'es' else f"✅ {msg}\n\n You can now generate high-quality audios!")
+        await message.answer(f"✅ {msg}\n\n🎉 ¡Ahora puedes generar audios de alta calidad!" if lang == 'es' else f"✅ {msg}\n\n🎉 You can now generate high-quality audios!")
         await message.answer("🎊 ¡Tu teclado ha sido actualizado!", reply_markup=get_main_keyboard(lang, True))
     else:
         await message.answer("⚠️ Error al procesar la compra." if lang == 'es' else "⚠️ Error processing purchase.")
@@ -1147,7 +1178,7 @@ async def process_successful_payment(message: Message):
 async def cmd_invite(message: Message):
     user = await get_user(message.from_user.id)
     if not user:
-        return await message.answer("⚠️ Primero debes registrarte con /start")
+        return await message.answer("️ Primero debes registrarte con /start")
     
     lang = user['language']
     active_ref = await count_active_referrals_last_24h(message.from_user.id)
@@ -1156,7 +1187,7 @@ async def cmd_invite(message: Message):
     
     link = f"https://t.me/{(await message.bot.get_me()).username}?start={user['referral_code']}"
     
-    text = f"🎁 Sistema de Referidos\n\n🔗 Tu enlace:\n{link}\n\n📊 Estadísticas:\n• Referidos activos (24h): {active_ref}/{MAX_REFERRALS_PER_DAY}\n• Gemas diarias: {daily_total}/{MAX_DAILY_GEMS}\n\n💡 ¡Comparte tu enlace y gana gemas gratis!" if lang == 'es' else f"🎁 Referral System\n\n🔗 Your link:\n{link}\n\n📊 Stats:\n• Active referrals (24h): {active_ref}/{MAX_REFERRALS_PER_DAY}\n• Daily gems: {daily_total}/{MAX_DAILY_GEMS}\n\n💡 Share your link and earn free gems!"
+    text = f"🎁 Sistema de Referidos\n\n🔗 Tu enlace:\n{link}\n\n📊 Estadísticas:\n• Referidos activos (24h): {active_ref}/{MAX_REFERRALS_PER_DAY}\n• Gemas diarias: {daily_total}/{MAX_DAILY_GEMS}\n\n💡 ¡Comparte tu enlace y gana gemas gratis!" if lang == 'es' else f" Referral System\n\n🔗 Your link:\n{link}\n\n📊 Stats:\n• Active referrals (24h): {active_ref}/{MAX_REFERRALS_PER_DAY}\n• Daily gems: {daily_total}/{MAX_DAILY_GEMS}\n\n💡 Share your link and earn free gems!"
     await message.answer(text)
 
 async def show_character_menu(message: Message):
@@ -1174,7 +1205,7 @@ async def show_character_menu(message: Message):
             label = char['character_name'] + (" ✅" if char['is_active'] else "")
             builder.button(text=label, callback_data=f"switch_{char['id']}")
         
-        builder.button(text="➕ Crear nuevo personaje" if user['language'] == 'es' else " Create new character", callback_data="create_new_character")
+        builder.button(text="➕ Crear nuevo personaje" if user['language'] == 'es' else "➕ Create new character", callback_data="create_new_character")
         builder.adjust(1)
         
         text = "Selecciona un personaje para cambiar, o crea uno nuevo:" if user['language'] == 'es' else "Select a character to switch, or create a new one:"
@@ -1186,11 +1217,14 @@ async def process_switch(callback: CallbackQuery):
     character_id = int(callback.data.split('_')[1])
     
     await set_active_character(telegram_id, character_id)
-    char = supabase.table('user_characters').select('*').eq('id', character_id).execute()
+    char = await execute_query(
+        """SELECT * FROM user_characters WHERE id = ?""",
+        (character_id,)
+    )
     
-    if char.data:
+    if char:
         user = await get_user(telegram_id)
-        name = char.data[0]['character_name']
+        name = char[0]['character_name']
         await callback.message.answer(f"✅ Has cambiado al personaje: {name}" if user['language'] == 'es' else f"✅ Switched to character: {name}")
     
     await callback.answer()
@@ -1205,7 +1239,7 @@ async def create_new_character(callback: CallbackQuery):
     gems = await get_balance(telegram_id)
     if gems < GEM_COST_NEW_CHARACTER:
         lang = user['language']
-        msg = f"❌ No tienes suficientes gemas. Crear un personaje cuesta {GEM_COST_NEW_CHARACTER} gemas. Tienes {gems}." if lang == 'es' else f"❌ You don't have enough gems. Creating a character costs {GEM_COST_NEW_CHARACTER} gems. You have {gems}."
+        msg = f" No tienes suficientes gemas. Crear un personaje cuesta {GEM_COST_NEW_CHARACTER} gemas. Tienes {gems}." if lang == 'es' else f"❌ You don't have enough gems. Creating a character costs {GEM_COST_NEW_CHARACTER} gems. You have {gems}."
         await callback.message.answer(msg)
         return await callback.answer()
     
@@ -1214,7 +1248,6 @@ async def create_new_character(callback: CallbackQuery):
         await callback.message.answer(f"⚠️ {msg}")
         return await callback.answer()
     
-    # GUARDAR ESTADO EN DB
     await set_user_state(telegram_id, {
         'step': 'gender',
         'language': user['language'],
@@ -1231,7 +1264,7 @@ async def create_new_character(callback: CallbackQuery):
     else:
         builder.button(text=" Male", callback_data="gender_male")
         builder.button(text="👩 Female", callback_data="gender_female")
-        text = " Select your new character's gender:"
+        text = "🎭 Select your new character's gender:"
     
     builder.adjust(2)
     await callback.message.answer(text, reply_markup=builder.as_markup())
@@ -1280,7 +1313,7 @@ async def process_message(message: Message):
             await save_character(telegram_id, message.text.strip(), state['gender'], state['archetype'], PERSONALITIES.get(state['archetype'], ''))
             await clear_user_state(telegram_id)
             lang = state['language']
-            text = f"✅ ¡Nuevo personaje creado!\n\n🎭 Nombre: {message.text.strip()}\n\nPuedes empezar a chatear con el botón 💬 Chat." if lang == 'es' else f"✅ New character created!\n\n🎭 Name: {message.text.strip()}\n\nYou can start chatting with the  Chat button."
+            text = f"✅ ¡Nuevo personaje creado!\n\n Nombre: {message.text.strip()}\n\nPuedes empezar a chatear con el botón  Chat." if lang == 'es' else f"✅ New character created!\n\n🎭 Name: {message.text.strip()}\n\nYou can start chatting with the 💬 Chat button."
             return await message.answer(text)
     
     # --- Manejo de descripción de foto (selfie personalizado) ---
@@ -1337,14 +1370,14 @@ async def process_message(message: Message):
         image_url = await generate_image(image_prompt)
         
         if image_url:
-            caption = f" <b>{char_name}</b> te envía la foto que pediste."
+            caption = f"📸 <b>{char_name}</b> te envía la foto que pediste."
             sent_ok = await send_generated_image(message.bot, telegram_id, image_url, caption)
             if not sent_ok:
                 await add_gems(telegram_id, GEM_COST_IMAGE, 'refund', 'Reembolso por fallo en imagen')
                 await message.answer("⚠️ Error al enviar la imagen. Se te han reembolsado las gemas.")
         else:
             await add_gems(telegram_id, GEM_COST_IMAGE, 'refund', 'Reembolso por fallo en generación')
-            await message.answer("⚠️ Error al generar la imagen. Se te han reembolsado las gemas.")
+            await message.answer("️ Error al generar la imagen. Se te han reembolsado las gemas.")
         
         await clear_user_state(telegram_id)
         return
@@ -1356,7 +1389,7 @@ async def process_message(message: Message):
     
     character = await get_active_character(telegram_id)
     if not character:
-        return await message.answer("⚠️ No tienes un personaje activo. Usa /newchat")
+        return await message.answer("️ No tienes un personaje activo. Usa /newchat")
     
     lang = user['language']
     hook_remaining = user.get('hook_messages_remaining', 0)
@@ -1379,7 +1412,7 @@ async def process_message(message: Message):
             "<b>*te mira con deseo*</b> \"¿Cuál eliges? Prometo que valdrá la pena...\" 😉"
         )
         builder = InlineKeyboardBuilder()
-        builder.button(text=" VER PAQUETES DISPONIBLES", callback_data="shop_from_block")
+        builder.button(text="🛒 VER PAQUETES DISPONIBLES", callback_data="shop_from_block")
         builder.button(text="🎁 Invitar amigo (5 gemas)", callback_data="invite_from_block")
         builder.adjust(1)
         return await message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
@@ -1414,17 +1447,17 @@ async def process_message(message: Message):
     if response:
         await save_message(telegram_id, 'assistant', response, character['id'])
         if is_hook_mode:
-            response += f"\n\n⚠️ <b>*Momentos especiales restantes: {hook_remaining}*</b>" if lang == 'es' else f"\n\n️ <b>*Special moments remaining: {hook_remaining}*</b>"
+            response += f"\n\n⚠️ <b>*Momentos especiales restantes: {hook_remaining}*</b>" if lang == 'es' else f"\n\n⚠️ <b>*Special moments remaining: {hook_remaining}*</b>"
         await message.answer(format_actions_html(response), parse_mode="HTML")
     else:
-        await message.answer("⚠️ Error al generar respuesta. Intenta de nuevo." if lang == 'es' else "⚠️ Error generating response. Try again.")
+        await message.answer("️ Error al generar respuesta. Intenta de nuevo." if lang == 'es' else "⚠️ Error generating response. Try again.")
 
 # ==================== FUNCIONES AUXILIARES ====================
 
 async def show_welcome(message: Message, character_name: str, language: str, keyboard: ReplyKeyboardMarkup = None):
-    text = f"✅ ¡Registro completado!\n\n🎭 Tu personaje: {escape_html(character_name)}\n💎 Tienes 15 gemas para empezar\n\n📝 Usa los botones de abajo para navegar." if language == 'es' else f"✅ Registration complete!\n\n Your character: {escape_html(character_name)}\n💎 You have 15 gems to start\n\n📝 Use the buttons below to navigate."
+    text = f"✅ ¡Registro completado!\n\n🎭 Tu personaje: {escape_html(character_name)}\n💎 Tienes 15 gemas para empezar\n\n📝 Usa los botones de abajo para navegar." if language == 'es' else f"✅ Registration complete!\n\n🎭 Your character: {escape_html(character_name)}\n💎 You have 15 gems to start\n\n📝 Use the buttons below to navigate."
     await message.answer(text, reply_markup=keyboard)
 
 async def show_main_menu(message: Message, language: str, keyboard: ReplyKeyboardMarkup = None):
-    text = "🏠 Menú Principal\n\nUsa los botones de abajo para navegar:" if language == 'es' else "🏠 Main Menu\n\nUse the buttons below to navigate:"
+    text = " Menú Principal\n\nUsa los botones de abajo para navegar:" if language == 'es' else "🏠 Main Menu\n\nUse the buttons below to navigate:"
     await message.answer(text, reply_markup=keyboard)
