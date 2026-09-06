@@ -2,14 +2,19 @@
   "version": 2,
   "builds": [
     {
-      "src": "api/index.py",
+      "src": "telegrabot.py",
       "use": "@vercel/python"
     }
   ],
   "routes": [
     {
       "src": "/(.*)",
-      "dest": "api/index.py"
+      "dest": "telegrabot.py"
     }
-  ]
+  ],
+  "functions": {
+    "telegrabot.py": {
+      "maxDuration": 60
+    }
+  }
 }
