@@ -1,12 +1,5 @@
+.env
 __pycache__/
 *.pyc
-*.pyo
-*.pyd
-.Python
-env/
-venv/
 .venv/
-.env
-*.log
-*.sqlite3
-.vercel/
+venv/
