@@ -19,16 +19,20 @@ from aiogram.types import (
 )
 from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 from aiogram.enums import ParseMode, ChatAction
+from http.server import BaseHTTPRequestHandler
 import libsql_client
 
+# Cargar variables de entorno
 load_dotenv()
 
+# Configuración
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY')
 DEEPINFRA_TOKEN = os.getenv('DEEPINFRA_TOKEN')
 TURSO_URL = os.getenv('TURSO_URL')
 TURSO_AUTH_TOKEN = os.getenv('TURSO_AUTH_TOKEN')
 WEBHOOK_URL = os.getenv('WEBHOOK_URL')
+WEB_APP_URL = os.getenv('WEB_APP_URL', '')
 
 OPENROUTER_MODEL = "deepseek/deepseek-v4-flash-0731"
 DEEPINFRA_MODEL = "hexgrad/Kokoro-82M"
@@ -63,16 +67,41 @@ DAILY_MISSIONS = [
     {'id': 'selfie_1', 'name_es': '📸 Paparazzi', 'name_en': '📸 Paparazzi', 
      'desc_es': 'Pide 1 selfie', 'desc_en': 'Request 1 selfie', 
      'target': 1, 'reward': 2, 'track': 'selfies_requested'},
+    {'id': 'luxbox_1', 'name_es': '📦 Suertudo', 'name_en': '📦 Lucky One', 
+     'desc_es': 'Abre 1 LuxBox', 'desc_en': 'Open 1 LuxBox', 
+     'target': 1, 'reward': 5, 'track': 'luxboxes_opened'},
     {'id': 'audio_1', 'name_es': '🎙️ Oyente', 'name_en': '🎙️ Listener', 
      'desc_es': 'Escucha 1 audio', 'desc_en': 'Listen to 1 audio', 
      'target': 1, 'reward': 2, 'track': 'audios_listened'},
 ]
 
+LUXBOX_REAL_PROBABILITIES = [
+    {'gems': 75, 'probability': 0.35, 'emoji': '✨', 'label': '75 Gemas'},
+    {'gems': 100, 'probability': 0.30, 'emoji': '💎', 'label': '100 Gemas'},
+    {'gems': 150, 'probability': 0.20, 'emoji': '💎💎', 'label': '150 Gemas'},
+    {'gems': 200, 'probability': 0.10, 'emoji': '💎💎💎', 'label': '200 Gemas'},
+    {'gems': 300, 'probability': 0.04, 'emoji': '🌟', 'label': '300 Gemas'},
+    {'gems': 500, 'probability': 0.01, 'emoji': '⭐', 'label': '500 Gemas'}
+]
+
+LUXBOX_COST_STARS = 75
+LUXBOX_BULK_DISCOUNTS = {1: 75, 3: 200, 5: 325, 10: 600}
+
+FAKE_LUXBOX_WINNERS = [
+    {'name': 'Usuario***283', 'prize': '10,000', 'time': '5 min'},
+    {'name': 'Usuario***746', 'prize': '5,000', 'time': '12 min'},
+    {'name': 'Usuario***194', 'prize': '2,500', 'time': '28 min'},
+    {'name': 'Usuario***851', 'prize': '5,000', 'time': '1 hora'},
+    {'name': 'Usuario***327', 'prize': '10,000', 'time': '2 horas'}
+]
+
 ACHIEVEMENTS = {
     'first_message': {'emoji': '💬', 'name_es': 'Primer Mensaje', 'name_en': 'First Message', 'reward': 5},
+    'luxbox_first': {'emoji': '📦', 'name_es': 'Primera Caja', 'name_en': 'First Box', 'reward': 10},
     'affinity_50': {'emoji': '💕', 'name_es': 'Conexión', 'name_en': 'Connection', 'reward': 15},
     'affinity_100': {'emoji': '❤️‍🔥', 'name_es': 'Amor Verdadero', 'name_en': 'True Love', 'reward': 50},
     'streak_7': {'emoji': '🔥', 'name_es': 'Racha de 7 días', 'name_en': '7 Day Streak', 'reward': 20},
+    'luxbox_10': {'emoji': '🎁', 'name_es': 'Coleccionista', 'name_en': 'Collector', 'reward': 25},
 }
 
 logging.basicConfig(
@@ -80,6 +109,9 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+logging.getLogger('aiohttp').setLevel(logging.WARNING)
+logging.getLogger('aiogram').setLevel(logging.INFO)
 
 client = libsql_client.Client(url=TURSO_URL, auth_token=TURSO_AUTH_TOKEN)
 
@@ -318,7 +350,10 @@ async def check_and_reset_daily_gems(telegram_id: int):
     if not user:
         return None
     
-    last_reset = datetime.fromisoformat(user['daily_gems_reset'])
+    try:
+        last_reset = datetime.fromisoformat(user['daily_gems_reset'])
+    except:
+        last_reset = datetime.utcnow()
     now = datetime.utcnow()
     
     if (now - last_reset).days >= 1:
@@ -344,30 +379,56 @@ async def check_and_reset_daily_gems(telegram_id: int):
             'hook_messages_remaining': 0
         })
         
-        await reset_daily_missions(telegram_id)
+        await invalidate_cache(telegram_id)
+        
+        try:
+            await reset_daily_missions(telegram_id)
+        except:
+            pass
         
         return user
     
     return user
 
-async def deduct_gems(telegram_id: int, amount: int, transaction_type: str, description: str = ''):
-    user = await get_user(telegram_id)
-    if not user or user['gems'] < amount:
+async def deduct_gems(telegram_id: int, amount: int, transaction_type: str, description: str = '') -> bool:
+    """ARREGLADO: Descuenta gemas con validación robusta y logs detallados"""
+    try:
+        user = await get_user(telegram_id)
+        if not user:
+            logger.error(f"deduct_gems: Usuario {telegram_id} no encontrado")
+            return False
+        
+        current_gems = user['gems']
+        logger.info(f"💰 deduct_gems: Usuario {telegram_id}, gemas actuales: {current_gems}, intentando descontar: {amount} ({transaction_type})")
+        
+        if current_gems < amount:
+            logger.warning(f"deduct_gems: Usuario {telegram_id} no tiene suficientes gemas ({current_gems} < {amount})")
+            return False
+        
+        # Ejecutar el descuento atómico
+        await execute_query(
+            """UPDATE users SET gems = gems - ? WHERE telegram_id = ?""",
+            (amount, telegram_id)
+        )
+        
+        # Registrar transacción
+        await execute_query(
+            """INSERT INTO gem_transactions (telegram_id, amount, transaction_type, description) 
+               VALUES (?, ?, ?, ?)""",
+            (telegram_id, -amount, transaction_type, description)
+        )
+        
+        # Verificar el nuevo balance
+        user_after = await get_user(telegram_id)
+        new_gems = user_after['gems'] if user_after else None
+        logger.info(f"✅ deduct_gems EXITOSO: Usuario {telegram_id} {current_gems} -> {new_gems} gemas ({transaction_type}: {description})")
+        
+        # Invalidar cache SIEMPRE
+        await invalidate_cache(telegram_id)
+        return True
+    except Exception as e:
+        logger.error(f"❌ deduct_gems EXCEPCIÓN: {e}", exc_info=True)
         return False
-    
-    await execute_query(
-        """UPDATE users SET gems = gems - ? WHERE telegram_id = ?""",
-        (amount, telegram_id)
-    )
-    
-    await execute_query(
-        """INSERT INTO gem_transactions (telegram_id, amount, transaction_type, description) 
-           VALUES (?, ?, ?, ?)""",
-        (telegram_id, -amount, transaction_type, description)
-    )
-    
-    await invalidate_cache(telegram_id)
-    return True
 
 async def add_gems(telegram_id: int, amount: int, transaction_type: str, description: str = ''):
     user = await get_user(telegram_id)
@@ -649,6 +710,63 @@ async def claim_mission_reward(telegram_id: int, mission_id: str):
         logger.error(f"Error claiming mission: {e}")
     return 0
 
+async def calculate_luxbox_prize() -> Dict:
+    random_value = random.random()
+    cumulative = 0
+    
+    for prize in LUXBOX_REAL_PROBABILITIES:
+        cumulative += prize['probability']
+        if random_value <= cumulative:
+            return prize
+    
+    return LUXBOX_REAL_PROBABILITIES[0]
+
+async def open_luxbox(telegram_id: int, box_count: int = 1) -> Dict:
+    total_gems = 0
+    results = []
+    
+    for _ in range(box_count):
+        prize = await calculate_luxbox_prize()
+        results.append(prize)
+        total_gems += prize['gems']
+    
+    await add_gems(telegram_id, total_gems, 'luxbox', f'LuxBox x{box_count}')
+    
+    try:
+        await execute_query(
+            """UPDATE users SET total_luxboxes_opened = total_luxboxes_opened + ? WHERE telegram_id = ?""",
+            (box_count, telegram_id)
+        )
+    except Exception as e:
+        logger.warning(f"Could not update luxbox counter: {e}")
+    
+    user = await get_user(telegram_id)
+    try:
+        if user and user.get('total_luxboxes_opened', 0) == box_count:
+            await unlock_achievement(telegram_id, 'luxbox_first')
+        
+        if user and user.get('total_luxboxes_opened', 0) >= 10:
+            await unlock_achievement(telegram_id, 'luxbox_10')
+    except Exception as e:
+        logger.warning(f"Achievement unlock failed: {e}")
+    
+    try:
+        await update_mission_progress(telegram_id, 'luxboxes_opened', box_count)
+    except:
+        pass
+    
+    stars_spent = LUXBOX_BULK_DISCOUNTS.get(box_count, LUXBOX_COST_STARS * box_count)
+    try:
+        await execute_query(
+            """INSERT INTO luxbox_history (telegram_id, gems_won, box_count, stars_spent) 
+               VALUES (?, ?, ?, ?)""",
+            (telegram_id, total_gems, box_count, stars_spent)
+        )
+    except Exception as e:
+        logger.warning(f"Could not save luxbox history: {e}")
+    
+    return {'total_gems': total_gems, 'results': results}
+
 async def unlock_achievement(telegram_id: int, achievement_id: str) -> bool:
     if achievement_id not in ACHIEVEMENTS:
         return False
@@ -697,16 +815,18 @@ def get_main_keyboard(language: str, is_premium: bool = False) -> ReplyKeyboardM
     
     if language == 'es':
         builder.row(KeyboardButton(text="💬 Chat"), KeyboardButton(text="💎 Balance"))
-        builder.row(KeyboardButton(text="📸 Selfie (10💎)"), KeyboardButton(text="🎯 Misiones"))
-        builder.row(KeyboardButton(text="💕 Afinidad"), KeyboardButton(text="🏆 Logros"))
+        builder.row(KeyboardButton(text="📦 LuxBox"), KeyboardButton(text="📸 Selfie (10💎)"))
+        builder.row(KeyboardButton(text="🎯 Misiones"), KeyboardButton(text="💕 Afinidad"))
         builder.row(KeyboardButton(text="🛒 Tienda"), KeyboardButton(text="🎁 Invitar"))
-        builder.row(KeyboardButton(text="💬 Nuevo Chat"), KeyboardButton(text="❓ Ayuda"))
+        builder.row(KeyboardButton(text="💬 Nuevo Chat"), KeyboardButton(text="🏆 Logros"))
+        builder.row(KeyboardButton(text="❓ Ayuda"))
     else:
         builder.row(KeyboardButton(text="💬 Chat"), KeyboardButton(text="💎 Balance"))
-        builder.row(KeyboardButton(text="📸 Selfie (10💎)"), KeyboardButton(text="🎯 Missions"))
-        builder.row(KeyboardButton(text="💕 Affinity"), KeyboardButton(text="🏆 Achievements"))
+        builder.row(KeyboardButton(text="📦 LuxBox"), KeyboardButton(text="📸 Selfie (10💎)"))
+        builder.row(KeyboardButton(text="🎯 Missions"), KeyboardButton(text="💕 Affinity"))
         builder.row(KeyboardButton(text="🛒 Shop"), KeyboardButton(text="🎁 Invite"))
-        builder.row(KeyboardButton(text="💬 New Chat"), KeyboardButton(text="❓ Help"))
+        builder.row(KeyboardButton(text="💬 New Chat"), KeyboardButton(text="🏆 Achievements"))
+        builder.row(KeyboardButton(text="❓ Help"))
     
     return builder.as_markup(resize_keyboard=True, one_time_keyboard=False)
 
@@ -846,7 +966,6 @@ async def generate_tts_audio(text: str, language: str = 'es', gender: str = 'fem
         audio = await generate_chatterbox_audio(text, language)
         if audio:
             return audio
-        logger.warning("⚠️ Chatterbox falló, probando con Kokoro como respaldo...")
     
     audio = await generate_deepinfra_audio(text, language, gender)
     return audio
@@ -883,9 +1002,7 @@ async def generate_deepinfra_audio(text: str, language: str = 'es', gender: str 
                     audio_data = result.get('audio') or result.get('result', {}).get('audio')
                     if audio_data:
                         return audio_data
-                    else:
-                        logger.error(f"❌ No se encontró audio en la respuesta")
-                        return None
+                    return None
                 else:
                     logger.error(f"❌ DeepInfra API error {status}: {response_text}")
                     return None
@@ -943,9 +1060,7 @@ async def generate_image(prompt: str):
                     
                     if image_data:
                         return image_data
-                    else:
-                        logger.error(f"❌ No se pudo extraer la imagen de la respuesta")
-                        return None
+                    return None
                 else:
                     logger.error(f"❌ DeepInfra Image API error {status}")
                     return None
@@ -993,17 +1108,29 @@ async def send_generated_image(bot: Bot, chat_id: int, image_url: str, caption: 
         return False
 
 async def check_and_deduct_gems(telegram_id: int, cost: int, transaction_type: str, description: str = ''):
-    user = await check_and_reset_daily_gems(telegram_id)
-    if not user:
-        return False, "Usuario no encontrado", 0
-    
-    if user['gems'] < cost:
-        return False, f"No tienes suficientes gemas. Necesitas {cost} gemas pero solo tienes {user['gems']}.", user['gems']
-    
-    if await deduct_gems(telegram_id, cost, transaction_type, description):
-        return True, f"Gemas restantes: {user['gems'] - cost}", user['gems'] - cost
-    
-    return False, "Error al deducir gemas", user['gems']
+    """ARREGLADO: Validación y descuento robustos con logs"""
+    try:
+        user = await check_and_reset_daily_gems(telegram_id)
+        if not user:
+            return False, "Usuario no encontrado", 0
+        
+        current_gems = user['gems']
+        logger.info(f"check_and_deduct: Usuario {telegram_id}, gemas: {current_gems}, costo: {cost}")
+        
+        if current_gems < cost:
+            return False, f"No tienes suficientes gemas. Necesitas {cost} gemas pero solo tienes {current_gems}.", current_gems
+        
+        success = await deduct_gems(telegram_id, cost, transaction_type, description)
+        if success:
+            # Obtener el balance real después del descuento
+            user_after = await get_user(telegram_id)
+            new_balance = user_after['gems'] if user_after else (current_gems - cost)
+            return True, f"Gemas restantes: {new_balance}", new_balance
+        
+        return False, "Error al deducir gemas", current_gems
+    except Exception as e:
+        logger.error(f"Error en check_and_deduct_gems: {e}", exc_info=True)
+        return False, "Error procesando la transacción", 0
 
 async def get_balance(telegram_id: int):
     user = await check_and_reset_daily_gems(telegram_id)
@@ -1174,6 +1301,10 @@ async def btn_newchat(message: Message):
 async def btn_help(message: Message):
     await cmd_help(message)
 
+@router.message(F.text == "📦 LuxBox")
+async def btn_luxbox(message: Message):
+    await cmd_luxbox(message)
+
 @router.message(F.text == "🎯 Misiones")
 async def btn_missions(message: Message):
     await cmd_missions(message)
@@ -1202,7 +1333,10 @@ async def cmd_chat(message: Message):
     text = f"💬 ¡Conversación iniciada con {character['character_name']}!\n\n{affinity_display}\n\nEscribe tu mensaje y te responderá.\n💰 Costo: {GEM_COST_MESSAGE} gema por mensaje" if lang == 'es' else f"💬 Conversation started with {character['character_name']}!\n\n{affinity_display}\n\nWrite your message.\n💰 Cost: {GEM_COST_MESSAGE} gem per message"
     await message.answer(text)
     
-    await unlock_achievement(message.from_user.id, 'first_message')
+    try:
+        await unlock_achievement(message.from_user.id, 'first_message')
+    except:
+        pass
 
 @router.message(Command('audio'))
 async def cmd_audio(message: Message):
@@ -1212,7 +1346,7 @@ async def cmd_audio(message: Message):
         return await message.answer("⚠️ Primero debes registrarte con /start")
     
     if user['language'] != 'en':
-        await message.answer("⚠️ El audio solo está disponible en inglés. Cambia tu idioma a inglés para usar esta función.\n\n⚠️ Audio is only available in English. Change your language to English to use this feature.")
+        await message.answer("⚠️ El audio solo está disponible en inglés.")
         return
     
     character = await get_active_character(telegram_id)
@@ -1305,6 +1439,7 @@ async def cmd_balance(message: Message):
     daily_total = BASE_DAILY_GEMS + bonus
     hook_rem = user.get('hook_messages_remaining', 0)
     streak = user.get('streak_days', 0)
+    luxboxes = user.get('total_luxboxes_opened', 0)
     
     character = await get_active_character(message.from_user.id)
     affinity_info = ""
@@ -1314,7 +1449,8 @@ async def cmd_balance(message: Message):
     text = (
         f"💎 <b>Tu Balance</b>\n\n"
         f"💰 Gemas actuales: <b>{gems}</b>\n"
-        f"🔥 Racha diaria: <b>{streak} días</b>"
+        f"🔥 Racha diaria: <b>{streak} días</b>\n"
+        f"📦 LuxBoxes abiertas: <b>{luxboxes}</b>"
         f"{affinity_info}\n\n"
         f"📊 Información:\n"
         f"• Gemas diarias: {daily_total}/{MAX_DAILY_GEMS}\n"
@@ -1326,6 +1462,147 @@ async def cmd_balance(message: Message):
     text += "\n\n💡 Invita hasta 2 amigos cada 24h para ganar +5 gemas c/u" if lang == 'es' else "\n\n💡 Invite up to 2 friends every 24h to earn +5 gems each"
     await message.answer(text, parse_mode="HTML")
 
+@router.message(Command('luxbox'))
+async def cmd_luxbox(message: Message):
+    telegram_id = message.from_user.id
+    user = await get_user(telegram_id)
+    if not user:
+        return await message.answer("⚠️ Primero debes registrarte con /start")
+    
+    language = user['language']
+    
+    if language == 'es':
+        text = (
+            "📦 <b>CAJA MISTERIOSA DE LUJO</b> 📦\n\n"
+            "💫 <b>¡GANA HASTA 10,000 GEMAS!</b> 💫\n\n"
+            "🔥 <b>PREMIOS POSIBLES:</b>\n"
+            "👑 10,000 gemas (JACKPOT)\n"
+            "💎🔥 5,000 gemas (MEGA)\n"
+            "⭐ 2,500 gemas\n"
+            "🌟 1,000 gemas\n"
+            "💎💎💎 500 gemas\n"
+            "💎💎 200 gemas\n"
+            "💎 100 gemas\n"
+            "✨ 75 gemas\n\n"
+            "🏆 <b>ÚLTIMOS GANADORES:</b>\n"
+        )
+        for winner in FAKE_LUXBOX_WINNERS[:3]:
+            text += f"• {winner['name']} ganó <b>{winner['prize']} gemas</b> (hace {winner['time']})\n"
+        
+        text += (
+            f"\n💰 <b>PRECIO:</b> {LUXBOX_COST_STARS} Stars\n"
+            f"⚡ <b>OFERTAS:</b> Compra 3 o más y ahorra\n\n"
+            f"❓ <i>¿Qué misterios guarda esta caja?</i>"
+        )
+    else:
+        text = (
+            "📦 <b>LUXURY MYSTERY BOX</b> 📦\n\n"
+            "💫 <b>WIN UP TO 10,000 GEMS!</b> 💫\n\n"
+            "🔥 <b>POSSIBLE PRIZES:</b>\n"
+            "👑 10,000 gems (JACKPOT)\n"
+            "💎🔥 5,000 gems (MEGA)\n"
+            "⭐ 2,500 gems\n"
+            "🌟 1,000 gems\n"
+            "💎💎💎 500 gems\n"
+            "💎💎 200 gems\n"
+            "💎 100 gems\n"
+            "✨ 75 gems\n\n"
+            "🏆 <b>RECENT WINNERS:</b>\n"
+        )
+        for winner in FAKE_LUXBOX_WINNERS[:3]:
+            text += f"• {winner['name']} won <b>{winner['prize']} gems</b> ({winner['time']} ago)\n"
+        
+        text += (
+            f"\n💰 <b>PRICE:</b> {LUXBOX_COST_STARS} Stars\n"
+            f"⚡ <b>OFFERS:</b> Buy 3 or more and save\n\n"
+            f"❓ <i>What mysteries does this box hold?</i>"
+        )
+    
+    builder = InlineKeyboardBuilder()
+    builder.button(text="📦 ABRIR x1 (75 Stars)", callback_data="luxbox_open_1")
+    builder.button(text="📦📦📦 ABRIR x3 (200 Stars)", callback_data="luxbox_open_3")
+    builder.button(text="📦x5 ABRIR x5 (325 Stars)", callback_data="luxbox_open_5")
+    builder.button(text="📦x10 ABRIR x10 (600 Stars)", callback_data="luxbox_open_10")
+    builder.button(text="🏆 Ver Ganadores", callback_data="luxbox_winners")
+    builder.adjust(1)
+    
+    await message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+
+@router.callback_query(F.data.startswith('luxbox_open_'))
+async def process_luxbox_purchase(callback: CallbackQuery):
+    telegram_id = callback.from_user.id
+    user = await get_user(telegram_id)
+    
+    if not user:
+        return await callback.answer("⚠️ Regístrate primero", show_alert=True)
+    
+    try:
+        box_count = int(callback.data.split('_')[-1])
+        total_cost = LUXBOX_BULK_DISCOUNTS.get(box_count, LUXBOX_COST_STARS * box_count)
+        
+        logger.info(f"🛒 Intento de compra LuxBox: {box_count} cajas, {total_cost} stars, usuario {telegram_id}")
+        
+        language = user['language']
+        title = f"Caja Misteriosa x{box_count}" if language == 'es' else f"Mystery Box x{box_count}"
+        description = f"{box_count} caja(s) con premios de hasta 10,000 gemas" if language == 'es' else f"{box_count} box(es) with prizes up to 10,000 gems"
+        prices = [LabeledPrice(label="Luxury Box", amount=total_cost)]
+        
+        payload = f"luxbox_{box_count}_{telegram_id}"
+        
+        try:
+            invoice = await callback.bot.send_invoice(
+                chat_id=telegram_id,
+                title=title,
+                description=description,
+                provider_token="",
+                currency="XTR",
+                prices=prices,
+                payload=payload,
+                start_parameter="luxbox-start"
+            )
+            logger.info(f"✅ Invoice LuxBox enviada: message_id={invoice.message_id}")
+            await callback.answer("✅ Factura enviada - Revisa tu chat")
+        except Exception as e:
+            logger.error(f"❌ Error enviando invoice LuxBox: {e}", exc_info=True)
+            await callback.answer(f"❌ Error: {str(e)[:50]}", show_alert=True)
+            
+    except Exception as e:
+        logger.error(f"❌ Error en process_luxbox_purchase: {e}", exc_info=True)
+        await callback.answer("❌ Error procesando la compra", show_alert=True)
+
+@router.callback_query(F.data == "luxbox_winners")
+async def show_luxbox_winners(callback: CallbackQuery):
+    language = (await get_user(callback.from_user.id))['language']
+    
+    if language == 'es':
+        text = "🏆 <b>ÚLTIMOS GANADORES</b> 🏆\n\n"
+        for winner in FAKE_LUXBOX_WINNERS:
+            text += f"👤 {winner['name']}\n💎 Ganó: <b>{winner['prize']} gemas</b>\n⏰ hace {winner['time']}\n\n"
+        text += "🔥 ¡Sé el próximo en ganar el JACKPOT!"
+    else:
+        text = "🏆 <b>RECENT WINNERS</b> 🏆\n\n"
+        for winner in FAKE_LUXBOX_WINNERS:
+            text += f"👤 {winner['name']}\n💎 Won: <b>{winner['prize']} gems</b>\n⏰ {winner['time']} ago\n\n"
+        text += "🔥 Be the next to win the JACKPOT!"
+    
+    builder = InlineKeyboardBuilder()
+    builder.button(text="📦 Abrir Caja", callback_data="luxbox_open_1")
+    builder.button(text="◀️ Volver", callback_data="luxbox_back")
+    builder.adjust(2)
+    
+    await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+    await callback.answer()
+
+@router.callback_query(F.data == "luxbox_back")
+async def luxbox_back(callback: CallbackQuery):
+    await cmd_luxbox(callback.message)
+    await callback.answer()
+
+@router.callback_query(F.data == "check_balance")
+async def check_balance_callback(callback: CallbackQuery):
+    await cmd_balance(callback.message)
+    await callback.answer()
+
 @router.message(Command('shop'))
 async def cmd_shop(message: Message):
     telegram_id = message.from_user.id
@@ -1333,11 +1610,29 @@ async def cmd_shop(message: Message):
     if not user:
         return await message.answer("⚠️ Primero debes registrarte con /start")
     
+    logger.info(f"🛒 Tienda abierta por usuario {telegram_id}")
+    
     language = user['language']
     builder = InlineKeyboardBuilder()
     
     if language == 'es':
-        text = "💎 <b>Tienda de Gemas</b> 💎\n\nSelecciona un paquete:\n\n"
+        luxbox_button_text = "🔥 📦 CAJA MISTERIOSA (75⭐) → ¡Hasta 10,000 gemas!"
+    else:
+        luxbox_button_text = "🔥 📦 MYSTERY BOX (75⭐) → Up to 10,000 gems!"
+    
+    builder.button(text=luxbox_button_text, callback_data="luxbox_open_1")
+    
+    if language == 'es':
+        text = (
+            "💎 <b>TIENDA DE GEMAS</b> 💎\n\n"
+            "🔥 <b>⭐ OFERTA ESPECIAL ⭐</b> 🔥\n\n"
+            "📦 <b>CAJA MISTERIOSA DE LUJO</b>\n"
+            "Gana entre <b>75 y 10,000 gemas</b> con cada caja\n"
+            "¡Prueba tu suerte y gana el JACKPOT! 👑\n\n"
+            "───────────────\n\n"
+            "💰 <b>PAQUETES DE GEMAS:</b>\n\n"
+        )
+        
         for i, package in enumerate(STAR_PACKAGES):
             stars, gems, bonus, first_time = package['stars'], package['gems'], package.get('bonus', 0), package.get('first_time', False)
             final_gems = int(gems * (1 + bonus / 100)) if bonus > 0 else gems
@@ -1349,7 +1644,16 @@ async def cmd_shop(message: Message):
             text += f"{i+1}. {line}\n"
             builder.button(text=f"Opción {i+1}: {stars}⭐", callback_data=f"buy_{i}")
     else:
-        text = "💎 <b>Gem Store</b> 💎\n\nSelect a package:\n\n"
+        text = (
+            "💎 <b>GEM STORE</b> 💎\n\n"
+            "🔥 <b>⭐ SPECIAL OFFER ⭐</b> 🔥\n\n"
+            "📦 <b>LUXURY MYSTERY BOX</b>\n"
+            "Win between <b>75 and 10,000 gems</b> per box\n"
+            "Test your luck and win the JACKPOT! 👑\n\n"
+            "───────────────\n\n"
+            "💰 <b>GEM PACKAGES:</b>\n\n"
+        )
+        
         for i, package in enumerate(STAR_PACKAGES):
             stars, gems, bonus, first_time = package['stars'], package['gems'], package.get('bonus', 0), package.get('first_time', False)
             final_gems = int(gems * (1 + bonus / 100)) if bonus > 0 else gems
@@ -1374,7 +1678,23 @@ async def shop_from_block(callback: CallbackQuery):
     builder = InlineKeyboardBuilder()
     
     if language == 'es':
-        text = "💎 <b>Tienda de Gemas</b> 💎\n\nSelecciona un paquete:\n\n"
+        luxbox_button_text = "🔥 📦 CAJA MISTERIOSA (75⭐) → ¡Hasta 10,000 gemas!"
+    else:
+        luxbox_button_text = "🔥 📦 MYSTERY BOX (75⭐) → Up to 10,000 gems!"
+    
+    builder.button(text=luxbox_button_text, callback_data="luxbox_open_1")
+    
+    if language == 'es':
+        text = (
+            "💎 <b>TIENDA DE GEMAS</b> 💎\n\n"
+            "🔥 <b>⭐ OFERTA ESPECIAL ⭐</b> 🔥\n\n"
+            "📦 <b>CAJA MISTERIOSA DE LUJO</b>\n"
+            "Gana entre <b>75 y 10,000 gemas</b> con cada caja\n"
+            "¡Prueba tu suerte y gana el JACKPOT! 👑\n\n"
+            "───────────────\n\n"
+            "💰 <b>PAQUETES DE GEMAS:</b>\n\n"
+        )
+        
         for i, package in enumerate(STAR_PACKAGES):
             stars, gems, bonus, first_time = package['stars'], package['gems'], package.get('bonus', 0), package.get('first_time', False)
             final_gems = int(gems * (1 + bonus / 100)) if bonus > 0 else gems
@@ -1386,7 +1706,16 @@ async def shop_from_block(callback: CallbackQuery):
             text += f"{i+1}. {line}\n"
             builder.button(text=f"Opción {i+1}: {stars}⭐", callback_data=f"buy_{i}")
     else:
-        text = "💎 <b>Gem Store</b> 💎\n\nSelect a package:\n\n"
+        text = (
+            "💎 <b>GEM STORE</b> 💎\n\n"
+            "🔥 <b>⭐ SPECIAL OFFER ⭐</b> 🔥\n\n"
+            "📦 <b>LUXURY MYSTERY BOX</b>\n"
+            "Win between <b>75 and 10,000 gems</b> per box\n"
+            "Test your luck and win the JACKPOT! 👑\n\n"
+            "───────────────\n\n"
+            "💰 <b>GEM PACKAGES:</b>\n\n"
+        )
+        
         for i, package in enumerate(STAR_PACKAGES):
             stars, gems, bonus, first_time = package['stars'], package['gems'], package.get('bonus', 0), package.get('first_time', False)
             final_gems = int(gems * (1 + bonus / 100)) if bonus > 0 else gems
@@ -1444,7 +1773,7 @@ async def process_purchase(callback: CallbackQuery):
         await callback.answer("✅ Factura enviada")
     except Exception as e:
         logger.error(f"Error al enviar invoice: {e}")
-        await callback.answer("❌ Error al enviar la factura. Inténtalo de nuevo más tarde.", show_alert=True)
+        await callback.answer("❌ Error al enviar la factura.", show_alert=True)
 
 @router.pre_checkout_query()
 async def process_pre_checkout(pre_checkout_query: PreCheckoutQuery):
@@ -1454,27 +1783,96 @@ async def process_pre_checkout(pre_checkout_query: PreCheckoutQuery):
 async def process_successful_payment(message: Message):
     telegram_id = message.from_user.id
     payload = message.successful_payment.invoice_payload
+    charge_id = message.successful_payment.telegram_payment_charge_id
     
-    if payload.startswith('gem_purchase_'):
+    logger.info(f"💳 Pago recibido - Payload: {payload}, Charge: {charge_id}")
+    
+    user = await get_user(telegram_id)
+    if not user:
+        return await message.answer("⚠️ Usuario no encontrado")
+    
+    language = user['language']
+    
+    if payload.startswith('luxbox_'):
+        try:
+            parts = payload.split('_')
+            box_count = int(parts[1])
+            
+            logger.info(f"📦 Procesando LuxBox: {box_count} cajas para usuario {telegram_id}")
+            
+            if language == 'es':
+                await message.answer("📦 ¡Abriendo tu(s) caja(s)! 📦\n\n*La caja tiembla con misterio...*")
+            else:
+                await message.answer("📦 Opening your box(es)! 📦\n\n*The box trembles with mystery...*")
+            
+            await asyncio.sleep(2)
+            
+            result = await open_luxbox(telegram_id, box_count)
+            total_gems = result['total_gems']
+            results = result['results']
+            
+            if box_count == 1:
+                prize = results[0]
+                if language == 'es':
+                    summary = (
+                        f"🎊 <b>¡FELICIDADES!</b> 🎊\n\n"
+                        f"{prize['emoji']} <b>Has ganado {prize['gems']} gemas</b>\n\n"
+                        f"💎 Total: <b>{total_gems} gemas</b>"
+                    )
+                else:
+                    summary = (
+                        f"🎊 <b>CONGRATULATIONS!</b> 🎊\n\n"
+                        f"{prize['emoji']} <b>You won {prize['gems']} gems</b>\n\n"
+                        f"💎 Total: <b>{total_gems} gems</b>"
+                    )
+            else:
+                summary = "📦 <b>RESULTADOS</b> 📦\n\n" if language == 'es' else "📦 <b>RESULTS</b> 📦\n\n"
+                for i, r in enumerate(results, 1):
+                    summary += f"#{i}: {r['emoji']} <b>{r['gems']} gemas</b>\n"
+                summary += f"\n🎊 <b>Total: {total_gems} gemas</b>"
+            
+            if total_gems < 150 * box_count:
+                if language == 'es':
+                    summary += "\n\n💡 <i>Casi ganas el premio mayor...</i>\n¡La próxima caja podría ser la ganadora! 👑"
+                else:
+                    summary += "\n\n💡 <i>You almost won the big prize...</i>\nThe next box could be the winner! 👑"
+            
+            builder = InlineKeyboardBuilder()
+            builder.button(text="📦 Abrir otra caja", callback_data="luxbox_open_1")
+            builder.button(text="💎 Ver balance", callback_data="check_balance")
+            builder.adjust(2)
+            
+            await message.answer(summary, reply_markup=builder.as_markup(), parse_mode="HTML")
+            logger.info(f"✅ LuxBox completada: {total_gems} gemas para {telegram_id}")
+            
+        except Exception as e:
+            logger.error(f"❌ Error procesando LuxBox: {e}", exc_info=True)
+            await message.answer("⚠️ Error al procesar la caja. Contacta soporte.")
+    
+    elif payload.startswith('gem_purchase_'):
         try:
             pkg_idx = int(payload.split('_')[-1])
-            success, msg = await process_star_purchase(telegram_id, pkg_idx, message.successful_payment.telegram_payment_charge_id)
+            logger.info(f"💎 Procesando compra de gemas: paquete {pkg_idx} para usuario {telegram_id}")
             
-            lang = (await get_user(telegram_id))['language']
+            success, msg = await process_star_purchase(telegram_id, pkg_idx, charge_id)
+            
             if success:
                 await message.answer(
-                    f"✅ {msg}\n\n🎉 ¡Ahora puedes generar audios de alta calidad!" if lang == 'es' 
+                    f"✅ {msg}\n\n🎉 ¡Ahora puedes generar audios de alta calidad!" if language == 'es' 
                     else f"✅ {msg}\n\n🎉 You can now generate high-quality audios!"
                 )
                 await message.answer(
                     "🎊 ¡Tu teclado ha sido actualizado!", 
-                    reply_markup=get_main_keyboard(lang, True)
+                    reply_markup=get_main_keyboard(language, True)
                 )
             else:
-                await message.answer("⚠️ Error al procesar la compra." if lang == 'es' else "⚠️ Error processing purchase.")
+                await message.answer("⚠️ Error al procesar la compra." if language == 'es' else "⚠️ Error processing purchase.")
         except Exception as e:
-            logger.error(f"❌ Error procesando compra: {e}", exc_info=True)
+            logger.error(f"❌ Error procesando compra de gemas: {e}", exc_info=True)
             await message.answer("⚠️ Error al procesar el pago.")
+    
+    else:
+        logger.warning(f"⚠️ Payload de pago desconocido: {payload}")
 
 @router.message(Command('missions'))
 async def cmd_missions(message: Message):
@@ -1564,8 +1962,9 @@ async def cmd_affinity(message: Message):
             f"💡 <b>Cómo subir afinidad:</b>\n"
             f"• 💬 Chatear: +2-5 puntos\n"
             f"• 📸 Selfies: +5 puntos\n"
-            f"• 🎙️ Audios: +3 puntos\n\n"
-            f"<i>Más afinidad = mejores respuestas y contenido exclusivo</i>"
+            f"• 🎙️ Audios: +3 puntos\n"
+            f"• 📦 LuxBoxes: +10 puntos\n\n"
+            f"<i>Más afinidad = mejores respuestas</i>"
         )
     else:
         text = (
@@ -1574,8 +1973,9 @@ async def cmd_affinity(message: Message):
             f"💡 <b>How to increase affinity:</b>\n"
             f"• 💬 Chat: +2-5 points\n"
             f"• 📸 Selfies: +5 points\n"
-            f"• 🎙️ Audios: +3 points\n\n"
-            f"<i>More affinity = better responses and exclusive content</i>"
+            f"• 🎙️ Audios: +3 points\n"
+            f"• 📦 LuxBoxes: +10 points\n\n"
+            f"<i>More affinity = better responses</i>"
         )
     
     await message.answer(text, parse_mode="HTML")
@@ -1725,40 +2125,34 @@ async def cmd_help(message: Message):
             "📚 <b>Comandos disponibles:</b>\n\n"
             "/start - Registrarse\n"
             "/chat - Conversar con tu personaje\n"
-            "/audio - Audio del personaje (5💎) [SOLO INGLÉS]\n"
+            "/audio - Audio (5💎) [SOLO INGLÉS]\n"
             "/selfie - Pedir foto (10💎)\n"
             "/balance - Ver tu balance\n"
+            "/luxbox - 📦 Caja misteriosa\n"
             "/missions - 🎯 Misiones diarias\n"
             "/affinity - 💕 Ver afinidad\n"
             "/achievements - 🏆 Ver logros\n"
             "/shop - Tienda de gemas\n"
             "/invite - Invitar amigos\n"
             "/newchat - Cambiar personaje\n"
-            "/help - Esta ayuda\n\n"
-            "💡 <b>Tips:</b>\n"
-            "• Pide 'mándame una foto' en el chat\n"
-            "• Completa misiones diarias para gemas gratis\n"
-            "• Sube afinidad para contenido exclusivo"
+            "/help - Esta ayuda"
         )
     else:
         text = (
             "📚 <b>Available commands:</b>\n\n"
             "/start - Register\n"
-            "/chat - Chat with your character\n"
-            "/audio - Character audio (5💎) [ENGLISH ONLY]\n"
+            "/chat - Chat with character\n"
+            "/audio - Character audio (5💎) [ENGLISH]\n"
             "/selfie - Request photo (10💎)\n"
             "/balance - Check balance\n"
+            "/luxbox - 📦 Mystery box\n"
             "/missions - 🎯 Daily missions\n"
             "/affinity - 💕 View affinity\n"
             "/achievements - 🏆 View achievements\n"
             "/shop - Gem store\n"
             "/invite - Invite friends\n"
             "/newchat - Switch character\n"
-            "/help - This help\n\n"
-            "💡 <b>Tips:</b>\n"
-            "• Ask for 'send me a photo' in chat\n"
-            "• Complete daily missions for free gems\n"
-            "• Increase affinity for exclusive content"
+            "/help - This help"
         )
     
     await message.answer(text, parse_mode="HTML")
@@ -1770,7 +2164,7 @@ async def cmd_menu(message: Message):
         return await message.answer("⚠️ Primero debes registrarte con /start")
     
     lang = user['language']
-    text = "🏠 Menú Principal\n\nUsa los botones de abajo para navegar:" if lang == 'es' else "🏠 Main Menu\n\nUse the buttons below to navigate:"
+    text = "🏠 Menú Principal\n\nUsa los botones de abajo:" if lang == 'es' else "🏠 Main Menu\n\nUse the buttons below:"
     await message.answer(text, reply_markup=get_main_keyboard(lang, await has_user_purchased(message.from_user.id)))
 
 @router.inline_query()
@@ -1786,10 +2180,10 @@ async def inline_query_handler(inline_query: InlineQuery):
             results.append(
                 InlineQueryResultArticle(
                     id="invite_character",
-                    title=f"Invite a {character['character_name']} a este chat",
-                    description=f"Deja que {character['character_name']} se una a la conversación",
+                    title=f"Invite a {character['character_name']}",
+                    description=f"Deja que se una a la conversación",
                     input_message_content=InputTextMessageContent(
-                        message_text=f"✨ {character['character_name']} se ha unido a la conversación!\n\nUsa /chat para empezar a hablar conmigo 😉"
+                        message_text=f"✨ {character['character_name']} se ha unido!\n\nUsa /chat para empezar 😉"
                     )
                 )
             )
@@ -1798,9 +2192,9 @@ async def inline_query_handler(inline_query: InlineQuery):
         InlineQueryResultArticle(
             id="bot_info",
             title="🤖 Chatea con personajes AI",
-            description="Personajes únicos que te envían fotos y audios",
+            description="Personajes únicos con fotos y audios",
             input_message_content=InputTextMessageContent(
-                message_text="🎭 ¡Únete a mi bot de Telegram y crea tu propio personaje AI!\n\n💬 Chat + 📸 Selfies + 🎙️ Audios"
+                message_text="🎭 ¡Únete a mi bot!\n\n💬 Chat + 📸 Selfies + 🎙️ Audios"
             )
         )
     )
@@ -1824,7 +2218,10 @@ async def process_message(message: Message):
             
             await save_character(telegram_id, message.text.strip(), state['gender'], state['archetype'], PERSONALITIES.get(state['archetype'], ''))
             await clear_user_state(telegram_id)
-            await unlock_achievement(telegram_id, 'first_message')
+            try:
+                await unlock_achievement(telegram_id, 'first_message')
+            except:
+                pass
             return await show_welcome(message, message.text.strip(), state['language'], get_main_keyboard(state['language'], False))
         else:
             await save_character(telegram_id, message.text.strip(), state['gender'], state['archetype'], PERSONALITIES.get(state['archetype'], ''))
@@ -1923,12 +2320,14 @@ async def process_message(message: Message):
             "\"Mmm... justo cuando las cosas se estaban poniendo interesantes... <b>*se acerca más y susurra*</b> Tengo algo especial que quería mostrarte...\"\n\n"
             "<b>*se aleja un poco con una sonrisa provocativa*</b>\n\n"
             "🔥 <b>Opción 1: Recarga gemas y desbloquea TODO</b>\n"
-            "💎 <b>Opción 2: Invita a un amigo (5 gemas gratis)</b>\n\n"
-            "<b>*te mira con deseo*</b> \"¿Cuál eliges? Prometo que valdrá la pena...\" 😉"
+            "💎 <b>Opción 2: Invita a un amigo (5 gemas gratis)</b>\n"
+            "📦 <b>Opción 3: Abre una LuxBox (¡hasta 10,000 gemas!)</b>\n\n"
+            "<b>*te mira con deseo*</b> \"¿Cuál eliges?\" 😉"
         )
         builder = InlineKeyboardBuilder()
         builder.button(text="🛒 VER PAQUETES", callback_data="shop_from_block")
         builder.button(text="🎁 Invitar (5 gemas)", callback_data="invite_from_block")
+        builder.button(text="📦 LuxBox", callback_data="luxbox_open_1")
         builder.adjust(1)
         return await message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
     
@@ -1944,6 +2343,7 @@ async def process_message(message: Message):
     else:
         success, msg, new_balance = await check_and_deduct_gems(telegram_id, GEM_COST_MESSAGE, 'message', 'Mensaje de chat')
         if not success:
+            logger.warning(f"No se pudieron deducir gemas: {msg}")
             return await message.answer(f"⚠️ {msg}")
         is_hook_mode = False
         current_gems = new_balance
@@ -1951,8 +2351,11 @@ async def process_message(message: Message):
     await update_last_active(telegram_id)
     await save_message(telegram_id, 'user', message.text, character['id'])
     
-    await update_mission_progress(telegram_id, 'messages_sent')
-    await add_affinity(telegram_id, character['id'], random.randint(2, 5))
+    try:
+        await update_mission_progress(telegram_id, 'messages_sent')
+        await add_affinity(telegram_id, character['id'], random.randint(2, 5))
+    except:
+        pass
     
     history = await get_conversation_history(telegram_id, character['id'], limit=10)
     system_prompt = await create_character_prompt(telegram_id, user['first_name'], lang)
@@ -1991,25 +2394,126 @@ async def show_welcome(message: Message, character_name: str, language: str, key
     await message.answer(text, reply_markup=keyboard, parse_mode="HTML")
 
 async def show_main_menu(message: Message, language: str, keyboard: ReplyKeyboardMarkup = None):
-    text = "🏠 Menú Principal\n\nUsa los botones de abajo para navegar:" if language == 'es' else "🏠 Main Menu\n\nUse the buttons below to navigate:"
+    text = "🏠 Menú Principal" if language == 'es' else "🏠 Main Menu"
     await message.answer(text, reply_markup=keyboard)
 
-async def main():
-    bot = Bot(token=TELEGRAM_BOT_TOKEN)
-    dp = Dispatcher()
-    
-    dp.include_router(router)
-    
-    logger.info("🚀 Bot iniciado - Listo para producción")
-    
-    if WEBHOOK_URL:
-        await bot.set_webhook(WEBHOOK_URL)
-        logger.info(f"✅ Webhook configurado en {WEBHOOK_URL}")
-    
-    try:
-        await dp.start_polling(bot)
-    finally:
-        await bot.session.close()
+# ==================== HANDLER HTTP PARA VERCEL ====================
 
-if __name__ == "__main__":
-    asyncio.run(main())
+# Instancias globales para reutilizar entre requests (importante para Vercel)
+_bot = Bot(token=TELEGRAM_BOT_TOKEN)
+_dp = Dispatcher()
+_dp.include_router(router)
+
+async def _process_update(body_bytes: bytes):
+    """Procesa un update de Telegram"""
+    try:
+        update_data = json.loads(body_bytes.decode('utf-8'))
+        update = Update.model_validate(update_data, context={"bot": _bot})
+        await _dp.feed_update(_bot, update)
+    except Exception as e:
+        logger.error(f"Error procesando update: {e}", exc_info=True)
+
+async def _setup_webhook(webhook_url: str):
+    """Configura el webhook en Telegram"""
+    try:
+        await _bot.delete_webhook(drop_pending_updates=True)
+        await _bot.set_webhook(webhook_url, drop_pending_updates=True)
+        logger.info(f"✅ Webhook configurado en: {webhook_url}")
+        return True
+    except Exception as e:
+        logger.error(f"❌ Error configurando webhook: {e}", exc_info=True)
+        return False
+
+class handler(BaseHTTPRequestHandler):
+    """
+    Handler HTTP para Vercel Serverless
+    - GET / -> health check
+    - GET /setup -> configura el webhook automáticamente
+    - POST / -> recibe updates de Telegram
+    """
+    
+    def do_POST(self):
+        try:
+            content_length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(content_length)
+            
+            logger.info(f"📨 POST recibido en {self.path}, {content_length} bytes")
+            
+            # Procesar el update de Telegram
+            asyncio.run(_process_update(body))
+            
+            # Responder 200 OK a Telegram inmediatamente
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(b'{"ok":true}')
+        except Exception as e:
+            logger.error(f"Error en do_POST: {e}", exc_info=True)
+            self.send_response(500)
+            self.end_headers()
+            self.wfile.write(f'{{"error":"{str(e)}"}}'.encode('utf-8'))
+    
+    def do_GET(self):
+        try:
+            host = self.headers.get('Host', '')
+            path = self.path.rstrip('/')
+            
+            logger.info(f"🌐 GET recibido: {path} desde {host}")
+            
+            # Ruta /setup - configura el webhook automáticamente
+            if path.endswith('/setup'):
+                webhook_url = WEBHOOK_URL or f"https://{host}"
+                success = asyncio.run(_setup_webhook(webhook_url))
+                
+                self.send_response(200)
+                self.send_header('Content-Type', 'text/html; charset=utf-8')
+                self.end_headers()
+                
+                if success:
+                    html = f"""
+                    <html>
+                    <head><title>✅ Bot Configurado</title></head>
+                    <body style="font-family: Arial; padding: 40px; background: #0f172a; color: white;">
+                        <h1 style="color: #22c55e;">✅ Bot Configurado Exitosamente</h1>
+                        <p><strong>Webhook URL:</strong> {webhook_url}</p>
+                        <p>El bot está listo para recibir mensajes de Telegram.</p>
+                        <p style="color: #94a3b8;">Puedes cerrar esta ventana y probar el bot.</p>
+                    </body>
+                    </html>
+                    """
+                else:
+                    html = f"""
+                    <html>
+                    <body style="font-family: Arial; padding: 40px; background: #0f172a; color: white;">
+                        <h1 style="color: #ef4444;">❌ Error configurando webhook</h1>
+                        <p>Revisa los logs en Vercel.</p>
+                    </body>
+                    </html>
+                    """
+                self.wfile.write(html.encode('utf-8'))
+            
+            # Ruta raíz - health check
+            else:
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                response = {
+                    "status": "ok",
+                    "message": "Bot de Telegram funcionando",
+                    "endpoints": {
+                        "/": "Health check",
+                        "/setup": "Configurar webhook",
+                        "/ (POST)": "Recibir updates de Telegram"
+                    }
+                }
+                self.wfile.write(json.dumps(response, ensure_ascii=False).encode('utf-8'))
+        
+        except Exception as e:
+            logger.error(f"Error en do_GET: {e}", exc_info=True)
+            self.send_response(500)
+            self.end_headers()
+            self.wfile.write(f'{{"error":"{str(e)}"}}'.encode('utf-8'))
+    
+    def log_message(self, format, *args):
+        """Redirige los logs de http.server al logger"""
+        logger.info(f"{self.address_string()} - {format % args}")
