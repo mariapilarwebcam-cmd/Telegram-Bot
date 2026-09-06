@@ -1,10 +1,7 @@
-# api/index.py
 import logging
 from fastapi import FastAPI, Request
-from aiogram import Bot, Dispatcher, types
+from aiogram import Bot, Dispatcher
 from aiogram.types import Update
-import os
-
 from telegrabot import router, TELEGRAM_BOT_TOKEN
 
 logging.basicConfig(level=logging.INFO)
@@ -16,7 +13,7 @@ dp.include_router(router)
 
 app = FastAPI()
 
-@app.post("/api/webhook")
+@app.post("/")
 async def webhook_endpoint(request: Request):
     try:
         body = await request.json()
@@ -29,4 +26,4 @@ async def webhook_endpoint(request: Request):
 
 @app.get("/")
 async def root():
-    return {"message": "Bot is running"}
+    return {"message": "Bot is running "}
