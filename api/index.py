@@ -1,8 +1,10 @@
+# api/index.py
 import logging
 from fastapi import FastAPI, Request
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import Update
 import os
+
 from telegrabot import router, TELEGRAM_BOT_TOKEN
 
 logging.basicConfig(level=logging.INFO)
