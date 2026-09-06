@@ -1,7 +1,7 @@
-# Python
 __pycache__/
-*.py[cod]
-*.so
+*.pyc
+*.pyo
+*.pyd
 .Python
 env/
 venv/
@@ -9,6 +9,4 @@ venv/
 .env
 *.log
 *.sqlite3
-
-# Vercel
 .vercel/
