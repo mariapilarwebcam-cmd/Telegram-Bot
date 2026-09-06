@@ -10,7 +10,6 @@ import base64
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 import aiohttp
-from aiohttp import web
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, Router, F
 from aiogram.filters import Command, CommandStart
@@ -33,7 +32,7 @@ WEBHOOK_URL = os.getenv('WEBHOOK_URL')
 
 OPENROUTER_MODEL = "deepseek/deepseek-v4-flash-0731"
 DEEPINFRA_MODEL = "hexgrad/Kokoro-82M"
-DEEPINFRA_IMG_MODEL = "black-forest-labs/FLUX-1-schnell"  # Modelo de imagen rápido
+DEEPINFRA_IMG_MODEL = "black-forest-labs/FLUX-1-schnell"
 CHATTERBOX_MODEL = "ResembleAI/chatterbox-multilingual"
 
 TTS_PROVIDER = os.getenv('TTS_PROVIDER', 'chatterbox')
@@ -42,16 +41,14 @@ DEEPINFRA_VOICE_EN = os.getenv('DEEPINFRA_VOICE_EN', '')
 
 GEM_COST_MESSAGE = 1
 GEM_COST_AUDIO = 5
-GEM_COST_IMAGE = 10  # Costo por selfie
+GEM_COST_IMAGE = 10
 GEM_COST_NEW_CHARACTER = 5
 
-# Sistema de referidos
 BASE_DAILY_GEMS = 5
 GEMS_PER_REFERRAL = 5
 MAX_REFERRALS_PER_DAY = 2
 MAX_DAILY_GEMS = BASE_DAILY_GEMS + (GEMS_PER_REFERRAL * MAX_REFERRALS_PER_DAY)
 
-# Hook Mode
 HOOK_MODE_MESSAGES = 5
 
 # Arquetipos
@@ -85,7 +82,6 @@ ARCHETYPES_FEMALE = {
     }
 }
 
-# Descripción facial específica para cada arquetipo (en inglés para mejor calidad de imagen)
 CHARACTER_FACES = {
     "schoolmate": "19 year old, messy hair, casual hoodie, playful mischievous eyes, cute natural look",
     "stepmom": "38 year old mature woman, elegant long dark hair, sharp green eyes, luxurious silk robe, sultry expression",
@@ -156,8 +152,6 @@ def get_user_lock(telegram_id: int) -> asyncio.Lock:
         user_locks[telegram_id] = asyncio.Lock()
     return user_locks[telegram_id]
 
-openrouter_session: Optional[aiohttp.ClientSession] = None
-
 def escape_html(text: str) -> str:
     return text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
@@ -185,91 +179,59 @@ async def invalidate_cache(telegram_id: int):
     if telegram_id in user_cache:
         del user_cache[telegram_id]
 
-async def cleanup_cache():
-    while True:
-        try:
-            await asyncio.sleep(600)
-            now = datetime.utcnow()
-            expired = [tid for tid, data in user_cache.items() if (now - data['timestamp']).total_seconds() > CACHE_TTL]
-            for tid in expired:
-                del user_cache[tid]
-            if user_cache:
-                logger.info(f"Caché limpiado. Usuarios en caché: {len(user_cache)}")
-        except Exception as e:
-            logger.error(f"Error en cleanup_cache: {e}")
-
-async def cleanup_states():
-    while True:
-        try:
-            await asyncio.sleep(300)
-            now = datetime.utcnow()
-            expired = [tid for tid, state in user_states.items() if (now - state.get('created_at', now)).total_seconds() > 600]
-            for tid in expired:
-                del user_states[tid]
-            if user_states:
-                logger.info(f"Estados limpiados. Estados activos: {len(user_states)}")
-        except Exception as e:
-            logger.error(f"Error en cleanup_states: {e}")
-
 class SupabaseClient:
     def __init__(self, url: str, key: str):
         self.base_url = url.rstrip('/') + '/rest/v1'
         self.headers = {'apikey': key, 'Authorization': f'Bearer {key}', 'Content-Type': 'application/json', 'Prefer': 'return=representation'}
-        self.session: Optional[aiohttp.ClientSession] = None
-        self._connector = None
-
-    async def get_session(self) -> aiohttp.ClientSession:
-        if self.session is None or self.session.closed:
-            self._connector = aiohttp.TCPConnector(limit=10, limit_per_host=5, ttl_dns_cache=300)
-            self.session = aiohttp.ClientSession(connector=self._connector)
-        return self.session
-
-    async def close(self):
-        if self.session and not self.session.closed: await self.session.close()
-        if self._connector and not self._connector.closed: await self._connector.close()
 
     async def select(self, table: str, columns: str = '*', filters: Dict[str, Any] = None, order: str = None, limit: int = None) -> list:
-        session = await self.get_session()
-        params = {'select': columns}
-        if filters:
-            for key, value in filters.items(): params[key] = f'eq.{value}'
-        if order: params['order'] = order
-        if limit: params['limit'] = str(limit)
-        url = f"{self.base_url}/{table}?{urllib.parse.urlencode(params)}"
-        async with session.get(url, headers=self.headers) as response:
-            if response.status == 200: return await response.json()
-            logger.error(f"Supabase SELECT error: {await response.text()}")
-            return []
+        async with aiohttp.ClientSession() as session:
+            params = {'select': columns}
+            if filters:
+                for key, value in filters.items():
+                    params[key] = f'eq.{value}'
+            if order:
+                params['order'] = order
+            if limit:
+                params['limit'] = str(limit)
+            url = f"{self.base_url}/{table}?{urllib.parse.urlencode(params)}"
+            async with session.get(url, headers=self.headers) as response:
+                if response.status == 200:
+                    return await response.json()
+                logger.error(f"Supabase SELECT error: {await response.text()}")
+                return []
 
     async def insert(self, table: str, data: dict) -> Optional[dict]:
-        session = await self.get_session()
-        async with session.post(f"{self.base_url}/{table}", headers=self.headers, json=data) as response:
-            if response.status in [200, 201]:
-                result = await response.json()
-                return result[0] if result else None
-            logger.error(f"Supabase INSERT error: {await response.text()}")
-            return None
+        async with aiohttp.ClientSession() as session:
+            async with session.post(f"{self.base_url}/{table}", headers=self.headers, json=data) as response:
+                if response.status in [200, 201]:
+                    result = await response.json()
+                    return result[0] if result else None
+                logger.error(f"Supabase INSERT error: {await response.text()}")
+                return None
 
     async def update(self, table: str, data: dict, filters: Dict[str, Any]) -> bool:
-        session = await self.get_session()
-        params = {key: f'eq.{value}' for key, value in filters.items()}
-        url = f"{self.base_url}/{table}?{urllib.parse.urlencode(params)}"
-        async with session.patch(url, headers=self.headers, json=data) as response:
-            if response.status in [200, 204]: return True
-            logger.error(f"Supabase UPDATE error: {await response.text()}")
-            return False
+        async with aiohttp.ClientSession() as session:
+            params = {key: f'eq.{value}' for key, value in filters.items()}
+            url = f"{self.base_url}/{table}?{urllib.parse.urlencode(params)}"
+            async with session.patch(url, headers=self.headers, json=data) as response:
+                if response.status in [200, 204]:
+                    return True
+                logger.error(f"Supabase UPDATE error: {await response.text()}")
+                return False
 
     async def count(self, table: str, filters: Dict[str, Any] = None) -> int:
-        session = await self.get_session()
-        params = {'select': 'id', 'count': 'exact'}
-        if filters:
-            for key, value in filters.items(): params[key] = f'eq.{value}'
-        url = f"{self.base_url}/{table}?{urllib.parse.urlencode(params)}"
-        async with session.get(url, headers=self.headers) as response:
-            if response.status == 200:
-                count = response.headers.get('Content-Range', '0-0/0')
-                return int(count.split('/')[-1])
-            return 0
+        async with aiohttp.ClientSession() as session:
+            params = {'select': 'id', 'count': 'exact'}
+            if filters:
+                for key, value in filters.items():
+                    params[key] = f'eq.{value}'
+            url = f"{self.base_url}/{table}?{urllib.parse.urlencode(params)}"
+            async with session.get(url, headers=self.headers) as response:
+                if response.status == 200:
+                    count = response.headers.get('Content-Range', '0-0/0')
+                    return int(count.split('/')[-1])
+                return 0
 
 db = SupabaseClient(SUPABASE_URL, SUPABASE_KEY)
 
@@ -426,20 +388,18 @@ async def generate_openrouter_response(messages: list, language: str = 'es', gem
     data = {"model": OPENROUTER_MODEL, "messages": full_messages, "temperature": temperature, "max_tokens": 400}
 
     try:
-        global openrouter_session
-        if openrouter_session is None or openrouter_session.closed:
-            openrouter_session = aiohttp.ClientSession()
-        async with openrouter_session.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=data) as response:
-            if response.status == 200:
-                result = await response.json()
-                return result['choices'][0]['message']['content']
-            logger.error(f"OpenRouter error {response.status}: {await response.text()}")
-            return None
+        async with aiohttp.ClientSession() as session:
+            async with session.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=data) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    return result['choices'][0]['message']['content']
+                logger.error(f"OpenRouter error {response.status}: {await response.text()}")
+                return None
     except Exception as e:
         logger.error(f"Excepción en OpenRouter: {str(e)}")
         return None
 
-# Voces de Kokoro-82M por idioma y género
+# Voces de Kokoro-82M
 KOKORO_VOICES = {
     "es": {"male": "em_alex", "female": "ef_dora"},
     "en": {"male": "am_michael", "female": "af_bella"},
@@ -505,10 +465,6 @@ async def generate_tts_audio(text: str, language: str = 'es', gender: str = 'fem
         logger.warning("⚠️ Chatterbox falló, probando con Kokoro como respaldo...")
     
     audio = await generate_deepinfra_audio(text, language, gender)
-    
-    if not audio and language == 'es':
-        logger.warning("⚠️ No se pudo generar audio en español.")
-        
     return audio
 
 async def generate_deepinfra_audio(text: str, language: str = 'es', gender: str = 'female'):
@@ -541,7 +497,6 @@ async def generate_deepinfra_audio(text: str, language: str = 'es', gender: str 
                 if status == 200:
                     result = await response.json()
                     audio_data = result.get('audio') or result.get('result', {}).get('audio')
-
                     if audio_data:
                         return audio_data
                     else:
@@ -691,6 +646,7 @@ INSTRUCCIONES:
 
 router = Router()
 
+# ==================== HANDLERS ====================
 @router.message(CommandStart())
 async def cmd_start(message: Message, command=None):
     telegram_id = message.from_user.id
@@ -816,8 +772,6 @@ async def cmd_audio(message: Message):
     if not character:
         return await message.answer("⚠️ No tienes un personaje activo. Usa /newchat")
 
-    lang = user['language']
-
     history = await get_conversation_history(telegram_id, character['id'], limit=2)
     last_assistant_msg = None
     for msg in reversed(history):
@@ -848,7 +802,6 @@ async def cmd_audio(message: Message):
         await add_gems(telegram_id, GEM_COST_AUDIO, 'refund', 'Reembolso por fallo en TTS')
         await message.answer(f"⚠️ <b>Audio not available</b>\n\nYour gems have been refunded.\n\n<b>Dialogue:</b>\n<i>{dialogue}</i>", parse_mode="HTML")
 
-# COMANDO SELFIE MODIFICADO: Pregunta cómo quiere la foto
 @router.message(Command('selfie'))
 async def cmd_selfie(message: Message):
     telegram_id = message.from_user.id
@@ -861,12 +814,10 @@ async def cmd_selfie(message: Message):
 
     lang = user['language']
 
-    # Verificar gemas primero
     if user['gems'] < GEM_COST_IMAGE:
         await message.answer(f"⚠️ No tienes suficientes gemas. Necesitas {GEM_COST_IMAGE} gemas.")
         return
 
-    # Mensaje inmersivo y coqueto pidiendo descripción
     if lang == 'es':
         text = (
             f"📸 <b>{character['character_name']} sonríe con picardía y levanta su teléfono</b>\n\n"
@@ -884,7 +835,6 @@ async def cmd_selfie(message: Message):
 
     await message.answer(text, parse_mode="HTML")
 
-    # Guardar estado esperando descripción
     user_states[telegram_id] = {
         'step': 'awaiting_photo_desc',
         'language': lang,
@@ -1118,21 +1068,19 @@ async def process_message(message: Message):
             text = f"✅ ¡Nuevo personaje creado!\n\n🎭 Nombre: {message.text.strip()}\n\nPuedes empezar a chatear con el botón 💬 Chat." if lang == 'es' else f"✅ New character created!\n\n🎭 Name: {message.text.strip()}\n\nYou can start chatting with the 💬 Chat button."
             return await message.answer(text)
 
-    # --- NUEVO: Manejo de descripción de foto (selfie personalizado) ---
+    # --- Manejo de descripción de foto (selfie personalizado) ---
     if telegram_id in user_states and user_states[telegram_id].get('step') == 'awaiting_photo_desc':
         state = user_states[telegram_id]
         lang = state['language']
         character_id = state['character_id']
         description = message.text.strip()
 
-        # Obtener personaje
         character = await get_active_character(telegram_id)
         if not character or character['id'] != character_id:
             await message.answer("⚠️ Personaje no encontrado. Usa /newchat para seleccionar uno.")
             del user_states[telegram_id]
             return
 
-        # Verificar gemas y cobrar
         success, msg, _ = await check_and_deduct_gems(telegram_id, GEM_COST_IMAGE, 'image', f'Selfie personalizado: {description[:50]}')
         if not success:
             await message.answer(f"⚠️ {msg}")
@@ -1141,14 +1089,12 @@ async def process_message(message: Message):
 
         await message.bot.send_chat_action(telegram_id, 'upload_photo')
 
-        # Mensaje inmersivo mientras se genera
         char_name = escape_html(character['character_name'])
         if lang == 'es':
             await message.answer(f"*{char_name} sonríe y ajusta su teléfono*\n\n\"Perfecto, haré que esta foto sea exactamente como lo pediste...\"")
         else:
             await message.answer(f"*{char_name} smiles and adjusts the phone*\n\n\"Perfect, I'll make this photo just as you asked...\"")
 
-        # Obtener contexto de la conversación
         history = await get_conversation_history(telegram_id, character['id'], limit=5)
         last_action = "looking at camera, smiling"
         last_user_msg = ""
@@ -1164,10 +1110,8 @@ async def process_message(message: Message):
             if last_user_msg and last_assistant_msg:
                 break
 
-        # Construir prompt en inglés con la descripción del usuario
         face_prompt = CHARACTER_FACES.get(character['archetype'], "beautiful person")
         context = f"Context: User said '{last_user_msg[:100]}' and character responded '{last_assistant_msg[:100]}'." if last_user_msg and last_assistant_msg else ""
-        # El prompt incluye la descripción del usuario, la personalidad del personaje y la acción
         image_prompt = (
             f"{face_prompt}, selfie style, {last_action}, POV, realistic, smartphone photo, high detail, candid, beautiful lighting. "
             f"User request: {description}. Make it sensual, flirty, and immersive. {context}"
@@ -1201,14 +1145,13 @@ async def process_message(message: Message):
     lang = user['language']
     hook_remaining = user.get('hook_messages_remaining', 0)
 
-    # Detección de intención de foto (pero ahora redirigimos a la experiencia de personalización)
+    # Detección de intención de foto
     image_intent_pattern = re.compile(r'\b(foto|fotografia|imagen|selfie|pict|pic|picture|photo|image|enseñame|quiero verte|muestra|mandame una foto|enviame una foto|toma una foto)\b', re.IGNORECASE)
     if image_intent_pattern.search(message.text):
-        # En lugar de generar automáticamente, redirigimos al comando selfie personalizado
         await cmd_selfie(message)
         return
 
-    # Resto del chat normal
+    # Sin gemas y sin hook
     if user['gems'] <= 0 and hook_remaining <= 0:
         char_name = escape_html(character['character_name'])
         text = (f"<b>*{char_name} te mira con ojos ardientes y se muerde el labio inferior*</b>\n\n"
@@ -1224,6 +1167,7 @@ async def process_message(message: Message):
         builder.adjust(1)
         return await message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
 
+    # Hook mode
     if user['gems'] <= 0 and hook_remaining > 0:
         if hook_remaining == HOOK_MODE_MESSAGES:
             char_name = escape_html(character['character_name'])
@@ -1267,63 +1211,3 @@ async def show_welcome(message: Message, character_name: str, language: str, key
 async def show_main_menu(message: Message, language: str, keyboard: ReplyKeyboardMarkup = None):
     text = "🏠 Menú Principal\n\nUsa los botones de abajo para navegar:" if language == 'es' else "🏠 Main Menu\n\nUse the buttons below to navigate:"
     await message.answer(text, reply_markup=keyboard)
-
-# ==================== INICIALIZACIÓN ====================
-bot = Bot(token=TELEGRAM_BOT_TOKEN)
-dp = Dispatcher()
-dp.include_router(router)
-
-async def on_startup():
-    logger.info("Iniciando bot...")
-    await bot.set_webhook(url=WEBHOOK_URL, drop_pending_updates=True)
-    logger.info(f"Webhook configurado: {WEBHOOK_URL}")
-    asyncio.create_task(cleanup_cache())
-    asyncio.create_task(cleanup_states())
-    global openrouter_session
-    openrouter_session = aiohttp.ClientSession()
-
-async def on_shutdown():
-    logger.info("Deteniendo bot...")
-    await bot.delete_webhook()
-    await bot.session.close()
-    await db.close()
-    global openrouter_session
-    if openrouter_session and not openrouter_session.closed: await openrouter_session.close()
-
-async def handle_webhook(request):
-    if request.path == '/webhook':
-        try:
-            update = Update(**await request.json())
-            await dp.feed_update(bot, update)
-            return web.Response(text='OK')
-        except Exception as e:
-            logger.error(f"Error processing webhook: {e}")
-            return web.Response(text='Error', status=500)
-    return web.Response(status=404)
-
-def create_app():
-    app = web.Application()
-    app.router.add_post('/webhook', handle_webhook)
-    app.router.add_get('/', lambda r: web.Response(text='Bot is running'))
-    async def start_background_tasks(app):
-        app['on_startup_task'] = asyncio.create_task(on_startup())
-    async def cleanup_background_tasks(app):
-        await on_shutdown()
-        app['on_startup_task'].cancel()
-        try: await app['on_startup_task']
-        except asyncio.CancelledError: pass
-    app.on_startup.append(start_background_tasks)
-    app.on_cleanup.append(cleanup_background_tasks)
-    return app
-
-if __name__ == '__main__':
-    import sys
-    if len(sys.argv) > 1 and sys.argv[1] == 'polling':
-        async def main():
-            await on_startup()
-            await dp.start_polling(bot)
-        asyncio.run(main())
-    else:
-        app = create_app()
-        port = int(os.getenv('PORT', 8080))
-        web.run_app(app, host='0.0.0.0', port=port)
