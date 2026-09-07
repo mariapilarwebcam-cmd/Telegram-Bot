@@ -12,11 +12,11 @@ from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, Router, F
 from aiogram.filters import Command, CommandStart
 from aiogram.types import (
-    Message, CallbackQuery, LabeledPrice, PreCheckoutQuery, Update,
+    Message, CallbackQuery, LabeledPrice, PreCheckoutQuery,
     ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, BufferedInputFile
 )
 from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
-import libsql_client
+from supabase import create_client, Client
 
 # Cargar variables de entorno
 load_dotenv()
@@ -25,8 +25,8 @@ load_dotenv()
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY')
 DEEPINFRA_TOKEN = os.getenv('DEEPINFRA_TOKEN')
-TURSO_URL = os.getenv('TURSO_URL')
-TURSO_AUTH_TOKEN = os.getenv('TURSO_AUTH_TOKEN')
+SUPABASE_URL = os.getenv('SUPABASE_URL')
+SUPABASE_KEY = os.getenv('SUPABASE_KEY')
 WEBHOOK_URL = os.getenv('WEBHOOK_URL')
 
 OPENROUTER_MODEL = "deepseek/deepseek-v4-flash-0731"
@@ -47,37 +47,37 @@ MAX_REFERRALS_PER_DAY = 2
 MAX_DAILY_GEMS = BASE_DAILY_GEMS + (GEMS_PER_REFERRAL * MAX_REFERRALS_PER_DAY)
 HOOK_MODE_MESSAGES = 5
 
-# Conexión a Turso (UNA SOLA VEZ)
-client = libsql_client.Client(url=TURSO_URL, auth_token=TURSO_AUTH_TOKEN)
+# Cliente Supabase oficial (UNA SOLA VEZ, reutiliza conexiones)
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# Arquetipos
+# Arquetipos (CORREGIDO: sin espacios en las keys)
 ARCHETYPES_MALE = {
     "es": {
-        "schoolmate": "🎓 Compañero de escuela", "stepdad": " Padrastro", "stepbrother": "💪 Hermanastro",
+        "schoolmate": "🎓 Compañero de escuela", "stepdad": "👔 Padrastro", "stepbrother": "💪 Hermanastro",
         "teacher": "📚 Profesor", "neighbor": "🏠 Vecino", "boss": "💼 Jefe", "trainer": "🏋️ Entrenador personal",
-        "model": "📸 Modelo/Influencer", "musician": "🎵 Músico", "actor": "🎬 Actor", "doctor": "⚕️ Médico",
-        "chef": "👨‍🍳 Chef", "artist": "🎨 Artista", "writer": "✍️ Escritor", "bodyguard": "🛡️ Guardaespaldas", "ceo": "💼 CEO/Empresario"
+        "model": " Modelo/Influencer", "musician": "🎵 Músico", "actor": " Actor", "doctor": "⚕️ Médico",
+        "chef": "👨🍳 Chef", "artist": " Artista", "writer": "✍️ Escritor", "bodyguard": "🛡️ Guardaespaldas", "ceo": "💼 CEO/Empresario"
     },
     "en": {
         "schoolmate": "🎓 Schoolmate", "stepdad": "👔 Stepfather", "stepbrother": "💪 Stepbrother",
         "teacher": "📚 Teacher", "neighbor": "🏠 Neighbor", "boss": "💼 Boss", "trainer": "🏋️ Personal Trainer",
-        "model": "📸 Model/Influencer", "musician": "🎵 Musician", "actor": "🎬 Actor", "doctor": "⚕️ Doctor",
-        "chef": "👨‍🍳 Chef", "artist": "🎨 Artist", "writer": "✍️ Writer", "bodyguard": "️ Bodyguard", "ceo": "💼 CEO/Businessman"
+        "model": " Model/Influencer", "musician": "🎵 Musician", "actor": " Actor", "doctor": "⚕️ Doctor",
+        "chef": "👨‍🍳 Chef", "artist": "🎨 Artist", "writer": "✍️ Writer", "bodyguard": "🛡️ Bodyguard", "ceo": "💼 CEO/Businessman"
     }
 }
 
 ARCHETYPES_FEMALE = {
     "es": {
         "schoolmate": "🎓 Compañera de escuela", "stepmom": "💋 Madrastra", "stepsister": "🌸 Hermanastra",
-        "teacher": "📚 Profesora", "neighbor": "🏠 Vecina", "boss": "💼 Jefa", "trainer": "🏋️ Entrenadora personal",
-        "model": "📸 Modelo/Influencer", "musician": "🎵 Músico", "actor": "🎬 Actriz", "doctor": "⚕️ Doctora/Enfermera",
-        "chef": "👩‍🍳 Chef", "artist": " Artista", "writer": "✍️ Escritora", "secretary": "💼 Secretaria", "model_student": "🎓 Estudiante popular"
+        "teacher": "📚 Profesora", "neighbor": " Vecina", "boss": "💼 Jefa", "trainer": "🏋️ Entrenadora personal",
+        "model": "📸 Modelo/Influencer", "musician": " Músico", "actor": " Actriz", "doctor": "⚕️ Doctora/Enfermera",
+        "chef": "👩‍🍳 Chef", "artist": "🎨 Artista", "writer": "✍️ Escritora", "secretary": "💼 Secretaria", "model_student": "🎓 Estudiante popular"
     },
     "en": {
         "schoolmate": "🎓 Schoolmate", "stepmom": "💋 Stepmother", "stepsister": "🌸 Stepsister",
-        "teacher": "📚 Teacher", "neighbor": " Neighbor", "boss": "💼 Boss", "trainer": "🏋️ Personal Trainer",
-        "model": "📸 Model/Influencer", "musician": " Musician", "actor": "🎬 Actress", "doctor": "⚕️ Doctor/Nurse",
-        "chef": "👩‍🍳 Chef", "artist": "🎨 Artist", "writer": "✍️ Writer", "secretary": "💼 Secretary", "model_student": "🎓 Popular Student"
+        "teacher": "📚 Teacher", "neighbor": "🏠 Neighbor", "boss": "💼 Boss", "trainer": "️ Personal Trainer",
+        "model": " Model/Influencer", "musician": "🎵 Musician", "actor": " Actress", "doctor": "⚕️ Doctor/Nurse",
+        "chef": "‍🍳 Chef", "artist": "🎨 Artist", "writer": "✍️ Writer", "secretary": "💼 Secretary", "model_student": "🎓 Popular Student"
     }
 }
 
@@ -135,14 +135,12 @@ STAR_PACKAGES = [
     {"stars": 500, "gems": 2000, "bonus": 15, "first_time": False},
 ]
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 # Cache en memoria
 user_cache: Dict[int, Dict[str, Any]] = {}
+user_states: Dict[int, Dict[str, Any]] = {}
 CACHE_TTL = 300
 
 def escape_html(text: str) -> str:
@@ -163,7 +161,6 @@ async def get_user_cached(telegram_id: int):
         cached = user_cache[telegram_id]
         if (now - cached['timestamp']).total_seconds() < CACHE_TTL:
             return cached['data']
-    
     user = await get_user(telegram_id)
     if user:
         user_cache[telegram_id] = {'data': user, 'timestamp': now}
@@ -174,124 +171,72 @@ async def invalidate_cache(telegram_id: int):
     if telegram_id in user_cache:
         del user_cache[telegram_id]
 
-# Funciones de base de datos con Turso
-async def execute_query(sql: str, params: tuple = None):
-    """Ejecutar query en Turso"""
-    try:
-        if params:
-            result = await client.execute(sql, params)
-        else:
-            result = await client.execute(sql)
-        return result
-    except Exception as e:
-        logger.error(f"Error en query: {e}")
-        raise
+def generate_referral_code() -> str:
+    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
 
 async def create_user(telegram_id: int, username: str, first_name: str, language: str = 'es', referred_by: Optional[int] = None):
     referral_code = generate_referral_code()
+    user_data = {
+        'telegram_id': telegram_id, 'username': username, 'first_name': first_name,
+        'language': language, 'gems': 15, 'referral_code': referral_code,
+        'referred_by': referred_by, 'total_referrals': 0,
+        'daily_gems_reset': datetime.utcnow().isoformat(), 'hook_messages_remaining': 0
+    }
+    result = supabase.table('users').insert(user_data).execute()
     
-    await execute_query(
-        """INSERT INTO users (telegram_id, username, first_name, language, gems, referral_code, referred_by, total_referrals, daily_gems_reset, hook_messages_remaining)
-           VALUES (?, ?, ?, ?, 15, ?, ?, 0, ?, 0)""",
-        (telegram_id, username, first_name, language, referral_code, referred_by, datetime.utcnow().isoformat())
-    )
-    
-    if referred_by:
-        await execute_query(
-            """INSERT INTO referrals (referrer_id, referred_id) VALUES (?, ?)""",
-            (referred_by, telegram_id)
-        )
-        
-        referral_count_result = await execute_query(
-            """SELECT COUNT(*) as count FROM referrals WHERE referrer_id = ?""",
-            (referred_by,)
-        )
-        referral_count = referral_count_result[0]['count'] if referral_count_result else 0
-        
-        await execute_query(
-            """UPDATE users SET total_referrals = ? WHERE telegram_id = ?""",
-            (referral_count, referred_by)
-        )
-        
+    if referred_by and result.data:
+        supabase.table('referrals').insert({'referrer_id': referred_by, 'referred_id': telegram_id}).execute()
+        referral_count = supabase.table('referrals').select('*', count='exact').eq('referrer_id', referred_by).execute().count
+        supabase.table('users').update({'total_referrals': referral_count}).eq('telegram_id', referred_by).execute()
         await add_gems(referred_by, GEMS_PER_REFERRAL, 'referral', f'Referido: {username}')
     
-    return await get_user(telegram_id)
+    return result.data[0] if result.data else None
 
 async def get_user(telegram_id: int):
-    result = await execute_query(
-        """SELECT * FROM users WHERE telegram_id = ?""",
-        (telegram_id,)
-    )
-    return result[0] if result else None
+    result = supabase.table('users').select('*').eq('telegram_id', telegram_id).execute()
+    return result.data[0] if result.data else None
 
 async def update_last_active(telegram_id: int):
-    await execute_query(
-        """UPDATE users SET last_active = ? WHERE telegram_id = ?""",
-        (datetime.utcnow().isoformat(), telegram_id)
-    )
+    supabase.table('users').update({'last_active': datetime.utcnow().isoformat()}).eq('telegram_id', telegram_id).execute()
 
 async def count_active_referrals_last_24h(telegram_id: int) -> int:
-    twenty_four_hours_ago = (datetime.utcnow() - timedelta(hours=24)).isoformat()
-    
-    result = await execute_query(
-        """SELECT COUNT(*) as count FROM referrals 
-           WHERE referrer_id = ? AND created_at >= ?""",
-        (telegram_id, twenty_four_hours_ago)
-    )
-    
-    count = result[0]['count'] if result else 0
-    return min(count, MAX_REFERRALS_PER_DAY)
+    results = supabase.table('referrals').select('*').eq('referrer_id', telegram_id).execute()
+    if not results.data:
+        return 0
+    now = datetime.utcnow()
+    twenty_four_hours_ago = now - timedelta(hours=24)
+    active_count = sum(1 for r in results.data if datetime.fromisoformat(r['created_at']) >= twenty_four_hours_ago)
+    return min(active_count, MAX_REFERRALS_PER_DAY)
 
 async def check_and_reset_daily_gems(telegram_id: int):
     user = await get_user(telegram_id)
     if not user:
         return None
-    
     last_reset = datetime.fromisoformat(user['daily_gems_reset'])
     now = datetime.utcnow()
-    
     if (now - last_reset).days >= 1:
         active_referrals = await count_active_referrals_last_24h(telegram_id)
         bonus_gems = active_referrals * GEMS_PER_REFERRAL
         new_gems = BASE_DAILY_GEMS + bonus_gems
-        
-        total_referrals_result = await execute_query(
-            """SELECT COUNT(*) as count FROM referrals WHERE referrer_id = ?""",
-            (telegram_id,)
-        )
-        total_referrals = total_referrals_result[0]['count'] if total_referrals_result else 0
-        
-        await execute_query(
-            """UPDATE users SET gems = ?, daily_gems_reset = ?, bonus_gems_from_referrals = ?, 
-               total_referrals = ?, hook_messages_remaining = 0 WHERE telegram_id = ?""",
-            (new_gems, now.isoformat(), bonus_gems, total_referrals, telegram_id)
-        )
-        
-        user.update({
-            'gems': new_gems,
-            'bonus_gems_from_referrals': bonus_gems,
+        total_referrals = supabase.table('referrals').select('*', count='exact').eq('referrer_id', telegram_id).execute().count
+        supabase.table('users').update({
+            'gems': new_gems, 'daily_gems_reset': now.isoformat(),
+            'bonus_gems_from_referrals': bonus_gems, 'total_referrals': total_referrals,
             'hook_messages_remaining': 0
-        })
+        }).eq('telegram_id', telegram_id).execute()
+        user.update({'gems': new_gems, 'bonus_gems_from_referrals': bonus_gems, 'hook_messages_remaining': 0})
         return user
-    
     return user
 
 async def deduct_gems(telegram_id: int, amount: int, transaction_type: str, description: str = ''):
     user = await get_user(telegram_id)
     if not user or user['gems'] < amount:
         return False
-    
-    await execute_query(
-        """UPDATE users SET gems = gems - ? WHERE telegram_id = ?""",
-        (amount, telegram_id)
-    )
-    
-    await execute_query(
-        """INSERT INTO gem_transactions (telegram_id, amount, transaction_type, description) 
-           VALUES (?, ?, ?, ?)""",
-        (telegram_id, -amount, transaction_type, description)
-    )
-    
+    supabase.table('users').update({'gems': user['gems'] - amount}).eq('telegram_id', telegram_id).execute()
+    supabase.table('gem_transactions').insert({
+        'telegram_id': telegram_id, 'amount': -amount,
+        'transaction_type': transaction_type, 'description': description
+    }).execute()
     await invalidate_cache(telegram_id)
     return True
 
@@ -299,180 +244,85 @@ async def add_gems(telegram_id: int, amount: int, transaction_type: str, descrip
     user = await get_user(telegram_id)
     if not user:
         return False
-    
-    await execute_query(
-        """UPDATE users SET gems = gems + ? WHERE telegram_id = ?""",
-        (amount, telegram_id)
-    )
-    
-    await execute_query(
-        """INSERT INTO gem_transactions (telegram_id, amount, transaction_type, description) 
-           VALUES (?, ?, ?, ?)""",
-        (telegram_id, amount, transaction_type, description)
-    )
-    
+    supabase.table('users').update({'gems': user['gems'] + amount}).eq('telegram_id', telegram_id).execute()
+    supabase.table('gem_transactions').insert({
+        'telegram_id': telegram_id, 'amount': amount,
+        'transaction_type': transaction_type, 'description': description
+    }).execute()
     await invalidate_cache(telegram_id)
     return True
 
 async def save_character(telegram_id: int, character_name: str, gender: str, archetype: str, personality: str):
-    await execute_query(
-        """UPDATE user_characters SET is_active = 0 WHERE telegram_id = ?""",
-        (telegram_id,)
-    )
-    
-    await execute_query(
-        """INSERT INTO user_characters (telegram_id, character_name, gender, archetype, personality, is_active) 
-           VALUES (?, ?, ?, ?, ?, 1)""",
-        (telegram_id, character_name, gender, archetype, personality)
-    )
-    
-    return await get_active_character(telegram_id)
+    supabase.table('user_characters').update({'is_active': False}).eq('telegram_id', telegram_id).execute()
+    result = supabase.table('user_characters').insert({
+        'telegram_id': telegram_id, 'character_name': character_name,
+        'gender': gender, 'archetype': archetype, 'personality': personality, 'is_active': True
+    }).execute()
+    return result.data[0] if result.data else None
 
 async def get_active_character(telegram_id: int):
-    result = await execute_query(
-        """SELECT * FROM user_characters WHERE telegram_id = ? AND is_active = 1""",
-        (telegram_id,)
-    )
-    return result[0] if result else None
+    result = supabase.table('user_characters').select('*').eq('telegram_id', telegram_id).eq('is_active', True).execute()
+    return result.data[0] if result.data else None
 
 async def get_all_characters(telegram_id: int):
-    return await execute_query(
-        """SELECT * FROM user_characters WHERE telegram_id = ?""",
-        (telegram_id,)
-    )
+    result = supabase.table('user_characters').select('*').eq('telegram_id', telegram_id).execute()
+    return result.data if result.data else []
 
 async def set_active_character(telegram_id: int, character_id: int):
-    await execute_query(
-        """UPDATE user_characters SET is_active = 0 WHERE telegram_id = ?""",
-        (telegram_id,)
-    )
-    
-    await execute_query(
-        """UPDATE user_characters SET is_active = 1 WHERE id = ? AND telegram_id = ?""",
-        (character_id, telegram_id)
-    )
+    supabase.table('user_characters').update({'is_active': False}).eq('telegram_id', telegram_id).execute()
+    supabase.table('user_characters').update({'is_active': True}).eq('telegram_id', telegram_id).eq('id', character_id).execute()
 
 async def save_message(telegram_id: int, role: str, content: str, character_id: int):
-    await execute_query(
-        """INSERT INTO conversation_history (telegram_id, role, content, character_id) 
-           VALUES (?, ?, ?, ?)""",
-        (telegram_id, role, content, character_id)
-    )
+    supabase.table('conversation_history').insert({
+        'telegram_id': telegram_id, 'role': role, 'content': content, 'character_id': character_id
+    }).execute()
 
 async def get_conversation_history(telegram_id: int, character_id: int, limit: int = 10):
-    result = await execute_query(
-        """SELECT * FROM conversation_history 
-           WHERE telegram_id = ? AND character_id = ? 
-           ORDER BY created_at DESC LIMIT ?""",
-        (telegram_id, character_id, limit)
-    )
-    
-    if result:
-        result.reverse()
-    return result
+    result = supabase.table('conversation_history').select('*').eq('telegram_id', telegram_id).eq('character_id', character_id).order('created_at', desc=True).limit(limit).execute()
+    if result.data:
+        result.data.reverse()
+    return result.data if result.data else []
 
 async def get_user_by_referral_code(referral_code: str):
-    result = await execute_query(
-        """SELECT * FROM users WHERE referral_code = ?""",
-        (referral_code,)
-    )
-    return result[0] if result else None
+    result = supabase.table('users').select('*').eq('referral_code', referral_code).execute()
+    return result.data[0] if result.data else None
 
 async def record_star_purchase(telegram_id: int, stars: int, gems: int, is_first_purchase: bool, charge_id: str):
-    await execute_query(
-        """INSERT INTO star_purchases (telegram_id, stars_amount, gems_amount, is_first_purchase, telegram_charge_id) 
-           VALUES (?, ?, ?, ?, ?)""",
-        (telegram_id, stars, gems, is_first_purchase, charge_id)
-    )
-    
+    supabase.table('star_purchases').insert({
+        'telegram_id': telegram_id, 'stars_amount': stars, 'gems_amount': gems,
+        'is_first_purchase': is_first_purchase, 'telegram_charge_id': charge_id
+    }).execute()
     await add_gems(telegram_id, gems, 'purchase', f'Compra con {stars} stars')
 
 async def has_user_purchased(telegram_id: int) -> bool:
-    result = await execute_query(
-        """SELECT id FROM star_purchases WHERE telegram_id = ? LIMIT 1""",
-        (telegram_id,)
-    )
-    return len(result) > 0
+    result = supabase.table('star_purchases').select('id').eq('telegram_id', telegram_id).limit(1).execute()
+    return len(result.data) > 0
 
 async def decrement_hook_message(telegram_id: int) -> int:
     user = await get_user(telegram_id)
     if not user:
         return 0
-    
     remaining = max(0, user.get('hook_messages_remaining', 0) - 1)
-    
-    await execute_query(
-        """UPDATE users SET hook_messages_remaining = ? WHERE telegram_id = ?""",
-        (remaining, telegram_id)
-    )
-    
+    supabase.table('users').update({'hook_messages_remaining': remaining}).eq('telegram_id', telegram_id).execute()
     return remaining
-
-# Funciones de estado en base de datos
-async def get_user_state(telegram_id: int) -> Optional[Dict[str, Any]]:
-    result = await execute_query(
-        """SELECT state_data FROM user_states WHERE telegram_id = ?""",
-        (telegram_id,)
-    )
-    
-    if result and result[0]['state_data']:
-        import json
-        return json.loads(result[0]['state_data'])
-    return None
-
-async def set_user_state(telegram_id: int, state: Dict[str, Any]):
-    import json
-    state_json = json.dumps(state)
-    
-    await execute_query(
-        """INSERT INTO user_states (telegram_id, state_data) 
-           VALUES (?, ?)
-           ON CONFLICT(telegram_id) DO UPDATE SET state_data = ?, updated_at = ?""",
-        (telegram_id, state_json, state_json, datetime.utcnow().isoformat())
-    )
-
-async def clear_user_state(telegram_id: int):
-    await execute_query(
-        """DELETE FROM user_states WHERE telegram_id = ?""",
-        (telegram_id,)
-    )
-
-def generate_referral_code() -> str:
-    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
 
 def get_main_keyboard(language: str, is_premium: bool = False) -> ReplyKeyboardMarkup:
     builder = ReplyKeyboardBuilder()
-    
     if language == 'es':
         builder.row(KeyboardButton(text="💬 Chat"), KeyboardButton(text="💎 Balance"))
-        builder.row(KeyboardButton(text="📸 Selfie (10)"))
-        builder.row(KeyboardButton(text="🛒 Tienda"), KeyboardButton(text=" Invitar"))
-        builder.row(KeyboardButton(text="💬 Nuevo Chat"), KeyboardButton(text=" Ayuda"))
+        builder.row(KeyboardButton(text="📸 Selfie (10💎)"))
+        builder.row(KeyboardButton(text=" Tienda"), KeyboardButton(text="🎁 Invitar"))
+        builder.row(KeyboardButton(text="💬 Nuevo Chat"), KeyboardButton(text="❓ Ayuda"))
     else:
-        builder.row(KeyboardButton(text="💬 Chat"), KeyboardButton(text="💎 Balance"))
-        builder.row(KeyboardButton(text="🎙️ Record Audio"), KeyboardButton(text="📸 Selfie (10💎)"))
-        builder.row(KeyboardButton(text=" Shop"), KeyboardButton(text="🎁 Invite"))
+        builder.row(KeyboardButton(text="💬 Chat"), KeyboardButton(text=" Balance"))
+        builder.row(KeyboardButton(text="🎙️ Record Audio"), KeyboardButton(text=" Selfie (10💎)"))
+        builder.row(KeyboardButton(text="🛒 Shop"), KeyboardButton(text="🎁 Invite"))
         builder.row(KeyboardButton(text="💬 New Chat"), KeyboardButton(text="❓ Help"))
-    
-    clean_builder = ReplyKeyboardBuilder()
-    for row in builder.export():
-        clean_row = [btn for btn in row if btn.text != ""]
-        if clean_row:
-            clean_builder.row(*clean_row)
-    
-    return clean_builder.as_markup(resize_keyboard=True, one_time_keyboard=False)
+    return builder.as_markup(resize_keyboard=True, one_time_keyboard=False)
 
 async def generate_openrouter_response(messages: list, language: str = 'es', gem_balance: int = 15, is_hook_mode: bool = False, character_prompt: str = None):
-    headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "Content-Type": "application/json"
-    }
-    
-    intensity_level = "MAXIMUM" if is_hook_mode else (
-        "VERY_HIGH" if gem_balance <= 3 else (
-            "HIGH" if gem_balance <= 7 else "NORMAL"
-        )
-    )
+    headers = {"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"}
+    intensity_level = "MAXIMUM" if is_hook_mode else ("VERY_HIGH" if gem_balance <= 3 else ("HIGH" if gem_balance <= 7 else "NORMAL"))
     
     system_prompts = {
         'es': {
@@ -493,32 +343,17 @@ async def generate_openrouter_response(messages: list, language: str = 'es', gem
     combined_system = f"{intensity_prompt}\n\n{character_prompt}" if character_prompt else intensity_prompt
     
     if language == 'es':
-        combined_system = "IMPORTANTE: Responde ÚNICAMENTE en español.\n\n" + combined_system + "\n\nIMPORTANTE: Mantén tu respuesta dentro de 200 tokens. Usa un español neutro, sin modismos ni jerga regional."
+        combined_system = "IMPORTANTE: Responde ÚNICAMENTE en español.\n\n" + combined_system + "\n\nIMPORTANTE: Mantén tu respuesta dentro de 400 tokens. Usa un español neutro, sin modismos ni jerga regional."
     else:
-        combined_system = "IMPORTANT: Respond ONLY in English.\n\n" + combined_system + "\n\nIMPORTANT: Keep your response within 200 tokens. Use standard English, avoiding heavy slang."
+        combined_system = "IMPORTANT: Respond ONLY in English.\n\n" + combined_system + "\n\nIMPORTANT: Keep your response within 400 tokens. Use standard English, avoiding heavy slang."
     
     full_messages = [{"role": "system", "content": combined_system}] + messages
-    
-    temperature = 0.8 if intensity_level == 'NORMAL' else (
-        0.85 if intensity_level == 'HIGH' else (
-            0.9 if intensity_level == 'VERY_HIGH' else 0.95
-        )
-    )
-    
-    data = {
-        "model": OPENROUTER_MODEL,
-        "messages": full_messages,
-        "temperature": temperature,
-        "max_tokens": 200
-    }
+    temperature = 0.8 if intensity_level == 'NORMAL' else (0.85 if intensity_level == 'HIGH' else (0.9 if intensity_level == 'VERY_HIGH' else 0.95))
+    data = {"model": OPENROUTER_MODEL, "messages": full_messages, "temperature": temperature, "max_tokens": 400}
     
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.post(
-                "https://openrouter.ai/api/v1/chat/completions",
-                headers=headers,
-                json=data
-            ) as response:
+            async with session.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=data) as response:
                 if response.status == 200:
                     result = await response.json()
                     return result['choices'][0]['message']['content']
@@ -528,10 +363,7 @@ async def generate_openrouter_response(messages: list, language: str = 'es', gem
         logger.error(f"Excepción en OpenRouter: {str(e)}")
         return None
 
-KOKORO_VOICES = {
-    "es": {"male": "em_alex", "female": "ef_dora"},
-    "en": {"male": "am_michael", "female": "af_bella"},
-}
+KOKORO_VOICES = {"es": {"male": "em_alex", "female": "ef_dora"}, "en": {"male": "am_michael", "female": "af_bella"}}
 
 def get_kokoro_voice(language: str, gender: str) -> str:
     is_male = 'male' in gender.lower() or 'hombre' in gender.lower()
@@ -539,57 +371,34 @@ def get_kokoro_voice(language: str, gender: str) -> str:
     return KOKORO_VOICES[lang_key]["male" if is_male else "female"]
 
 def detect_audio_format(audio_bytes: bytes) -> str:
-    if audio_bytes[:4] == b'RIFF':
-        return 'wav'
-    if audio_bytes[:4] == b'OggS':
-        return 'ogg'
-    if audio_bytes[:3] == b'ID3' or audio_bytes[:2] == b'\xff\xfb' or audio_bytes[:2] == b'\xff\xf3':
-        return 'mp3'
-    if audio_bytes[:4] == b'fLaC':
-        return 'flac'
+    if audio_bytes[:4] == b'RIFF': return 'wav'
+    if audio_bytes[:4] == b'OggS': return 'ogg'
+    if audio_bytes[:3] == b'ID3' or audio_bytes[:2] == b'\xff\xfb' or audio_bytes[:2] == b'\xff\xf3': return 'mp3'
+    if audio_bytes[:4] == b'fLaC': return 'flac'
     return 'unknown'
 
 async def generate_chatterbox_audio(text: str, language: str = 'es'):
     if not DEEPINFRA_TOKEN:
         logger.error("❌ DEEPINFRA_TOKEN no está configurada")
         return None
-    
-    headers = {
-        "Authorization": f"Bearer {DEEPINFRA_TOKEN}",
-        "Content-Type": "application/json"
-    }
-    
+    headers = {"Authorization": f"Bearer {DEEPINFRA_TOKEN}", "Content-Type": "application/json"}
     lang_code = "es" if language == "es" else "en"
     voice_id = DEEPINFRA_VOICE_ES if lang_code == "es" else DEEPINFRA_VOICE_EN
-    
-    data = {
-        "text": text,
-        "language": lang_code
-    }
-    
+    data = {"text": text, "language": lang_code}
     if voice_id:
         data["voice_id"] = voice_id
-    
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f"https://api.deepinfra.com/v1/inference/{CHATTERBOX_MODEL}",
-                headers=headers,
-                json=data
-            ) as response:
-                status = response.status
-                response_text = await response.text()
-                
-                if status == 200:
+            async with session.post(f"https://api.deepinfra.com/v1/inference/{CHATTERBOX_MODEL}", headers=headers, json=data) as response:
+                if response.status == 200:
                     result = await response.json()
                     audio_data = result.get('audio') or result.get('result', {}).get('audio')
                     if audio_data:
                         return audio_data
-                    logger.error(f" No se encontró audio en la respuesta de Chatterbox: {result}")
+                    logger.error(f"❌ No se encontró audio en la respuesta de Chatterbox: {result}")
                     return None
-                else:
-                    logger.error(f"❌ Chatterbox API error {status}: {response_text}")
-                    return None
+                logger.error(f"❌ Chatterbox API error {response.status}: {await response.text()}")
+                return None
     except Exception as e:
         logger.error(f"⚠️ Excepción en Chatterbox: {str(e)}", exc_info=True)
         return None
@@ -600,48 +409,27 @@ async def generate_tts_audio(text: str, language: str = 'es', gender: str = 'fem
         if audio:
             return audio
         logger.warning("⚠️ Chatterbox falló, probando con Kokoro como respaldo...")
-    
-    audio = await generate_deepinfra_audio(text, language, gender)
-    return audio
+    return await generate_deepinfra_audio(text, language, gender)
 
 async def generate_deepinfra_audio(text: str, language: str = 'es', gender: str = 'female'):
     if not DEEPINFRA_TOKEN:
         logger.error("❌ DEEPINFRA_TOKEN no está configurada")
         return None
-    
-    headers = {
-        "Authorization": f"Bearer {DEEPINFRA_TOKEN}",
-        "Content-Type": "application/json"
-    }
-    
+    headers = {"Authorization": f"Bearer {DEEPINFRA_TOKEN}", "Content-Type": "application/json"}
     voice = get_kokoro_voice(language, gender)
-    
-    data = {
-        "text": text,
-        "voice": voice
-    }
-    
+    data = {"text": text, "voice": voice}
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f"https://api.deepinfra.com/v1/inference/{DEEPINFRA_MODEL}",
-                headers=headers,
-                json=data
-            ) as response:
-                status = response.status
-                response_text = await response.text()
-                
-                if status == 200:
+            async with session.post(f"https://api.deepinfra.com/v1/inference/{DEEPINFRA_MODEL}", headers=headers, json=data) as response:
+                if response.status == 200:
                     result = await response.json()
                     audio_data = result.get('audio') or result.get('result', {}).get('audio')
                     if audio_data:
                         return audio_data
-                    else:
-                        logger.error(f"❌ No se encontró audio en la respuesta. Estructura completa: {result}")
-                        return None
-                else:
-                    logger.error(f"❌ DeepInfra API error {status}: {response_text}")
+                    logger.error(f"❌ No se encontró audio en la respuesta: {result}")
                     return None
+                logger.error(f"❌ DeepInfra API error {response.status}: {await response.text()}")
+                return None
     except Exception as e:
         logger.error(f"⚠️ Excepción en DeepInfra: {str(e)}", exc_info=True)
         return None
@@ -650,31 +438,13 @@ async def generate_image(prompt: str):
     if not DEEPINFRA_TOKEN:
         logger.error("❌ DEEPINFRA_TOKEN no está configurada")
         return None
-    
-    headers = {
-        "Authorization": f"Bearer {DEEPINFRA_TOKEN}",
-        "Content-Type": "application/json"
-    }
-    
-    data = {
-        "prompt": prompt,
-        "width": 1024,
-        "height": 1024,
-        "num_images": 1
-    }
-    
+    headers = {"Authorization": f"Bearer {DEEPINFRA_TOKEN}", "Content-Type": "application/json"}
+    data = {"prompt": prompt, "width": 1024, "height": 1024, "num_images": 1}
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f"https://api.deepinfra.com/v1/inference/{DEEPINFRA_IMG_MODEL}",
-                headers=headers,
-                json=data
-            ) as response:
-                status = response.status
-                if status == 200:
+            async with session.post(f"https://api.deepinfra.com/v1/inference/{DEEPINFRA_IMG_MODEL}", headers=headers, json=data) as response:
+                if response.status == 200:
                     result = await response.json()
-                    logger.info(f"Respuesta de imagen: {result}")
-                    
                     image_data = None
                     if 'images' in result and isinstance(result['images'], list) and len(result['images']) > 0:
                         first_image = result['images'][0]
@@ -682,27 +452,14 @@ async def generate_image(prompt: str):
                             image_data = first_image.get('url') or first_image.get('image')
                         elif isinstance(first_image, str):
                             image_data = first_image
-                    
                     if not image_data and 'image' in result:
                         image_data = result['image']
-                    
-                    if not image_data and 'output' in result:
-                        output = result['output']
-                        if isinstance(output, dict) and 'images' in output and output['images']:
-                            first_image = output['images'][0]
-                            if isinstance(first_image, dict):
-                                image_data = first_image.get('url') or first_image.get('image')
-                            else:
-                                image_data = first_image
-                    
                     if image_data:
                         return image_data
-                    else:
-                        logger.error(f"❌ No se pudo extraer la imagen de la respuesta: {result}")
-                        return None
-                else:
-                    logger.error(f"❌ DeepInfra Image API error {status}: {await response.text()}")
+                    logger.error(f"❌ No se pudo extraer la imagen: {result}")
                     return None
+                logger.error(f"❌ DeepInfra Image API error {response.status}: {await response.text()}")
+                return None
     except Exception as e:
         logger.error(f"⚠️ Excepción en generación de imagen: {str(e)}", exc_info=True)
         return None
@@ -711,14 +468,10 @@ async def send_generated_audio(bot: Bot, chat_id: int, audio_data: str, caption:
     try:
         if audio_data.startswith("data:audio"):
             audio_data = audio_data.split(",")[1]
-        
         audio_bytes = base64.b64decode(audio_data)
         fmt = detect_audio_format(audio_bytes)
-        logger.info(f"🔎 Formato de audio detectado: {fmt} ({len(audio_bytes)} bytes)")
-        
         if len(audio_bytes) == 0:
             return False
-        
         if fmt == 'ogg':
             input_file = BufferedInputFile(audio_bytes, filename="audio.ogg")
             await bot.send_voice(chat_id, voice=input_file, caption=caption)
@@ -726,7 +479,6 @@ async def send_generated_audio(bot: Bot, chat_id: int, audio_data: str, caption:
             ext = fmt if fmt != 'unknown' else 'mp3'
             input_file = BufferedInputFile(audio_bytes, filename=f"audio.{ext}")
             await bot.send_audio(chat_id, audio=input_file, caption=caption)
-        
         return True
     except Exception as e:
         logger.error(f"Error al decodificar/enviar audio: {e}", exc_info=True)
@@ -751,13 +503,10 @@ async def check_and_deduct_gems(telegram_id: int, cost: int, transaction_type: s
     user = await check_and_reset_daily_gems(telegram_id)
     if not user:
         return False, "Usuario no encontrado", 0
-    
     if user['gems'] < cost:
         return False, f"No tienes suficientes gemas. Necesitas {cost} gemas pero solo tienes {user['gems']}.", user['gems']
-    
     if await deduct_gems(telegram_id, cost, transaction_type, description):
         return True, f"Gemas restantes: {user['gems'] - cost}", user['gems'] - cost
-    
     return False, "Error al deducir gemas", user['gems']
 
 async def get_balance(telegram_id: int):
@@ -767,26 +516,18 @@ async def get_balance(telegram_id: int):
 async def process_star_purchase(telegram_id: int, package_index: int, charge_id: str):
     if package_index >= len(STAR_PACKAGES):
         return False, "Paquete no válido"
-    
     pkg = STAR_PACKAGES[package_index]
     gems = int(pkg['gems'] * (1 + pkg.get('bonus', 0) / 100)) if pkg.get('bonus', 0) > 0 else pkg['gems']
-    
     await record_star_purchase(telegram_id, pkg['stars'], gems, pkg.get('first_time', False), charge_id)
-    await execute_query(
-        """UPDATE users SET hook_messages_remaining = 0 WHERE telegram_id = ?""",
-        (telegram_id,)
-    )
-    
+    supabase.table('users').update({'hook_messages_remaining': 0}).eq('telegram_id', telegram_id).execute()
     return True, f"¡Compra exitosa! Has recibido {gems} gemas."
 
 async def create_character_prompt(telegram_id: int, user_name: str, language: str = 'es'):
     character = await get_active_character(telegram_id)
     if not character:
         return None
-    
     personality = PERSONALITIES.get(character['archetype'], '')
     prefix = "Siempre responde en español." if language == 'es' else "Always respond in English."
-    
     return f"""Eres {character['character_name']}, {character['gender']}. {personality}
 El usuario se llama {user_name}. Úsalo naturalmente. Mantén siempre tu personalidad y rol.
 
@@ -820,43 +561,26 @@ async def cmd_start(message: Message, command=None):
         return
     
     builder = InlineKeyboardBuilder()
-    builder.button(text="🇪🇸 Español", callback_data="lang_es")
-    builder.button(text="🇸 English", callback_data="lang_en")
+    builder.button(text="🇪 Español", callback_data="lang_es")
+    builder.button(text="🇺🇸 English", callback_data="lang_en")
     builder.adjust(2)
     
     await message.answer("👋 ¡Bienvenido!\n\nPlease select your language / Selecciona tu idioma:", reply_markup=builder.as_markup())
-    
-    await set_user_state(telegram_id, {
-        'step': 'language',
-        'username': username,
-        'first_name': first_name,
-        'referred_by': referred_by,
-        'is_new_user': True,
-        'created_at': datetime.utcnow().isoformat()
-    })
+    user_states[telegram_id] = {'step': 'language', 'username': username, 'first_name': first_name, 'referred_by': referred_by, 'is_new_user': True, 'created_at': datetime.utcnow()}
 
 @router.callback_query(F.data.startswith('lang_'))
 async def process_language(callback: CallbackQuery):
-    state = await get_user_state(callback.from_user.id)
-    if not state:
+    if callback.from_user.id not in user_states:
         return await callback.answer("⏱️ Sesión expirada. Usa /start")
-    
     lang = callback.data.split('_')[1]
-    state.update({'language': lang, 'step': 'gender'})
-    await set_user_state(callback.from_user.id, state)
+    user_states[callback.from_user.id].update({'language': lang, 'step': 'gender'})
     
     builder = InlineKeyboardBuilder()
     if lang == 'es':
-        builder.row(
-            InlineKeyboardButton(text="👨 Hombre", callback_data="gender_male"),
-            InlineKeyboardButton(text="👩 Mujer", callback_data="gender_female")
-        )
+        builder.row(InlineKeyboardButton(text="👨 Hombre", callback_data="gender_male"), InlineKeyboardButton(text="👩 Mujer", callback_data="gender_female"))
         text = "🎭 Selecciona el género de tu personaje:"
     else:
-        builder.row(
-            InlineKeyboardButton(text=" Male", callback_data="gender_male"),
-            InlineKeyboardButton(text="👩 Female", callback_data="gender_female")
-        )
+        builder.row(InlineKeyboardButton(text="👨 Male", callback_data="gender_male"), InlineKeyboardButton(text=" Female", callback_data="gender_female"))
         text = "🎭 Select your character's gender:"
     
     await callback.message.edit_text(text, reply_markup=builder.as_markup())
@@ -864,15 +588,11 @@ async def process_language(callback: CallbackQuery):
 
 @router.callback_query(F.data.startswith('gender_'))
 async def process_gender(callback: CallbackQuery):
-    state = await get_user_state(callback.from_user.id)
-    if not state:
+    if callback.from_user.id not in user_states:
         return await callback.answer("⏱️ Sesión expirada. Usa /start")
-    
     gender = callback.data.split('_')[1]
-    state.update({'gender': gender, 'step': 'archetype'})
-    await set_user_state(callback.from_user.id, state)
-    
-    lang = state['language']
+    user_states[callback.from_user.id].update({'gender': gender, 'step': 'archetype'})
+    lang = user_states[callback.from_user.id]['language']
     archetypes = ARCHETYPES_MALE[lang] if gender == 'male' else ARCHETYPES_FEMALE[lang]
     
     builder = InlineKeyboardBuilder()
@@ -880,20 +600,16 @@ async def process_gender(callback: CallbackQuery):
         builder.button(text=name, callback_data=f"archetype_{key}")
     builder.adjust(2)
     
-    text = "🎭 Selecciona el tipo de personaje:" if lang == 'es' else "🎭 Select character type:"
+    text = " Selecciona el tipo de personaje:" if lang == 'es' else "🎭 Select character type:"
     await callback.message.edit_text(text, reply_markup=builder.as_markup())
     await callback.answer()
 
 @router.callback_query(F.data.startswith('archetype_'))
 async def process_archetype(callback: CallbackQuery):
-    state = await get_user_state(callback.from_user.id)
-    if not state:
+    if callback.from_user.id not in user_states:
         return await callback.answer("⏱️ Sesión expirada. Usa /start")
-    
-    state.update({'archetype': callback.data.split('_')[1], 'step': 'name'})
-    await set_user_state(callback.from_user.id, state)
-    
-    lang = state['language']
+    user_states[callback.from_user.id].update({'archetype': callback.data.split('_')[1], 'step': 'name'})
+    lang = user_states[callback.from_user.id]['language']
     text = "✍️ ¿Qué nombre quieres para tu personaje?" if lang == 'es' else "✍️ What name do you want for your character?"
     await callback.message.edit_text(text)
     await callback.answer()
@@ -901,36 +617,28 @@ async def process_archetype(callback: CallbackQuery):
 # ==================== HANDLERS DE BOTONES ====================
 
 @router.message(F.text == "💬 Chat")
-async def btn_chat(message: Message):
-    await cmd_chat(message)
+async def btn_chat(message: Message): await cmd_chat(message)
 
-@router.message(F.text == " Balance")
-async def btn_balance(message: Message):
-    await cmd_balance(message)
+@router.message(F.text == "💎 Balance")
+async def btn_balance(message: Message): await cmd_balance(message)
 
-@router.message(F.text.in_(["🎙️ Grabar Audio", "🎙️ Record Audio", "🎵 Generar Audio", "🎵 Generate Audio"]))
-async def btn_audio(message: Message):
-    await cmd_audio(message)
+@router.message(F.text.in_(["🎙️ Grabar Audio", "🎙️ Record Audio", "🎵 Generar Audio", " Generate Audio"]))
+async def btn_audio(message: Message): await cmd_audio(message)
 
-@router.message(F.text.in_(["📸 Selfie (10💎)", "📸 Selfie"]))
-async def btn_selfie(message: Message):
-    await cmd_selfie(message)
+@router.message(F.text.in_(["📸 Selfie (10)", "📸 Selfie"]))
+async def btn_selfie(message: Message): await cmd_selfie(message)
 
-@router.message(F.text.in_(["🛒 Tienda", "🛒 Shop"]))
-async def btn_shop(message: Message):
-    await cmd_shop(message)
+@router.message(F.text.in_([" Tienda", "🛒 Shop"]))
+async def btn_shop(message: Message): await cmd_shop(message)
 
-@router.message(F.text.in_([" Invitar Amigos", "🎁 Invitar", "🎁 Invite Friends", " Invite"]))
-async def btn_invite(message: Message):
-    await cmd_invite(message)
+@router.message(F.text.in_(["🎁 Invitar Amigos", "🎁 Invitar", "🎁 Invite Friends", "🎁 Invite"]))
+async def btn_invite(message: Message): await cmd_invite(message)
 
 @router.message(F.text.in_(["💬 Nuevo Chat", "💬 New Chat"]))
-async def btn_newchat(message: Message):
-    await show_character_menu(message)
+async def btn_newchat(message: Message): await show_character_menu(message)
 
 @router.message(F.text.in_(["❓ Ayuda", "❓ Help"]))
-async def btn_help(message: Message):
-    await cmd_help(message)
+async def btn_help(message: Message): await cmd_help(message)
 
 # ==================== COMANDOS ====================
 
@@ -938,12 +646,10 @@ async def btn_help(message: Message):
 async def cmd_chat(message: Message):
     user = await get_user(message.from_user.id)
     if not user:
-        return await message.answer("️ Primero debes registrarte con /start")
-    
+        return await message.answer("⚠️ Primero debes registrarte con /start")
     character = await get_active_character(message.from_user.id)
     if not character:
         return await message.answer("⚠️ No tienes un personaje activo. Usa /newchat")
-    
     lang = user['language']
     text = f"💬 ¡Conversación iniciada con {character['character_name']}!\n\nEscribe tu mensaje y te responderá.\n💰 Costo: {GEM_COST_MESSAGE} gema por mensaje" if lang == 'es' else f"💬 Conversation started with {character['character_name']}!\n\nWrite your message.\n💰 Cost: {GEM_COST_MESSAGE} gem per message"
     await message.answer(text)
@@ -954,11 +660,9 @@ async def cmd_audio(message: Message):
     user = await get_user(telegram_id)
     if not user:
         return await message.answer("⚠️ Primero debes registrarte con /start")
-    
     if user['language'] != 'en':
         await message.answer("⚠️ El audio solo está disponible en inglés. Cambia tu idioma a inglés para usar esta función.\n\n⚠️ Audio is only available in English. Change your language to English to use this feature.")
         return
-    
     character = await get_active_character(telegram_id)
     if not character:
         return await message.answer("⚠️ No tienes un personaje activo. Usa /newchat")
@@ -969,7 +673,6 @@ async def cmd_audio(message: Message):
         if msg['role'] == 'assistant':
             last_assistant_msg = msg['content']
             break
-    
     if not last_assistant_msg:
         last_assistant_msg = "Hello, I'm your character. What would you like me to say?"
     
@@ -988,7 +691,7 @@ async def cmd_audio(message: Message):
         sent_ok = await send_generated_audio(message.bot, telegram_id, audio_data, caption)
         if not sent_ok:
             await add_gems(telegram_id, GEM_COST_AUDIO, 'refund', 'Reembolso por fallo en audio')
-            await message.answer("⚠️ Error al enviar el audio. Se te han reembolsado las gemas.")
+            await message.answer("️ Error al enviar el audio. Se te han reembolsado las gemas.")
     else:
         await add_gems(telegram_id, GEM_COST_AUDIO, 'refund', 'Reembolso por fallo en TTS')
         await message.answer(f"⚠️ <b>Audio not available</b>\n\nYour gems have been refunded.\n\n<b>Dialogue:</b>\n<i>{dialogue}</i>", parse_mode="HTML")
@@ -999,57 +702,36 @@ async def cmd_selfie(message: Message):
     user = await get_user(telegram_id)
     if not user:
         return await message.answer("⚠️ Primero debes registrarte con /start")
-    
     character = await get_active_character(telegram_id)
     if not character:
         return await message.answer("⚠️ No tienes un personaje activo. Usa /newchat")
-    
     lang = user['language']
     if user['gems'] < GEM_COST_IMAGE:
         await message.answer(f"⚠️ No tienes suficientes gemas. Necesitas {GEM_COST_IMAGE} gemas.")
         return
     
     if lang == 'es':
-        text = (
-            f"📸 <b>{character['character_name']} sonríe con picardía y levanta su teléfono</b>\n\n"
-            f"\"Mmm... ¿cómo quieres que me tome la foto? ¿Con una sonrisa pícara, una mirada profunda, o algo más atrevido?\"\n\n"
-            f"<i>Escribe lo que deseas y haré que la foto sea perfecta para ti.</i>\n\n"
-            f"💰 Costo: {GEM_COST_IMAGE} gemas"
-        )
+        text = f"📸 <b>{character['character_name']} sonríe con picardía y levanta su teléfono</b>\n\n\"Mmm... ¿cómo quieres que me tome la foto? ¿Con una sonrisa pícara, una mirada profunda, o algo más atrevido?\"\n\n<i>Escribe lo que deseas y haré que la foto sea perfecta para ti.</i>\n\n💰 Costo: {GEM_COST_IMAGE} gemas"
     else:
-        text = (
-            f"📸 <b>{character['character_name']} smirks and raises their phone</b>\n\n"
-            f"\"Mmm... how do you want me to take the photo? With a mischievous smile, a deep gaze, or something bolder?\"\n\n"
-            f"<i>Type what you desire and I'll make the photo perfect for you.</i>\n\n"
-            f"💰 Cost: {GEM_COST_IMAGE} gems"
-        )
+        text = f"📸 <b>{character['character_name']} smirks and raises their phone</b>\n\n\"Mmm... how do you want me to take the photo? With a mischievous smile, a deep gaze, or something bolder?\"\n\n<i>Type what you desire and I'll make the photo perfect for you.</i>\n\n💰 Cost: {GEM_COST_IMAGE} gems"
     
     await message.answer(text, parse_mode="HTML")
-    
-    await set_user_state(telegram_id, {
-        'step': 'awaiting_photo_desc',
-        'language': lang,
-        'character_id': character['id'],
-        'created_at': datetime.utcnow().isoformat()
-    })
+    user_states[telegram_id] = {'step': 'awaiting_photo_desc', 'language': lang, 'character_id': character['id'], 'created_at': datetime.utcnow()}
 
 @router.message(Command('balance'))
 async def cmd_balance(message: Message):
     user = await get_user(message.from_user.id)
     if not user:
         return await message.answer("⚠️ Primero debes registrarte con /start")
-    
     lang = user['language']
     gems = await get_balance(message.from_user.id)
     active_ref = await count_active_referrals_last_24h(message.from_user.id)
     bonus = active_ref * GEMS_PER_REFERRAL
     daily_total = BASE_DAILY_GEMS + bonus
     hook_rem = user.get('hook_messages_remaining', 0)
-    
     text = f"💎 Tu Balance\n\nGemas actuales: {gems}\n\n📊 Información:\n• Gemas diarias: {daily_total}/{MAX_DAILY_GEMS}\n• Referidos activos (24h): {active_ref}/{MAX_REFERRALS_PER_DAY}"
     if hook_rem > 0:
         text += f"\n• ⚠️ Momentos especiales: {hook_rem}/{HOOK_MODE_MESSAGES}"
-    
     text += "\n\n💡 Invita hasta 2 amigos cada 24h para ganar +5 gemas c/u" if lang == 'es' else "\n\n💡 Invite up to 2 friends every 24h to earn +5 gems each"
     await message.answer(text)
 
@@ -1058,8 +740,7 @@ async def cmd_shop(message: Message):
     telegram_id = message.from_user.id
     user = await get_user(telegram_id)
     if not user:
-        return await message.answer("️ Primero debes registrarte con /start")
-    
+        return await message.answer("⚠️ Primero debes registrarte con /start")
     language = user['language']
     builder = InlineKeyboardBuilder()
     
@@ -1068,7 +749,7 @@ async def cmd_shop(message: Message):
         for i, package in enumerate(STAR_PACKAGES):
             stars, gems, bonus, first_time = package['stars'], package['gems'], package.get('bonus', 0), package.get('first_time', False)
             final_gems = int(gems * (1 + bonus / 100)) if bonus > 0 else gems
-            line = f"⭐ {stars} Stars → 💎 {final_gems} gemas" + (" (¡Primera vez!)" if first_time else "")
+            line = f"⭐ {stars} Stars →  {final_gems} gemas" + (" (¡Primera vez!)" if first_time else "")
             text += f"{i+1}. {line}\n"
             builder.button(text=f"Opción {i+1}", callback_data=f"buy_{i}")
     else:
@@ -1087,8 +768,7 @@ async def cmd_shop(message: Message):
 async def shop_from_block(callback: CallbackQuery):
     user = await get_user(callback.from_user.id)
     if not user:
-        return await callback.answer("⚠️ Primero debes registrarte con /start", show_alert=True)
-    
+        return await callback.answer("️ Primero debes registrarte con /start", show_alert=True)
     language = user['language']
     builder = InlineKeyboardBuilder()
     
@@ -1125,7 +805,6 @@ async def process_purchase(callback: CallbackQuery):
         package_index = int(callback.data.split('_')[1])
     except (ValueError, IndexError):
         return await callback.answer("❌ Paquete no válido", show_alert=True)
-    
     if package_index >= len(STAR_PACKAGES):
         return await callback.answer("❌ Paquete no válido", show_alert=True)
     
@@ -1143,15 +822,7 @@ async def process_purchase(callback: CallbackQuery):
     prices = [LabeledPrice(label="Gems", amount=stars)]
     
     try:
-        await callback.bot.send_invoice(
-            chat_id=telegram_id,
-            title=title,
-            description=description,
-            provider_token="",
-            currency="XTR",
-            prices=prices,
-            payload=f"gem_purchase_{package_index}"
-        )
+        await callback.bot.send_invoice(chat_id=telegram_id, title=title, description=description, provider_token="", currency="XTR", prices=prices, payload=f"gem_purchase_{package_index}")
         await callback.answer("✅ Factura enviada")
     except Exception as e:
         logger.error(f"Error al enviar invoice: {e}")
@@ -1166,11 +837,10 @@ async def process_successful_payment(message: Message):
     telegram_id = message.from_user.id
     pkg_idx = int(message.successful_payment.invoice_payload.split('_')[-1])
     success, msg = await process_star_purchase(telegram_id, pkg_idx, message.successful_payment.telegram_payment_charge_id)
-    
     lang = (await get_user(telegram_id))['language']
     if success:
         await message.answer(f"✅ {msg}\n\n🎉 ¡Ahora puedes generar audios de alta calidad!" if lang == 'es' else f"✅ {msg}\n\n🎉 You can now generate high-quality audios!")
-        await message.answer("🎊 ¡Tu teclado ha sido actualizado!", reply_markup=get_main_keyboard(lang, True))
+        await message.answer(" ¡Tu teclado ha sido actualizado!", reply_markup=get_main_keyboard(lang, True))
     else:
         await message.answer("⚠️ Error al procesar la compra." if lang == 'es' else "⚠️ Error processing purchase.")
 
@@ -1178,15 +848,12 @@ async def process_successful_payment(message: Message):
 async def cmd_invite(message: Message):
     user = await get_user(message.from_user.id)
     if not user:
-        return await message.answer("️ Primero debes registrarte con /start")
-    
+        return await message.answer("⚠️ Primero debes registrarte con /start")
     lang = user['language']
     active_ref = await count_active_referrals_last_24h(message.from_user.id)
     bonus = active_ref * GEMS_PER_REFERRAL
     daily_total = BASE_DAILY_GEMS + bonus
-    
     link = f"https://t.me/{(await message.bot.get_me()).username}?start={user['referral_code']}"
-    
     text = f"🎁 Sistema de Referidos\n\n🔗 Tu enlace:\n{link}\n\n📊 Estadísticas:\n• Referidos activos (24h): {active_ref}/{MAX_REFERRALS_PER_DAY}\n• Gemas diarias: {daily_total}/{MAX_DAILY_GEMS}\n\n💡 ¡Comparte tu enlace y gana gemas gratis!" if lang == 'es' else f" Referral System\n\n🔗 Your link:\n{link}\n\n📊 Stats:\n• Active referrals (24h): {active_ref}/{MAX_REFERRALS_PER_DAY}\n• Daily gems: {daily_total}/{MAX_DAILY_GEMS}\n\n💡 Share your link and earn free gems!"
     await message.answer(text)
 
@@ -1196,18 +863,14 @@ async def show_character_menu(message: Message):
     if not user:
         await message.answer("⚠️ Primero debes registrarte con /start")
         return
-    
     characters = await get_all_characters(telegram_id)
     builder = InlineKeyboardBuilder()
-    
     if characters:
         for char in characters:
             label = char['character_name'] + (" ✅" if char['is_active'] else "")
             builder.button(text=label, callback_data=f"switch_{char['id']}")
-        
         builder.button(text="➕ Crear nuevo personaje" if user['language'] == 'es' else "➕ Create new character", callback_data="create_new_character")
         builder.adjust(1)
-        
         text = "Selecciona un personaje para cambiar, o crea uno nuevo:" if user['language'] == 'es' else "Select a character to switch, or create a new one:"
         await message.answer(text, reply_markup=builder.as_markup())
 
@@ -1215,18 +878,12 @@ async def show_character_menu(message: Message):
 async def process_switch(callback: CallbackQuery):
     telegram_id = callback.from_user.id
     character_id = int(callback.data.split('_')[1])
-    
     await set_active_character(telegram_id, character_id)
-    char = await execute_query(
-        """SELECT * FROM user_characters WHERE id = ?""",
-        (character_id,)
-    )
-    
-    if char:
+    char = supabase.table('user_characters').select('*').eq('id', character_id).execute()
+    if char.data:
         user = await get_user(telegram_id)
-        name = char[0]['character_name']
+        name = char.data[0]['character_name']
         await callback.message.answer(f"✅ Has cambiado al personaje: {name}" if user['language'] == 'es' else f"✅ Switched to character: {name}")
-    
     await callback.answer()
 
 @router.callback_query(F.data == "create_new_character")
@@ -1235,11 +892,10 @@ async def create_new_character(callback: CallbackQuery):
     user = await get_user(telegram_id)
     if not user:
         return await callback.answer("Primero regístrate", show_alert=True)
-    
     gems = await get_balance(telegram_id)
     if gems < GEM_COST_NEW_CHARACTER:
         lang = user['language']
-        msg = f" No tienes suficientes gemas. Crear un personaje cuesta {GEM_COST_NEW_CHARACTER} gemas. Tienes {gems}." if lang == 'es' else f"❌ You don't have enough gems. Creating a character costs {GEM_COST_NEW_CHARACTER} gems. You have {gems}."
+        msg = f"❌ No tienes suficientes gemas. Crear un personaje cuesta {GEM_COST_NEW_CHARACTER} gemas. Tienes {gems}." if lang == 'es' else f"❌ You don't have enough gems. Creating a character costs {GEM_COST_NEW_CHARACTER} gems. You have {gems}."
         await callback.message.answer(msg)
         return await callback.answer()
     
@@ -1248,24 +904,17 @@ async def create_new_character(callback: CallbackQuery):
         await callback.message.answer(f"⚠️ {msg}")
         return await callback.answer()
     
-    await set_user_state(telegram_id, {
-        'step': 'gender',
-        'language': user['language'],
-        'is_new_user': False,
-        'created_at': datetime.utcnow().isoformat()
-    })
-    
+    user_states[telegram_id] = {'step': 'gender', 'language': user['language'], 'is_new_user': False, 'created_at': datetime.utcnow()}
     lang = user['language']
     builder = InlineKeyboardBuilder()
     if lang == 'es':
         builder.button(text="👨 Hombre", callback_data="gender_male")
         builder.button(text="👩 Mujer", callback_data="gender_female")
-        text = " Selecciona el género de tu nuevo personaje:"
+        text = "🎭 Selecciona el género de tu nuevo personaje:"
     else:
-        builder.button(text=" Male", callback_data="gender_male")
-        builder.button(text="👩 Female", callback_data="gender_female")
+        builder.button(text="👨 Male", callback_data="gender_male")
+        builder.button(text=" Female", callback_data="gender_female")
         text = "🎭 Select your new character's gender:"
-    
     builder.adjust(2)
     await callback.message.answer(text, reply_markup=builder.as_markup())
     await callback.answer()
@@ -1276,14 +925,13 @@ async def cmd_newchat(message: Message):
 
 @router.message(Command('help'))
 async def cmd_help(message: Message):
-    await message.answer("📚 Comandos:\n/start - Registrarse\n/chat - Conversar\n/audio - Grabar audio del personaje (5 gemas) [SOLO INGLÉS]\n/selfie - Pedir foto (10 gemas)\n/balance - Ver gemas\n/shop - Tienda\n/invite - Invitar amigos\n/newchat - Cambiar/Crear personaje (5 gemas)\n/help - Ayuda\n\n💡 Consejo: Pide 'mándame una foto' en el chat para recibir un selfie personalizado.")
+    await message.answer("📚 Comandos:\n/start - Registrarse\n/chat - Conversar\n/audio - Grabar audio del personaje (5 gemas) [SOLO INGLÉS]\n/selfie - Pedir foto (10 gemas)\n/balance - Ver gemas\n/shop - Tienda\n/invite - Invitar amigos\n/newchat - Cambiar/Crear personaje (5 gemas)\n/help - Ayuda\n\n Consejo: Pide 'mándame una foto' en el chat para recibir un selfie personalizado.")
 
 @router.message(Command('menu'))
 async def cmd_menu(message: Message):
     user = await get_user(message.from_user.id)
     if not user:
         return await message.answer("⚠️ Primero debes registrarte con /start")
-    
     lang = user['language']
     text = "🏠 Menú Principal\n\nUsa los botones de abajo para navegar:" if lang == 'es' else "🏠 Main Menu\n\nUse the buttons below to navigate:"
     await message.answer(text, reply_markup=get_main_keyboard(lang, await has_user_purchased(message.from_user.id)))
@@ -1295,43 +943,41 @@ async def process_message(message: Message):
     telegram_id = message.from_user.id
     
     # --- Manejo de estado de creación de personaje ---
-    state = await get_user_state(telegram_id)
-    
-    if state and state.get('step') == 'name':
+    if telegram_id in user_states and user_states[telegram_id].get('step') == 'name':
+        state = user_states[telegram_id]
         is_new_user = state.get('is_new_user', False)
         if is_new_user:
             user = await create_user(telegram_id, state['username'], state['first_name'], state['language'], state.get('referred_by'))
             if not user:
-                await message.answer("⚠️ Error al crear el usuario. Intenta de nuevo con /start")
-                await clear_user_state(telegram_id)
+                await message.answer("️ Error al crear el usuario. Intenta de nuevo con /start")
+                del user_states[telegram_id]
                 return
-            
             await save_character(telegram_id, message.text.strip(), state['gender'], state['archetype'], PERSONALITIES.get(state['archetype'], ''))
-            await clear_user_state(telegram_id)
+            del user_states[telegram_id]
             return await show_welcome(message, message.text.strip(), state['language'], get_main_keyboard(state['language'], False))
         else:
             await save_character(telegram_id, message.text.strip(), state['gender'], state['archetype'], PERSONALITIES.get(state['archetype'], ''))
-            await clear_user_state(telegram_id)
+            del user_states[telegram_id]
             lang = state['language']
-            text = f"✅ ¡Nuevo personaje creado!\n\n Nombre: {message.text.strip()}\n\nPuedes empezar a chatear con el botón  Chat." if lang == 'es' else f"✅ New character created!\n\n🎭 Name: {message.text.strip()}\n\nYou can start chatting with the 💬 Chat button."
+            text = f"✅ ¡Nuevo personaje creado!\n\n🎭 Nombre: {message.text.strip()}\n\nPuedes empezar a chatear con el botón 💬 Chat." if lang == 'es' else f"✅ New character created!\n\n🎭 Name: {message.text.strip()}\n\nYou can start chatting with the 💬 Chat button."
             return await message.answer(text)
     
     # --- Manejo de descripción de foto (selfie personalizado) ---
-    if state and state.get('step') == 'awaiting_photo_desc':
+    if telegram_id in user_states and user_states[telegram_id].get('step') == 'awaiting_photo_desc':
+        state = user_states[telegram_id]
         lang = state['language']
         character_id = state['character_id']
         description = message.text.strip()
-        
         character = await get_active_character(telegram_id)
         if not character or character['id'] != character_id:
             await message.answer("⚠️ Personaje no encontrado. Usa /newchat para seleccionar uno.")
-            await clear_user_state(telegram_id)
+            del user_states[telegram_id]
             return
         
         success, msg, _ = await check_and_deduct_gems(telegram_id, GEM_COST_IMAGE, 'image', f'Selfie personalizado: {description[:50]}')
         if not success:
             await message.answer(f"⚠️ {msg}")
-            await clear_user_state(telegram_id)
+            del user_states[telegram_id]
             return
         
         await message.bot.send_chat_action(telegram_id, 'upload_photo')
@@ -1360,11 +1006,7 @@ async def process_message(message: Message):
         
         face_prompt = CHARACTER_FACES.get(character['archetype'], "beautiful person")
         context = f"Context: User said '{last_user_msg[:100]}' and character responded '{last_assistant_msg[:100]}'." if last_user_msg and last_assistant_msg else ""
-        
-        image_prompt = (
-            f"{face_prompt}, selfie style, {last_action}, POV, realistic, smartphone photo, high detail, candid, beautiful lighting. "
-            f"User request: {description}. Make it sensual, flirty, and immersive. {context}"
-        )
+        image_prompt = f"{face_prompt}, selfie style, {last_action}, POV, realistic, smartphone photo, high detail, candid, beautiful lighting. User request: {description}. Make it sensual, flirty, and immersive. {context}"
         
         logger.info(f"Generando imagen con prompt: {image_prompt}")
         image_url = await generate_image(image_prompt)
@@ -1377,9 +1019,9 @@ async def process_message(message: Message):
                 await message.answer("⚠️ Error al enviar la imagen. Se te han reembolsado las gemas.")
         else:
             await add_gems(telegram_id, GEM_COST_IMAGE, 'refund', 'Reembolso por fallo en generación')
-            await message.answer("️ Error al generar la imagen. Se te han reembolsado las gemas.")
+            await message.answer("⚠️ Error al generar la imagen. Se te han reembolsado las gemas.")
         
-        await clear_user_state(telegram_id)
+        del user_states[telegram_id]
         return
     
     # --- Flujo normal de chat ---
@@ -1403,14 +1045,12 @@ async def process_message(message: Message):
     # Sin gemas y sin hook
     if user['gems'] <= 0 and hook_remaining <= 0:
         char_name = escape_html(character['character_name'])
-        text = (
-            f"<b>*{char_name} te mira con ojos ardientes y se muerde el labio inferior*</b>\n\n"
-            "\"Mmm... justo cuando las cosas se estaban poniendo interesantes... <b>*se acerca más y susurra*</b> Tengo algo especial que quería mostrarte...\"\n\n"
-            "<b>*se aleja un poco con una sonrisa provocativa*</b>\n\n"
-            "🔥 <b>Opción 1: Recarga gemas y desbloquea TODO</b>\n"
-            "💎 <b>Opción 2: Invita a un amigo (5 gemas gratis)</b>\n\n"
-            "<b>*te mira con deseo*</b> \"¿Cuál eliges? Prometo que valdrá la pena...\" 😉"
-        )
+        text = (f"<b>*{char_name} te mira con ojos ardientes y se muerde el labio inferior*</b>\n\n"
+                "\"Mmm... justo cuando las cosas se estaban poniendo interesantes... <b>*se acerca más y susurra*</b> Tengo algo especial que quería mostrarte...\"\n\n"
+                "<b>*se aleja un poco con una sonrisa provocativa*</b>\n\n"
+                "🔥 <b>Opción 1: Recarga gemas y desbloquea TODO</b>\n"
+                "💎 <b>Opción 2: Invita a un amigo (5 gemas gratis)</b>\n\n"
+                "<b>*te mira con deseo*</b> \"¿Cuál eliges? Prometo que valdrá la pena...\" 😉")
         builder = InlineKeyboardBuilder()
         builder.button(text="🛒 VER PAQUETES DISPONIBLES", callback_data="shop_from_block")
         builder.button(text="🎁 Invitar amigo (5 gemas)", callback_data="invite_from_block")
@@ -1423,14 +1063,13 @@ async def process_message(message: Message):
             char_name = escape_html(character['character_name'])
             hook_msg = f"<b>*{char_name} te detiene con una mano en tu pecho y te mira con ojos brillantes*</b>\n\n\"¡Espera! <b>*se muerde el labio*</b> No te vayas todavía...\"\n\n<b>*se acerca más y susurra al oído*</b>\n\n\"Tengo {hook_remaining} momentos especiales reservados solo para ti...\""
             await message.answer(hook_msg, parse_mode="HTML")
-        
         hook_remaining = await decrement_hook_message(telegram_id)
         is_hook_mode = True
         current_gems = 0
     else:
         success, msg, new_balance = await check_and_deduct_gems(telegram_id, GEM_COST_MESSAGE, 'message', 'Mensaje de chat')
         if not success:
-            return await message.answer(f"️ {msg}")
+            return await message.answer(f"⚠️ {msg}")
         is_hook_mode = False
         current_gems = new_balance
     
@@ -1450,14 +1089,14 @@ async def process_message(message: Message):
             response += f"\n\n⚠️ <b>*Momentos especiales restantes: {hook_remaining}*</b>" if lang == 'es' else f"\n\n⚠️ <b>*Special moments remaining: {hook_remaining}*</b>"
         await message.answer(format_actions_html(response), parse_mode="HTML")
     else:
-        await message.answer("️ Error al generar respuesta. Intenta de nuevo." if lang == 'es' else "⚠️ Error generating response. Try again.")
+        await message.answer("⚠️ Error al generar respuesta. Intenta de nuevo." if lang == 'es' else "⚠️ Error generating response. Try again.")
 
 # ==================== FUNCIONES AUXILIARES ====================
 
 async def show_welcome(message: Message, character_name: str, language: str, keyboard: ReplyKeyboardMarkup = None):
-    text = f"✅ ¡Registro completado!\n\n🎭 Tu personaje: {escape_html(character_name)}\n💎 Tienes 15 gemas para empezar\n\n📝 Usa los botones de abajo para navegar." if language == 'es' else f"✅ Registration complete!\n\n🎭 Your character: {escape_html(character_name)}\n💎 You have 15 gems to start\n\n📝 Use the buttons below to navigate."
+    text = f"✅ ¡Registro completado!\n\n🎭 Tu personaje: {escape_html(character_name)}\n💎 Tienes 15 gemas para empezar\n\n📝 Usa los botones de abajo para navegar." if language == 'es' else f"✅ Registration complete!\n\n🎭 Your character: {escape_html(character_name)}\n You have 15 gems to start\n\n Use the buttons below to navigate."
     await message.answer(text, reply_markup=keyboard)
 
 async def show_main_menu(message: Message, language: str, keyboard: ReplyKeyboardMarkup = None):
-    text = " Menú Principal\n\nUsa los botones de abajo para navegar:" if language == 'es' else "🏠 Main Menu\n\nUse the buttons below to navigate:"
+    text = "🏠 Menú Principal\n\nUsa los botones de abajo para navegar:" if language == 'es' else "🏠 Main Menu\n\nUse the buttons below to navigate:"
     await message.answer(text, reply_markup=keyboard)
