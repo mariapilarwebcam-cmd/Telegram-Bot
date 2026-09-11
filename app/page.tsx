@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState } from 'react'
-import WebApp from '@twa-dev/sdk'
 import { supabase } from '@/lib/supabase'
 import { PERSONALITIES } from '@/lib/constants'
 import Link from 'next/link'
@@ -22,18 +21,21 @@ export default function Home() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    WebApp.ready()
-    WebApp.expand()
-    
-    const tgUser = WebApp.initDataUnsafe?.user
-    if (tgUser) {
-      loadUserData(tgUser.id)
-    }
+    // IMPORTACIÓN DINÁMICA: Evita el error "window is not defined" en el servidor
+    import('@twa-dev/sdk').then((WebAppModule) => {
+      const WebApp = WebAppModule.default
+      WebApp.ready()
+      WebApp.expand()
+      
+      const tgUser = WebApp.initDataUnsafe?.user
+      if (tgUser) {
+        loadUserData(tgUser.id)
+      }
+    })
   }, [])
 
   const loadUserData = async (telegramId: number) => {
     try {
-      // Obtener usuario
       const { data: userData } = await supabase
         .from('users')
         .select('*')
@@ -44,7 +46,6 @@ export default function Home() {
         setUser(userData)
         setGems(userData.gems)
 
-        // Obtener personajes
         const { data: chars } = await supabase
           .from('user_characters')
           .select('*')
@@ -75,13 +76,13 @@ export default function Home() {
     return (
       <div className="flex items-center justify-center h-screen bg-background p-4">
         <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">️ Usuario no encontrado</h1>
+          <h1 className="text-2xl font-bold mb-4">⚠️ Usuario no encontrado</h1>
           <p className="text-textMuted mb-6">
             Por favor, inicia el bot en Telegram primero con /start
           </p>
           <a
-            href="https://t.me/your_bot_username"
-            className="bg-gradient-primary text-white px-6 py-3 rounded-xl font-bold"
+            href="https://t.me/tu_bot_username"
+            className="bg-gradient-primary text-white px-6 py-3 rounded-xl font-bold inline-block"
           >
             Abrir en Telegram
           </a>
@@ -92,7 +93,6 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-background p-4 pb-20">
-      {/* Header */}
       <header className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-primary">
@@ -106,14 +106,10 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Personajes */}
       <section className="mb-6">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold">Tus Personajes</h2>
-          <Link
-            href="/characters"
-            className="text-sm text-primary hover:text-primaryDark transition-colors"
-          >
+          <Link href="/characters" className="text-sm text-primary hover:text-primaryDark transition-colors">
             Ver todos →
           </Link>
         </div>
@@ -121,10 +117,7 @@ export default function Home() {
         {characters.length === 0 ? (
           <div className="text-center py-12 bg-surface rounded-2xl border border-white/5">
             <p className="text-textMuted mb-4">No tienes personajes aún</p>
-            <Link
-              href="/characters"
-              className="bg-gradient-primary text-white px-6 py-3 rounded-xl font-bold inline-block"
-            >
+            <Link href="/characters" className="bg-gradient-primary text-white px-6 py-3 rounded-xl font-bold inline-block">
               Crear Personaje
             </Link>
           </div>
@@ -135,7 +128,7 @@ export default function Home() {
                 <div className="group relative rounded-xl overflow-hidden bg-surface border border-white/5 hover:border-primary/50 transition-all">
                   <div className="aspect-[3/4] bg-surfaceHighlight relative">
                     <div className="absolute inset-0 flex items-center justify-center text-6xl">
-                      {char.gender === 'male' ? '👨' : ''}
+                      {char.gender === 'male' ? '👨' : '👩'}
                     </div>
                     <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
                   </div>
@@ -157,10 +150,9 @@ export default function Home() {
         )}
       </section>
 
-      {/* Acciones Rápidas */}
       <section className="grid grid-cols-2 gap-4">
         <Link href="/shop" className="bg-surface p-4 rounded-xl border border-white/5 hover:border-primary/30 transition-all">
-          <div className="text-3xl mb-2"></div>
+          <div className="text-3xl mb-2">🛒</div>
           <h3 className="font-bold mb-1">Tienda</h3>
           <p className="text-xs text-textMuted">Comprar gemas</p>
         </Link>
