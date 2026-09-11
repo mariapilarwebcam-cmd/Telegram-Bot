@@ -97,12 +97,16 @@ export default function CharactersPage() {
           .eq('id', existingChar.id)
         characterId = existingChar.id
       } else {
+        // CORRECCIÓN: Usar Record<string, string> para evitar error de TypeScript
+        const maleArchetypes = ARCHETYPES_MALE[lang] as Record<string, string>
+        const femaleArchetypes = ARCHETYPES_FEMALE[lang] as Record<string, string>
+        
         // Crear nuevo personaje
         const { data, error } = await supabase
           .from('user_characters')
           .insert({
             telegram_id: user.telegram_id,
-            character_name: ARCHETYPES_MALE[lang][archetype] || ARCHETYPES_FEMALE[lang][archetype],
+            character_name: maleArchetypes[archetype] || femaleArchetypes[archetype],
             gender: gender,
             archetype: archetype,
             personality: PERSONALITIES[archetype] || '',
@@ -137,23 +141,26 @@ export default function CharactersPage() {
   // Generar lista de personajes predefinidos
   const predefinedCharacters: PredefinedCharacter[] = []
 
-  Object.entries(ARCHETYPES_MALE[lang]).forEach(([key, name]) => {
+  const maleArchetypesList = ARCHETYPES_MALE[lang] as Record<string, string>
+  const femaleArchetypesList = ARCHETYPES_FEMALE[lang] as Record<string, string>
+
+  Object.entries(maleArchetypesList).forEach(([key, name]) => {
     predefinedCharacters.push({
       archetype: key,
-      name: name as string,
+      name: name,
       gender: 'male',
       personality: PERSONALITIES[key] || '',
-      icon: '👨'
+      icon: ''
     })
   })
 
-  Object.entries(ARCHETYPES_FEMALE[lang]).forEach(([key, name]) => {
+  Object.entries(femaleArchetypesList).forEach(([key, name]) => {
     predefinedCharacters.push({
       archetype: key,
-      name: name as string,
+      name: name,
       gender: 'female',
       personality: PERSONALITIES[key] || '',
-      icon: ''
+      icon: '👩'
     })
   })
 
@@ -196,7 +203,7 @@ export default function CharactersPage() {
               : 'bg-surface text-textMuted border border-white/10'
           }`}
         >
-           Masculinos
+          👨 Masculinos
         </button>
         <button
           onClick={() => setSelectedGender('female')}
