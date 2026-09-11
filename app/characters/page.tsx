@@ -143,7 +143,8 @@ export default function CharactersPage() {
     )
   }
 
-  const archetypes = newCharGender === 'male' ? ARCHETYPES_MALE[user?.language || 'es'] : ARCHETYPES_FEMALE[user?.language || 'es']
+ const lang = (user?.language || 'es') as 'es' | 'en'
+const archetypes = newCharGender === 'male' ? ARCHETYPES_MALE[lang] : ARCHETYPES_FEMALE[lang]
 
   return (
     <div className="min-h-screen bg-background p-4 pb-20">
