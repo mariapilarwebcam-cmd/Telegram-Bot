@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { useParams } from 'next/navigation'
-import WebApp from '@twa-dev/sdk'
 import { supabase } from '@/lib/supabase'
 import { PERSONALITIES, CHARACTER_FACES, GEM_COSTS } from '@/lib/constants'
 
@@ -30,13 +29,17 @@ export default function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    WebApp.ready()
-    WebApp.expand()
-    
-    const tgUser = WebApp.initDataUnsafe?.user
-    if (tgUser) {
-      loadChatData(tgUser.id)
-    }
+    // IMPORTACIÓN DINÁMICA: Evita el error "window is not defined"
+    import('@twa-dev/sdk').then((WebAppModule) => {
+      const WebApp = WebAppModule.default
+      WebApp.ready()
+      WebApp.expand()
+      
+      const tgUser = WebApp.initDataUnsafe?.user
+      if (tgUser) {
+        loadChatData(tgUser.id)
+      }
+    })
   }, [characterId])
 
   useEffect(() => {
@@ -45,7 +48,6 @@ export default function ChatPage() {
 
   const loadChatData = async (telegramId: number) => {
     try {
-      // Obtener usuario
       const { data: userData } = await supabase
         .from('users')
         .select('*')
@@ -56,7 +58,6 @@ export default function ChatPage() {
         setUser(userData)
         setGems(userData.gems)
 
-        // Obtener personaje
         const { data: charData } = await supabase
           .from('user_characters')
           .select('*')
@@ -66,7 +67,6 @@ export default function ChatPage() {
         if (charData) {
           setCharacter(charData)
 
-          // Obtener historial
           const { data: history } = await supabase
             .from('conversation_history')
             .select('*')
@@ -95,7 +95,6 @@ export default function ChatPage() {
     setInput('')
     setLoading(true)
 
-    // Añadir mensaje del usuario inmediatamente
     const newUserMsg: Message = { role: 'user', content: userMessage }
     setMessages(prev => [...prev, newUserMsg])
 
@@ -117,7 +116,6 @@ export default function ChatPage() {
         setGems(data.remaining_gems)
       } else {
         alert(data.error || 'Error al enviar mensaje')
-        // Remover el mensaje del usuario si falló
         setMessages(prev => prev.slice(0, -1))
       }
     } catch (error) {
@@ -170,9 +168,7 @@ export default function ChatPage() {
   }
 
   const formatMessage = (content: string) => {
-    // Convertir *acciones* a negrita
     const formatted = content.replace(/\*([^*]+)\*/g, '<b>$1</b>')
-    // Convertir URLs de imágenes a etiquetas img
     const withImages = formatted.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" class="rounded-lg max-w-full mt-2" />')
     return withImages
   }
@@ -190,11 +186,10 @@ export default function ChatPage() {
 
   return (
     <div className="flex flex-col h-screen bg-background">
-      {/* Header */}
       <header className="flex items-center justify-between p-4 bg-surface border-b border-white/10">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-gradient-primary flex items-center justify-center text-xl">
-            {character.gender === 'male' ? '' : '👩'}
+            {character.gender === 'male' ? '👨' : '👩'}
           </div>
           <div>
             <h2 className="font-bold">{character.character_name}</h2>
@@ -207,7 +202,6 @@ export default function ChatPage() {
         </div>
       </header>
 
-      {/* Mensajes */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.length === 0 && (
           <div className="text-center py-12">
@@ -245,7 +239,6 @@ export default function ChatPage() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Modal de Imagen */}
       {showImageModal && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
           <div className="bg-surface rounded-2xl p-6 max-w-md w-full border border-white/10">
@@ -278,7 +271,6 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* Input */}
       <div className="p-4 bg-surface border-t border-white/10">
         <div className="flex gap-2">
           <button
@@ -303,7 +295,7 @@ export default function ChatPage() {
             disabled={loading || !input.trim()}
             className="bg-gradient-primary text-white px-4 py-2 rounded-xl font-bold disabled:opacity-50"
           >
-            ➤
+            
           </button>
         </div>
       </div>
