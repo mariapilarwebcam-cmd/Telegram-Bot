@@ -10,9 +10,10 @@ export async function POST(request: Request) {
     }
 
     const pkg = STAR_PACKAGES[package_id]
-    const finalGems = Math.floor(pkg.gems * (1 + pkg.bonus / 100))
+    const finalGems = pkg.bonus > 0
+      ? Math.floor(pkg.gems * (1 + pkg.bonus / 100))
+      : pkg.gems
 
-    // Crear factura de Telegram
     const response = await fetch(
       `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/createInvoiceLink`,
       {
@@ -35,7 +36,6 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ invoice_link: data.result })
-
   } catch (error: any) {
     console.error('Error creando invoice:', error)
     return NextResponse.json({ error: 'Error interno' }, { status: 500 })
