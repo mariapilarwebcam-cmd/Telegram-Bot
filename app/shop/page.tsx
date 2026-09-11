@@ -12,32 +12,30 @@ export default function ShopPage() {
   const [purchasing, setPurchasing] = useState<number | null>(null)
 
   useEffect(() => {
-    // Importar WebApp solo dentro de useEffect (lado del cliente)
-    import('@twa-dev/sdk').then((WebApp) => {
-      WebApp.default.ready()
-      WebApp.default.expand()
-      
-      const tgUser = WebApp.default.initDataUnsafe?.user
-      if (tgUser) {
-        loadUserData(tgUser.id)
-      }
+    import('@twa-dev/sdk').then((mod) => {
+      const WebApp = mod.default
+      WebApp.ready()
+      WebApp.expand()
+      const tgUser = WebApp.initDataUnsafe?.user
+      if (tgUser) loadUserData(tgUser.id)
+      else setLoading(false)
     })
   }, [])
 
   const loadUserData = async (telegramId: number) => {
     try {
-      const { data: userData } = await supabase
+      const { data } = await supabase
         .from('users')
         .select('*')
-        .eq('telegram_id', telegramId)
-        .single()
+        .eq('telegram_id', telegramId.toString())
+        .maybeSingle()
 
-      if (userData) {
-        setUser(userData)
-        setGems(userData.gems)
+      if (data) {
+        setUser(data)
+        setGems(data.gems)
       }
-    } catch (error) {
-      console.error('Error cargando datos:', error)
+    } catch (e) {
+      console.error(e)
     } finally {
       setLoading(false)
     }
@@ -45,7 +43,6 @@ export default function ShopPage() {
 
   const createInvoice = async (packageIndex: number) => {
     if (!user) return
-    
     setPurchasing(packageIndex)
 
     try {
@@ -53,7 +50,7 @@ export default function ShopPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          telegram_id: user.telegram_id,
+          telegram_id: user.telegram_id.toString(),
           package_id: packageIndex
         })
       })
@@ -61,13 +58,12 @@ export default function ShopPage() {
       const data = await res.json()
 
       if (res.ok && data.invoice_link) {
-        import('@twa-dev/sdk').then((WebApp) => {
-          WebApp.default.openInvoice(data.invoice_link, async (status: string) => {
+        import('@twa-dev/sdk').then((mod) => {
+          const WebApp = mod.default
+          WebApp.openInvoice(data.invoice_link, async (status: string) => {
             if (status === 'paid') {
               alert('¡Compra exitosa! Gemas añadidas.')
-              if (user) {
-                loadUserData(user.telegram_id)
-              }
+              await loadUserData(Number(user.telegram_id))
             } else {
               alert('Pago cancelado o fallido.')
             }
@@ -78,7 +74,7 @@ export default function ShopPage() {
         alert(data.error || 'Error al crear factura')
         setPurchasing(null)
       }
-    } catch (error) {
+    } catch (e) {
       alert('Error de conexión')
       setPurchasing(null)
     }
@@ -97,9 +93,7 @@ export default function ShopPage() {
       <div className="flex items-center justify-center h-screen bg-background">
         <div className="text-center">
           <p className="text-textMuted mb-4">Inicia sesión desde Telegram</p>
-          <Link href="/" className="text-primary hover:underline">
-            ← Volver al inicio
-          </Link>
+          <Link href="/" className="text-primary hover:underline">← Volver al inicio</Link>
         </div>
       </div>
     )
@@ -107,11 +101,8 @@ export default function ShopPage() {
 
   return (
     <div className="min-h-screen bg-background p-4 pb-20">
-      {/* Header */}
       <header className="flex justify-between items-center mb-6">
-        <Link href="/" className="text-textMuted hover:text-textMain">
-          ← Volver
-        </Link>
+        <Link href="/" className="text-textMuted hover:text-textMain">← Volver</Link>
         <h1 className="text-xl font-bold">Tienda</h1>
         <div className="flex items-center gap-2 bg-surface px-3 py-1.5 rounded-full">
           <span className="text-primary">💎</span>
@@ -119,22 +110,22 @@ export default function ShopPage() {
         </div>
       </header>
 
-      {/* Info */}
       <div className="bg-surface p-4 rounded-xl border border-white/5 mb-6">
         <h2 className="font-bold mb-2">💎 Gemas</h2>
         <p className="text-sm text-textMuted">
-          Las gemas se usan para chatear, generar imágenes y crear personajes.
+          Las gemas se usan para chatear, generar imágenes y audios.
         </p>
       </div>
 
-      {/* Paquetes */}
       <div className="space-y-3">
         <h2 className="font-bold mb-3">Paquetes Disponibles</h2>
-        
+
         {STAR_PACKAGES.map((pkg, idx) => {
-          const finalGems = Math.floor(pkg.gems * (1 + pkg.bonus / 100))
+          const finalGems = pkg.bonus > 0
+            ? Math.floor(pkg.gems * (1 + pkg.bonus / 100))
+            : pkg.gems
           const isPopular = idx === 2
-          
+
           return (
             <div
               key={idx}
@@ -147,7 +138,7 @@ export default function ShopPage() {
                   Popular
                 </span>
               )}
-              
+
               <div className="flex items-center justify-between">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
@@ -155,7 +146,7 @@ export default function ShopPage() {
                     <span className="font-bold text-lg">{pkg.stars} Stars</span>
                   </div>
                   <p className="text-sm text-textMuted">
-                     {finalGems} gemas
+                    💎 {finalGems} gemas
                     {pkg.bonus > 0 && (
                       <span className="text-primary ml-1">(+{pkg.bonus}% bonus)</span>
                     )}
@@ -164,7 +155,7 @@ export default function ShopPage() {
                     <p className="text-xs text-accent mt-1">¡Primera vez!</p>
                   )}
                 </div>
-                
+
                 <button
                   onClick={() => createInvoice(idx)}
                   disabled={purchasing !== null}
@@ -178,13 +169,12 @@ export default function ShopPage() {
         })}
       </div>
 
-      {/* Info adicional */}
       <div className="mt-6 bg-surface p-4 rounded-xl border border-white/5">
-        <h3 className="font-bold mb-2">💡 ¿Cómo funciona?</h3>
+        <h3 className="font-bold mb-2">💡 Precios</h3>
         <ul className="text-sm text-textMuted space-y-1">
           <li>• 1 mensaje de chat = 1 gema</li>
-          <li>• 1 imagen generada = 10 gemas</li>
-          <li>• 1 audio generado = 5 gemas</li>
+          <li>• 1 audio (inglés) = 5 gemas</li>
+          <li>• 1 imagen = 10 gemas (requiere compra previa)</li>
           <li>• Crear personaje = 5 gemas</li>
         </ul>
       </div>
