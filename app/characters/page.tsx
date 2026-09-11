@@ -70,13 +70,11 @@ export default function CharactersPage() {
     setCreating(true)
 
     try {
-      // Desactivar personajes actuales
       await supabase
         .from('user_characters')
         .update({ is_active: false })
         .eq('telegram_id', user.telegram_id)
 
-      // Crear nuevo personaje
       const { data, error } = await supabase
         .from('user_characters')
         .insert({
@@ -92,7 +90,6 @@ export default function CharactersPage() {
 
       if (error) throw error
 
-      // Deducir gemas
       await supabase
         .from('users')
         .update({ gems: gems - GEM_COSTS.new_character })
@@ -101,7 +98,6 @@ export default function CharactersPage() {
       setGems(gems - GEM_COSTS.new_character)
       setCharacters([{ ...data, personality: PERSONALITIES[newCharArchetype] || '' }, ...characters])
       
-      // Resetear formulario
       setShowCreateModal(false)
       setStep('gender')
       setNewCharGender('')
@@ -143,8 +139,9 @@ export default function CharactersPage() {
     )
   }
 
- const lang = (user?.language || 'es') as 'es' | 'en'
-const archetypes = newCharGender === 'male' ? ARCHETYPES_MALE[lang] : ARCHETYPES_FEMALE[lang]
+  // CORRECCIÓN: Estas líneas deben estar ANTES del return
+  const lang = (user?.language || 'es') as 'es' | 'en'
+  const archetypes = newCharGender === 'male' ? ARCHETYPES_MALE[lang] : ARCHETYPES_FEMALE[lang]
 
   return (
     <div className="min-h-screen bg-background p-4 pb-20">
@@ -229,7 +226,7 @@ const archetypes = newCharGender === 'male' ? ARCHETYPES_MALE[lang] : ARCHETYPES
                     onClick={() => { setNewCharGender('female'); setStep('archetype') }}
                     className="bg-surfaceHighlight p-4 rounded-xl border border-white/5 hover:border-primary/50"
                   >
-                    <div className="text-4xl mb-2">👩</div>
+                    <div className="text-4xl mb-2"></div>
                     <p className="font-bold">Mujer</p>
                   </button>
                 </div>
