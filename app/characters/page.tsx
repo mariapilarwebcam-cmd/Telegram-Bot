@@ -7,15 +7,6 @@ import { getTranslations, getLanguage, Language } from '@/lib/i18n'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
-interface Character {
-  id: number
-  character_name: string
-  archetype: string
-  gender: string
-  is_active: boolean
-  personality: string
-}
-
 interface PredefinedCharacter {
   archetype: string
   name: string
@@ -34,15 +25,16 @@ export default function CharactersPage() {
   const [creating, setCreating] = useState<string | null>(null)
 
   useEffect(() => {
-    import('@twa-dev/sdk').then((WebAppModule) => {
-      const WebApp = WebAppModule.default
+    import('@twa-dev/sdk').then((mod) => {
+      const WebApp = mod.default
       WebApp.ready()
-      
+      WebApp.expand()
       const tgUser = WebApp.initDataUnsafe?.user
       if (tgUser) {
-        const detectedLang = getLanguage(tgUser.language_code)
-        setLang(detectedLang)
+        setLang(getLanguage(tgUser.language_code))
         loadUserData(tgUser.id)
+      } else {
+        setLoading(false)
       }
     })
   }, [])
@@ -53,14 +45,14 @@ export default function CharactersPage() {
         .from('users')
         .select('*')
         .eq('telegram_id', telegramId.toString())
-        .single()
+        .maybeSingle()
 
       if (userData) {
         setUser(userData)
-        setGems(userData.gems)
+        setGems(userData.gems || 0)
       }
-    } catch (error) {
-      console.error('Error:', error)
+    } catch (e) {
+      console.error(e)
     } finally {
       setLoading(false)
     }
@@ -68,47 +60,44 @@ export default function CharactersPage() {
 
   const selectCharacter = async (archetype: string, gender: 'male' | 'female') => {
     if (!user) return
-
     setCreating(`${gender}_${archetype}`)
-
     try {
-      // Desactivar personajes actuales
-      await supabase
-        .from('user_characters')
-        .update({ is_active: false })
-        .eq('telegram_id', user.telegram_id)
+      const tid = user.telegram_id.toString()
 
-      // Crear o activar personaje
       const { data: existingChar } = await supabase
         .from('user_characters')
         .select('*')
-        .eq('telegram_id', user.telegram_id)
+        .eq('telegram_id', tid)
         .eq('archetype', archetype)
         .eq('gender', gender)
-        .single()
+        .maybeSingle()
 
-      let characterId
+      await supabase
+        .from('user_characters')
+        .update({ is_active: false })
+        .eq('telegram_id', tid)
+
+      let characterId: number
 
       if (existingChar) {
-        // Activar personaje existente
         await supabase
           .from('user_characters')
           .update({ is_active: true })
           .eq('id', existingChar.id)
         characterId = existingChar.id
       } else {
-        // CORRECCIÓN: Usar Record<string, string> para evitar error de TypeScript
-        const maleArchetypes = ARCHETYPES_MALE[lang] as Record<string, string>
-        const femaleArchetypes = ARCHETYPES_FEMALE[lang] as Record<string, string>
-        
-        // Crear nuevo personaje
+        const map = (gender === 'male' ? ARCHETYPES_MALE : ARCHETYPES_FEMALE)[lang] as Record<string, string>
+        const charName = (map[archetype] || archetype)
+          .replace(/^[^\wáéíóúñ]+\s*/i, '')
+          .trim()
+
         const { data, error } = await supabase
           .from('user_characters')
           .insert({
-            telegram_id: user.telegram_id,
-            character_name: maleArchetypes[archetype] || femaleArchetypes[archetype],
-            gender: gender,
-            archetype: archetype,
+            telegram_id: tid,
+            character_name: charName || archetype,
+            gender,
+            archetype,
             personality: PERSONALITIES[archetype] || '',
             is_active: true
           })
@@ -119,10 +108,9 @@ export default function CharactersPage() {
         characterId = data.id
       }
 
-      // Redirigir al chat
       router.push(`/chat/${characterId}`)
-    } catch (error: any) {
-      alert('Error al seleccionar personaje: ' + error.message)
+    } catch (e: any) {
+      alert('Error al seleccionar personaje: ' + e.message)
     } finally {
       setCreating(null)
     }
@@ -138,40 +126,36 @@ export default function CharactersPage() {
 
   const t = getTranslations(lang)
 
-  // Generar lista de personajes predefinidos
   const predefinedCharacters: PredefinedCharacter[] = []
+  const maleList = ARCHETYPES_MALE[lang] as Record<string, string>
+  const femaleList = ARCHETYPES_FEMALE[lang] as Record<string, string>
 
-  const maleArchetypesList = ARCHETYPES_MALE[lang] as Record<string, string>
-  const femaleArchetypesList = ARCHETYPES_FEMALE[lang] as Record<string, string>
-
-  Object.entries(maleArchetypesList).forEach(([key, name]) => {
+  Object.entries(maleList).forEach(([key, name]) => {
     predefinedCharacters.push({
       archetype: key,
-      name: name,
+      name,
       gender: 'male',
       personality: PERSONALITIES[key] || '',
-      icon: ''
+      icon: '👨'
     })
   })
 
-  Object.entries(femaleArchetypesList).forEach(([key, name]) => {
+  Object.entries(femaleList).forEach(([key, name]) => {
     predefinedCharacters.push({
       archetype: key,
-      name: name,
+      name,
       gender: 'female',
       personality: PERSONALITIES[key] || '',
       icon: '👩'
     })
   })
 
-  // Filtrar por género
-  const filteredCharacters = selectedGender === 'all' 
-    ? predefinedCharacters 
+  const filteredCharacters = selectedGender === 'all'
+    ? predefinedCharacters
     : predefinedCharacters.filter(c => c.gender === selectedGender)
 
   return (
     <div className="min-h-screen bg-background p-4 pb-20">
-      {/* Header */}
       <header className="flex justify-between items-center mb-6">
         <Link href="/" className="text-textMuted hover:text-textMain">
           ← {t.back}
@@ -183,7 +167,6 @@ export default function CharactersPage() {
         </div>
       </header>
 
-      {/* Filtros de Género */}
       <div className="flex gap-2 mb-6">
         <button
           onClick={() => setSelectedGender('all')}
@@ -217,7 +200,6 @@ export default function CharactersPage() {
         </button>
       </div>
 
-      {/* Lista de Personajes */}
       <div className="grid grid-cols-2 gap-4">
         {filteredCharacters.map((char) => (
           <button
@@ -230,7 +212,7 @@ export default function CharactersPage() {
               <div className="text-6xl mb-2">{char.icon}</div>
               <div className="absolute inset-0 bg-gradient-to-t from-background via-background/50 to-transparent" />
             </div>
-            
+
             <div className="absolute bottom-0 left-0 right-0 p-4">
               <h3 className="text-lg font-bold text-white mb-1">{char.name}</h3>
               <p className="text-xs text-textMuted line-clamp-2">{char.personality}</p>
