@@ -4,12 +4,27 @@
     {
       "src": "api/index.py",
       "use": "@vercel/python"
+    },
+    {
+      "src": "frontend/package.json",
+      "use": "@vercel/next"
     }
   ],
   "routes": [
     {
-      "src": "/(.*)",
+      "src": "/api/webhook/(.*)",
       "dest": "api/index.py"
+    },
+    {
+      "src": "/api/bot/(.*)",
+      "dest": "api/index.py"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "frontend/$1"
     }
-  ]
+  ],
+  "env": {
+    "PYTHONPATH": "."
+  }
 }
