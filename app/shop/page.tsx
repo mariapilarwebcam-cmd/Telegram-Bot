@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState } from 'react'
-import WebApp from '@twa-dev/sdk'
 import { supabase } from '@/lib/supabase'
 import { STAR_PACKAGES } from '@/lib/constants'
 import Link from 'next/link'
@@ -13,13 +12,16 @@ export default function ShopPage() {
   const [purchasing, setPurchasing] = useState<number | null>(null)
 
   useEffect(() => {
-    WebApp.ready()
-    WebApp.expand()
-    
-    const tgUser = WebApp.initDataUnsafe?.user
-    if (tgUser) {
-      loadUserData(tgUser.id)
-    }
+    // Importar WebApp solo dentro de useEffect (lado del cliente)
+    import('@twa-dev/sdk').then((WebApp) => {
+      WebApp.default.ready()
+      WebApp.default.expand()
+      
+      const tgUser = WebApp.default.initDataUnsafe?.user
+      if (tgUser) {
+        loadUserData(tgUser.id)
+      }
+    })
   }, [])
 
   const loadUserData = async (telegramId: number) => {
@@ -59,14 +61,18 @@ export default function ShopPage() {
       const data = await res.json()
 
       if (res.ok && data.invoice_link) {
-        WebApp.openInvoice(data.invoice_link, async (status) => {
-          if (status === 'paid') {
-            alert('¡Compra exitosa! Gemas añadidas.')
-            loadUserData(user.telegram_id)
-          } else {
-            alert('Pago cancelado o fallido.')
-          }
-          setPurchasing(null)
+        import('@twa-dev/sdk').then((WebApp) => {
+          WebApp.default.openInvoice(data.invoice_link, async (status: string) => {
+            if (status === 'paid') {
+              alert('¡Compra exitosa! Gemas añadidas.')
+              if (user) {
+                loadUserData(user.telegram_id)
+              }
+            } else {
+              alert('Pago cancelado o fallido.')
+            }
+            setPurchasing(null)
+          })
         })
       } else {
         alert(data.error || 'Error al crear factura')
@@ -82,6 +88,19 @@ export default function ShopPage() {
     return (
       <div className="flex items-center justify-center h-screen bg-background">
         <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-background">
+        <div className="text-center">
+          <p className="text-textMuted mb-4">Inicia sesión desde Telegram</p>
+          <Link href="/" className="text-primary hover:underline">
+            ← Volver al inicio
+          </Link>
+        </div>
       </div>
     )
   }
@@ -136,7 +155,7 @@ export default function ShopPage() {
                     <span className="font-bold text-lg">{pkg.stars} Stars</span>
                   </div>
                   <p className="text-sm text-textMuted">
-                    💎 {finalGems} gemas
+                     {finalGems} gemas
                     {pkg.bonus > 0 && (
                       <span className="text-primary ml-1">(+{pkg.bonus}% bonus)</span>
                     )}
