@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState } from 'react'
-import WebApp from '@twa-dev/sdk'
 import { supabase } from '@/lib/supabase'
 import { ARCHETYPES_MALE, ARCHETYPES_FEMALE, PERSONALITIES, GEM_COSTS } from '@/lib/constants'
 import Link from 'next/link'
@@ -28,13 +27,17 @@ export default function CharactersPage() {
   const [creating, setCreating] = useState(false)
 
   useEffect(() => {
-    WebApp.ready()
-    WebApp.expand()
-    
-    const tgUser = WebApp.initDataUnsafe?.user
-    if (tgUser) {
-      loadData(tgUser.id)
-    }
+    // IMPORTACIÓN DINÁMICA: Evita el error "window is not defined"
+    import('@twa-dev/sdk').then((WebAppModule) => {
+      const WebApp = WebAppModule.default
+      WebApp.ready()
+      WebApp.expand()
+      
+      const tgUser = WebApp.initDataUnsafe?.user
+      if (tgUser) {
+        loadData(tgUser.id)
+      }
+    })
   }, [])
 
   const loadData = async (telegramId: number) => {
@@ -139,13 +142,11 @@ export default function CharactersPage() {
     )
   }
 
-  // CORRECCIÓN: Estas líneas deben estar ANTES del return
   const lang = (user?.language || 'es') as 'es' | 'en'
   const archetypes = newCharGender === 'male' ? ARCHETYPES_MALE[lang] : ARCHETYPES_FEMALE[lang]
 
   return (
     <div className="min-h-screen bg-background p-4 pb-20">
-      {/* Header */}
       <header className="flex justify-between items-center mb-6">
         <Link href="/" className="text-textMuted hover:text-textMain">
           ← Volver
@@ -157,7 +158,6 @@ export default function CharactersPage() {
         </div>
       </header>
 
-      {/* Lista de Personajes */}
       <div className="space-y-3 mb-6">
         {characters.map((char) => (
           <div key={char.id} className="bg-surface p-4 rounded-xl border border-white/5 flex items-center justify-between">
@@ -171,10 +171,7 @@ export default function CharactersPage() {
               </div>
             </div>
             <div className="flex gap-2">
-              <Link
-                href={`/chat/${char.id}`}
-                className="bg-primary/20 text-primary px-3 py-1.5 rounded-lg text-sm"
-              >
+              <Link href={`/chat/${char.id}`} className="bg-primary/20 text-primary px-3 py-1.5 rounded-lg text-sm">
                 Chatear
               </Link>
               {!char.is_active && (
@@ -196,7 +193,6 @@ export default function CharactersPage() {
         )}
       </div>
 
-      {/* Botón Crear */}
       <button
         onClick={() => setShowCreateModal(true)}
         disabled={gems < GEM_COSTS.new_character}
@@ -205,7 +201,6 @@ export default function CharactersPage() {
         ➕ Crear Nuevo Personaje ({GEM_COSTS.new_character} gemas)
       </button>
 
-      {/* Modal de Creación */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
           <div className="bg-surface rounded-2xl p-6 max-w-md w-full border border-white/10">
@@ -226,7 +221,7 @@ export default function CharactersPage() {
                     onClick={() => { setNewCharGender('female'); setStep('archetype') }}
                     className="bg-surfaceHighlight p-4 rounded-xl border border-white/5 hover:border-primary/50"
                   >
-                    <div className="text-4xl mb-2"></div>
+                    <div className="text-4xl mb-2">👩</div>
                     <p className="font-bold">Mujer</p>
                   </button>
                 </div>
