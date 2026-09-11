@@ -19,43 +19,69 @@ export default function Home() {
   const [characters, setCharacters] = useState<Character[]>([])
   const [gems, setGems] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [tgUser, setTgUser] = useState<any>(null)
 
   useEffect(() => {
-    // IMPORTACIÓN DINÁMICA: Evita el error "window is not defined" en el servidor
     import('@twa-dev/sdk').then((WebAppModule) => {
       const WebApp = WebAppModule.default
       WebApp.ready()
       WebApp.expand()
       
-      const tgUser = WebApp.initDataUnsafe?.user
-      if (tgUser) {
-        loadUserData(tgUser.id)
+      const user = WebApp.initDataUnsafe?.user
+      setTgUser(user)
+      
+      if (user) {
+        loadUserData(user.id)
+      } else {
+        setLoading(false)
+        setError('Abre esta app desde Telegram')
       }
+    }).catch((err) => {
+      console.error('Error cargando Telegram SDK:', err)
+      setLoading(false)
+      setError('Error al cargar el SDK de Telegram')
     })
   }, [])
 
   const loadUserData = async (telegramId: number) => {
     try {
-      const { data: userData } = await supabase
+      console.log('Cargando datos para:', telegramId)
+      
+      const { data: userData, error: userError } = await supabase
         .from('users')
         .select('*')
-        .eq('telegram_id', telegramId)
+        .eq('telegram_id', telegramId.toString())
         .single()
+
+      if (userError) {
+        console.error('Error de Supabase:', userError)
+        setError('Error al cargar usuario: ' + userError.message)
+        setLoading(false)
+        return
+      }
 
       if (userData) {
         setUser(userData)
         setGems(userData.gems)
 
-        const { data: chars } = await supabase
+        const { data: chars, error: charsError } = await supabase
           .from('user_characters')
           .select('*')
-          .eq('telegram_id', telegramId)
+          .eq('telegram_id', telegramId.toString())
           .order('created_at', { ascending: false })
 
-        setCharacters(chars || [])
+        if (charsError) {
+          console.error('Error cargando personajes:', charsError)
+        } else {
+          setCharacters(chars || [])
+        }
+      } else {
+        setError('Usuario no encontrado. Usa /start en Telegram primero.')
       }
-    } catch (error) {
-      console.error('Error cargando datos:', error)
+    } catch (error: any) {
+      console.error('Error general:', error)
+      setError('Error: ' + error.message)
     } finally {
       setLoading(false)
     }
@@ -72,20 +98,31 @@ export default function Home() {
     )
   }
 
-  if (!user) {
+  if (error || !user) {
     return (
       <div className="flex items-center justify-center h-screen bg-background p-4">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">⚠️ Usuario no encontrado</h1>
+        <div className="text-center max-w-md">
+          <div className="text-6xl mb-4"></div>
+          <h1 className="text-2xl font-bold mb-4 text-white">
+            {error || 'Usuario no encontrado'}
+          </h1>
           <p className="text-textMuted mb-6">
-            Por favor, inicia el bot en Telegram primero con /start
+            Esta es una Mini App de Telegram. Para usarla, abre tu bot en Telegram y haz clic en "Abrir App".
           </p>
-          <a
-            href="https://t.me/tu_bot_username"
-            className="bg-gradient-primary text-white px-6 py-3 rounded-xl font-bold inline-block"
+          <div className="bg-surface p-4 rounded-xl border border-white/10 mb-4">
+            <p className="text-sm text-textMuted">
+              <strong className="text-primary">Estado:</strong> {tgUser ? 'Telegram detectado' : 'No estás en Telegram'}
+            </p>
+            <p className="text-sm text-textMuted mt-2">
+              <strong className="text-primary">URL:</strong> {typeof window !== 'undefined' ? window.location.href : 'N/A'}
+            </p>
+          </div>
+          <Link 
+            href="/shop" 
+            className="inline-block bg-gradient-primary text-white px-6 py-3 rounded-xl font-bold"
           >
-            Abrir en Telegram
-          </a>
+            Ver Tienda (Demo)
+          </Link>
         </div>
       </div>
     )
@@ -98,7 +135,7 @@ export default function Home() {
           <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-primary">
             AI Roleplay
           </h1>
-          <p className="text-sm text-textMuted">Hola, {user.first_name} 👋</p>
+          <p className="text-sm text-textMuted">Hola, {user.first_name} </p>
         </div>
         <div className="flex items-center gap-2 bg-surface px-4 py-2 rounded-full border border-white/10">
           <span className="text-primary">💎</span>
