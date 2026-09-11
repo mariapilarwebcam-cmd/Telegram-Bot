@@ -59,7 +59,6 @@ export default function ShopPage() {
       const data = await res.json()
 
       if (res.ok && data.invoice_link) {
-        // Abrir factura de Telegram
         WebApp.openInvoice(data.invoice_link, async (status) => {
           if (status === 'paid') {
             alert('¡Compra exitosa! Gemas añadidas.')
