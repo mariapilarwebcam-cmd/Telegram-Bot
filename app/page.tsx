@@ -22,7 +22,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [tgUser, setTgUser] = useState<any>(null)
-  const [lang, setLang] = useState<Language>('en') // Por defecto inglés
+  const [lang, setLang] = useState<Language>('en')
 
   useEffect(() => {
     import('@twa-dev/sdk').then((WebAppModule) => {
@@ -33,7 +33,6 @@ export default function Home() {
       const user = WebApp.initDataUnsafe?.user
       setTgUser(user)
       
-      // DETECTAR IDIOMA: español o inglés (por defecto)
       const detectedLang = getLanguage(user?.language_code)
       setLang(detectedLang)
       
@@ -59,7 +58,7 @@ export default function Home() {
         .single()
 
       if (userError) {
-        setError('Error al cargar usuario: ' + userError.message)
+        setError('Error al cargar usuario')
         setLoading(false)
         return
       }
@@ -76,7 +75,6 @@ export default function Home() {
 
         setCharacters(chars || [])
       } else {
-        // Crear usuario nuevo con el idioma detectado
         await supabase.from('users').insert({
           telegram_id: telegramId.toString(),
           username: tgUser?.username || '',
@@ -86,7 +84,6 @@ export default function Home() {
           referral_code: Math.random().toString(36).substring(2, 10).toUpperCase(),
         })
         
-        // Recargar datos
         const { data: newUser } = await supabase
           .from('users')
           .select('*')
@@ -122,24 +119,33 @@ export default function Home() {
     return (
       <div className="flex items-center justify-center h-screen bg-background p-4">
         <div className="text-center max-w-md">
-          <div className="text-6xl mb-4"></div>
+          <div className="text-6xl mb-4">️</div>
           <h1 className="text-2xl font-bold mb-4 text-white">
             {t.openFromTelegram}
           </h1>
           <p className="text-textMuted mb-6">
             {t.openFromTelegramDesc}
           </p>
-          <div className="bg-surface p-4 rounded-xl border border-white/10 mb-4">
-            <p className="text-sm text-textMuted">
-              <strong className="text-primary">Status:</strong> {tgUser ? 'Telegram detected' : t.notInTelegram}
+          <div className="bg-surface p-4 rounded-xl border border-white/10 mb-6">
+            <p className="text-sm text-textMuted mb-2">
+              <strong className="text-primary">Status:</strong> {tgUser ? 'Telegram detected ✅' : t.notInTelegram}
             </p>
           </div>
-          <Link 
-            href="/shop" 
-            className="inline-block bg-gradient-primary text-white px-6 py-3 rounded-xl font-bold"
-          >
-            {t.shop} (Demo)
-          </Link>
+          
+          <div className="space-y-4">
+            <a
+              href="https://t.me/TabooRealmBot"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block bg-gradient-primary text-white px-8 py-4 rounded-xl font-bold text-lg hover:opacity-90 transition-opacity"
+            >
+              🤖 Abrir TabooRealmBot
+            </a>
+            
+            <p className="text-xs text-textMuted">
+              Luego haz clic en "Abrir App" desde el bot
+            </p>
+          </div>
         </div>
       </div>
     )
@@ -152,10 +158,10 @@ export default function Home() {
           <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-primary">
             AI Roleplay
           </h1>
-          <p className="text-sm text-textMuted">{t.welcome}, {user.first_name} </p>
+          <p className="text-sm text-textMuted">{t.welcome}, {user.first_name} 👋</p>
         </div>
         <div className="flex items-center gap-2 bg-surface px-4 py-2 rounded-full border border-white/10">
-          <span className="text-primary"></span>
+          <span className="text-primary">💎</span>
           <span className="font-bold">{gems}</span>
         </div>
       </header>
@@ -182,7 +188,7 @@ export default function Home() {
                 <div className="group relative rounded-xl overflow-hidden bg-surface border border-white/5 hover:border-primary/50 transition-all">
                   <div className="aspect-[3/4] bg-surfaceHighlight relative">
                     <div className="absolute inset-0 flex items-center justify-center text-6xl">
-                      {char.gender === 'male' ? '' : ''}
+                      {char.gender === 'male' ? '👨' : '👩'}
                     </div>
                     <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
                   </div>
@@ -203,13 +209,13 @@ export default function Home() {
 
       <section className="grid grid-cols-2 gap-4">
         <Link href="/shop" className="bg-surface p-4 rounded-xl border border-white/5 hover:border-primary/30 transition-all">
-          <div className="text-3xl mb-2"></div>
+          <div className="text-3xl mb-2">🛒</div>
           <h3 className="font-bold mb-1">{t.shop}</h3>
           <p className="text-xs text-textMuted">{t.buyGems}</p>
         </Link>
         
         <Link href="/characters" className="bg-surface p-4 rounded-xl border border-white/5 hover:border-primary/30 transition-all">
-          <div className="text-3xl mb-2"></div>
+          <div className="text-3xl mb-2">➕</div>
           <h3 className="font-bold mb-1">{t.newCharacter}</h3>
           <p className="text-xs text-textMuted">5 {t.gems}</p>
         </Link>
