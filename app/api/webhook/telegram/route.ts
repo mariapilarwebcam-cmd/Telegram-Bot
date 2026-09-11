@@ -6,7 +6,7 @@ export async function POST(request: Request) {
   try {
     const update = await request.json()
 
-    // Responder a pre-checkout query
+    // Pre-checkout
     if (update.pre_checkout_query) {
       await fetch(
         `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/answerPreCheckoutQuery`,
@@ -21,34 +21,36 @@ export async function POST(request: Request) {
       )
     }
 
-    // Procesar pago exitoso
+    // Pago exitoso
     if (update.message?.successful_payment) {
       const payment = update.message.successful_payment
-      const userId = update.message.from.id
-      const packageId = parseInt(payment.invoice_payload.split('_')[2])
+      const userId = String(update.message.from.id)
+      const packageId = parseInt(payment.invoice_payload.split('_').slice(-1)[0])
 
       if (packageId >= STAR_PACKAGES.length) {
         return NextResponse.json({ error: 'Paquete no válido' }, { status: 400 })
       }
 
       const pkg = STAR_PACKAGES[packageId]
-      const gemsToAdd = Math.floor(pkg.gems * (1 + pkg.bonus / 100))
+      const gemsToAdd = pkg.bonus > 0
+        ? Math.floor(pkg.gems * (1 + pkg.bonus / 100))
+        : pkg.gems
 
-      // Obtener gemas actuales
       const { data: user } = await supabase
         .from('users')
         .select('gems')
         .eq('telegram_id', userId)
-        .single()
+        .maybeSingle()
 
       if (user) {
-        // Añadir gemas
         await supabase
           .from('users')
-          .update({ gems: user.gems + gemsToAdd })
+          .update({
+            gems: user.gems + gemsToAdd,
+            hook_messages_remaining: 0
+          })
           .eq('telegram_id', userId)
 
-        // Registrar transacción
         await supabase.from('gem_transactions').insert({
           telegram_id: userId,
           amount: gemsToAdd,
@@ -56,7 +58,6 @@ export async function POST(request: Request) {
           description: `Compra con ${pkg.stars} Stars`
         })
 
-        // Registrar compra de stars
         await supabase.from('star_purchases').insert({
           telegram_id: userId,
           stars_amount: pkg.stars,
@@ -68,7 +69,6 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ ok: true })
-
   } catch (error: any) {
     console.error('Error en webhook:', error)
     return NextResponse.json({ error: 'Error interno' }, { status: 500 })
