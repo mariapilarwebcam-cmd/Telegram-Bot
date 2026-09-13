@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import {
   ARCHETYPES_MALE, ARCHETYPES_FEMALE,
@@ -42,13 +42,11 @@ function getGradient(key: string) {
 
 export default function CharactersPage() {
   const router = useRouter()
-  const params = useSearchParams()
   const [user, setUser] = useState<any>(null)
   const [gems, setGems] = useState(0)
   const [loading, setLoading] = useState(true)
   const [lang, setLang] = useState<Language>('es')
   const [tab, setTab] = useState<'all' | 'male' | 'female'>('all')
-
   const [pendingChar, setPendingChar] = useState<Char | null>(null)
   const [customName, setCustomName] = useState('')
   const [creating, setCreating] = useState(false)
@@ -70,27 +68,24 @@ export default function CharactersPage() {
     try {
       const { data } = await supabase
         .from('users').select('*').eq('telegram_id', telegramId.toString()).maybeSingle()
-      if (data) { setUser(data); setGems(data.gems || 0) }
-    } catch (e) { console.error(e) }
-    finally { setLoading(false) }
+      if (data) {
+        setUser(data)
+        setGems(data.gems || 0)
+      }
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const t = getTranslations(lang)
 
+  // FEMENINAS PRIMERO
   const all: Char[] = []
-  const maleMap = ARCHETYPES_MALE[lang] as Record<string, string>
   const femaleMap = ARCHETYPES_FEMALE[lang] as Record<string, string>
+  const maleMap = ARCHETYPES_MALE[lang] as Record<string, string>
 
-  Object.entries(maleMap).forEach(([k, role]) => {
-    all.push({
-      archetype: k,
-      name: CHARACTER_NAMES_MALE[k] || role,
-      role,
-      gender: 'male',
-      personality: PERSONALITIES[k] || '',
-      gradient: getGradient('m_' + k)
-    })
-  })
   Object.entries(femaleMap).forEach(([k, role]) => {
     all.push({
       archetype: k,
@@ -98,7 +93,17 @@ export default function CharactersPage() {
       role,
       gender: 'female',
       personality: PERSONALITIES[k] || '',
-      gradient: getGradient('f_' + k)
+      gradient: getGradient('f_' + k),
+    })
+  })
+  Object.entries(maleMap).forEach(([k, role]) => {
+    all.push({
+      archetype: k,
+      name: CHARACTER_NAMES_MALE[k] || role,
+      role,
+      gender: 'male',
+      personality: PERSONALITIES[k] || '',
+      gradient: getGradient('m_' + k),
     })
   })
 
@@ -125,12 +130,17 @@ export default function CharactersPage() {
         setCustomName(c.name)
         setPendingChar(c)
       }
-    } catch (e) { console.error(e) }
+    } catch (e) {
+      console.error(e)
+    }
   }
 
   const confirmCreate = async () => {
     if (!pendingChar || !user) return
-    if (gems < GEM_COSTS.new_character) { alert(t.notEnoughGems); return }
+    if (gems < GEM_COSTS.new_character) {
+      alert(t.notEnoughGems)
+      return
+    }
 
     setCreating(true)
     try {
@@ -167,30 +177,42 @@ export default function CharactersPage() {
       router.push(`/chat/${data.id}`)
     } catch (e: any) {
       alert('Error: ' + e.message)
-    } finally { setCreating(false) }
+    } finally {
+      setCreating(false)
+    }
   }
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="w-10 h-10 rounded-full border-2 border-[#7c5cff] border-t-transparent animate-spin" />
+      <div className="spinner-full">
+        <div className="spinner" />
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen pb-24">
-      <header className="sticky top-0 z-20 bg-[#0a0a0f]/95 backdrop-blur px-4 py-4 border-b border-white/5 flex items-center justify-between">
-        <h1 className="text-xl font-bold">{t.characters}</h1>
-        <div className="flex items-center gap-1.5 bg-white/5 px-3 py-1.5 rounded-full border border-white/5">
+    <div className="page">
+      <header className="page-header">
+        <h1 className="page-title">{t.characters}</h1>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            background: 'rgba(255, 255, 255, 0.05)',
+            padding: '6px 12px',
+            borderRadius: 20,
+            border: '1px solid rgba(255, 255, 255, 0.06)',
+          }}
+        >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
             <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" fill="#a78bfa" />
           </svg>
-          <span className="text-sm font-semibold">{gems}</span>
+          <span style={{ fontSize: 14, fontWeight: 600 }}>{gems}</span>
         </div>
       </header>
 
-      <section className="px-4 mt-4 flex gap-2">
+      <div className="tabs">
         {[
           { id: 'all', label: t.all },
           { id: 'female', label: t.female },
@@ -199,45 +221,38 @@ export default function CharactersPage() {
           <button
             key={x.id}
             onClick={() => setTab(x.id as any)}
-            className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
-              tab === x.id
-                ? 'bg-gradient-to-r from-[#7c5cff] to-[#a855f7] text-white'
-                : 'bg-white/5 text-[#8b8b9e] border border-white/5'
-            }`}
+            className={`tab ${tab === x.id ? 'active' : ''}`}
           >
             {x.label}
           </button>
         ))}
-      </section>
+      </div>
 
-      <section className="px-4 mt-4 grid grid-cols-2 gap-3">
-        {filtered.map(c => (
+      <div className="char-grid">
+        {filtered.map((c) => (
           <button
             key={`${c.gender}_${c.archetype}`}
             onClick={() => pick(c)}
             disabled={creating}
-            className="text-left disabled:opacity-50"
+            className="char-card"
           >
-            <div
-              className="w-full aspect-[3/4] rounded-2xl relative overflow-hidden"
-              style={{ background: c.gradient }}
-            >
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
-              <div className="absolute bottom-0 left-0 right-0 p-3">
-                <p className="text-white font-bold text-base truncate">{c.name}</p>
-                <p className="text-white/70 text-[11px] truncate mt-0.5">{c.role}</p>
+            <div className="char-card-img" style={{ background: c.gradient }}>
+              <div className="char-card-overlay" />
+              <div className="char-card-text">
+                <p className="char-card-name">{c.name}</p>
+                <p className="char-card-role">{c.role}</p>
               </div>
             </div>
           </button>
         ))}
-      </section>
+      </div>
 
       {/* Create modal */}
       {pendingChar && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
-          <div className="bg-[#16161d] rounded-2xl p-6 max-w-md w-full border border-white/5">
-            <h3 className="text-lg font-bold mb-1">{pendingChar.name}</h3>
-            <p className="text-xs text-[#8b8b9e] mb-4">
+        <div className="modal-backdrop">
+          <div className="modal-box">
+            <h3 className="modal-title">{pendingChar.name}</h3>
+            <p className="modal-desc">
               {pendingChar.role} · {t.createCharCost}: {GEM_COSTS.new_character} {t.gems}
             </p>
             <input
@@ -245,25 +260,34 @@ export default function CharactersPage() {
               onChange={(e) => setCustomName(e.target.value)}
               placeholder={t.namePlaceholder}
               maxLength={30}
-              className="w-full bg-black/30 border border-white/5 rounded-xl p-3 text-sm mb-4 outline-none focus:border-[#7c5cff]/50"
+              className="modal-input"
             />
-            <div className="flex gap-2">
+            <div className="modal-btn-row">
               <button
                 onClick={() => setPendingChar(null)}
-                className="flex-1 py-2.5 rounded-xl bg-white/5 text-[#8b8b9e]"
+                className="modal-btn secondary"
               >
                 {t.cancel}
               </button>
               <button
                 onClick={confirmCreate}
                 disabled={creating || !customName.trim() || gems < GEM_COSTS.new_character}
-                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-[#7c5cff] to-[#a855f7] text-white font-medium disabled:opacity-40"
+                className="modal-btn primary"
               >
                 {creating ? t.creating : `${t.create} (${GEM_COSTS.new_character})`}
               </button>
             </div>
             {gems < GEM_COSTS.new_character && (
-              <p className="text-xs text-[#ef4444] mt-3 text-center">{t.notEnoughGems}</p>
+              <p
+                style={{
+                  fontSize: 12,
+                  color: '#ef4444',
+                  marginTop: 12,
+                  textAlign: 'center',
+                }}
+              >
+                {t.notEnoughGems}
+              </p>
             )}
           </div>
         </div>
