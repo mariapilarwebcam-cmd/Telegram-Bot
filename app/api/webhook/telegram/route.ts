@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
-import { STAR_PACKAGES } from '@/lib/constants'
+import { STAR_PACKAGES, getFinalGems } from '@/lib/constants'
 
 export async function POST(request: Request) {
   try {
@@ -30,15 +30,10 @@ export async function POST(request: Request) {
       }
 
       const pkg = STAR_PACKAGES[packageId]
-      const gemsToAdd = pkg.bonus > 0
-        ? Math.floor(pkg.gems * (1 + pkg.bonus / 100))
-        : pkg.gems
+      const gemsToAdd = getFinalGems(pkg)
 
       const { data: user } = await supabaseAdmin
-        .from('users')
-        .select('gems')
-        .eq('telegram_id', userId)
-        .maybeSingle()
+        .from('users').select('gems').eq('telegram_id', userId).maybeSingle()
 
       if (user) {
         await supabaseAdmin
@@ -60,7 +55,7 @@ export async function POST(request: Request) {
           telegram_id: userId,
           stars_amount: pkg.stars,
           gems_amount: gemsToAdd,
-          is_first_purchase: pkg.first_time,
+          is_first_purchase: pkg.first_time_only || false,
           telegram_charge_id: payment.telegram_payment_charge_id
         })
       }
