@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/supabase-admin'
 import { STAR_PACKAGES } from '@/lib/constants'
 
 export async function POST(request: Request) {
   try {
     const update = await request.json()
 
-    // Pre-checkout
     if (update.pre_checkout_query) {
       await fetch(
         `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/answerPreCheckoutQuery`,
@@ -21,13 +20,12 @@ export async function POST(request: Request) {
       )
     }
 
-    // Pago exitoso
     if (update.message?.successful_payment) {
       const payment = update.message.successful_payment
       const userId = String(update.message.from.id)
       const packageId = parseInt(payment.invoice_payload.split('_').slice(-1)[0])
 
-      if (packageId >= STAR_PACKAGES.length) {
+      if (packageId >= STAR_PACKAGES.length || packageId < 0) {
         return NextResponse.json({ error: 'Paquete no válido' }, { status: 400 })
       }
 
@@ -36,29 +34,29 @@ export async function POST(request: Request) {
         ? Math.floor(pkg.gems * (1 + pkg.bonus / 100))
         : pkg.gems
 
-      const { data: user } = await supabase
+      const { data: user } = await supabaseAdmin
         .from('users')
         .select('gems')
         .eq('telegram_id', userId)
         .maybeSingle()
 
       if (user) {
-        await supabase
+        await supabaseAdmin
           .from('users')
           .update({
-            gems: user.gems + gemsToAdd,
+            gems: (user.gems || 0) + gemsToAdd,
             hook_messages_remaining: 0
           })
           .eq('telegram_id', userId)
 
-        await supabase.from('gem_transactions').insert({
+        await supabaseAdmin.from('gem_transactions').insert({
           telegram_id: userId,
           amount: gemsToAdd,
           transaction_type: 'purchase',
           description: `Compra con ${pkg.stars} Stars`
         })
 
-        await supabase.from('star_purchases').insert({
+        await supabaseAdmin.from('star_purchases').insert({
           telegram_id: userId,
           stars_amount: pkg.stars,
           gems_amount: gemsToAdd,
