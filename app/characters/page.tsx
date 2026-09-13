@@ -1,313 +1,183 @@
 "use client"
 
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
-import { ARCHETYPES_MALE, ARCHETYPES_FEMALE, PERSONALITIES, GEM_COSTS } from '@/lib/constants'
-import { getTranslations, getLanguage, Language } from '@/lib/i18n'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabase'
+import { getTranslations, getLanguage, Language } from '@/lib/i18n'
+import { getRelationshipLevel } from '@/lib/constants'
 
-interface PredefinedCharacter {
+interface ChatRow {
+  id: number
+  character_name: string
   archetype: string
-  name: string
-  gender: 'male' | 'female'
-  personality: string
-  icon: string
+  gender: string
+  lastMessage?: string
+  lastAt?: string
+  messageCount: number
 }
 
-export default function CharactersPage() {
+const GRADIENTS = [
+  'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+  'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+  'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+  'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+  'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+  'linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%)',
+  'linear-gradient(135deg, #8e2de2 0%, #4a00e0 100%)',
+]
+
+function getGradient(key: string) {
+  let h = 0
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) | 0
+  return GRADIENTS[Math.abs(h) % GRADIENTS.length]
+}
+
+export default function ChatsPage() {
   const router = useRouter()
-  const [user, setUser] = useState<any>(null)
-  const [gems, setGems] = useState(0)
+  const [chats, setChats] = useState<ChatRow[]>([])
   const [loading, setLoading] = useState(true)
   const [lang, setLang] = useState<Language>('es')
-  const [selectedGender, setSelectedGender] = useState<'all' | 'male' | 'female'>('all')
-  const [creating, setCreating] = useState<string | null>(null)
-
-  // Modal para nuevo personaje
-  const [showNameModal, setShowNameModal] = useState(false)
-  const [pendingChar, setPendingChar] = useState<{ archetype: string; gender: 'male' | 'female'; defaultName: string } | null>(null)
-  const [customName, setCustomName] = useState('')
 
   useEffect(() => {
     import('@twa-dev/sdk').then((mod) => {
       const WebApp = mod.default
       WebApp.ready()
       WebApp.expand()
-      const tgUser = WebApp.initDataUnsafe?.user
-      if (tgUser) {
-        setLang(getLanguage(tgUser.language_code))
-        loadUserData(tgUser.id)
-      } else {
-        setLoading(false)
-      }
-    })
+      const u = WebApp.initDataUnsafe?.user
+      if (u?.id) {
+        setLang(getLanguage(u.language_code))
+        loadChats(u.id)
+      } else setLoading(false)
+    }).catch(() => setLoading(false))
   }, [])
 
-  const loadUserData = async (telegramId: number) => {
+  const loadChats = async (telegramId: number) => {
+    const tid = telegramId.toString()
     try {
-      const { data: userData } = await supabase
-        .from('users')
-        .select('*')
-        .eq('telegram_id', telegramId.toString())
-        .maybeSingle()
-
-      if (userData) {
-        setUser(userData)
-        setGems(userData.gems || 0)
-      }
-    } catch (e) {
-      console.error(e)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleCharacterClick = async (archetype: string, gender: 'male' | 'female') => {
-    if (!user) return
-    const tid = user.telegram_id.toString()
-
-    try {
-      const { data: existingChar } = await supabase
+      const { data: chars } = await supabase
         .from('user_characters')
-        .select('*')
+        .select('id, character_name, archetype, gender')
         .eq('telegram_id', tid)
-        .eq('archetype', archetype)
-        .eq('gender', gender)
-        .maybeSingle()
 
-      if (existingChar) {
-        // Ya existe: activar gratis
-        await supabase
-          .from('user_characters')
-          .update({ is_active: false })
+      if (!chars || chars.length === 0) {
+        setChats([])
+        setLoading(false)
+        return
+      }
+
+      const rows: ChatRow[] = []
+      for (const c of chars) {
+        const { data: msgs } = await supabase
+          .from('conversation_history')
+          .select('content, created_at')
           .eq('telegram_id', tid)
-        await supabase
-          .from('user_characters')
-          .update({ is_active: true })
-          .eq('id', existingChar.id)
-        router.push(`/chat/${existingChar.id}`)
-      } else {
-        // Nuevo: abrir modal para pedir nombre y cobrar
-        const map = (gender === 'male' ? ARCHETYPES_MALE : ARCHETYPES_FEMALE)[lang] as Record<string, string>
-        const defaultName = (map[archetype] || archetype)
-          .replace(/^[^\wáéíóúñ]+\s*/i, '')
-          .trim()
-        setCustomName(defaultName)
-        setPendingChar({ archetype, gender, defaultName })
-        setShowNameModal(true)
-      }
-    } catch (e: any) {
-      console.error(e)
-    }
-  }
+          .eq('character_id', c.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
 
-  const confirmCreate = async () => {
-    if (!pendingChar || !user) return
+        const { count } = await supabase
+          .from('conversation_history')
+          .select('*', { count: 'exact', head: true })
+          .eq('telegram_id', tid)
+          .eq('character_id', c.id)
 
-    if (gems < GEM_COSTS.new_character) {
-      alert(`Necesitas ${GEM_COSTS.new_character} gemas para crear un personaje nuevo`)
-      return
-    }
-
-    const tid = user.telegram_id.toString()
-    setCreating(`${pendingChar.gender}_${pendingChar.archetype}`)
-
-    try {
-      const newGems = gems - GEM_COSTS.new_character
-      await supabase.from('users').update({ gems: newGems }).eq('telegram_id', tid)
-      await supabase.from('gem_transactions').insert({
-        telegram_id: tid,
-        amount: -GEM_COSTS.new_character,
-        transaction_type: 'new_character',
-        description: 'Nuevo personaje'
-      })
-
-      await supabase
-        .from('user_characters')
-        .update({ is_active: false })
-        .eq('telegram_id', tid)
-
-      const charName = customName.trim() || pendingChar.defaultName || 'Personaje'
-      const { data, error } = await supabase
-        .from('user_characters')
-        .insert({
-          telegram_id: tid,
-          character_name: charName,
-          gender: pendingChar.gender,
-          archetype: pendingChar.archetype,
-          personality: PERSONALITIES[pendingChar.archetype] || '',
-          is_active: true
+        rows.push({
+          id: c.id,
+          character_name: c.character_name,
+          archetype: c.archetype,
+          gender: c.gender,
+          lastMessage: msgs?.[0]?.content,
+          lastAt: msgs?.[0]?.created_at,
+          messageCount: count || 0,
         })
-        .select()
-        .single()
+      }
 
-      if (error) throw error
-
-      setGems(newGems)
-      setShowNameModal(false)
-      setPendingChar(null)
-      router.push(`/chat/${data.id}`)
-    } catch (e: any) {
-      alert('Error al crear personaje: ' + e.message)
-    } finally {
-      setCreating(null)
-    }
-  }
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-background">
-        <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    )
+      rows.sort((a, b) => (b.lastAt || '').localeCompare(a.lastAt || ''))
+      setChats(rows)
+    } catch (e) { console.error(e) }
+    finally { setLoading(false) }
   }
 
   const t = getTranslations(lang)
 
-  const predefinedCharacters: PredefinedCharacter[] = []
-  const maleList = ARCHETYPES_MALE[lang] as Record<string, string>
-  const femaleList = ARCHETYPES_FEMALE[lang] as Record<string, string>
+  const formatTime = (iso?: string) => {
+    if (!iso) return ''
+    const d = new Date(iso)
+    const now = new Date()
+    const diff = (now.getTime() - d.getTime()) / 3600000
+    if (diff < 24) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    if (diff < 48) return t.yesterday
+    return `${Math.floor(diff / 24)} ${t.daysAgo}`
+  }
 
-  Object.entries(maleList).forEach(([key, name]) => {
-    predefinedCharacters.push({
-      archetype: key,
-      name,
-      gender: 'male',
-      personality: PERSONALITIES[key] || '',
-      icon: '👨'
-    })
-  })
-
-  Object.entries(femaleList).forEach(([key, name]) => {
-    predefinedCharacters.push({
-      archetype: key,
-      name,
-      gender: 'female',
-      personality: PERSONALITIES[key] || '',
-      icon: '👩'
-    })
-  })
-
-  const filteredCharacters = selectedGender === 'all'
-    ? predefinedCharacters
-    : predefinedCharacters.filter(c => c.gender === selectedGender)
+  const cleanPreview = (txt?: string) => {
+    if (!txt) return ''
+    return txt
+      .replace(/\*[^*]*\*/g, '')
+      .replace(/<[^>]+>/g, '')
+      .replace(/!\[[^\]]*\]\([^)]+\)/g, '')
+      .trim()
+      .slice(0, 50)
+  }
 
   return (
-    <div className="min-h-screen bg-background p-4 pb-20">
-      <header className="flex justify-between items-center mb-6">
-        <Link href="/" className="text-textMuted hover:text-textMain">
-          {t.back}
-        </Link>
-        <h1 className="text-xl font-bold">{t.characters}</h1>
-        <div className="flex items-center gap-2 bg-surface px-3 py-1.5 rounded-full">
-          <span className="text-primary">💎</span>
-          <span className="font-bold text-sm">{gems}</span>
-        </div>
+    <div className="min-h-screen pb-24">
+      <header className="sticky top-0 z-20 bg-[#0a0a0f]/95 backdrop-blur px-4 py-4 border-b border-white/5">
+        <h1 className="text-xl font-bold">{t.chats}</h1>
       </header>
 
-      <div className="flex gap-2 mb-6">
-        <button
-          onClick={() => setSelectedGender('all')}
-          className={`flex-1 py-3 rounded-xl font-bold transition-all ${
-            selectedGender === 'all'
-              ? 'bg-gradient-primary text-white'
-              : 'bg-surface text-textMuted border border-white/10'
-          }`}
-        >
-          {t.all}
-        </button>
-        <button
-          onClick={() => setSelectedGender('male')}
-          className={`flex-1 py-3 rounded-xl font-bold transition-all ${
-            selectedGender === 'male'
-              ? 'bg-gradient-primary text-white'
-              : 'bg-surface text-textMuted border border-white/10'
-          }`}
-        >
-          {t.masculine}
-        </button>
-        <button
-          onClick={() => setSelectedGender('female')}
-          className={`flex-1 py-3 rounded-xl font-bold transition-all ${
-            selectedGender === 'female'
-              ? 'bg-gradient-primary text-white'
-              : 'bg-surface text-textMuted border border-white/10'
-          }`}
-        >
-          {t.feminine}
-        </button>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        {filteredCharacters.map((char) => (
+      {loading ? (
+        <div className="flex justify-center py-20">
+          <div className="w-8 h-8 rounded-full border-2 border-[#7c5cff] border-t-transparent animate-spin" />
+        </div>
+      ) : chats.length === 0 ? (
+        <div className="text-center py-20 px-6">
+          <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-[#7c5cff] to-[#a855f7] opacity-20" />
+          <p className="font-semibold mb-1">{t.noChatsYet}</p>
+          <p className="text-sm text-[#8b8b9e] mb-6">{t.noChatsDesc}</p>
           <button
-            key={`${char.gender}_${char.archetype}`}
-            onClick={() => handleCharacterClick(char.archetype, char.gender)}
-            disabled={creating !== null}
-            className="group relative rounded-2xl overflow-hidden bg-gradient-to-br from-surface to-surfaceHighlight border border-white/10 hover:border-primary/50 transition-all duration-300 hover:scale-105 disabled:opacity-50 text-left"
+            onClick={() => router.push('/characters')}
+            className="bg-gradient-to-r from-[#7c5cff] to-[#a855f7] text-white px-6 py-3 rounded-xl font-medium"
           >
-            <div className="aspect-[3/4] relative p-4">
-              <div className="text-6xl mb-2">{char.icon}</div>
-              <div className="absolute inset-0 bg-gradient-to-t from-background via-background/50 to-transparent" />
-            </div>
-
-            <div className="absolute bottom-0 left-0 right-0 p-4">
-              <h3 className="text-lg font-bold text-white mb-1">{char.name}</h3>
-              <p className="text-xs text-textMuted line-clamp-2">{char.personality}</p>
-            </div>
-
-            {creating === `${char.gender}_${char.archetype}` && (
-              <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-              </div>
-            )}
+            {t.viewCharacters}
           </button>
-        ))}
-      </div>
-
-      {/* MODAL NOMBRE */}
-      {showNameModal && pendingChar && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
-          <div className="bg-surface rounded-2xl p-6 max-w-md w-full border border-white/10">
-            <h3 className="text-xl font-bold mb-2 text-white">
-              🎭 {pendingChar.defaultName}
-            </h3>
-            <p className="text-sm text-textMuted mb-4">
-              Ponle un nombre a tu personaje ({GEM_COSTS.new_character} gemas)
-            </p>
-            <input
-              type="text"
-              value={customName}
-              onChange={(e) => setCustomName(e.target.value)}
-              placeholder={t.namePlaceholder}
-              maxLength={30}
-              className="w-full bg-background border border-white/10 rounded-xl p-3 text-sm mb-4 focus:outline-none focus:border-primary text-textMain"
-            />
-            <div className="flex gap-2">
+        </div>
+      ) : (
+        <div className="divide-y divide-white/5">
+          {chats.map((c) => {
+            const level = getRelationshipLevel(c.messageCount)
+            return (
               <button
-                onClick={() => {
-                  setShowNameModal(false)
-                  setPendingChar(null)
-                }}
-                className="flex-1 py-2 rounded-xl bg-surfaceHighlight text-textMuted"
+                key={c.id}
+                onClick={() => router.push(`/chat/${c.id}`)}
+                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/[0.02] text-left"
               >
-                {t.cancel}
+                <div
+                  className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg shrink-0"
+                  style={{ background: getGradient(c.archetype) }}
+                >
+                  {c.character_name?.[0]?.toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <p className="font-semibold truncate">{c.character_name}</p>
+                    <span className="text-[11px] text-[#6b6b7e] shrink-0">{formatTime(c.lastAt)}</span>
+                  </div>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span
+                      className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
+                      style={{ color: level.color, background: `${level.color}20` }}
+                    >
+                      {t[level.key as keyof typeof t]}
+                    </span>
+                    <p className="text-sm text-[#8b8b9e] truncate flex-1">
+                      {c.lastMessage ? cleanPreview(c.lastMessage) : t.startChat}
+                    </p>
+                  </div>
+                </div>
               </button>
-              <button
-                onClick={confirmCreate}
-                disabled={creating !== null || !customName.trim() || gems < GEM_COSTS.new_character}
-                className="flex-1 py-2 rounded-xl bg-gradient-primary text-white font-bold disabled:opacity-50"
-              >
-                {creating ? t.creating : `${t.create} (${GEM_COSTS.new_character}💎)`}
-              </button>
-            </div>
-            {gems < GEM_COSTS.new_character && (
-              <p className="text-xs text-primary mt-3 text-center">
-                {t.notEnoughGems}
-              </p>
-            )}
-          </div>
+            )
+          })}
         </div>
       )}
     </div>
