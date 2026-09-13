@@ -29,9 +29,15 @@ export default function ShopPage() {
     try {
       const { data } = await supabase
         .from('users').select('*').eq('telegram_id', telegramId.toString()).maybeSingle()
-      if (data) { setUser(data); setGems(data.gems || 0) }
-    } catch (e) { console.error(e) }
-    finally { setLoading(false) }
+      if (data) {
+        setUser(data)
+        setGems(data.gems || 0)
+      }
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const buy = async (idx: number) => {
@@ -69,46 +75,106 @@ export default function ShopPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="w-10 h-10 rounded-full border-2 border-[#7c5cff] border-t-transparent animate-spin" />
+      <div className="spinner-full">
+        <div className="spinner" />
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen pb-24">
-      <header className="sticky top-0 z-20 bg-[#0a0a0f]/95 backdrop-blur px-4 py-4 border-b border-white/5 flex items-center justify-between">
-        <h1 className="text-xl font-bold">{t.shop}</h1>
-        <div className="flex items-center gap-1.5 bg-white/5 px-3 py-1.5 rounded-full border border-white/5">
+    <div className="page">
+      <header className="page-header">
+        <h1 className="page-title">{t.shop}</h1>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            background: 'rgba(255, 255, 255, 0.05)',
+            padding: '6px 12px',
+            borderRadius: 20,
+            border: '1px solid rgba(255, 255, 255, 0.06)',
+          }}
+        >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
             <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" fill="#a78bfa" />
           </svg>
-          <span className="text-sm font-semibold">{gems}</span>
+          <span style={{ fontSize: 14, fontWeight: 600 }}>{gems}</span>
         </div>
       </header>
 
-      <section className="px-4 mt-5">
-        <div className="relative rounded-3xl overflow-hidden p-5 bg-gradient-to-br from-[#7c5cff] via-[#a855f7] to-[#d946ef]">
-          <div className="absolute top-3 right-3 bg-white/20 backdrop-blur text-[10px] font-bold px-2 py-1 rounded-full text-white uppercase tracking-wider">
+      {/* Premium banner */}
+      <section style={{ padding: '20px 16px 0' }}>
+        <div
+          style={{
+            position: 'relative',
+            borderRadius: 24,
+            overflow: 'hidden',
+            padding: 20,
+            background:
+              'linear-gradient(135deg, #7c5cff 0%, #a855f7 50%, #d946ef 100%)',
+          }}
+        >
+          <div
+            style={{
+              position: 'absolute',
+              top: 12,
+              right: 12,
+              background: 'rgba(255,255,255,0.2)',
+              backdropFilter: 'blur(8px)',
+              fontSize: 10,
+              fontWeight: 700,
+              padding: '4px 10px',
+              borderRadius: 20,
+              color: '#fff',
+              textTransform: 'uppercase',
+              letterSpacing: '0.04em',
+            }}
+          >
             {t.premiumBanner}
           </div>
-          <h2 className="text-2xl font-black text-white mb-1">{t.premiumTitle}</h2>
-          <p className="text-sm text-white/80 mb-3 max-w-[75%]">{t.premiumDesc}</p>
-          <div className="flex items-center gap-2">
-            <div className="bg-white/20 backdrop-blur rounded-xl px-3 py-1.5">
-              <span className="text-xs font-bold text-white">70% OFF</span>
+          <h2
+            style={{
+              fontSize: 24,
+              fontWeight: 900,
+              color: '#fff',
+              margin: '0 0 4px 0',
+            }}
+          >
+            {t.premiumTitle}
+          </h2>
+          <p
+            style={{
+              fontSize: 14,
+              color: 'rgba(255,255,255,0.8)',
+              margin: '0 0 12px 0',
+              maxWidth: '75%',
+            }}
+          >
+            {t.premiumDesc}
+          </p>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <div
+              style={{
+                background: 'rgba(255,255,255,0.2)',
+                backdropFilter: 'blur(8px)',
+                borderRadius: 12,
+                padding: '6px 12px',
+              }}
+            >
+              <span style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>70% OFF</span>
             </div>
           </div>
         </div>
       </section>
 
-      <section className="px-4 mt-6">
-        <h2 className="text-base font-semibold mb-3">{t.packages}</h2>
-        <div className="space-y-2.5">
+      {/* Packages */}
+      <section style={{ padding: '24px 16px 0' }}>
+        <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>{t.packages}</h2>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {STAR_PACKAGES.map((pkg, idx) => {
-            const finalGems = pkg.bonus > 0
-              ? Math.floor(pkg.gems * (1 + pkg.bonus / 100))
-              : pkg.gems
+            const finalGems =
+              pkg.bonus > 0 ? Math.floor(pkg.gems * (1 + pkg.bonus / 100)) : pkg.gems
             const popular = idx === 2
 
             return (
@@ -116,40 +182,96 @@ export default function ShopPage() {
                 key={idx}
                 onClick={() => buy(idx)}
                 disabled={purchasing !== null}
-                className={`w-full flex items-center gap-3 p-4 rounded-2xl border text-left transition-all ${
-                  popular
-                    ? 'bg-gradient-to-r from-[#7c5cff]/20 to-[#a855f7]/10 border-[#7c5cff]/40'
-                    : 'bg-white/[0.03] border-white/5'
-                } disabled:opacity-50`}
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: 16,
+                  borderRadius: 16,
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  color: 'inherit',
+                  background: popular
+                    ? 'linear-gradient(90deg, rgba(124,92,255,0.2), rgba(168,85,247,0.1))'
+                    : 'rgba(255,255,255,0.03)',
+                  border: popular
+                    ? '1px solid rgba(124,92,255,0.4)'
+                    : '1px solid rgba(255,255,255,0.06)',
+                  opacity: purchasing !== null ? 0.5 : 1,
+                }}
               >
-                <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#7c5cff] to-[#a855f7] flex items-center justify-center shrink-0">
+                <div
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 12,
+                    background: 'linear-gradient(135deg, #7c5cff 0%, #a855f7 100%)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
                     <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" fill="#fff" />
                   </svg>
                 </div>
 
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-bold text-base">{finalGems} {t.gems}</p>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <p style={{ fontWeight: 700, fontSize: 16, margin: 0 }}>
+                      {finalGems} {t.gems}
+                    </p>
                     {popular && (
-                      <span className="text-[10px] font-bold uppercase bg-[#a855f7] text-white px-1.5 py-0.5 rounded">
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 700,
+                          textTransform: 'uppercase',
+                          background: '#a855f7',
+                          color: '#fff',
+                          padding: '2px 6px',
+                          borderRadius: 4,
+                        }}
+                      >
                         {t.popular}
                       </span>
                     )}
                     {pkg.first_time && (
-                      <span className="text-[10px] font-bold uppercase bg-[#22c55e] text-white px-1.5 py-0.5 rounded">
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 700,
+                          textTransform: 'uppercase',
+                          background: '#22c55e',
+                          color: '#fff',
+                          padding: '2px 6px',
+                          borderRadius: 4,
+                        }}
+                      >
                         {t.firstTime}
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-[#8b8b9e] mt-0.5">
+                  <p style={{ fontSize: 12, color: '#8b8b9e', margin: '2px 0 0 0' }}>
                     {pkg.bonus > 0 ? `+${pkg.bonus}% ${t.bonus}` : `${pkg.stars} Stars`}
                   </p>
                 </div>
 
-                <div className="shrink-0 text-right">
-                  <p className="font-bold text-sm">{pkg.stars}</p>
-                  <p className="text-[10px] text-[#8b8b9e] uppercase">Stars</p>
+                <div style={{ flexShrink: 0, textAlign: 'right' }}>
+                  <p style={{ fontWeight: 700, fontSize: 14, margin: 0 }}>{pkg.stars}</p>
+                  <p
+                    style={{
+                      fontSize: 10,
+                      color: '#8b8b9e',
+                      textTransform: 'uppercase',
+                      margin: 0,
+                    }}
+                  >
+                    Stars
+                  </p>
                 </div>
               </button>
             )
@@ -157,25 +279,43 @@ export default function ShopPage() {
         </div>
       </section>
 
-      <section className="px-4 mt-6">
-        <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-4">
-          <h3 className="text-sm font-semibold mb-3">{t.howItWorks}</h3>
-          <ul className="space-y-2 text-sm text-[#8b8b9e]">
-            <li className="flex justify-between">
-              <span>{t.chatCost}</span><span className="text-white font-semibold">1 {t.gems}</span>
-            </li>
-            <li className="flex justify-between">
-              <span>{t.audioCost}</span><span className="text-white font-semibold">5 {t.gems}</span>
-            </li>
-            <li className="flex justify-between">
-              <span>{t.imageCost}</span><span className="text-white font-semibold">10 {t.gems}</span>
-            </li>
-            <li className="flex justify-between">
-              <span>{t.createCharCost}</span><span className="text-white font-semibold">5 {t.gems}</span>
-            </li>
-            <li className="flex justify-between">
-              <span>{t.renameCost}</span><span className="text-white font-semibold">3 {t.gems}</span>
-            </li>
+      {/* Info */}
+      <section style={{ padding: '24px 16px' }}>
+        <div
+          style={{
+            background: 'rgba(255,255,255,0.03)',
+            border: '1px solid rgba(255,255,255,0.06)',
+            borderRadius: 16,
+            padding: 16,
+          }}
+        >
+          <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
+            {t.howItWorks}
+          </h3>
+          <ul
+            style={{
+              listStyle: 'none',
+              padding: 0,
+              margin: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 8,
+              fontSize: 14,
+              color: '#8b8b9e',
+            }}
+          >
+            {[
+              { label: t.chatCost, cost: `1 ${t.gems}` },
+              { label: t.audioCost, cost: `5 ${t.gems}` },
+              { label: t.imageCost, cost: `10 ${t.gems}` },
+              { label: t.createCharCost, cost: `5 ${t.gems}` },
+              { label: t.renameCost, cost: `3 ${t.gems}` },
+            ].map((row, i) => (
+              <li key={i} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>{row.label}</span>
+                <span style={{ color: '#fff', fontWeight: 600 }}>{row.cost}</span>
+              </li>
+            ))}
           </ul>
         </div>
       </section>
