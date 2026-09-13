@@ -88,7 +88,7 @@ export default function CharactersPage() {
           .eq('id', existingChar.id)
         router.push(`/chat/${existingChar.id}`)
       } else {
-        // Nuevo: abrir modal
+        // Nuevo: abrir modal para pedir nombre y cobrar
         const map = (gender === 'male' ? ARCHETYPES_MALE : ARCHETYPES_FEMALE)[lang] as Record<string, string>
         const defaultName = (map[archetype] || archetype)
           .replace(/^[^\wáéíóúñ]+\s*/i, '')
@@ -114,7 +114,6 @@ export default function CharactersPage() {
     setCreating(`${pendingChar.gender}_${pendingChar.archetype}`)
 
     try {
-      // Cobrar
       const newGems = gems - GEM_COSTS.new_character
       await supabase.from('users').update({ gems: newGems }).eq('telegram_id', tid)
       await supabase.from('gem_transactions').insert({
@@ -124,13 +123,11 @@ export default function CharactersPage() {
         description: 'Nuevo personaje'
       })
 
-      // Desactivar todos
       await supabase
         .from('user_characters')
         .update({ is_active: false })
         .eq('telegram_id', tid)
 
-      // Crear
       const charName = customName.trim() || pendingChar.defaultName || 'Personaje'
       const { data, error } = await supabase
         .from('user_characters')
@@ -245,4 +242,74 @@ export default function CharactersPage() {
       <div className="grid grid-cols-2 gap-4">
         {filteredCharacters.map((char) => (
           <button
-            key={`${char.gender}_${char.archetype
+            key={`${char.gender}_${char.archetype}`}
+            onClick={() => handleCharacterClick(char.archetype, char.gender)}
+            disabled={creating !== null}
+            className="group relative rounded-2xl overflow-hidden bg-gradient-to-br from-surface to-surfaceHighlight border border-white/10 hover:border-primary/50 transition-all duration-300 hover:scale-105 disabled:opacity-50 text-left"
+          >
+            <div className="aspect-[3/4] relative p-4">
+              <div className="text-6xl mb-2">{char.icon}</div>
+              <div className="absolute inset-0 bg-gradient-to-t from-background via-background/50 to-transparent" />
+            </div>
+
+            <div className="absolute bottom-0 left-0 right-0 p-4">
+              <h3 className="text-lg font-bold text-white mb-1">{char.name}</h3>
+              <p className="text-xs text-textMuted line-clamp-2">{char.personality}</p>
+            </div>
+
+            {creating === `${char.gender}_${char.archetype}` && (
+              <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* MODAL NOMBRE */}
+      {showNameModal && pendingChar && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
+          <div className="bg-surface rounded-2xl p-6 max-w-md w-full border border-white/10">
+            <h3 className="text-xl font-bold mb-2 text-white">
+              🎭 {pendingChar.defaultName}
+            </h3>
+            <p className="text-sm text-textMuted mb-4">
+              Ponle un nombre a tu personaje ({GEM_COSTS.new_character} gemas)
+            </p>
+            <input
+              type="text"
+              value={customName}
+              onChange={(e) => setCustomName(e.target.value)}
+              placeholder={t.namePlaceholder}
+              maxLength={30}
+              className="w-full bg-background border border-white/10 rounded-xl p-3 text-sm mb-4 focus:outline-none focus:border-primary text-textMain"
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  setShowNameModal(false)
+                  setPendingChar(null)
+                }}
+                className="flex-1 py-2 rounded-xl bg-surfaceHighlight text-textMuted"
+              >
+                {t.cancel}
+              </button>
+              <button
+                onClick={confirmCreate}
+                disabled={creating !== null || !customName.trim() || gems < GEM_COSTS.new_character}
+                className="flex-1 py-2 rounded-xl bg-gradient-primary text-white font-bold disabled:opacity-50"
+              >
+                {creating ? t.creating : `${t.create} (${GEM_COSTS.new_character}💎)`}
+              </button>
+            </div>
+            {gems < GEM_COSTS.new_character && (
+              <p className="text-xs text-primary mt-3 text-center">
+                {t.notEnoughGems}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
