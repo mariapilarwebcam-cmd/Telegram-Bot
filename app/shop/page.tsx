@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { STAR_PACKAGES, getFinalGems } from '@/lib/constants'
+import { STAR_PACKAGES } from '@/lib/constants'
 import { getTranslations, getLanguage, Language } from '@/lib/i18n'
 
 export default function ShopPage() {
@@ -85,7 +85,6 @@ export default function ShopPage() {
     )
   }
 
-  // Oculta el paquete first_time_only si el usuario ya compró antes
   const visiblePackages = STAR_PACKAGES
     .map((pkg, idx) => ({ ...pkg, originalIndex: idx }))
     .filter(p => !p.first_time_only || !hasPurchased)
@@ -112,6 +111,7 @@ export default function ShopPage() {
         </div>
       </header>
 
+      {/* Premium banner */}
       <section style={{ padding: '20px 16px 0' }}>
         <div
           style={{
@@ -147,7 +147,7 @@ export default function ShopPage() {
             style={{
               fontSize: 14,
               color: 'rgba(255,255,255,0.8)',
-              margin: '0 0 12px 0',
+              margin: 0,
               maxWidth: '75%',
             }}
           >
@@ -156,13 +156,14 @@ export default function ShopPage() {
         </div>
       </section>
 
+      {/* Packages */}
       <section style={{ padding: '24px 16px 0' }}>
         <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>{t.packages}</h2>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {visiblePackages.map((pkg) => {
-            const finalGems = getFinalGems(pkg)
             const idx = pkg.originalIndex
             const isFirstTime = pkg.first_time_only
+            const bonusGems = pkg.bonus > 0 ? Math.floor(pkg.gems * pkg.bonus / 100) : 0
 
             return (
               <button
@@ -211,8 +212,19 @@ export default function ShopPage() {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     <p style={{ fontWeight: 700, fontSize: 16, margin: 0 }}>
-                      {finalGems} {t.gems}
+                      {pkg.gems} {t.gems}
                     </p>
+                    {bonusGems > 0 && (
+                      <span
+                        style={{
+                          fontSize: 13,
+                          color: '#22c55e',
+                          fontWeight: 700,
+                        }}
+                      >
+                        + {bonusGems} {t.bonusGems}
+                      </span>
+                    )}
                     {isFirstTime && (
                       <span
                         style={{
@@ -229,9 +241,6 @@ export default function ShopPage() {
                       </span>
                     )}
                   </div>
-                  <p style={{ fontSize: 12, color: '#8b8b9e', margin: '2px 0 0 0' }}>
-                    {pkg.bonus > 0 ? `+${pkg.bonus}% ${t.bonus}` : `${pkg.stars} Stars`}
-                  </p>
                 </div>
 
                 <div style={{ flexShrink: 0, textAlign: 'right' }}>
@@ -246,6 +255,7 @@ export default function ShopPage() {
         </div>
       </section>
 
+      {/* Info */}
       <section style={{ padding: '24px 16px' }}>
         <div
           style={{
