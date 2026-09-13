@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/supabase-admin'
 import { CHARACTER_FACES, GEM_COSTS } from '@/lib/constants'
 import { generateImage } from '@/lib/ai'
 
@@ -8,7 +8,7 @@ export async function POST(request: Request) {
     const { telegram_id, character_id, description } = await request.json()
     const tid = String(telegram_id)
 
-    const { data: user } = await supabase
+    const { data: user } = await supabaseAdmin
       .from('users')
       .select('gems, language')
       .eq('telegram_id', tid)
@@ -16,8 +16,7 @@ export async function POST(request: Request) {
 
     if (!user) return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
 
-    // Gating premium
-    const { data: purchases } = await supabase
+    const { data: purchases } = await supabaseAdmin
       .from('star_purchases')
       .select('id')
       .eq('telegram_id', tid)
@@ -36,7 +35,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Necesitas 10 gemas' }, { status: 402 })
     }
 
-    const { data: character } = await supabase
+    const { data: character } = await supabaseAdmin
       .from('user_characters')
       .select('archetype, character_name')
       .eq('id', character_id)
@@ -51,8 +50,8 @@ export async function POST(request: Request) {
     const imageUrl = await generateImage(imagePrompt)
 
     const newGems = user.gems - GEM_COSTS.image
-    await supabase.from('users').update({ gems: newGems }).eq('telegram_id', tid)
-    await supabase.from('gem_transactions').insert({
+    await supabaseAdmin.from('users').update({ gems: newGems }).eq('telegram_id', tid)
+    await supabaseAdmin.from('gem_transactions').insert({
       telegram_id: tid,
       amount: -GEM_COSTS.image,
       transaction_type: 'image',
