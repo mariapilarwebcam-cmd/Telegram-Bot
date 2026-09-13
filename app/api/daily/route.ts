@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/supabase-admin'
 import { BASE_DAILY_GEMS, GEMS_PER_REFERRAL, MAX_REFERRALS_PER_DAY } from '@/lib/constants'
 
 const HOURS = 24
@@ -9,7 +9,7 @@ export async function POST(request: Request) {
     const { telegram_id } = await request.json()
     const tid = String(telegram_id)
 
-    const { data: user } = await supabase
+    const { data: user } = await supabaseAdmin
       .from('users')
       .select('gems, language, last_daily_claim')
       .eq('telegram_id', tid)
@@ -28,7 +28,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const { data: referrals } = await supabase
+    const { data: referrals } = await supabaseAdmin
       .from('referrals')
       .select('created_at')
       .eq('referrer_id', tid)
@@ -43,14 +43,14 @@ export async function POST(request: Request) {
     const dailyTotal = BASE_DAILY_GEMS + bonus
     const newGems = user.gems + dailyTotal
 
-    await supabase.from('users').update({
+    await supabaseAdmin.from('users').update({
       gems: newGems,
       last_daily_claim: new Date().toISOString(),
       bonus_gems_from_referrals: bonus,
       hook_messages_remaining: 0
     }).eq('telegram_id', tid)
 
-    await supabase.from('gem_transactions').insert({
+    await supabaseAdmin.from('gem_transactions').insert({
       telegram_id: tid,
       amount: dailyTotal,
       transaction_type: 'daily',
