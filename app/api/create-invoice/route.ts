@@ -1,18 +1,28 @@
 import { NextResponse } from 'next/server'
-import { STAR_PACKAGES } from '@/lib/constants'
+import { supabaseAdmin } from '@/lib/supabase-admin'
+import { STAR_PACKAGES, getFinalGems } from '@/lib/constants'
 
 export async function POST(request: Request) {
   try {
     const { telegram_id, package_id } = await request.json()
+    const tid = String(telegram_id)
 
     if (package_id >= STAR_PACKAGES.length || package_id < 0) {
       return NextResponse.json({ error: 'Paquete no válido' }, { status: 400 })
     }
 
     const pkg = STAR_PACKAGES[package_id]
-    const finalGems = pkg.bonus > 0
-      ? Math.floor(pkg.gems * (1 + pkg.bonus / 100))
-      : pkg.gems
+
+    // Validar first_time_only: solo si el usuario nunca ha comprado
+    if (pkg.first_time_only) {
+      const { data: purchases } = await supabaseAdmin
+        .from('star_purchases').select('id').eq('telegram_id', tid).limit(1)
+      if (purchases && purchases.length > 0) {
+        return NextResponse.json({ error: 'Paquete no disponible' }, { status: 400 })
+      }
+    }
+
+    const finalGems = getFinalGems(pkg)
 
     const response = await fetch(
       `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/createInvoiceLink`,
@@ -20,11 +30,11 @@ export async function POST(request: Request) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title: `${finalGems} Gemas`,
-          description: `Paquete de ${finalGems} gemas${pkg.bonus > 0 ? ` (+${pkg.bonus}% bonus)` : ''}`,
+          title: `${finalGems} Gems`,
+          description: `${finalGems} gems${pkg.bonus > 0 ? ` (+${pkg.bonus}% bonus)` : ''}`,
           payload: `gem_purchase_${package_id}`,
           currency: 'XTR',
-          prices: [{ label: 'Gemas', amount: pkg.stars }]
+          prices: [{ label: 'Gems', amount: pkg.stars }]
         })
       }
     )
