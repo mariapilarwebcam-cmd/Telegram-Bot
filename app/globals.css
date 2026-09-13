@@ -24,6 +24,13 @@ body {
   }
 }
 
+/* Acciones de personajes: asteriscos en morado */
+.chat-action {
+  color: #c084fc;
+  font-style: italic;
+  font-weight: 500;
+}
+
 /* Scrollbar personalizado */
 ::-webkit-scrollbar {
   width: 6px;
