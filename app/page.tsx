@@ -124,8 +124,6 @@ export default function HomePage() {
         c.role.toLowerCase().includes(search.toLowerCase())
     )
 
-  const featured = filtered.slice(0, 10)
-
   const openCharacter = () => {
     router.push('/characters')
   }
@@ -239,7 +237,6 @@ export default function HomePage() {
         </div>
       </header>
 
-      {/* Hook mode notice */}
       {hookRemaining > 0 && (
         <div
           style={{
@@ -256,7 +253,6 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Active character */}
       {activeChar && (
         <section style={{ padding: '16px 16px 0' }}>
           <button
@@ -320,7 +316,6 @@ export default function HomePage() {
         </section>
       )}
 
-      {/* Tabs */}
       <div className="tabs">
         {[
           { id: 'all', label: t.all },
@@ -337,76 +332,15 @@ export default function HomePage() {
         ))}
       </div>
 
-      {/* Featured */}
-      <section style={{ marginTop: 8 }}>
+      {/* Grid único con TODOS los personajes */}
+      <section style={{ marginTop: 4 }}>
         <div style={{ padding: '0 16px 12px' }}>
           <h2 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>{t.featured}</h2>
-        </div>
-        <div className="scroll-x">
-          {featured.map((c) => (
-            <button
-              key={`f_${c.gender}_${c.archetype}`}
-              onClick={openCharacter}
-              style={{
-                flexShrink: 0,
-                width: 140,
-                textAlign: 'left',
-                background: 'transparent',
-                border: 'none',
-                padding: 0,
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-                color: 'inherit',
-              }}
-            >
-              <div
-                style={{
-                  width: 140,
-                  height: 200,
-                  borderRadius: 16,
-                  position: 'relative',
-                  overflow: 'hidden',
-                  background: c.gradient,
-                }}
-              >
-                <div className="char-card-overlay" />
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: 8,
-                    left: 8,
-                    background: 'rgba(255,255,255,0.15)',
-                    backdropFilter: 'blur(8px)',
-                    fontSize: 9,
-                    fontWeight: 600,
-                    padding: '3px 8px',
-                    borderRadius: 20,
-                    color: 'rgba(255,255,255,0.9)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.04em',
-                  }}
-                >
-                  {t.newCharacters}
-                </div>
-                <div className="char-card-text">
-                  <p className="char-card-name">{c.name}</p>
-                  <p className="char-card-role">{c.role}</p>
-                </div>
-              </div>
-            </button>
-          ))}
-        </div>
-      </section>
-
-      {/* Full grid */}
-      <section style={{ marginTop: 24 }}>
-        <div style={{ padding: '0 16px 12px' }}>
-          <h2 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>{t.characters}</h2>
         </div>
         <div className="char-grid">
           {filtered.map((c) => (
             <button
-              key={`g_${c.gender}_${c.archetype}`}
+              key={`${c.gender}_${c.archetype}`}
               onClick={openCharacter}
               className="char-card"
             >
