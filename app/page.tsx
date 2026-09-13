@@ -316,6 +316,7 @@ export default function HomePage() {
         </section>
       )}
 
+      {/* Tabs */}
       <div className="tabs">
         {[
           { id: 'all', label: t.all },
@@ -332,29 +333,24 @@ export default function HomePage() {
         ))}
       </div>
 
-      {/* Grid único con TODOS los personajes */}
-      <section style={{ marginTop: 4 }}>
-        <div style={{ padding: '0 16px 12px' }}>
-          <h2 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>{t.featured}</h2>
-        </div>
-        <div className="char-grid">
-          {filtered.map((c) => (
-            <button
-              key={`${c.gender}_${c.archetype}`}
-              onClick={openCharacter}
-              className="char-card"
-            >
-              <div className="char-card-img" style={{ background: c.gradient }}>
-                <div className="char-card-overlay" />
-                <div className="char-card-text">
-                  <p className="char-card-name">{c.name}</p>
-                  <p className="char-card-role">{c.role}</p>
-                </div>
+      {/* Único grid con TODOS los personajes */}
+      <div className="char-grid">
+        {filtered.map((c) => (
+          <button
+            key={`${c.gender}_${c.archetype}`}
+            onClick={openCharacter}
+            className="char-card"
+          >
+            <div className="char-card-img" style={{ background: c.gradient }}>
+              <div className="char-card-overlay" />
+              <div className="char-card-text">
+                <p className="char-card-name">{c.name}</p>
+                <p className="char-card-role">{c.role}</p>
               </div>
-            </button>
-          ))}
-        </div>
-      </section>
+            </div>
+          </button>
+        ))}
+      </div>
     </div>
   )
 }
