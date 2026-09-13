@@ -1,78 +1,118 @@
+// Nombres canónicos USA — Femeninos
+export const CHARACTER_NAMES_FEMALE: Record<string, string> = {
+  schoolmate: "Mia",
+  stepmom: "Victoria",
+  stepsister: "Chloe",
+  teacher: "Emma",
+  neighbor: "Sophie",
+  boss: "Amanda",
+  trainer: "Jessica",
+  model: "Isabella",
+  musician: "Luna",
+  actor: "Scarlett",
+  doctor: "Olivia",
+  chef: "Valentina",
+  artist: "Aurora",
+  writer: "Clara",
+  secretary: "Brooke",
+  model_student: "Harper"
+}
+
+// Nombres canónicos USA — Masculinos
+export const CHARACTER_NAMES_MALE: Record<string, string> = {
+  schoolmate: "Ethan",
+  stepdad: "Richard",
+  stepbrother: "Jake",
+  teacher: "Daniel",
+  neighbor: "Michael",
+  boss: "Alexander",
+  trainer: "Brandon",
+  model: "Lucas",
+  musician: "Dylan",
+  actor: "Nathan",
+  doctor: "James",
+  chef: "Marco",
+  artist: "Leo",
+  writer: "Sebastian",
+  bodyguard: "Marcus",
+  ceo: "Christian"
+}
+
 export const ARCHETYPES_MALE = {
   es: {
-    schoolmate: "🎓 Compañero de escuela",
-    stepdad: "👔 Padrastro",
-    stepbrother: "💪 Hermanastro",
-    teacher: "📚 Profesor",
-    neighbor: "🏠 Vecino",
-    boss: "💼 Jefe",
-    trainer: "🏋️ Entrenador personal",
-    model: "📸 Modelo/Influencer",
-    musician: "🎵 Músico",
-    actor: "🎬 Actor",
-    doctor: "⚕️ Médico",
-    chef: "👨‍🍳 Chef",
-    artist: "🎨 Artista",
-    writer: "✍️ Escritor",
-    bodyguard: "🛡️ Guardaespaldas",
-    ceo: "💼 CEO/Empresario"
+    schoolmate: "Compañero de escuela",
+    stepdad: "Padrastro",
+    stepbrother: "Hermanastro",
+    teacher: "Profesor",
+    neighbor: "Vecino",
+    boss: "Jefe",
+    trainer: "Entrenador personal",
+    model: "Modelo",
+    musician: "Músico",
+    actor: "Actor",
+    doctor: "Médico",
+    chef: "Chef",
+    artist: "Artista",
+    writer: "Escritor",
+    bodyguard: "Guardaespaldas",
+    ceo: "CEO"
   },
   en: {
-    schoolmate: "🎓 Schoolmate",
-    stepdad: "👔 Stepfather",
-    stepbrother: "💪 Stepbrother",
-    teacher: "📚 Teacher",
-    neighbor: "🏠 Neighbor",
-    boss: "💼 Boss",
-    trainer: "🏋️ Personal Trainer",
-    model: "📸 Model/Influencer",
-    musician: "🎵 Musician",
-    actor: "🎬 Actor",
-    doctor: "⚕️ Doctor",
-    chef: "👨‍🍳 Chef",
-    artist: "🎨 Artist",
-    writer: "✍️ Writer",
-    bodyguard: "🛡️ Bodyguard",
-    ceo: "💼 CEO/Businessman"
+    schoolmate: "Schoolmate",
+    stepdad: "Stepfather",
+    stepbrother: "Stepbrother",
+    teacher: "Teacher",
+    neighbor: "Neighbor",
+    boss: "Boss",
+    trainer: "Personal Trainer",
+    model: "Model",
+    musician: "Musician",
+    actor: "Actor",
+    doctor: "Doctor",
+    chef: "Chef",
+    artist: "Artist",
+    writer: "Writer",
+    bodyguard: "Bodyguard",
+    ceo: "CEO"
   }
 }
 
 export const ARCHETYPES_FEMALE = {
   es: {
-    schoolmate: "🎓 Compañera de escuela",
-    stepmom: "💋 Madrastra",
-    stepsister: "🌸 Hermanastra",
-    teacher: "📚 Profesora",
-    neighbor: "🏠 Vecina",
-    boss: "💼 Jefa",
-    trainer: "🏋️ Entrenadora personal",
-    model: "📸 Modelo/Influencer",
-    musician: "🎵 Músico",
-    actor: "🎬 Actriz",
-    doctor: "⚕️ Doctora/Enfermera",
-    chef: "👩‍🍳 Chef",
-    artist: "🎨 Artista",
-    writer: "✍️ Escritora",
-    secretary: "💼 Secretaria",
-    model_student: "🎓 Estudiante popular"
+    schoolmate: "Compañera de escuela",
+    stepmom: "Madrastra",
+    stepsister: "Hermanastra",
+    teacher: "Profesora",
+    neighbor: "Vecina",
+    boss: "Jefa",
+    trainer: "Entrenadora personal",
+    model: "Modelo",
+    musician: "Música",
+    actor: "Actriz",
+    doctor: "Doctora",
+    chef: "Chef",
+    artist: "Artista",
+    writer: "Escritora",
+    secretary: "Secretaria",
+    model_student: "Estudiante popular"
   },
   en: {
-    schoolmate: "🎓 Schoolmate",
-    stepmom: "💋 Stepmother",
-    stepsister: "🌸 Stepsister",
-    teacher: "📚 Teacher",
-    neighbor: "🏠 Neighbor",
-    boss: "💼 Boss",
-    trainer: "🏋️ Personal Trainer",
-    model: "📸 Model/Influencer",
-    musician: "🎵 Musician",
-    actor: "🎬 Actress",
-    doctor: "⚕️ Doctor/Nurse",
-    chef: "👩‍🍳 Chef",
-    artist: "🎨 Artist",
-    writer: "✍️ Writer",
-    secretary: "💼 Secretary",
-    model_student: "🎓 Popular Student"
+    schoolmate: "Schoolmate",
+    stepmom: "Stepmother",
+    stepsister: "Stepsister",
+    teacher: "Teacher",
+    neighbor: "Neighbor",
+    boss: "Boss",
+    trainer: "Personal Trainer",
+    model: "Model",
+    musician: "Musician",
+    actor: "Actress",
+    doctor: "Doctor",
+    chef: "Chef",
+    artist: "Artist",
+    writer: "Writer",
+    secretary: "Secretary",
+    model_student: "Popular Student"
   }
 }
 
@@ -100,7 +140,7 @@ export const CHARACTER_FACES: Record<string, string> = {
 }
 
 export const PERSONALITIES: Record<string, string> = {
-  schoolmate: "Eres un compañero de escuela travieso, coqueto y juguetón. Te encanta provocar, hacer bromas con doble sentido y crear momentos de tensión. Siempre encuentras la forma de estar cerca y tocar 'accidentalmente'. Eres divertido pero con intenciones ocultas.",
+  schoolmate: "Eres un compañero/a de escuela travieso, coqueto y juguetón. Te encanta provocar, hacer bromas con doble sentido y crear momentos de tensión. Siempre encuentras la forma de estar cerca y tocar 'accidentalmente'. Eres divertido pero con intenciones ocultas.",
   stepmom: "Eres una madrastra increíblemente atractiva, seductora y misteriosa. Tu presencia es eléctrica y sabes usar tu encanto. Eres cariñosa pero con un toque prohibido que genera tensión. Hablas con confianza, experiencia y siempre dejas espacio para la imaginación.",
   stepdad: "Eres un padrastro dominante, carismático y magnético. Tu presencia es imponente pero seductora. Tienes autoridad pero también un lado oscuro y tentador. Eres maduro, seguro y sabes exactamente cómo crear anticipación.",
   stepsister: "Eres una hermanastra provocativa, coqueta y rebelde. Te encanta jugar con fuego, provocar celos y crear situaciones incómodas pero excitantes. Eres joven, atrevida y siempre encuentras excusas para invadir el espacio personal.",
@@ -124,20 +164,38 @@ export const PERSONALITIES: Record<string, string> = {
 
 export const STAR_PACKAGES = [
   { stars: 50, gems: 200, bonus: 0, first_time: true },
-  { stars: 75, gems: 300, bonus: 0, first_time: false },
-  { stars: 150, gems: 600, bonus: 5, first_time: false },
-  { stars: 300, gems: 1200, bonus: 10, first_time: false },
-  { stars: 500, gems: 2000, bonus: 15, first_time: false },
+  { stars: 150, gems: 600, bonus: 17, first_time: false },
+  { stars: 300, gems: 1200, bonus: 50, first_time: false },
+  { stars: 500, gems: 2000, bonus: 75, first_time: false },
+  { stars: 1000, gems: 4000, bonus: 100, first_time: false },
 ]
 
 export const GEM_COSTS = {
   message: 1,
   audio: 5,
   image: 10,
-  new_character: 5
+  new_character: 5,
+  rename_character: 3,
 }
 
 export const HOOK_MODE_MESSAGES = 5
 export const BASE_DAILY_GEMS = 5
 export const GEMS_PER_REFERRAL = 5
 export const MAX_REFERRALS_PER_DAY = 2
+
+// Niveles de relación (basados en cantidad de mensajes totales)
+export const RELATIONSHIP_LEVELS = [
+  { min: 0, key: 'levelStranger', color: '#8b8b9e' },
+  { min: 5, key: 'levelFriend', color: '#22c55e' },
+  { min: 20, key: 'levelClose', color: '#7c5cff' },
+  { min: 50, key: 'levelIntimate', color: '#a855f7' },
+  { min: 100, key: 'levelSpecial', color: '#ec4899' },
+]
+
+export function getRelationshipLevel(messageCount: number) {
+  let current = RELATIONSHIP_LEVELS[0]
+  for (const lvl of RELATIONSHIP_LEVELS) {
+    if (messageCount >= lvl.min) current = lvl
+  }
+  return current
+}
