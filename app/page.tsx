@@ -4,10 +4,8 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import {
-  ARCHETYPES_MALE,
-  ARCHETYPES_FEMALE,
-  CHARACTER_NAMES_MALE,
-  CHARACTER_NAMES_FEMALE,
+  ARCHETYPES_MALE, ARCHETYPES_FEMALE,
+  CHARACTER_NAMES_MALE, CHARACTER_NAMES_FEMALE,
   PERSONALITIES
 } from '@/lib/constants'
 import { getTranslations, getLanguage, Language } from '@/lib/i18n'
@@ -44,7 +42,6 @@ function getGradient(key: string): string {
 
 export default function HomePage() {
   const router = useRouter()
-  const [user, setUser] = useState<any>(null)
   const [gems, setGems] = useState(0)
   const [hookRemaining, setHookRemaining] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -63,17 +60,16 @@ export default function HomePage() {
       const u = WebApp.initDataUnsafe?.user
       const detectedLang = getLanguage(u?.language_code)
       setLang(detectedLang)
-      if (u?.id) await loadUser(u.id, detectedLang)
+      if (u?.id) await loadUser(u.id)
       else setLoading(false)
     }).catch(() => setLoading(false))
   }, [])
 
-  const loadUser = async (telegramId: number, language: Language) => {
+  const loadUser = async (telegramId: number) => {
     const tid = telegramId.toString()
     try {
       const { data } = await supabase.from('users').select('*').eq('telegram_id', tid).maybeSingle()
       if (data) {
-        setUser(data)
         setGems(data.gems || 0)
         setHookRemaining(data.hook_messages_remaining || 0)
         const { data: ac } = await supabase
@@ -84,26 +80,20 @@ export default function HomePage() {
           .maybeSingle()
         if (ac) setActiveChar(ac)
       }
-    } catch (e) { console.error(e) }
-    finally { setLoading(false) }
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const t = getTranslations(lang)
 
+  // FEMENINAS PRIMERO
   const all: Char[] = []
-  const maleMap = ARCHETYPES_MALE[lang] as Record<string, string>
   const femaleMap = ARCHETYPES_FEMALE[lang] as Record<string, string>
+  const maleMap = ARCHETYPES_MALE[lang] as Record<string, string>
 
-  Object.entries(maleMap).forEach(([k, role]) => {
-    all.push({
-      archetype: k,
-      name: CHARACTER_NAMES_MALE[k] || role,
-      role,
-      gender: 'male',
-      personality: PERSONALITIES[k] || '',
-      gradient: getGradient('m_' + k)
-    })
-  })
   Object.entries(femaleMap).forEach(([k, role]) => {
     all.push({
       archetype: k,
@@ -111,36 +101,70 @@ export default function HomePage() {
       role,
       gender: 'female',
       personality: PERSONALITIES[k] || '',
-      gradient: getGradient('f_' + k)
+      gradient: getGradient('f_' + k),
+    })
+  })
+  Object.entries(maleMap).forEach(([k, role]) => {
+    all.push({
+      archetype: k,
+      name: CHARACTER_NAMES_MALE[k] || role,
+      role,
+      gender: 'male',
+      personality: PERSONALITIES[k] || '',
+      gradient: getGradient('m_' + k),
     })
   })
 
   const filtered = all
-    .filter(c => tab === 'all' ? true : c.gender === tab)
-    .filter(c => !search || c.name.toLowerCase().includes(search.toLowerCase()) || c.role.toLowerCase().includes(search.toLowerCase()))
+    .filter(c => (tab === 'all' ? true : c.gender === tab))
+    .filter(
+      c =>
+        !search ||
+        c.name.toLowerCase().includes(search.toLowerCase()) ||
+        c.role.toLowerCase().includes(search.toLowerCase())
+    )
 
-  const featured = filtered.slice(0, 8)
+  const featured = filtered.slice(0, 10)
 
-  const openCharacter = (c: Char) => {
-    router.push(`/characters?archetype=${c.archetype}&gender=${c.gender}`)
+  const openCharacter = () => {
+    router.push('/characters')
   }
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="w-10 h-10 rounded-full border-2 border-[#7c5cff] border-t-transparent animate-spin" />
+      <div className="spinner-full">
+        <div className="spinner" />
       </div>
     )
   }
 
   if (!isTelegram) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-6">
-        <div className="text-center max-w-sm">
-          <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-[#7c5cff] to-[#a855f7]" />
-          <h1 className="text-xl font-semibold mb-2">{t.openFromTelegram}</h1>
-          <p className="text-sm text-[#8b8b9e] mb-6">{t.openFromTelegramDesc}</p>
-          <a href="https://t.me/TabooRealmBot" className="inline-block bg-gradient-to-r from-[#7c5cff] to-[#a855f7] text-white px-6 py-3 rounded-xl font-medium">
+      <div className="spinner-full" style={{ padding: 24 }}>
+        <div style={{ textAlign: 'center', maxWidth: 340 }}>
+          <div
+            style={{
+              width: 56,
+              height: 56,
+              borderRadius: 16,
+              margin: '0 auto 16px',
+              background: 'linear-gradient(135deg, #7c5cff 0%, #a855f7 100%)',
+            }}
+          />
+          <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 8 }}>{t.openFromTelegram}</h1>
+          <p style={{ fontSize: 14, color: '#8b8b9e', marginBottom: 24 }}>{t.openFromTelegramDesc}</p>
+          <a
+            href="https://t.me/TabooRealmBot"
+            style={{
+              display: 'inline-block',
+              background: 'linear-gradient(135deg, #7c5cff 0%, #a855f7 100%)',
+              color: '#fff',
+              padding: '12px 24px',
+              borderRadius: 12,
+              fontWeight: 500,
+              textDecoration: 'none',
+            }}
+          >
             Abrir en Telegram
           </a>
         </div>
@@ -149,22 +173,50 @@ export default function HomePage() {
   }
 
   return (
-    <div className="min-h-screen pb-24">
-      <header className="sticky top-0 z-20 bg-[#0a0a0f]/95 backdrop-blur px-4 py-3 border-b border-white/5">
-        <div className="flex items-center justify-between mb-3">
-          <h1 className="text-xl font-bold tracking-tight">
-            Taboo<span className="text-[#a78bfa]">Realm</span>
+    <div style={{ paddingBottom: 24 }}>
+      {/* Header */}
+      <header
+        style={{
+          position: 'sticky',
+          top: 0,
+          zIndex: 20,
+          background: 'rgba(10, 10, 15, 0.95)',
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
+          padding: '12px 16px',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0, letterSpacing: '-0.02em' }}>
+            Taboo<span style={{ color: '#a78bfa' }}>Realm</span>
           </h1>
-          <div className="flex items-center gap-1.5 bg-white/5 px-3 py-1.5 rounded-full border border-white/5">
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              background: 'rgba(255, 255, 255, 0.05)',
+              padding: '6px 12px',
+              borderRadius: 20,
+              border: '1px solid rgba(255, 255, 255, 0.06)',
+            }}
+          >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
               <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" fill="#a78bfa" />
             </svg>
-            <span className="text-sm font-semibold">{gems}</span>
+            <span style={{ fontSize: 14, fontWeight: 600 }}>{gems}</span>
           </div>
         </div>
 
-        <div className="relative">
-          <svg className="absolute left-3 top-1/2 -translate-y-1/2" width="16" height="16" viewBox="0 0 24 24" fill="none">
+        <div style={{ position: 'relative' }}>
+          <svg
+            style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)' }}
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+          >
             <circle cx="11" cy="11" r="7" stroke="#6b6b7e" strokeWidth="2" />
             <path d="m20 20-3.5-3.5" stroke="#6b6b7e" strokeWidth="2" strokeLinecap="round" />
           </svg>
@@ -172,92 +224,173 @@ export default function HomePage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t.search}
-            className="w-full bg-white/5 border border-white/5 rounded-xl pl-9 pr-3 py-2.5 text-sm outline-none focus:border-[#7c5cff]/50"
+            style={{
+              width: '100%',
+              background: 'rgba(255, 255, 255, 0.05)',
+              border: '1px solid rgba(255, 255, 255, 0.06)',
+              borderRadius: 12,
+              padding: '10px 12px 10px 36px',
+              fontSize: 14,
+              color: '#f0f0f5',
+              outline: 'none',
+              fontFamily: 'inherit',
+            }}
           />
         </div>
       </header>
 
+      {/* Hook mode notice */}
       {hookRemaining > 0 && (
-        <div className="mx-4 mt-3 px-4 py-3 rounded-xl bg-gradient-to-r from-[#7c5cff]/20 to-[#a855f7]/20 border border-[#7c5cff]/30">
-          <p className="text-xs font-medium text-[#c4b5fd]">
+        <div
+          style={{
+            margin: '12px 16px 0',
+            padding: '12px 16px',
+            borderRadius: 12,
+            background: 'linear-gradient(135deg, rgba(124,92,255,0.2), rgba(168,85,247,0.1))',
+            border: '1px solid rgba(124,92,255,0.3)',
+          }}
+        >
+          <p style={{ fontSize: 12, fontWeight: 500, color: '#c4b5fd', margin: 0 }}>
             {hookRemaining} {t.specialMoments}
           </p>
         </div>
       )}
 
+      {/* Active character */}
       {activeChar && (
-        <section className="px-4 mt-4">
+        <section style={{ padding: '16px 16px 0' }}>
           <button
             onClick={() => router.push(`/chat/${activeChar.id}`)}
-            className="w-full flex items-center gap-3 p-3 rounded-2xl bg-gradient-to-r from-[#7c5cff]/15 to-[#a855f7]/10 border border-[#7c5cff]/30 text-left"
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              padding: 12,
+              borderRadius: 16,
+              background: 'linear-gradient(90deg, rgba(124,92,255,0.15), rgba(168,85,247,0.1))',
+              border: '1px solid rgba(124,92,255,0.3)',
+              textAlign: 'left',
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              color: 'inherit',
+            }}
           >
             <div
-              className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg"
+              className="avatar-lg"
               style={{ background: getGradient(activeChar.archetype) }}
             >
               {activeChar.character_name?.[0]?.toUpperCase()}
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[10px] uppercase tracking-wider text-[#a78bfa] font-semibold">
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p
+                style={{
+                  fontSize: 10,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.06em',
+                  color: '#a78bfa',
+                  fontWeight: 600,
+                  margin: 0,
+                }}
+              >
                 {t.activeCharacter}
               </p>
-              <p className="font-semibold truncate">{activeChar.character_name}</p>
+              <p
+                style={{
+                  fontWeight: 600,
+                  margin: '2px 0 0 0',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {activeChar.character_name}
+              </p>
             </div>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-              <path d="m9 6 6 6-6 6" stroke="#a78bfa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <path
+                d="m9 6 6 6-6 6"
+                stroke="#a78bfa"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
             </svg>
           </button>
         </section>
       )}
 
-      <section className="px-4 mt-5">
-        <div className="flex gap-2">
-          {[
-            { id: 'all', label: t.all },
-            { id: 'female', label: t.female },
-            { id: 'male', label: t.male },
-          ].map((x) => (
-            <button
-              key={x.id}
-              onClick={() => setTab(x.id as any)}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                tab === x.id
-                  ? 'bg-gradient-to-r from-[#7c5cff] to-[#a855f7] text-white'
-                  : 'bg-white/5 text-[#8b8b9e] border border-white/5'
-              }`}
-            >
-              {x.label}
-            </button>
-          ))}
-        </div>
-      </section>
+      {/* Tabs */}
+      <div className="tabs">
+        {[
+          { id: 'all', label: t.all },
+          { id: 'female', label: t.female },
+          { id: 'male', label: t.male },
+        ].map((x) => (
+          <button
+            key={x.id}
+            onClick={() => setTab(x.id as any)}
+            className={`tab ${tab === x.id ? 'active' : ''}`}
+          >
+            {x.label}
+          </button>
+        ))}
+      </div>
 
-      <section className="mt-6">
-        <div className="flex items-center justify-between px-4 mb-3">
-          <h2 className="text-base font-semibold">{t.featured}</h2>
+      {/* Featured */}
+      <section style={{ marginTop: 8 }}>
+        <div style={{ padding: '0 16px 12px' }}>
+          <h2 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>{t.featured}</h2>
         </div>
-        <div className="scroll-x flex gap-3 px-4">
+        <div className="scroll-x">
           {featured.map((c) => (
             <button
               key={`f_${c.gender}_${c.archetype}`}
-              onClick={() => openCharacter(c)}
-              className="shrink-0 w-[140px] text-left"
+              onClick={openCharacter}
+              style={{
+                flexShrink: 0,
+                width: 140,
+                textAlign: 'left',
+                background: 'transparent',
+                border: 'none',
+                padding: 0,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                color: 'inherit',
+              }}
             >
               <div
-                className="w-[140px] h-[200px] rounded-2xl relative overflow-hidden"
-                style={{ background: c.gradient }}
+                style={{
+                  width: 140,
+                  height: 200,
+                  borderRadius: 16,
+                  position: 'relative',
+                  overflow: 'hidden',
+                  background: c.gradient,
+                }}
               >
-                <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent" />
-                <div className="absolute top-2 left-2 bg-white/15 backdrop-blur text-[9px] font-semibold px-2 py-0.5 rounded-full text-white/90 uppercase tracking-wide">
+                <div className="char-card-overlay" />
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 8,
+                    left: 8,
+                    background: 'rgba(255,255,255,0.15)',
+                    backdropFilter: 'blur(8px)',
+                    fontSize: 9,
+                    fontWeight: 600,
+                    padding: '3px 8px',
+                    borderRadius: 20,
+                    color: 'rgba(255,255,255,0.9)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
+                  }}
+                >
                   {t.newCharacters}
                 </div>
-                <div className="absolute bottom-0 left-0 right-0 p-3">
-                  <p className="text-white font-bold text-base leading-tight truncate">
-                    {c.name}
-                  </p>
-                  <p className="text-white/70 text-[11px] truncate mt-0.5">
-                    {c.role}
-                  </p>
+                <div className="char-card-text">
+                  <p className="char-card-name">{c.name}</p>
+                  <p className="char-card-role">{c.role}</p>
                 </div>
               </div>
             </button>
@@ -265,23 +398,23 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="mt-6 px-4">
-        <h2 className="text-base font-semibold mb-3">{t.characters}</h2>
-        <div className="grid grid-cols-2 gap-3">
+      {/* Full grid */}
+      <section style={{ marginTop: 24 }}>
+        <div style={{ padding: '0 16px 12px' }}>
+          <h2 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>{t.characters}</h2>
+        </div>
+        <div className="char-grid">
           {filtered.map((c) => (
             <button
               key={`g_${c.gender}_${c.archetype}`}
-              onClick={() => openCharacter(c)}
-              className="text-left"
+              onClick={openCharacter}
+              className="char-card"
             >
-              <div
-                className="w-full aspect-[3/4] rounded-2xl relative overflow-hidden"
-                style={{ background: c.gradient }}
-              >
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
-                <div className="absolute bottom-0 left-0 right-0 p-3">
-                  <p className="text-white font-bold text-base truncate">{c.name}</p>
-                  <p className="text-white/70 text-[11px] truncate mt-0.5">{c.role}</p>
+              <div className="char-card-img" style={{ background: c.gradient }}>
+                <div className="char-card-overlay" />
+                <div className="char-card-text">
+                  <p className="char-card-name">{c.name}</p>
+                  <p className="char-card-role">{c.role}</p>
                 </div>
               </div>
             </button>
