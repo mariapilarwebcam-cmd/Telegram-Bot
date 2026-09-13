@@ -1,8 +1,9 @@
 import { Metadata, Viewport } from 'next'
 import './globals.css'
+import BottomNav from '@/components/BottomNav'
 
 export const metadata: Metadata = {
-  title: 'AI Roleplay Mini App',
+  title: 'Taboo Realm',
   description: 'Experiencia de chat con personajes de IA',
 }
 
@@ -11,6 +12,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  themeColor: '#0a0a0f',
 }
 
 export default function RootLayout({
@@ -20,8 +22,13 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es">
-      <body className="bg-background text-textMain antialiased">
-        {children}
+      <body className="antialiased">
+        <div className="app-shell">
+          <div className="app-content">
+            {children}
+          </div>
+          <BottomNav />
+        </div>
       </body>
     </html>
   )
