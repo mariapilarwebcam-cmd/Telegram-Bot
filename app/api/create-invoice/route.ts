@@ -5,7 +5,7 @@ export async function POST(request: Request) {
   try {
     const { telegram_id, package_id } = await request.json()
 
-    if (package_id >= STAR_PACKAGES.length) {
+    if (package_id >= STAR_PACKAGES.length || package_id < 0) {
       return NextResponse.json({ error: 'Paquete no válido' }, { status: 400 })
     }
 
