@@ -18,7 +18,6 @@ export const CHARACTER_NAMES_FEMALE: Record<string, string> = {
   model_student: "Harper"
 }
 
-// Nombres canónicos USA — Masculinos
 export const CHARACTER_NAMES_MALE: Record<string, string> = {
   schoolmate: "Ethan",
   stepdad: "Richard",
@@ -40,79 +39,43 @@ export const CHARACTER_NAMES_MALE: Record<string, string> = {
 
 export const ARCHETYPES_MALE = {
   es: {
-    schoolmate: "Compañero de escuela",
-    stepdad: "Padrastro",
-    stepbrother: "Hermanastro",
-    teacher: "Profesor",
-    neighbor: "Vecino",
-    boss: "Jefe",
-    trainer: "Entrenador personal",
-    model: "Modelo",
-    musician: "Músico",
-    actor: "Actor",
-    doctor: "Médico",
-    chef: "Chef",
-    artist: "Artista",
-    writer: "Escritor",
-    bodyguard: "Guardaespaldas",
-    ceo: "CEO"
+    schoolmate: "Compañero de escuela", stepdad: "Padrastro",
+    stepbrother: "Hermanastro", teacher: "Profesor",
+    neighbor: "Vecino", boss: "Jefe",
+    trainer: "Entrenador personal", model: "Modelo",
+    musician: "Músico", actor: "Actor", doctor: "Médico",
+    chef: "Chef", artist: "Artista", writer: "Escritor",
+    bodyguard: "Guardaespaldas", ceo: "CEO"
   },
   en: {
-    schoolmate: "Schoolmate",
-    stepdad: "Stepfather",
-    stepbrother: "Stepbrother",
-    teacher: "Teacher",
-    neighbor: "Neighbor",
-    boss: "Boss",
-    trainer: "Personal Trainer",
-    model: "Model",
-    musician: "Musician",
-    actor: "Actor",
-    doctor: "Doctor",
-    chef: "Chef",
-    artist: "Artist",
-    writer: "Writer",
-    bodyguard: "Bodyguard",
-    ceo: "CEO"
+    schoolmate: "Schoolmate", stepdad: "Stepfather",
+    stepbrother: "Stepbrother", teacher: "Teacher",
+    neighbor: "Neighbor", boss: "Boss",
+    trainer: "Personal Trainer", model: "Model",
+    musician: "Musician", actor: "Actor", doctor: "Doctor",
+    chef: "Chef", artist: "Artist", writer: "Writer",
+    bodyguard: "Bodyguard", ceo: "CEO"
   }
 }
 
 export const ARCHETYPES_FEMALE = {
   es: {
-    schoolmate: "Compañera de escuela",
-    stepmom: "Madrastra",
-    stepsister: "Hermanastra",
-    teacher: "Profesora",
-    neighbor: "Vecina",
-    boss: "Jefa",
-    trainer: "Entrenadora personal",
-    model: "Modelo",
-    musician: "Música",
-    actor: "Actriz",
-    doctor: "Doctora",
-    chef: "Chef",
-    artist: "Artista",
-    writer: "Escritora",
-    secretary: "Secretaria",
-    model_student: "Estudiante popular"
+    schoolmate: "Compañera de escuela", stepmom: "Madrastra",
+    stepsister: "Hermanastra", teacher: "Profesora",
+    neighbor: "Vecina", boss: "Jefa",
+    trainer: "Entrenadora personal", model: "Modelo",
+    musician: "Música", actor: "Actriz", doctor: "Doctora",
+    chef: "Chef", artist: "Artista", writer: "Escritora",
+    secretary: "Secretaria", model_student: "Estudiante popular"
   },
   en: {
-    schoolmate: "Schoolmate",
-    stepmom: "Stepmother",
-    stepsister: "Stepsister",
-    teacher: "Teacher",
-    neighbor: "Neighbor",
-    boss: "Boss",
-    trainer: "Personal Trainer",
-    model: "Model",
-    musician: "Musician",
-    actor: "Actress",
-    doctor: "Doctor",
-    chef: "Chef",
-    artist: "Artist",
-    writer: "Writer",
-    secretary: "Secretary",
-    model_student: "Popular Student"
+    schoolmate: "Schoolmate", stepmom: "Stepmother",
+    stepsister: "Stepsister", teacher: "Teacher",
+    neighbor: "Neighbor", boss: "Boss",
+    trainer: "Personal Trainer", model: "Model",
+    musician: "Musician", actor: "Actress", doctor: "Doctor",
+    chef: "Chef", artist: "Artist", writer: "Writer",
+    secretary: "Secretary", model_student: "Popular Student"
   }
 }
 
@@ -162,19 +125,21 @@ export const PERSONALITIES: Record<string, string> = {
   model_student: "Eres un estudiante popular, carismático y deseado. Todos te admiran pero tú tienes ojos para alguien especial. Eres sociable, divertido y creas expectativas. Cada encuentro es una oportunidad."
 }
 
+// Paquetes: first_time_only se oculta si el usuario ya compró alguna vez
 export const STAR_PACKAGES = [
-  { stars: 50, gems: 200, bonus: 0, first_time: true },
-  { stars: 150, gems: 600, bonus: 17, first_time: false },
-  { stars: 300, gems: 1200, bonus: 50, first_time: false },
-  { stars: 500, gems: 2000, bonus: 75, first_time: false },
-  { stars: 1000, gems: 4000, bonus: 100, first_time: false },
+  { stars: 50, gems: 200, bonus: 0, first_time_only: true },
+  { stars: 75, gems: 300, bonus: 0, first_time_only: false },
+  { stars: 150, gems: 600, bonus: 10, first_time_only: false },
+  { stars: 300, gems: 1200, bonus: 20, first_time_only: false },
+  { stars: 500, gems: 2400, bonus: 25, first_time_only: false },
+  { stars: 1000, gems: 5000, bonus: 25, first_time_only: false },
 ]
 
 export const GEM_COSTS = {
   message: 1,
   audio: 5,
   image: 10,
-  new_character: 5,
+  new_character: 0,      // ya no se cobra
   rename_character: 3,
 }
 
@@ -183,7 +148,6 @@ export const BASE_DAILY_GEMS = 5
 export const GEMS_PER_REFERRAL = 5
 export const MAX_REFERRALS_PER_DAY = 2
 
-// Niveles de relación (basados en cantidad de mensajes totales)
 export const RELATIONSHIP_LEVELS = [
   { min: 0, key: 'levelStranger', color: '#8b8b9e' },
   { min: 5, key: 'levelFriend', color: '#22c55e' },
@@ -198,4 +162,10 @@ export function getRelationshipLevel(messageCount: number) {
     if (messageCount >= lvl.min) current = lvl
   }
   return current
+}
+
+export function getFinalGems(pkg: { gems: number; bonus: number }) {
+  return pkg.bonus > 0
+    ? Math.floor(pkg.gems * (1 + pkg.bonus / 100))
+    : pkg.gems
 }
