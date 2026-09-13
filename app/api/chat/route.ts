@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/supabase-admin'
 import { PERSONALITIES, GEM_COSTS, HOOK_MODE_MESSAGES } from '@/lib/constants'
 import { generateAIResponse, getIntensity, buildSystemPrompt } from '@/lib/ai'
 
@@ -8,7 +8,7 @@ export async function POST(request: Request) {
     const { telegram_id, character_id, message } = await request.json()
     const tid = String(telegram_id)
 
-    const { data: user } = await supabase
+    const { data: user } = await supabaseAdmin
       .from('users')
       .select('gems, language, first_name, hook_messages_remaining')
       .eq('telegram_id', tid)
@@ -16,7 +16,7 @@ export async function POST(request: Request) {
 
     if (!user) return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
 
-    const { data: character } = await supabase
+    const { data: character } = await supabaseAdmin
       .from('user_characters')
       .select('*')
       .eq('id', character_id)
@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     const lang = (user.language || 'es') as 'es' | 'en'
     const hookRemaining = user.hook_messages_remaining || 0
 
-    // ============ BLOQUEADO ============
+    // ============ BLOQUEADO (sin gemas y sin hook) ============
     if (user.gems <= 0 && hookRemaining <= 0) {
       const blockedMessage = lang === 'es'
         ? `*${character.character_name} te mira con ojos ardientes y se muerde el labio*\n\n"Mmm... justo cuando las cosas se estaban poniendo interesantes... *se acerca más* Tengo algo especial que quería mostrarte..."\n\n*se aleja con una sonrisa provocativa*\n\n"Pero parece que nuestro tiempo se acabó. Recarga gemas para seguir, o invita a un amigo y te regalo 5 gemas."`
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
 
       return NextResponse.json({
         blocked: true,
-        response: blockedMessage.replace(/\*([^*]+)\*/g, '<b>*$1*</b>'),
+        response: blockedMessage,
         remaining_gems: 0,
         hook_messages_remaining: 0
       })
@@ -48,9 +48,20 @@ export async function POST(request: Request) {
     let newGems = user.gems
 
     if (!isHookMode) {
+      // Cobrar gema
       newGems = user.gems - GEM_COSTS.message
-      await supabase.from('users').update({ gems: newGems }).eq('telegram_id', tid)
-      await supabase.from('gem_transactions').insert({
+
+      // Si acaba de quedarse sin gemas, activar hook mode con 5 mensajes gratis
+      if (newGems <= 0 && newHookRemaining <= 0) {
+        newHookRemaining = HOOK_MODE_MESSAGES
+      }
+
+      await supabaseAdmin
+        .from('users')
+        .update({ gems: newGems, hook_messages_remaining: newHookRemaining })
+        .eq('telegram_id', tid)
+
+      await supabaseAdmin.from('gem_transactions').insert({
         telegram_id: tid,
         amount: -GEM_COSTS.message,
         transaction_type: 'message',
@@ -58,14 +69,14 @@ export async function POST(request: Request) {
       })
     } else {
       newHookRemaining = Math.max(0, hookRemaining - 1)
-      await supabase
+      await supabaseAdmin
         .from('users')
         .update({ hook_messages_remaining: newHookRemaining })
         .eq('telegram_id', tid)
     }
 
     // ============ HISTORIAL ============
-    const { data: history } = await supabase
+    const { data: history } = await supabaseAdmin
       .from('conversation_history')
       .select('role, content')
       .eq('telegram_id', tid)
@@ -88,26 +99,36 @@ export async function POST(request: Request) {
     const intensity = getIntensity(newGems, isHookMode)
     const systemPrompt = buildSystemPrompt(lang, intensity, characterPrompt)
 
-    const responseText = await generateAIResponse(messages, systemPrompt, intensity)
+    // ============ LLAMADA IA (con reembolso si falla) ============
+    let responseText: string
+    try {
+      responseText = await generateAIResponse(messages, systemPrompt, intensity)
+    } catch (aiError) {
+      // Reembolsar
+      await supabaseAdmin
+        .from('users')
+        .update({ gems: user.gems, hook_messages_remaining: hookRemaining })
+        .eq('telegram_id', tid)
+      console.error('AI error:', aiError)
+      return NextResponse.json({ error: 'Error al generar respuesta' }, { status: 500 })
+    }
 
     // ============ GUARDAR ============
-    await supabase.from('conversation_history').insert([
+    await supabaseAdmin.from('conversation_history').insert([
       { telegram_id: tid, character_id, role: 'user', content: message },
       { telegram_id: tid, character_id, role: 'assistant', content: responseText }
     ])
 
     // ============ AVISO HOOK ============
     let finalText = responseText
-    if (isHookMode) {
+    if (isHookMode || (newHookRemaining > 0 && newGems <= 0)) {
       finalText += lang === 'es'
         ? `\n\n⚠️ *Momentos especiales restantes: ${newHookRemaining}*`
         : `\n\n⚠️ *Special moments remaining: ${newHookRemaining}*`
     }
 
-    const formatted = finalText.replace(/\*([^*]+)\*/g, '<b>*$1*</b>')
-
     return NextResponse.json({
-      response: formatted,
+      response: finalText,
       remaining_gems: newGems,
       hook_messages_remaining: newHookRemaining,
       is_hook_mode: isHookMode,
