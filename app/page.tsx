@@ -79,7 +79,6 @@ export default function Home() {
 
         if (activeChar) setActiveCharacter(activeChar)
       } else {
-        // Crear usuario nuevo
         const referralCode = Math.random().toString(36).substring(2, 10).toUpperCase()
         const newUser = {
           telegram_id: tid,
@@ -102,7 +101,6 @@ export default function Home() {
         setUser(created)
         setGems(10)
 
-        // Procesar referido si viene con start_param
         if (startParam && !referralProcessed) {
           setReferralProcessed(true)
           await fetch('/api/referral', {
@@ -135,12 +133,12 @@ export default function Home() {
       if (res.ok) {
         setGems(data.gems)
         setHookRemaining(0)
-        alert(`+${data.claimed} gemas 💎 (base ${data.base} + bonus ${data.bonus})`)
+        alert(`+${data.claimed} 💎 (base ${data.base} + bonus ${data.bonus})`)
       } else {
-        alert(data.error || 'Error')
+        alert(data.error || t.errorGeneric)
       }
     } catch {
-      alert('Error de conexión')
+      alert(t.errorConnection)
     }
   }
 
@@ -167,7 +165,7 @@ export default function Home() {
             onClick={() => window.location.reload()}
             className="bg-gradient-primary text-white px-6 py-3 rounded-xl font-bold"
           >
-            Recargar
+            {t.back}
           </button>
         </div>
       </div>
@@ -180,10 +178,10 @@ export default function Home() {
         <div className="text-center max-w-md">
           <div className="text-6xl mb-4">⚠️</div>
           <h1 className="text-2xl font-bold mb-4 text-white">
-            Abre esta app desde Telegram
+            {t.openFromTelegram}
           </h1>
           <p className="text-textMuted mb-6">
-            Esta es una Mini App de Telegram. Para usarla, abre tu bot en Telegram y haz clic en "Abrir App".
+            {t.openFromTelegramDesc}
           </p>
           <a
             href="https://t.me/TabooRealmBot"
@@ -218,7 +216,7 @@ export default function Home() {
       {hookRemaining > 0 && (
         <div className="mb-4 bg-gradient-to-r from-primary/30 to-secondary/30 p-3 rounded-xl border border-primary/40">
           <p className="text-sm font-bold text-white">
-            ✨ {hookRemaining} momentos especiales gratis
+            ✨ {hookRemaining} {t.specialMoments}
           </p>
         </div>
       )}
@@ -227,7 +225,7 @@ export default function Home() {
       {activeCharacter ? (
         <section className="mb-8">
           <div className="bg-gradient-to-br from-primary/20 to-primary/5 p-6 rounded-2xl border border-primary/30">
-            <h2 className="text-lg font-bold mb-2 text-white">✨ Tu Personaje Activo</h2>
+            <h2 className="text-lg font-bold mb-2 text-white">{t.activeCharacter}</h2>
             <div className="flex items-center gap-4">
               <div className="text-5xl">
                 {activeCharacter.gender === 'male' ? '👨' : '👩'}
@@ -243,7 +241,7 @@ export default function Home() {
               href={`/chat/${activeCharacter.id}`}
               className="mt-4 inline-block bg-gradient-primary text-white px-6 py-3 rounded-xl font-bold"
             >
-              💬 Continuar Chat
+              {t.continueChat}
             </Link>
           </div>
         </section>
@@ -251,13 +249,13 @@ export default function Home() {
         <section className="mb-8">
           <div className="bg-surface p-6 rounded-2xl border border-white/10 text-center">
             <div className="text-6xl mb-4">🎭</div>
-            <h2 className="text-xl font-bold mb-2 text-white">Selecciona un Personaje</h2>
-            <p className="text-textMuted mb-4">Elige con quién quieres chatear</p>
+            <h2 className="text-xl font-bold mb-2 text-white">{t.selectCharacter}</h2>
+            <p className="text-textMuted mb-4">{t.selectCharacterDesc}</p>
             <Link
               href="/characters"
               className="inline-block bg-gradient-primary text-white px-8 py-4 rounded-xl font-bold text-lg"
             >
-              Ver Personajes Disponibles
+              {t.viewCharacters}
             </Link>
           </div>
         </section>
@@ -270,8 +268,8 @@ export default function Home() {
           className="group bg-gradient-to-br from-surface to-surfaceHighlight p-6 rounded-2xl border border-white/10 hover:border-primary/50 transition-all hover:scale-105"
         >
           <div className="text-4xl mb-3">🎭</div>
-          <h3 className="font-bold mb-1 text-white">Personajes</h3>
-          <p className="text-xs text-textMuted">Explorar y chatear</p>
+          <h3 className="font-bold mb-1 text-white">{t.characters}</h3>
+          <p className="text-xs text-textMuted">{t.explore}</p>
         </Link>
 
         <Link
@@ -286,53 +284,52 @@ export default function Home() {
 
       {/* Daily */}
       <section className="mt-6 bg-surface p-4 rounded-2xl border border-white/10">
-        <h3 className="font-bold mb-2 text-white">💎 Recompensa diaria</h3>
+        <h3 className="font-bold mb-2 text-white">{t.dailyReward}</h3>
         <p className="text-xs text-textMuted mb-3">
-          Reclama 5 gemas cada 24h. Bonus +5 por cada referido activo (máx 2/día).
+          {t.dailyRewardDesc}
         </p>
         <button
           onClick={claimDaily}
           className="w-full bg-gradient-primary text-white py-3 rounded-xl font-bold"
         >
-          🎁 Reclamar gemas diarias
+          {t.claimDaily}
         </button>
       </section>
 
       {/* Referidos */}
       {user?.referral_code && (
         <section className="mt-4 bg-surface p-4 rounded-2xl border border-white/10">
-          <h3 className="font-bold mb-2 text-white">🎁 Invita y gana 5 gemas</h3>
+          <h3 className="font-bold mb-2 text-white">{t.inviteFriends}</h3>
           <div className="flex gap-2">
             <input
               readOnly
               value={`https://t.me/TabooRealmBot?startapp=${user.referral_code}`}
-              className="flex-1 bg-background border border-white/10 rounded-xl px-3 py-2 text-xs"
+              className="flex-1 bg-background border border-white/10 rounded-xl px-3 py-2 text-xs text-textMain"
             />
             <button
               onClick={() => {
                 navigator.clipboard.writeText(`https://t.me/TabooRealmBot?startapp=${user.referral_code}`)
-                alert('Enlace copiado ✅')
+                alert(t.copied)
               }}
               className="bg-gradient-primary text-white px-4 py-2 rounded-xl text-sm font-bold"
             >
-              Copiar
+              {t.copy}
             </button>
           </div>
           <p className="text-xs text-textMuted mt-2">
-            Cuando tu amigo abra la Mini App con tu enlace, recibirás 5 gemas.
+            {t.inviteDesc}
           </p>
         </section>
       )}
 
       {/* Info */}
       <section className="mt-6 bg-gradient-to-br from-surface/50 to-surfaceHighlight/50 p-6 rounded-2xl border border-white/10">
-        <h3 className="font-bold mb-3 text-white">💡 ¿Cómo funciona?</h3>
+        <h3 className="font-bold mb-3 text-white">{t.howItWorks}</h3>
         <ul className="text-sm text-textMuted space-y-2">
-          <li>• Selecciona un personaje y chatea (1 gema/mensaje)</li>
-          <li>• Genera imágenes (10 gemas) — requiere compra de Stars</li>
-          <li>• Escucha audios en inglés (5 gemas)</li>
-          <li>• Reclama 5 gemas diarias gratis</li>
-          <li>• Invita amigos y gana 5 gemas por cada uno</li>
+          <li>• {t.chatCost}</li>
+          <li>• {t.imageCost}</li>
+          <li>• {t.audioCost}</li>
+          <li>• {t.createCharCost}</li>
         </ul>
       </section>
     </div>
