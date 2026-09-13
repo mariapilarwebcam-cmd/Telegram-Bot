@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { GEM_COSTS, HOOK_MODE_MESSAGES } from '@/lib/constants'
+import { getTranslations, getLanguage, Language } from '@/lib/i18n'
 
 interface Message {
   id?: number
@@ -26,6 +27,8 @@ export default function ChatPage() {
   const [hookRemaining, setHookRemaining] = useState(0)
   const [isPremium, setIsPremium] = useState(false)
   const [blocked, setBlocked] = useState(false)
+  const [blockedMessage, setBlockedMessage] = useState('')
+  const [lang, setLang] = useState<Language>('es')
 
   const [showImageModal, setShowImageModal] = useState(false)
   const [imageDescription, setImageDescription] = useState('')
@@ -40,7 +43,10 @@ export default function ChatPage() {
       WebApp.ready()
       WebApp.expand()
       const tgUser = WebApp.initDataUnsafe?.user
-      if (tgUser) loadChatData(tgUser.id)
+      if (tgUser) {
+        setLang(getLanguage(tgUser.language_code))
+        loadChatData(tgUser.id)
+      }
     })
   }, [characterId])
 
@@ -117,6 +123,7 @@ export default function ChatPage() {
 
       if (res.ok) {
         if (data.blocked) {
+          setBlockedMessage(data.response || '')
           setBlocked(true)
           setMessages(prev => prev.slice(0, -1))
         } else {
@@ -125,11 +132,11 @@ export default function ChatPage() {
           setHookRemaining(data.hook_messages_remaining ?? 0)
         }
       } else {
-        alert(data.error || 'Error')
+        alert(data.error || t.errorGeneric)
         setMessages(prev => prev.slice(0, -1))
       }
     } catch {
-      alert('Error de conexión')
+      alert(t.errorConnection)
       setMessages(prev => prev.slice(0, -1))
     } finally {
       setLoading(false)
@@ -138,8 +145,8 @@ export default function ChatPage() {
 
   const playAudio = async () => {
     const last = [...messages].reverse().find(m => m.role === 'assistant')
-    if (!last) return alert('No hay mensaje para reproducir')
-    if (gems < GEM_COSTS.audio) return alert('Necesitas 5 gemas')
+    if (!last) return alert(t.noMessageToPlay)
+    if (gems < GEM_COSTS.audio) return alert(t.audioNeed)
 
     setGeneratingAudio(true)
     try {
@@ -157,10 +164,10 @@ export default function ChatPage() {
         setGems(data.remaining_gems)
         new Audio(`data:audio/wav;base64,${data.audio}`).play()
       } else {
-        alert(data.error || 'Error')
+        alert(data.error || t.errorGeneric)
       }
     } catch {
-      alert('Error de conexión')
+      alert(t.errorConnection)
     } finally {
       setGeneratingAudio(false)
     }
@@ -169,11 +176,11 @@ export default function ChatPage() {
   const generateImage = async () => {
     if (!imageDescription.trim()) return
     if (!isPremium) {
-      alert('La generación de imágenes es Premium. Compra Stars en la Tienda.')
+      alert(t.premiumImage)
       router.push('/shop')
       return
     }
-    if (gems < GEM_COSTS.image) return alert('Necesitas 10 gemas')
+    if (gems < GEM_COSTS.image) return alert(t.imageNeed)
 
     setGeneratingImage(true)
     setShowImageModal(false)
@@ -197,22 +204,42 @@ export default function ChatPage() {
         setGems(data.remaining_gems)
         setImageDescription('')
       } else {
-        alert(data.message || data.error || 'Error')
+        alert(data.message || data.error || t.errorGeneric)
       }
     } catch {
-      alert('Error de conexión')
+      alert(t.errorConnection)
     } finally {
       setGeneratingImage(false)
     }
   }
 
+  // Formatea: escapa HTML, imágenes, y convierte *acciones* en span morado
   const formatMessage = (content: string) => {
-    const formatted = content.replace(/\*([^*]+)\*/g, '<b>$1</b>')
-    return formatted.replace(
+    let html = content
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+
+    // Negritas **texto**
+    html = html.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
+
+    // Imágenes ![alt](url)
+    html = html.replace(
       /!\[([^\]]*)\]\(([^)]+)\)/g,
-      '<img src="$2" alt="$1" class="rounded-lg max-w-full mt-2" />'
+      '<img src="$2" alt="$1" style="border-radius:10px;max-width:100%;margin-top:8px;" />'
     )
+
+    // Acciones *texto* → morado
+    html = html.replace(
+      /\*([^*\n]+)\*/g,
+      '<span class="chat-action">*$1*</span>'
+    )
+
+    return html
   }
+
+  const t = getTranslations(lang)
 
   if (!user || !character) {
     return (
@@ -234,8 +261,8 @@ export default function ChatPage() {
             <h2 className="font-bold">{character.character_name}</h2>
             <p className="text-xs text-textMuted">
               {hookRemaining > 0
-                ? `✨ ${hookRemaining} momentos especiales`
-                : 'En línea'}
+                ? `✨ ${hookRemaining} ${t.specialMoments}`
+                : t.online}
             </p>
           </div>
         </div>
@@ -248,7 +275,7 @@ export default function ChatPage() {
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.length === 0 && (
           <div className="text-center py-12 text-textMuted">
-            Inicia la conversación con {character.character_name}
+            {t.startConversation} {character.character_name}
           </div>
         )}
 
@@ -258,7 +285,7 @@ export default function ChatPage() {
               className={`max-w-[80%] p-3 rounded-2xl text-sm ${
                 msg.role === 'user'
                   ? 'bg-primary text-white rounded-br-none'
-                  : 'bg-surface border border-white/10 rounded-bl-none'
+                  : 'bg-surface border border-white/10 rounded-bl-none text-textMain'
               }`}
               dangerouslySetInnerHTML={{ __html: formatMessage(msg.content) }}
             />
@@ -284,27 +311,36 @@ export default function ChatPage() {
       {blocked && (
         <div className="fixed inset-0 bg-black/85 flex items-center justify-center p-4 z-50">
           <div className="bg-surface rounded-2xl p-6 max-w-md w-full border border-primary/40">
-            <h3 className="text-xl font-bold mb-2 text-white">✨ No te vayas todavía</h3>
+            <h3 className="text-xl font-bold mb-3 text-white">{t.blockedTitle}</h3>
+
+            {blockedMessage && (
+              <div
+                className="bg-background/60 border border-white/10 rounded-xl p-4 mb-4 text-sm leading-relaxed"
+                dangerouslySetInnerHTML={{ __html: formatMessage(blockedMessage) }}
+              />
+            )}
+
             <p className="text-sm text-textMuted mb-4">
-              {character.character_name} tiene algo especial que mostrarte. Elige cómo continuar:
+              {character.character_name} {t.blockedDesc}
             </p>
+
             <button
               onClick={() => router.push('/shop')}
               className="w-full bg-gradient-primary text-white py-3 rounded-xl font-bold mb-2"
             >
-              🔥 Recargar gemas y desbloquear TODO
+              {t.rechargeUnlock}
             </button>
             <button
               onClick={() => router.push('/')}
               className="w-full bg-secondary text-white py-3 rounded-xl font-bold mb-2"
             >
-              🎁 Invitar amigo (+5 gemas)
+              {t.inviteFriend}
             </button>
             <button
               onClick={() => setBlocked(false)}
               className="w-full bg-surfaceHighlight text-textMuted py-2 rounded-xl text-sm"
             >
-              Cerrar
+              {t.close}
             </button>
           </div>
         </div>
@@ -314,29 +350,27 @@ export default function ChatPage() {
       {showImageModal && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
           <div className="bg-surface rounded-2xl p-6 max-w-md w-full border border-white/10">
-            <h3 className="text-xl font-bold mb-4 text-white">📸 Generar Selfie</h3>
-            <p className="text-sm text-textMuted mb-4">
-              Describe cómo quieres la foto (10 gemas)
-            </p>
+            <h3 className="text-xl font-bold mb-4 text-white">{t.generateSelfie}</h3>
+            <p className="text-sm text-textMuted mb-4">{t.generateSelfieDesc}</p>
             <textarea
               value={imageDescription}
               onChange={(e) => setImageDescription(e.target.value)}
-              placeholder="Ej: Sonriendo con mirada pícara, luz tenue..."
-              className="w-full bg-background border border-white/10 rounded-xl p-3 text-sm mb-4 focus:outline-none focus:border-primary h-24 resize-none"
+              placeholder={t.selfiePlaceholder}
+              className="w-full bg-background border border-white/10 rounded-xl p-3 text-sm mb-4 focus:outline-none focus:border-primary h-24 resize-none text-textMain"
             />
             <div className="flex gap-2">
               <button
                 onClick={() => setShowImageModal(false)}
                 className="flex-1 py-2 rounded-xl bg-surfaceHighlight text-textMuted"
               >
-                Cancelar
+                {t.cancel}
               </button>
               <button
                 onClick={generateImage}
                 disabled={generatingImage || !imageDescription.trim()}
                 className="flex-1 py-2 rounded-xl bg-gradient-primary text-white font-bold disabled:opacity-50"
               >
-                {generatingImage ? 'Generando...' : 'Generar'}
+                {generatingImage ? t.generating : t.generate}
               </button>
             </div>
           </div>
@@ -350,22 +384,22 @@ export default function ChatPage() {
             onClick={playAudio}
             disabled={generatingAudio || gems < GEM_COSTS.audio}
             className="p-3 rounded-xl bg-surfaceHighlight text-textMuted disabled:opacity-50"
-            title="Audio (5 gemas, EN)"
+            title={t.audioTooltip}
           >
             {generatingAudio ? '…' : '🔊'}
           </button>
           <button
             onClick={() => {
               if (!isPremium) {
-                alert('Función Premium. Compra Stars en la Tienda.')
+                alert(t.premiumRequired)
                 router.push('/shop')
                 return
               }
-              if (gems < GEM_COSTS.image) return alert('Necesitas 10 gemas')
+              if (gems < GEM_COSTS.image) return alert(t.imageNeed)
               setShowImageModal(true)
             }}
             className="p-3 rounded-xl bg-surfaceHighlight text-textMuted disabled:opacity-50"
-            title="Imagen (10 gemas)"
+            title={t.imageTooltip}
           >
             📸
           </button>
@@ -374,8 +408,8 @@ export default function ChatPage() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
-            placeholder="Escribe un mensaje..."
-            className="flex-1 bg-background border border-white/10 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-primary"
+            placeholder={t.writeMessage}
+            className="flex-1 bg-background border border-white/10 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-primary text-textMain"
             disabled={loading}
           />
           <button
