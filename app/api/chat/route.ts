@@ -28,11 +28,11 @@ export async function POST(request: Request) {
     const lang = (user.language || 'es') as 'es' | 'en'
     const hookRemaining = user.hook_messages_remaining || 0
 
-    // ============ BLOQUEADO (sin gemas y sin hook) ============
+    // BLOQUEADO
     if (user.gems <= 0 && hookRemaining <= 0) {
       const blockedMessage = lang === 'es'
-        ? `*${character.character_name} te mira con ojos ardientes y se muerde el labio*\n\n"Mmm... justo cuando las cosas se estaban poniendo interesantes... *se acerca más* Tengo algo especial que quería mostrarte..."\n\n*se aleja con una sonrisa provocativa*\n\n"Pero parece que nuestro tiempo se acabó. Recarga gemas para seguir, o invita a un amigo y te regalo 5 gemas."`
-        : `*${character.character_name} looks at you with burning eyes and bites their lip*\n\n"Mmm... just when things were getting interesting... *gets closer* I have something special I wanted to show you..."\n\n*pulls back with a provocative smile*\n\n"But it seems our time is up. Recharge gems to continue, or invite a friend and I'll gift you 5 gems."`
+        ? `*${character.character_name} te mira con ojos ardientes y se muerde el labio*\n\n"Mmm... justo cuando se ponía interesante... *se acerca* tengo algo que quería mostrarte 😏"\n\n*se aleja con una sonrisa provocativa*\n\n"Recarga gemas o invita a un amigo y te regalo 5 💎"`
+        : `*${character.character_name} looks at you with burning eyes and bites their lip*\n\n"Mmm... just when it was getting interesting... *gets closer* I have something I wanted to show you 😏"\n\n*pulls back with a provocative smile*\n\n"Recharge gems or invite a friend and I'll gift you 5 💎"`
 
       return NextResponse.json({
         blocked: true,
@@ -42,20 +42,15 @@ export async function POST(request: Request) {
       })
     }
 
-    // ============ HOOK MODE o NORMAL ============
     const isHookMode = user.gems <= 0 && hookRemaining > 0
     let newHookRemaining = hookRemaining
     let newGems = user.gems
 
     if (!isHookMode) {
-      // Cobrar gema
       newGems = user.gems - GEM_COSTS.message
-
-      // Si acaba de quedarse sin gemas, activar hook mode con 5 mensajes gratis
       if (newGems <= 0 && newHookRemaining <= 0) {
         newHookRemaining = HOOK_MODE_MESSAGES
       }
-
       await supabaseAdmin
         .from('users')
         .update({ gems: newGems, hook_messages_remaining: newHookRemaining })
@@ -75,7 +70,7 @@ export async function POST(request: Request) {
         .eq('telegram_id', tid)
     }
 
-    // ============ HISTORIAL ============
+    // Historial
     const { data: history } = await supabaseAdmin
       .from('conversation_history')
       .select('role, content')
@@ -90,21 +85,19 @@ export async function POST(request: Request) {
     }))
     messages.push({ role: 'user', content: message })
 
-    // ============ PROMPT ============
+    // Prompt con nombre y rol
     const personality = PERSONALITIES[character.archetype] || ''
     const characterPrompt = lang === 'es'
-      ? `Eres ${character.character_name}, ${character.gender}.\n${personality}\n\nEl usuario se llama ${user.first_name}. Recuerda su nombre y úsalo naturalmente.\nMantén siempre tu personalidad y rol. Nunca rompas el personaje.`
-      : `You are ${character.character_name}, ${character.gender}.\n${personality}\n\nThe user's name is ${user.first_name}. Remember their name and use it naturally.\nAlways maintain your personality and role. Never break character.`
+      ? `Eres ${character.character_name}, rol: ${character.archetype}.\n${personality}\n\nEl usuario se llama ${user.first_name}. Recuerda su nombre y úsalo naturalmente.\nMantén siempre tu personalidad y rol. Nunca rompas el personaje.`
+      : `You are ${character.character_name}, role: ${character.archetype}.\n${personality}\n\nThe user's name is ${user.first_name}. Remember their name and use it naturally.\nAlways maintain your personality and role. Never break character.`
 
     const intensity = getIntensity(newGems, isHookMode)
     const systemPrompt = buildSystemPrompt(lang, intensity, characterPrompt)
 
-    // ============ LLAMADA IA (con reembolso si falla) ============
     let responseText: string
     try {
       responseText = await generateAIResponse(messages, systemPrompt, intensity)
     } catch (aiError) {
-      // Reembolsar
       await supabaseAdmin
         .from('users')
         .update({ gems: user.gems, hook_messages_remaining: hookRemaining })
@@ -113,18 +106,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Error al generar respuesta' }, { status: 500 })
     }
 
-    // ============ GUARDAR ============
     await supabaseAdmin.from('conversation_history').insert([
       { telegram_id: tid, character_id, role: 'user', content: message },
       { telegram_id: tid, character_id, role: 'assistant', content: responseText }
     ])
 
-    // ============ AVISO HOOK ============
     let finalText = responseText
     if (isHookMode || (newHookRemaining > 0 && newGems <= 0)) {
       finalText += lang === 'es'
-        ? `\n\n⚠️ *Momentos especiales restantes: ${newHookRemaining}*`
-        : `\n\n⚠️ *Special moments remaining: ${newHookRemaining}*`
+        ? `\n\n⚠️ ${newHookRemaining} mensajes gratis restantes`
+        : `\n\n⚠️ ${newHookRemaining} free messages remaining`
     }
 
     return NextResponse.json({
