@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { STAR_PACKAGES } from '@/lib/constants'
+import { STAR_PACKAGES, getFinalGems } from '@/lib/constants'
 import { getTranslations, getLanguage, Language } from '@/lib/i18n'
 
 export default function ShopPage() {
@@ -11,6 +11,7 @@ export default function ShopPage() {
   const [loading, setLoading] = useState(true)
   const [purchasing, setPurchasing] = useState<number | null>(null)
   const [lang, setLang] = useState<Language>('es')
+  const [hasPurchased, setHasPurchased] = useState(false)
 
   useEffect(() => {
     import('@twa-dev/sdk').then((mod) => {
@@ -26,13 +27,16 @@ export default function ShopPage() {
   }, [])
 
   const load = async (telegramId: number) => {
+    const tid = telegramId.toString()
     try {
-      const { data } = await supabase
-        .from('users').select('*').eq('telegram_id', telegramId.toString()).maybeSingle()
+      const { data } = await supabase.from('users').select('*').eq('telegram_id', tid).maybeSingle()
       if (data) {
         setUser(data)
         setGems(data.gems || 0)
       }
+      const { data: purchases } = await supabase
+        .from('star_purchases').select('id').eq('telegram_id', tid).limit(1)
+      setHasPurchased(!!purchases && purchases.length > 0)
     } catch (e) {
       console.error(e)
     } finally {
@@ -81,6 +85,11 @@ export default function ShopPage() {
     )
   }
 
+  // Oculta el paquete first_time_only si el usuario ya compró antes
+  const visiblePackages = STAR_PACKAGES
+    .map((pkg, idx) => ({ ...pkg, originalIndex: idx }))
+    .filter(p => !p.first_time_only || !hasPurchased)
+
   return (
     <div className="page">
       <header className="page-header">
@@ -103,7 +112,6 @@ export default function ShopPage() {
         </div>
       </header>
 
-      {/* Premium banner */}
       <section style={{ padding: '20px 16px 0' }}>
         <div
           style={{
@@ -111,8 +119,7 @@ export default function ShopPage() {
             borderRadius: 24,
             overflow: 'hidden',
             padding: 20,
-            background:
-              'linear-gradient(135deg, #7c5cff 0%, #a855f7 50%, #d946ef 100%)',
+            background: 'linear-gradient(135deg, #7c5cff 0%, #a855f7 50%, #d946ef 100%)',
           }}
         >
           <div
@@ -133,14 +140,7 @@ export default function ShopPage() {
           >
             {t.premiumBanner}
           </div>
-          <h2
-            style={{
-              fontSize: 24,
-              fontWeight: 900,
-              color: '#fff',
-              margin: '0 0 4px 0',
-            }}
-          >
+          <h2 style={{ fontSize: 24, fontWeight: 900, color: '#fff', margin: '0 0 4px 0' }}>
             {t.premiumTitle}
           </h2>
           <p
@@ -153,29 +153,16 @@ export default function ShopPage() {
           >
             {t.premiumDesc}
           </p>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <div
-              style={{
-                background: 'rgba(255,255,255,0.2)',
-                backdropFilter: 'blur(8px)',
-                borderRadius: 12,
-                padding: '6px 12px',
-              }}
-            >
-              <span style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>70% OFF</span>
-            </div>
-          </div>
         </div>
       </section>
 
-      {/* Packages */}
       <section style={{ padding: '24px 16px 0' }}>
         <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>{t.packages}</h2>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {STAR_PACKAGES.map((pkg, idx) => {
-            const finalGems =
-              pkg.bonus > 0 ? Math.floor(pkg.gems * (1 + pkg.bonus / 100)) : pkg.gems
-            const popular = idx === 2
+          {visiblePackages.map((pkg) => {
+            const finalGems = getFinalGems(pkg)
+            const idx = pkg.originalIndex
+            const isFirstTime = pkg.first_time_only
 
             return (
               <button
@@ -193,11 +180,11 @@ export default function ShopPage() {
                   cursor: 'pointer',
                   fontFamily: 'inherit',
                   color: 'inherit',
-                  background: popular
-                    ? 'linear-gradient(90deg, rgba(124,92,255,0.2), rgba(168,85,247,0.1))'
+                  background: isFirstTime
+                    ? 'linear-gradient(90deg, rgba(34,197,94,0.15), rgba(34,197,94,0.05))'
                     : 'rgba(255,255,255,0.03)',
-                  border: popular
-                    ? '1px solid rgba(124,92,255,0.4)'
+                  border: isFirstTime
+                    ? '1px solid rgba(34,197,94,0.4)'
                     : '1px solid rgba(255,255,255,0.06)',
                   opacity: purchasing !== null ? 0.5 : 1,
                 }}
@@ -207,7 +194,9 @@ export default function ShopPage() {
                     width: 44,
                     height: 44,
                     borderRadius: 12,
-                    background: 'linear-gradient(135deg, #7c5cff 0%, #a855f7 100%)',
+                    background: isFirstTime
+                      ? 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)'
+                      : 'linear-gradient(135deg, #7c5cff 0%, #a855f7 100%)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -224,22 +213,7 @@ export default function ShopPage() {
                     <p style={{ fontWeight: 700, fontSize: 16, margin: 0 }}>
                       {finalGems} {t.gems}
                     </p>
-                    {popular && (
-                      <span
-                        style={{
-                          fontSize: 10,
-                          fontWeight: 700,
-                          textTransform: 'uppercase',
-                          background: '#a855f7',
-                          color: '#fff',
-                          padding: '2px 6px',
-                          borderRadius: 4,
-                        }}
-                      >
-                        {t.popular}
-                      </span>
-                    )}
-                    {pkg.first_time && (
+                    {isFirstTime && (
                       <span
                         style={{
                           fontSize: 10,
@@ -262,14 +236,7 @@ export default function ShopPage() {
 
                 <div style={{ flexShrink: 0, textAlign: 'right' }}>
                   <p style={{ fontWeight: 700, fontSize: 14, margin: 0 }}>{pkg.stars}</p>
-                  <p
-                    style={{
-                      fontSize: 10,
-                      color: '#8b8b9e',
-                      textTransform: 'uppercase',
-                      margin: 0,
-                    }}
-                  >
+                  <p style={{ fontSize: 10, color: '#8b8b9e', textTransform: 'uppercase', margin: 0 }}>
                     Stars
                   </p>
                 </div>
@@ -279,7 +246,6 @@ export default function ShopPage() {
         </div>
       </section>
 
-      {/* Info */}
       <section style={{ padding: '24px 16px' }}>
         <div
           style={{
@@ -289,9 +255,7 @@ export default function ShopPage() {
             padding: 16,
           }}
         >
-          <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
-            {t.howItWorks}
-          </h3>
+          <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>{t.howItWorks}</h3>
           <ul
             style={{
               listStyle: 'none',
@@ -308,7 +272,6 @@ export default function ShopPage() {
               { label: t.chatCost, cost: `1 ${t.gems}` },
               { label: t.audioCost, cost: `5 ${t.gems}` },
               { label: t.imageCost, cost: `10 ${t.gems}` },
-              { label: t.createCharCost, cost: `5 ${t.gems}` },
               { label: t.renameCost, cost: `3 ${t.gems}` },
             ].map((row, i) => (
               <li key={i} style={{ display: 'flex', justifyContent: 'space-between' }}>
