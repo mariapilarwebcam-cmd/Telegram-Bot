@@ -28,6 +28,7 @@ export const translations = {
     createCharCost: 'Nuevo personaje',
     renameCost: 'Renombrar',
     gems: 'gemas',
+    bonusGems: 'gemas de bono',
     online: 'En línea',
     writeMessage: 'Escribe un mensaje...',
     startConversation: 'Inicia la conversación con',
@@ -83,20 +84,17 @@ export const translations = {
     today: 'Hoy',
     yesterday: 'Ayer',
     daysAgo: 'días',
-    // Niveles de relación
     levelStranger: 'Conocidos',
     levelFriend: 'Amigos',
     levelClose: 'Cercanos',
     levelIntimate: 'Íntimos',
     levelSpecial: 'Especiales',
-    // Renombrar
     renameTitle: 'Renombrar personaje',
     renameDesc: 'Costo: 3 gemas',
     renamePlaceholder: 'Nuevo nombre',
     save: 'Guardar',
     saving: 'Guardando...',
     renameSuccess: 'Nombre actualizado',
-    // Avisos
     confirmRename: '¿Renombrar por 3 gemas?',
   },
   en: {
@@ -128,6 +126,7 @@ export const translations = {
     createCharCost: 'New character',
     renameCost: 'Rename',
     gems: 'gems',
+    bonusGems: 'bonus gems',
     online: 'Online',
     writeMessage: 'Write a message...',
     startConversation: 'Start the conversation with',
