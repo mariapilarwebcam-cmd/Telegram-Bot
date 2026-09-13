@@ -1,7 +1,3 @@
-// ==========================================================
-// SISTEMA DE IA - Portado del bot Python (Candy AI style)
-// ==========================================================
-
 type Intensity = 'NORMAL' | 'HIGH' | 'VERY_HIGH' | 'MAXIMUM'
 
 const SYSTEM_PROMPTS: Record<'es' | 'en', Record<Intensity, string>> = {
@@ -84,8 +80,11 @@ export function buildSystemPrompt(
   const lengthGate = language === 'es'
     ? 'Mantén tu respuesta dentro de 400 tokens (aprox. 300 palabras). Termina tus frases y no cortes a mitad de palabra.'
     : 'Keep your response within 400 tokens (about 300 words). Finish your sentences and do not cut off mid-word.'
+  const actionGate = language === 'es'
+    ? 'OBLIGATORIO: Todas las acciones, gestos y expresiones del personaje deben ir SIEMPRE entre asteriscos simples, ejemplo: *sonríe*, *te mira fijamente*. El diálogo hablado va SIN asteriscos.'
+    : 'MANDATORY: All actions, gestures and expressions must ALWAYS be wrapped in single asterisks, example: *smiles*, *looks at you*. Spoken dialogue goes WITHOUT asterisks.'
 
-  return `${langGate}\n\n${base}\n\n${characterPrompt}\n\n${lengthGate}`
+  return `${langGate}\n\n${base}\n\n${characterPrompt}\n\n${actionGate}\n\n${lengthGate}`
 }
 
 export async function generateAIResponse(
@@ -142,12 +141,20 @@ export async function generateImage(prompt: string): Promise<string> {
   return data.images?.[0]?.url || data.image
 }
 
-// Audio SIEMPRE en inglés
+// Audio en el idioma del usuario
 export async function generateAudio(
   text: string,
-  gender: 'male' | 'female' = 'female'
+  gender: 'male' | 'female' = 'female',
+  language: 'es' | 'en' = 'en'
 ): Promise<string> {
-  const voice = gender === 'male' ? 'am_michael' : 'af_bella'
+  let voice: string
+  if (language === 'es') {
+    // Voces en español de Kokoro
+    voice = gender === 'male' ? 'em_alex' : 'ef_dora'
+  } else {
+    voice = gender === 'male' ? 'am_michael' : 'af_bella'
+  }
+
   const response = await fetch(
     'https://api.deepinfra.com/v1/inference/hexgrad/Kokoro-82M',
     {
