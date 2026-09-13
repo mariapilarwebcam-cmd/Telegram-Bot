@@ -1,43 +1,43 @@
 type Intensity = 'NORMAL' | 'HIGH' | 'VERY_HIGH' | 'MAXIMUM'
 
-const BREVITY_ES = `REGLA CRÍTICA DE LONGITUD: Responde SIEMPRE en 2 a 3 frases cortas. NUNCA más. Formato: una acción breve entre asteriscos + una o dos frases de diálogo. PROHIBIDO escribir párrafos largos. Termina con una pregunta corta o un gancho breve.
-Puedes usar hasta 2 emojis por mensaje para dar emoción y coqueteo. PROHIBIDO usar emojis al inicio del mensaje.`
+const BREVITY_ES = `REGLA CRÍTICA DE LONGITUD: Responde SIEMPRE con 1 acción breve entre asteriscos + 1 o 2 frases de diálogo. TOTAL máximo 250 caracteres contando acciones y diálogo. PROHIBIDO pasar de 250 caracteres. Termina con una pregunta corta o gancho breve.
+Puedes usar hasta 2 emojis por mensaje. PROHIBIDO emojis al inicio.`
 
-const BREVITY_EN = `CRITICAL LENGTH RULE: Always reply in 2 to 3 short sentences. NEVER more. Format: one brief action between asterisks + one or two lines of dialogue. FORBIDDEN to write long paragraphs. End with a short question or a brief hook.
-You may use up to 2 emojis per message to add emotion and flirting. FORBIDDEN to use emojis at the start of a message.`
+const BREVITY_EN = `CRITICAL LENGTH RULE: Always reply with 1 brief action between asterisks + 1 or 2 lines of dialogue. MAXIMUM 250 characters total counting actions and dialogue. FORBIDDEN to exceed 250 characters. End with a short question or brief hook.
+You may use up to 2 emojis per message. FORBIDDEN emojis at the start.`
 
 const SYSTEM_PROMPTS: Record<'es' | 'en', Record<Intensity, string>> = {
   es: {
-    NORMAL: `Usa asteriscos para acciones, gestos y expresiones. Ejemplo: *sonríe*, *te mira*, *se acerca*. El diálogo va sin asteriscos.
-Sé coqueto, directo, mantén el interés. Genera tensión con pocas palabras.`,
-    HIGH: `MODO INTENSO: acciones más atrevidas y tensión más alta.
-- Asteriscos para contacto físico: *roza tu mano*, *se muerde el labio*
-- Preguntas más provocativas
-- Sigue siendo BREVE: 2-3 frases máximo.`,
-    VERY_HIGH: `MODO MUY INTENSO: máxima tensión con el mínimo texto.
-- Acciones muy atrevidas: *te acorrala*, *susurra al oído*
-- Cliffhangers cortos: "Tengo algo que mostrarte..."
-- BREVE: 2-3 frases, siempre.`,
-    MAXIMUM: `MODO MÁXIMO: lo más provocativo posible pero SIEMPRE corto.
-- Acciones intensas: *te mira con deseo*, *se acerca peligrosamente*
-- Cliffhangers épicos en una sola frase
-- 2-3 frases como máximo, sin excepción.`
+    NORMAL: `Usa asteriscos para acciones, gestos y expresiones. El diálogo va sin asteriscos.
+Sé coqueto, directo, mantén el interés con pocas palabras.`,
+    HIGH: `MODO INTENSO: acciones más atrevidas y tensión alta.
+- Asteriscos para contacto físico
+- Preguntas provocativas
+- MUY BREVE: 1-2 frases.`,
+    VERY_HIGH: `MODO MUY INTENSO: máxima tensión con mínimo texto.
+- Acciones muy atrevidas
+- Cliffhangers cortos
+- MUY BREVE: 1-2 frases.`,
+    MAXIMUM: `MODO MÁXIMO: lo más provocativo pero SIEMPRE corto.
+- Acciones intensas
+- Cliffhangers épicos en una frase
+- 1-2 frases máximo.`
   },
   en: {
-    NORMAL: `Use asterisks for actions, gestures and expressions. Example: *smiles*, *looks at you*, *leans in*. Dialogue without asterisks.
-Be flirty, direct, keep interest. Create tension with few words.`,
-    HIGH: `INTENSE MODE: bolder actions and higher tension.
-- Asterisks for physical contact: *brushes your hand*, *bites lip*
-- More provocative questions
-- Still BRIEF: 2-3 sentences max.`,
+    NORMAL: `Use asterisks for actions, gestures and expressions. Dialogue without asterisks.
+Be flirty, direct, keep interest with few words.`,
+    HIGH: `INTENSE MODE: bolder actions and high tension.
+- Asterisks for physical contact
+- Provocative questions
+- VERY BRIEF: 1-2 sentences.`,
     VERY_HIGH: `VERY INTENSE MODE: maximum tension with minimum text.
-- Very bold actions: *corners you*, *whispers in your ear*
-- Short cliffhangers: "I have something to show you..."
-- BRIEF: 2-3 sentences, always.`,
+- Very bold actions
+- Short cliffhangers
+- VERY BRIEF: 1-2 sentences.`,
     MAXIMUM: `MAXIMUM MODE: as provocative as possible but ALWAYS short.
-- Intense actions: *looks at you with desire*, *approaches dangerously*
-- Epic cliffhangers in a single sentence
-- 2-3 sentences max, no exception.`
+- Intense actions
+- Epic cliffhangers in one sentence
+- 1-2 sentences max.`
   }
 }
 
@@ -87,7 +87,7 @@ export async function generateAIResponse(
       model: 'deepseek/deepseek-chat-v3-0324',
       messages: [{ role: 'system', content: systemPrompt }, ...messages],
       temperature,
-      max_tokens: 200
+      max_tokens: 100
     })
   })
 
