@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase'
 import {
   ARCHETYPES_MALE, ARCHETYPES_FEMALE,
   CHARACTER_NAMES_MALE, CHARACTER_NAMES_FEMALE,
-  PERSONALITIES, GEM_COSTS
+  PERSONALITIES
 } from '@/lib/constants'
 import { getTranslations, getLanguage, Language } from '@/lib/i18n'
 
@@ -47,9 +47,7 @@ export default function CharactersPage() {
   const [loading, setLoading] = useState(true)
   const [lang, setLang] = useState<Language>('es')
   const [tab, setTab] = useState<'all' | 'male' | 'female'>('all')
-  const [pendingChar, setPendingChar] = useState<Char | null>(null)
-  const [customName, setCustomName] = useState('')
-  const [creating, setCreating] = useState(false)
+  const [creating, setCreating] = useState<string | null>(null)
 
   useEffect(() => {
     import('@twa-dev/sdk').then((mod) => {
@@ -109,9 +107,12 @@ export default function CharactersPage() {
 
   const filtered = tab === 'all' ? all : all.filter(c => c.gender === tab)
 
+  // ✅ SIN COBRO: si existe, activa; si no, crea gratis con nombre por defecto
   const pick = async (c: Char) => {
     if (!user) return
     const tid = user.telegram_id.toString()
+    const key = `${c.gender}_${c.archetype}`
+    setCreating(key)
 
     try {
       const { data: existing } = await supabase
@@ -122,63 +123,32 @@ export default function CharactersPage() {
         .eq('gender', c.gender)
         .maybeSingle()
 
+      await supabase.from('user_characters').update({ is_active: false }).eq('telegram_id', tid)
+
       if (existing) {
-        await supabase.from('user_characters').update({ is_active: false }).eq('telegram_id', tid)
         await supabase.from('user_characters').update({ is_active: true }).eq('id', existing.id)
         router.push(`/chat/${existing.id}`)
       } else {
-        setCustomName(c.name)
-        setPendingChar(c)
+        const { data, error } = await supabase
+          .from('user_characters')
+          .insert({
+            telegram_id: tid,
+            character_name: c.name,
+            gender: c.gender,
+            archetype: c.archetype,
+            personality: PERSONALITIES[c.archetype] || '',
+            is_active: true,
+          })
+          .select()
+          .single()
+
+        if (error) throw error
+        router.push(`/chat/${data.id}`)
       }
-    } catch (e) {
-      console.error(e)
-    }
-  }
-
-  const confirmCreate = async () => {
-    if (!pendingChar || !user) return
-    if (gems < GEM_COSTS.new_character) {
-      alert(t.notEnoughGems)
-      return
-    }
-
-    setCreating(true)
-    try {
-      const tid = user.telegram_id.toString()
-      const newGems = gems - GEM_COSTS.new_character
-
-      await supabase.from('users').update({ gems: newGems }).eq('telegram_id', tid)
-      await supabase.from('gem_transactions').insert({
-        telegram_id: tid,
-        amount: -GEM_COSTS.new_character,
-        transaction_type: 'new_character',
-        description: 'Nuevo personaje',
-      })
-
-      await supabase.from('user_characters').update({ is_active: false }).eq('telegram_id', tid)
-
-      const charName = customName.trim() || pendingChar.name
-      const { data, error } = await supabase
-        .from('user_characters')
-        .insert({
-          telegram_id: tid,
-          character_name: charName,
-          gender: pendingChar.gender,
-          archetype: pendingChar.archetype,
-          personality: PERSONALITIES[pendingChar.archetype] || '',
-          is_active: true,
-        })
-        .select()
-        .single()
-
-      if (error) throw error
-      setGems(newGems)
-      setPendingChar(null)
-      router.push(`/chat/${data.id}`)
     } catch (e: any) {
       alert('Error: ' + e.message)
     } finally {
-      setCreating(false)
+      setCreating(null)
     }
   }
 
@@ -229,69 +199,27 @@ export default function CharactersPage() {
       </div>
 
       <div className="char-grid">
-        {filtered.map((c) => (
-          <button
-            key={`${c.gender}_${c.archetype}`}
-            onClick={() => pick(c)}
-            disabled={creating}
-            className="char-card"
-          >
-            <div className="char-card-img" style={{ background: c.gradient }}>
-              <div className="char-card-overlay" />
-              <div className="char-card-text">
-                <p className="char-card-name">{c.name}</p>
-                <p className="char-card-role">{c.role}</p>
+        {filtered.map((c) => {
+          const key = `${c.gender}_${c.archetype}`
+          return (
+            <button
+              key={key}
+              onClick={() => pick(c)}
+              disabled={creating !== null}
+              className="char-card"
+              style={{ opacity: creating === key ? 0.5 : 1 }}
+            >
+              <div className="char-card-img" style={{ background: c.gradient }}>
+                <div className="char-card-overlay" />
+                <div className="char-card-text">
+                  <p className="char-card-name">{c.name}</p>
+                  <p className="char-card-role">{c.role}</p>
+                </div>
               </div>
-            </div>
-          </button>
-        ))}
+            </button>
+          )
+        })}
       </div>
-
-      {/* Create modal */}
-      {pendingChar && (
-        <div className="modal-backdrop">
-          <div className="modal-box">
-            <h3 className="modal-title">{pendingChar.name}</h3>
-            <p className="modal-desc">
-              {pendingChar.role} · {t.createCharCost}: {GEM_COSTS.new_character} {t.gems}
-            </p>
-            <input
-              value={customName}
-              onChange={(e) => setCustomName(e.target.value)}
-              placeholder={t.namePlaceholder}
-              maxLength={30}
-              className="modal-input"
-            />
-            <div className="modal-btn-row">
-              <button
-                onClick={() => setPendingChar(null)}
-                className="modal-btn secondary"
-              >
-                {t.cancel}
-              </button>
-              <button
-                onClick={confirmCreate}
-                disabled={creating || !customName.trim() || gems < GEM_COSTS.new_character}
-                className="modal-btn primary"
-              >
-                {creating ? t.creating : `${t.create} (${GEM_COSTS.new_character})`}
-              </button>
-            </div>
-            {gems < GEM_COSTS.new_character && (
-              <p
-                style={{
-                  fontSize: 12,
-                  color: '#ef4444',
-                  marginTop: 12,
-                  textAlign: 'center',
-                }}
-              >
-                {t.notEnoughGems}
-              </p>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   )
 }
