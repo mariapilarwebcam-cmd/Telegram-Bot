@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { ARCHETYPES_MALE, ARCHETYPES_FEMALE, PERSONALITIES } from '@/lib/constants'
+import { ARCHETYPES_MALE, ARCHETYPES_FEMALE, PERSONALITIES, GEM_COSTS } from '@/lib/constants'
 import { getTranslations, getLanguage, Language } from '@/lib/i18n'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -23,6 +23,11 @@ export default function CharactersPage() {
   const [lang, setLang] = useState<Language>('es')
   const [selectedGender, setSelectedGender] = useState<'all' | 'male' | 'female'>('all')
   const [creating, setCreating] = useState<string | null>(null)
+
+  // Modal para nuevo personaje
+  const [showNameModal, setShowNameModal] = useState(false)
+  const [pendingChar, setPendingChar] = useState<{ archetype: string; gender: 'male' | 'female'; defaultName: string } | null>(null)
+  const [customName, setCustomName] = useState('')
 
   useEffect(() => {
     import('@twa-dev/sdk').then((mod) => {
@@ -58,12 +63,11 @@ export default function CharactersPage() {
     }
   }
 
-  const selectCharacter = async (archetype: string, gender: 'male' | 'female') => {
+  const handleCharacterClick = async (archetype: string, gender: 'male' | 'female') => {
     if (!user) return
-    setCreating(`${gender}_${archetype}`)
-    try {
-      const tid = user.telegram_id.toString()
+    const tid = user.telegram_id.toString()
 
+    try {
       const { data: existingChar } = await supabase
         .from('user_characters')
         .select('*')
@@ -72,45 +76,83 @@ export default function CharactersPage() {
         .eq('gender', gender)
         .maybeSingle()
 
+      if (existingChar) {
+        // Ya existe: activar gratis
+        await supabase
+          .from('user_characters')
+          .update({ is_active: false })
+          .eq('telegram_id', tid)
+        await supabase
+          .from('user_characters')
+          .update({ is_active: true })
+          .eq('id', existingChar.id)
+        router.push(`/chat/${existingChar.id}`)
+      } else {
+        // Nuevo: abrir modal
+        const map = (gender === 'male' ? ARCHETYPES_MALE : ARCHETYPES_FEMALE)[lang] as Record<string, string>
+        const defaultName = (map[archetype] || archetype)
+          .replace(/^[^\wáéíóúñ]+\s*/i, '')
+          .trim()
+        setCustomName(defaultName)
+        setPendingChar({ archetype, gender, defaultName })
+        setShowNameModal(true)
+      }
+    } catch (e: any) {
+      console.error(e)
+    }
+  }
+
+  const confirmCreate = async () => {
+    if (!pendingChar || !user) return
+
+    if (gems < GEM_COSTS.new_character) {
+      alert(`Necesitas ${GEM_COSTS.new_character} gemas para crear un personaje nuevo`)
+      return
+    }
+
+    const tid = user.telegram_id.toString()
+    setCreating(`${pendingChar.gender}_${pendingChar.archetype}`)
+
+    try {
+      // Cobrar
+      const newGems = gems - GEM_COSTS.new_character
+      await supabase.from('users').update({ gems: newGems }).eq('telegram_id', tid)
+      await supabase.from('gem_transactions').insert({
+        telegram_id: tid,
+        amount: -GEM_COSTS.new_character,
+        transaction_type: 'new_character',
+        description: 'Nuevo personaje'
+      })
+
+      // Desactivar todos
       await supabase
         .from('user_characters')
         .update({ is_active: false })
         .eq('telegram_id', tid)
 
-      let characterId: number
+      // Crear
+      const charName = customName.trim() || pendingChar.defaultName || 'Personaje'
+      const { data, error } = await supabase
+        .from('user_characters')
+        .insert({
+          telegram_id: tid,
+          character_name: charName,
+          gender: pendingChar.gender,
+          archetype: pendingChar.archetype,
+          personality: PERSONALITIES[pendingChar.archetype] || '',
+          is_active: true
+        })
+        .select()
+        .single()
 
-      if (existingChar) {
-        await supabase
-          .from('user_characters')
-          .update({ is_active: true })
-          .eq('id', existingChar.id)
-        characterId = existingChar.id
-      } else {
-        const map = (gender === 'male' ? ARCHETYPES_MALE : ARCHETYPES_FEMALE)[lang] as Record<string, string>
-        const charName = (map[archetype] || archetype)
-          .replace(/^[^\wáéíóúñ]+\s*/i, '')
-          .trim()
+      if (error) throw error
 
-        const { data, error } = await supabase
-          .from('user_characters')
-          .insert({
-            telegram_id: tid,
-            character_name: charName || archetype,
-            gender,
-            archetype,
-            personality: PERSONALITIES[archetype] || '',
-            is_active: true
-          })
-          .select()
-          .single()
-
-        if (error) throw error
-        characterId = data.id
-      }
-
-      router.push(`/chat/${characterId}`)
+      setGems(newGems)
+      setShowNameModal(false)
+      setPendingChar(null)
+      router.push(`/chat/${data.id}`)
     } catch (e: any) {
-      alert('Error al seleccionar personaje: ' + e.message)
+      alert('Error al crear personaje: ' + e.message)
     } finally {
       setCreating(null)
     }
@@ -158,7 +200,7 @@ export default function CharactersPage() {
     <div className="min-h-screen bg-background p-4 pb-20">
       <header className="flex justify-between items-center mb-6">
         <Link href="/" className="text-textMuted hover:text-textMain">
-          ← {t.back}
+          {t.back}
         </Link>
         <h1 className="text-xl font-bold">{t.characters}</h1>
         <div className="flex items-center gap-2 bg-surface px-3 py-1.5 rounded-full">
@@ -176,7 +218,7 @@ export default function CharactersPage() {
               : 'bg-surface text-textMuted border border-white/10'
           }`}
         >
-          Todos
+          {t.all}
         </button>
         <button
           onClick={() => setSelectedGender('male')}
@@ -186,7 +228,7 @@ export default function CharactersPage() {
               : 'bg-surface text-textMuted border border-white/10'
           }`}
         >
-          👨 Masculinos
+          {t.masculine}
         </button>
         <button
           onClick={() => setSelectedGender('female')}
@@ -196,36 +238,11 @@ export default function CharactersPage() {
               : 'bg-surface text-textMuted border border-white/10'
           }`}
         >
-          👩 Femeninos
+          {t.feminine}
         </button>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
         {filteredCharacters.map((char) => (
           <button
-            key={`${char.gender}_${char.archetype}`}
-            onClick={() => selectCharacter(char.archetype, char.gender)}
-            disabled={creating !== null}
-            className="group relative rounded-2xl overflow-hidden bg-gradient-to-br from-surface to-surfaceHighlight border border-white/10 hover:border-primary/50 transition-all duration-300 hover:scale-105 disabled:opacity-50 text-left"
-          >
-            <div className="aspect-[3/4] relative p-4">
-              <div className="text-6xl mb-2">{char.icon}</div>
-              <div className="absolute inset-0 bg-gradient-to-t from-background via-background/50 to-transparent" />
-            </div>
-
-            <div className="absolute bottom-0 left-0 right-0 p-4">
-              <h3 className="text-lg font-bold text-white mb-1">{char.name}</h3>
-              <p className="text-xs text-textMuted line-clamp-2">{char.personality}</p>
-            </div>
-
-            {creating === `${char.gender}_${char.archetype}` && (
-              <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-              </div>
-            )}
-          </button>
-        ))}
-      </div>
-    </div>
-  )
-}
+            key={`${char.gender}_${char.archetype
