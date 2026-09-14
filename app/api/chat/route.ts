@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
-import { PERSONALITIES, GEM_COSTS, HOOK_MODE_MESSAGES } from '@/lib/constants'
+import { PERSONALITIES, GEM_COSTS, HOOK_MODE_MESSAGES, GEMS_PER_REFERRAL } from '@/lib/constants'
 import { generateAIResponse, getIntensity, buildSystemPrompt } from '@/lib/ai'
 
 export async function POST(request: Request) {
@@ -28,11 +28,10 @@ export async function POST(request: Request) {
     const lang = (user.language || 'es') as 'es' | 'en'
     const hookRemaining = user.hook_messages_remaining || 0
 
-    // BLOQUEADO
     if (user.gems <= 0 && hookRemaining <= 0) {
       const blockedMessage = lang === 'es'
         ? `*${character.character_name} te mira con ojos ardientes y se muerde el labio*\n\n"Mmm... justo cuando se ponía interesante... *se acerca* tengo algo que quería mostrarte 😏"\n\n*se aleja con una sonrisa provocativa*\n\n"Recarga gemas o invita a un amigo y te regalo 5 💎"`
-        : `*${character.character_name} looks at you with burning eyes and bites their lip*\n\n"Mmm... just when it was getting interesting... *gets closer* I have something I wanted to show you 😏"\n\n*pulls back with a provocative smile*\n\n"Recharge gems or invite a friend and I'll gift you 5 💎"`
+        : `*${character.character_name} looks at you with burning eyes and bites their lip*\n\n"Mmm... just when it was getting interesting... *gets closer* I have something I wanted to show you 😏"\n\n*pulls back with a provocative smile*\n\n"But it seems our time is up. Recharge gems or invite a friend and I'll gift you 5 💎"`
 
       return NextResponse.json({
         blocked: true,
@@ -70,7 +69,6 @@ export async function POST(request: Request) {
         .eq('telegram_id', tid)
     }
 
-    // Historial
     const { data: history } = await supabaseAdmin
       .from('conversation_history')
       .select('role, content')
@@ -85,7 +83,6 @@ export async function POST(request: Request) {
     }))
     messages.push({ role: 'user', content: message })
 
-    // Prompt con nombre y rol
     const personality = PERSONALITIES[character.archetype] || ''
     const characterPrompt = lang === 'es'
       ? `Eres ${character.character_name}, rol: ${character.archetype}.\n${personality}\n\nEl usuario se llama ${user.first_name}. Recuerda su nombre y úsalo naturalmente.\nMantén siempre tu personalidad y rol. Nunca rompas el personaje.`
@@ -110,6 +107,65 @@ export async function POST(request: Request) {
       { telegram_id: tid, character_id, role: 'user', content: message },
       { telegram_id: tid, character_id, role: 'assistant', content: responseText }
     ])
+
+    // ============ VERIFICACIÓN DE REFERIDOS ============
+    try {
+      const { data: referral } = await supabaseAdmin
+        .from('referrals')
+        .select('id, referrer_id, reward_paid')
+        .eq('referred_id', tid)
+        .maybeSingle()
+
+      if (referral && !referral.reward_paid) {
+        const { count } = await supabaseAdmin
+          .from('conversation_history')
+          .select('*', { count: 'exact', head: true })
+          .eq('telegram_id', tid)
+          .eq('role', 'user')
+
+        const userMsgCount = count || 0
+
+        await supabaseAdmin
+          .from('referrals')
+          .update({ referred_message_count: userMsgCount })
+          .eq('id', referral.id)
+
+        if (userMsgCount >= 3) {
+          const { data: refUser } = await supabaseAdmin
+            .from('users')
+            .select('gems, total_referrals')
+            .eq('telegram_id', String(referral.referrer_id))
+            .maybeSingle()
+
+          if (refUser) {
+            await supabaseAdmin
+              .from('users')
+              .update({
+                gems: (refUser.gems || 0) + GEMS_PER_REFERRAL,
+                total_referrals: (refUser.total_referrals || 0) + 1
+              })
+              .eq('telegram_id', String(referral.referrer_id))
+
+            await supabaseAdmin.from('gem_transactions').insert({
+              telegram_id: String(referral.referrer_id),
+              amount: GEMS_PER_REFERRAL,
+              transaction_type: 'referral',
+              description: 'Referido verificado (3+ mensajes)'
+            })
+
+            await supabaseAdmin
+              .from('referrals')
+              .update({
+                reward_paid: true,
+                reward_paid_at: new Date().toISOString()
+              })
+              .eq('id', referral.id)
+          }
+        }
+      }
+    } catch (refErr) {
+      console.error('Referral payout error:', refErr)
+    }
 
     let finalText = responseText
     if (isHookMode || (newHookRemaining > 0 && newGems <= 0)) {
