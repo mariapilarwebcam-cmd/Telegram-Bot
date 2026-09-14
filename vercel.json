@@ -1,4 +1,5 @@
 {
+  "framework": "nextjs",
   "rewrites": [
     { "source": "/api/webhook", "destination": "/api/index" },
     { "source": "/api/health", "destination": "/api/index" }
