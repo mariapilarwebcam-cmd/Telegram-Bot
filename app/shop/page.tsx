@@ -35,7 +35,10 @@ export default function ShopPage() {
         setGems(data.gems || 0)
       }
       const { data: purchases } = await supabase
-        .from('star_purchases').select('id').eq('telegram_id', tid).limit(1)
+        .from('star_purchases')
+        .select('id')
+        .eq('telegram_id', tid)
+        .limit(1)
       setHasPurchased(!!purchases && purchases.length > 0)
     } catch (e) {
       console.error(e)
@@ -87,7 +90,7 @@ export default function ShopPage() {
 
   const visiblePackages = STAR_PACKAGES
     .map((pkg, idx) => ({ ...pkg, originalIndex: idx }))
-    .filter(p => !p.first_time_only || !hasPurchased)
+    .filter((p) => !p.first_time_only || !hasPurchased)
 
   return (
     <div className="page">
@@ -163,7 +166,9 @@ export default function ShopPage() {
           {visiblePackages.map((pkg) => {
             const idx = pkg.originalIndex
             const isFirstTime = pkg.first_time_only
-            const bonusGems = pkg.bonus > 0 ? Math.floor(pkg.gems * pkg.bonus / 100) : 0
+            const percentBonus = pkg.bonus > 0 ? Math.floor((pkg.gems * pkg.bonus) / 100) : 0
+            const flatBonus = pkg.first_time_bonus || 0
+            const bonusGems = percentBonus + flatBonus
 
             return (
               <button
@@ -215,13 +220,7 @@ export default function ShopPage() {
                       {pkg.gems} {t.gems}
                     </p>
                     {bonusGems > 0 && (
-                      <span
-                        style={{
-                          fontSize: 13,
-                          color: '#22c55e',
-                          fontWeight: 700,
-                        }}
-                      >
+                      <span style={{ fontSize: 13, color: '#22c55e', fontWeight: 700 }}>
                         + {bonusGems} {t.bonusGems}
                       </span>
                     )}
