@@ -4,7 +4,8 @@ import { useEffect, useState, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { GEM_COSTS, getRelationshipLevel, getDisplayName } from '@/lib/constants'
-import { getTranslations, getLanguage, Language } from '@/lib/i18n'
+import { getTranslations } from '@/lib/i18n'
+import { useUser } from '@/lib/UserContext'
 
 interface Message {
   id?: number
@@ -34,17 +35,15 @@ export default function ChatPage() {
   const router = useRouter()
   const characterId = parseInt(id as string)
 
-  const [user, setUser] = useState<any>(null)
+  const { user, loading: userLoading, lang, setGems, setHookRemaining } = useUser()
+
   const [character, setCharacter] = useState<any>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [gems, setGems] = useState(0)
-  const [hookRemaining, setHookRemaining] = useState(0)
   const [isPremium, setIsPremium] = useState(false)
   const [blocked, setBlocked] = useState(false)
   const [blockedMessage, setBlockedMessage] = useState('')
-  const [lang, setLang] = useState<Language>('es')
 
   const [showImageModal, setShowImageModal] = useState(false)
   const [imageDescription, setImageDescription] = useState('')
@@ -56,25 +55,36 @@ export default function ChatPage() {
   const [newName, setNewName] = useState('')
   const [renaming, setRenaming] = useState(false)
 
-  // Control para auto-start de chat (solo la primera vez)
+  const [characterLoading, setCharacterLoading] = useState(true)
   const [historyLoaded, setHistoryLoaded] = useState(false)
   const [autoStartAttempted, setAutoStartAttempted] = useState(false)
 
   const endRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
 
+  // Cargar personaje + historial + premium cuando ya tenemos user
   useEffect(() => {
-    import('@twa-dev/sdk').then((mod) => {
-      const WebApp = mod.default
-      WebApp.ready()
-      WebApp.expand()
-      const u = WebApp.initDataUnsafe?.user
-      if (u?.id) {
-        setLang(getLanguage(u.language_code))
-        load(u.id)
+    if (userLoading) return
+    if (!user?.telegram_id) return
+
+    const tid = user.telegram_id
+
+    // Cargar todo en paralelo
+    Promise.all([
+      supabase.from('user_characters').select('*').eq('id', characterId).maybeSingle(),
+      supabase.from('conversation_history').select('*').eq('telegram_id', tid).eq('character_id', characterId).order('created_at', { ascending: true }).limit(50),
+      supabase.from('star_purchases').select('id').eq('telegram_id', tid).limit(1),
+    ]).then(([charRes, histRes, premRes]) => {
+      if (charRes.data) {
+        setCharacter(charRes.data)
+        setNewName(getDisplayName(charRes.data))
       }
+      setMessages(histRes.data || [])
+      setIsPremium(!!premRes.data && premRes.data.length > 0)
+      setCharacterLoading(false)
+      setHistoryLoaded(true)
     })
-  }, [characterId])
+  }, [characterId, user?.telegram_id, userLoading])
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -90,52 +100,16 @@ export default function ChatPage() {
     return () => document.removeEventListener('mousedown', handler)
   }, [menuOpen])
 
-  const load = async (telegramId: number) => {
-    const tid = telegramId.toString()
-    try {
-      const { data: u } = await supabase.from('users').select('*').eq('telegram_id', tid).maybeSingle()
-      if (!u) return
-      setUser(u)
-      setGems(u.gems || 0)
-      setHookRemaining(u.hook_messages_remaining || 0)
-
-      const { data: p } = await supabase.from('star_purchases').select('id').eq('telegram_id', tid).limit(1)
-      setIsPremium(!!p && p.length > 0)
-
-      const { data: c } = await supabase.from('user_characters').select('*').eq('id', characterId).maybeSingle()
-      if (c) {
-        setCharacter(c)
-        setNewName(getDisplayName(c))
-      }
-
-      const { data: hist } = await supabase
-        .from('conversation_history')
-        .select('*')
-        .eq('telegram_id', tid)
-        .eq('character_id', characterId)
-        .order('created_at', { ascending: true })
-        .limit(50)
-
-      setMessages(hist || [])
-    } catch (e) {
-      console.error(e)
-    } finally {
-      setHistoryLoaded(true)
-    }
-  }
-
-  // Auto-start: si no hay historial, el personaje habla primero (cobra 1 gema)
+  // Auto-start del personaje
   useEffect(() => {
-    if (!historyLoaded) return
-    if (!user || !character) return
-    if (messages.length > 0) return
-    if (autoStartAttempted) return
-    if (loading) return
+    if (!historyLoaded || !user || !character) return
+    if (messages.length > 0 || autoStartAttempted || loading) return
 
     const startChat = async () => {
       setAutoStartAttempted(true)
+      const gems = user.gems || 0
+      const hookRemaining = user.hook_messages_remaining || 0
 
-      // Si no tiene gemas ni hook mode → bloqueado
       if (gems < GEM_COSTS.message && hookRemaining <= 0) {
         setBlocked(true)
         return
@@ -147,12 +121,11 @@ export default function ChatPage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            telegram_id: user.telegram_id.toString(),
+            telegram_id: user.telegram_id,
             character_id: characterId,
           }),
         })
         const data = await res.json()
-
         if (res.ok) {
           if (data.blocked) {
             setBlocked(true)
@@ -177,6 +150,8 @@ export default function ChatPage() {
 
   const send = async () => {
     if (!input.trim() || !user || loading) return
+    const gems = user.gems || 0
+    const hookRemaining = user.hook_messages_remaining || 0
     if (gems < GEM_COSTS.message && hookRemaining <= 0) {
       setBlocked(true)
       return
@@ -191,7 +166,7 @@ export default function ChatPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          telegram_id: user.telegram_id.toString(),
+          telegram_id: user.telegram_id,
           character_id: characterId,
           message: text,
         }),
@@ -220,16 +195,17 @@ export default function ChatPage() {
   }
 
   const playAudio = async () => {
+    if (!user) return
     const last = [...messages].reverse().find((m) => m.role === 'assistant')
     if (!last) return alert(t.noMessageToPlay)
-    if (gems < GEM_COSTS.audio) return alert(t.audioNeed)
+    if ((user.gems || 0) < GEM_COSTS.audio) return alert(t.audioNeed)
     setGeneratingAudio(true)
     try {
       const res = await fetch('/api/generate-audio', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          telegram_id: user.telegram_id.toString(),
+          telegram_id: user.telegram_id,
           character_id: characterId,
           text: last.content,
         }),
@@ -247,13 +223,14 @@ export default function ChatPage() {
   }
 
   const generateImage = async () => {
+    if (!user || !character) return
     if (!imageDescription.trim()) return
     if (!isPremium) {
       alert(t.premiumImage)
       router.push('/shop')
       return
     }
-    if (gems < GEM_COSTS.image) return alert(t.imageNeed)
+    if ((user.gems || 0) < GEM_COSTS.image) return alert(t.imageNeed)
     setGeneratingImage(true)
     setShowImageModal(false)
     try {
@@ -261,7 +238,7 @@ export default function ChatPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          telegram_id: user.telegram_id.toString(),
+          telegram_id: user.telegram_id,
           character_id: characterId,
           description: imageDescription,
         }),
@@ -291,13 +268,13 @@ export default function ChatPage() {
       setShowRename(false)
       return
     }
-    if (gems < GEM_COSTS.rename_character) return alert(t.renameNeed)
+    if ((user.gems || 0) < GEM_COSTS.rename_character) return alert(t.renameNeed)
     if (!confirm(t.confirmRename)) return
 
     setRenaming(true)
     try {
-      const newGems = gems - GEM_COSTS.rename_character
-      const tid = user.telegram_id.toString()
+      const newGems = (user.gems || 0) - GEM_COSTS.rename_character
+      const tid = user.telegram_id
 
       await supabase.from('users').update({ gems: newGems }).eq('telegram_id', tid)
       await supabase.from('gem_transactions').insert({
@@ -327,7 +304,6 @@ export default function ChatPage() {
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
-
     html = html.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
     html = html.replace(
       /!\[([^\]]*)\]\(([^)]+)\)/g,
@@ -338,8 +314,10 @@ export default function ChatPage() {
   }
 
   const t = getTranslations(lang)
+  const gems = user?.gems || 0
+  const hookRemaining = user?.hook_messages_remaining || 0
 
-  if (!user || !character) {
+  if (userLoading || characterLoading || !character) {
     return (
       <div className="spinner-full">
         <div className="spinner" />
@@ -421,7 +399,6 @@ export default function ChatPage() {
               <circle cx="12" cy="19" r="1.6" fill="currentColor" />
             </svg>
           </button>
-
           {menuOpen && (
             <div className="menu-dropdown">
               <button
@@ -488,7 +465,10 @@ export default function ChatPage() {
         ))}
 
         {loading && messages.length > 0 && (
-          <div className="bubble-ai" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <div
+            className="bubble-ai"
+            style={{ display: 'flex', gap: 6, alignItems: 'center' }}
+          >
             <span className="dot" />
             <span className="dot" />
             <span className="dot" />
@@ -638,7 +618,12 @@ export default function ChatPage() {
             <button
               onClick={() => router.push('/')}
               className="modal-btn secondary"
-              style={{ width: '100%', background: 'rgba(255,255,255,0.05)', color: '#fff', marginBottom: 8 }}
+              style={{
+                width: '100%',
+                background: 'rgba(255,255,255,0.05)',
+                color: '#fff',
+                marginBottom: 8,
+              }}
             >
               {t.inviteFriend}
             </button>
