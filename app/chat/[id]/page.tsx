@@ -45,6 +45,10 @@ export default function ChatPage() {
   const [blocked, setBlocked] = useState(false)
   const [blockedMessage, setBlockedMessage] = useState('')
 
+  // Modal premium genérico
+  const [showPremiumModal, setShowPremiumModal] = useState(false)
+  const [premiumModalReason, setPremiumModalReason] = useState<'audio' | 'image'>('audio')
+
   const [showImageModal, setShowImageModal] = useState(false)
   const [imageDescription, setImageDescription] = useState('')
   const [generatingImage, setGeneratingImage] = useState(false)
@@ -62,14 +66,12 @@ export default function ChatPage() {
   const endRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
 
-  // Cargar personaje + historial + premium cuando ya tenemos user
   useEffect(() => {
     if (userLoading) return
     if (!user?.telegram_id) return
 
     const tid = user.telegram_id
 
-    // Cargar todo en paralelo
     Promise.all([
       supabase.from('user_characters').select('*').eq('id', characterId).maybeSingle(),
       supabase.from('conversation_history').select('*').eq('telegram_id', tid).eq('character_id', characterId).order('created_at', { ascending: true }).limit(50),
@@ -100,7 +102,7 @@ export default function ChatPage() {
     return () => document.removeEventListener('mousedown', handler)
   }, [menuOpen])
 
-  // Auto-start del personaje
+  // Auto-start
   useEffect(() => {
     if (!historyLoaded || !user || !character) return
     if (messages.length > 0 || autoStartAttempted || loading) return
@@ -196,9 +198,18 @@ export default function ChatPage() {
 
   const playAudio = async () => {
     if (!user) return
+
+    // ✅ PREMIUM CHECK PRIMERO
+    if (!isPremium) {
+      setPremiumModalReason('audio')
+      setShowPremiumModal(true)
+      return
+    }
+
     const last = [...messages].reverse().find((m) => m.role === 'assistant')
     if (!last) return alert(t.noMessageToPlay)
     if ((user.gems || 0) < GEM_COSTS.audio) return alert(t.audioNeed)
+
     setGeneratingAudio(true)
     try {
       const res = await fetch('/api/generate-audio', {
@@ -214,7 +225,12 @@ export default function ChatPage() {
       if (res.ok) {
         setGems(data.remaining_gems)
         new Audio(`data:audio/wav;base64,${data.audio}`).play()
-      } else alert(data.error || t.errorGeneric)
+      } else if (data.error === 'premium_required') {
+        setPremiumModalReason('audio')
+        setShowPremiumModal(true)
+      } else {
+        alert(data.error || t.errorGeneric)
+      }
     } catch {
       alert(t.errorConnection)
     } finally {
@@ -225,11 +241,14 @@ export default function ChatPage() {
   const generateImage = async () => {
     if (!user || !character) return
     if (!imageDescription.trim()) return
+
+    // ✅ PREMIUM CHECK PRIMERO
     if (!isPremium) {
-      alert(t.premiumImage)
-      router.push('/shop')
+      setPremiumModalReason('image')
+      setShowPremiumModal(true)
       return
     }
+
     if ((user.gems || 0) < GEM_COSTS.image) return alert(t.imageNeed)
     setGeneratingImage(true)
     setShowImageModal(false)
@@ -254,12 +273,30 @@ export default function ChatPage() {
         ])
         setGems(data.remaining_gems)
         setImageDescription('')
-      } else alert(data.message || data.error || t.errorGeneric)
+      } else if (data.error === 'premium_required') {
+        setPremiumModalReason('image')
+        setShowPremiumModal(true)
+      } else {
+        alert(data.message || data.error || t.errorGeneric)
+      }
     } catch {
       alert(t.errorConnection)
     } finally {
       setGeneratingImage(false)
     }
+  }
+
+  const tryOpenImageModal = () => {
+    if (!isPremium) {
+      setPremiumModalReason('image')
+      setShowPremiumModal(true)
+      return
+    }
+    if ((user?.gems || 0) < GEM_COSTS.image) {
+      alert(t.imageNeed)
+      return
+    }
+    setShowImageModal(true)
   }
 
   const doRename = async () => {
@@ -482,9 +519,12 @@ export default function ChatPage() {
         <div className="chat-input-row">
           <button
             onClick={playAudio}
-            disabled={generatingAudio || gems < GEM_COSTS.audio}
+            disabled={generatingAudio || (isPremium && gems < GEM_COSTS.audio)}
             className="chat-icon-btn"
             title={t.audioTooltip}
+            style={{
+              opacity: isPremium && gems < GEM_COSTS.audio ? 0.3 : 1,
+            }}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
               <path
@@ -503,17 +543,12 @@ export default function ChatPage() {
           </button>
 
           <button
-            onClick={() => {
-              if (!isPremium) {
-                alert(t.premiumRequired)
-                router.push('/shop')
-                return
-              }
-              if (gems < GEM_COSTS.image) return alert(t.imageNeed)
-              setShowImageModal(true)
-            }}
+            onClick={tryOpenImageModal}
             className="chat-icon-btn"
             title={t.imageTooltip}
+            style={{
+              opacity: isPremium && gems < GEM_COSTS.image ? 0.3 : 1,
+            }}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
               <rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="2" />
@@ -548,6 +583,53 @@ export default function ChatPage() {
         </div>
       </div>
 
+      {/* PREMIUM MODAL */}
+      {showPremiumModal && (
+        <div className="modal-backdrop">
+          <div className="modal-box">
+            <div
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: 16,
+                margin: '0 auto 16px',
+                background: 'linear-gradient(135deg, #7c5cff 0%, #a855f7 100%)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 28,
+              }}
+            >
+              {premiumModalReason === 'audio' ? '🔊' : '📸'}
+            </div>
+            <h3 className="modal-title" style={{ textAlign: 'center' }}>
+              {t.premiumFeatureTitle}
+            </h3>
+            <p className="modal-desc" style={{ textAlign: 'center', marginBottom: 20 }}>
+              {premiumModalReason === 'audio' ? t.premiumAudio : t.premiumImage}
+            </p>
+            <div className="modal-btn-row">
+              <button
+                onClick={() => setShowPremiumModal(false)}
+                className="modal-btn secondary"
+              >
+                {t.close}
+              </button>
+              <button
+                onClick={() => {
+                  setShowPremiumModal(false)
+                  router.push('/shop')
+                }}
+                className="modal-btn primary"
+              >
+                {t.goToShop}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* RENAME MODAL */}
       {showRename && (
         <div className="modal-backdrop">
           <div className="modal-box">
@@ -587,6 +669,7 @@ export default function ChatPage() {
         </div>
       )}
 
+      {/* BLOCKED MODAL */}
       {blocked && (
         <div className="modal-backdrop">
           <div className="modal-box danger">
@@ -646,6 +729,7 @@ export default function ChatPage() {
         </div>
       )}
 
+      {/* IMAGE MODAL */}
       {showImageModal && (
         <div className="modal-backdrop">
           <div className="modal-box">
