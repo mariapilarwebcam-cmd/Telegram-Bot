@@ -40,6 +40,22 @@ function getGradient(key: string): string {
   return GRADIENTS[Math.abs(hash) % GRADIENTS.length]
 }
 
+// Muestra el nombre canónico si el character_name es un rol antiguo
+function getDisplayName(c: any): string {
+  if (!c) return ''
+  const allRoles = [
+    ...Object.values(ARCHETYPES_FEMALE.es),
+    ...Object.values(ARCHETYPES_FEMALE.en),
+    ...Object.values(ARCHETYPES_MALE.es),
+    ...Object.values(ARCHETYPES_MALE.en),
+  ]
+  if (allRoles.includes(c.character_name)) {
+    const map = c.gender === 'female' ? CHARACTER_NAMES_FEMALE : CHARACTER_NAMES_MALE
+    return map[c.archetype] || c.character_name
+  }
+  return c.character_name
+}
+
 export default function HomePage() {
   const router = useRouter()
   const [gems, setGems] = useState(0)
@@ -172,7 +188,6 @@ export default function HomePage() {
 
   return (
     <div style={{ paddingBottom: 24 }}>
-      {/* Header */}
       <header
         style={{
           position: 'sticky',
@@ -276,7 +291,7 @@ export default function HomePage() {
               className="avatar-lg"
               style={{ background: getGradient(activeChar.archetype) }}
             >
-              {activeChar.character_name?.[0]?.toUpperCase()}
+              {getDisplayName(activeChar)?.[0]?.toUpperCase()}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <p
@@ -300,7 +315,7 @@ export default function HomePage() {
                   whiteSpace: 'nowrap',
                 }}
               >
-                {activeChar.character_name}
+                {getDisplayName(activeChar)}
               </p>
             </div>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
@@ -316,7 +331,6 @@ export default function HomePage() {
         </section>
       )}
 
-      {/* Tabs */}
       <div className="tabs">
         {[
           { id: 'all', label: t.all },
@@ -333,7 +347,6 @@ export default function HomePage() {
         ))}
       </div>
 
-      {/* Único grid con TODOS los personajes */}
       <div className="char-grid">
         {filtered.map((c) => (
           <button
