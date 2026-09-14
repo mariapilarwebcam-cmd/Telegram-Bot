@@ -34,6 +34,7 @@ async def webhook_endpoint(request: Request):
 async def health_check():
     return {"status": "healthy", "service": "telegram-bot-api"}
 
+# Root devuelve 404: la UI la sirve Next.js, no Python
 @app.get("/")
 async def root():
-    return {"message": "Telegram Bot API running"}
+    return JSONResponse({"error": "not found"}, status_code=404)
