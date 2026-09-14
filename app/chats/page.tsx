@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { getTranslations, getLanguage, Language } from '@/lib/i18n'
-import { getRelationshipLevel } from '@/lib/constants'
+import { getRelationshipLevel, getDisplayName } from '@/lib/constants'
 
 interface ChatRow {
   id: number
@@ -83,7 +83,7 @@ export default function ChatsPage() {
 
         rows.push({
           id: c.id,
-          character_name: c.character_name,
+          character_name: getDisplayName(c),  // ✅ nombre, no rol
           archetype: c.archetype,
           gender: c.gender,
           lastMessage: msgs?.[0]?.content,
