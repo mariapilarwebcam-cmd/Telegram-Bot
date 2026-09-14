@@ -14,7 +14,27 @@ export async function POST(request: Request) {
       .eq('telegram_id', tid)
       .maybeSingle()
 
-    if (!user || user.gems < GEM_COSTS.audio) {
+    if (!user) {
+      return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
+    }
+
+    // ✅ PREMIUM GATE: debe haber comprado Stars
+    const { data: purchases } = await supabaseAdmin
+      .from('star_purchases')
+      .select('id')
+      .eq('telegram_id', tid)
+      .limit(1)
+
+    if (!purchases || purchases.length === 0) {
+      return NextResponse.json({
+        error: 'premium_required',
+        message: user.language === 'en'
+          ? 'Voice audio is a Premium feature. Buy gems with Stars to unlock it.'
+          : 'El audio de voz es Premium. Compra gemas con Stars para desbloquearlo.'
+      }, { status: 403 })
+    }
+
+    if (user.gems < GEM_COSTS.audio) {
       return NextResponse.json({ error: 'Necesitas 5 gemas' }, { status: 402 })
     }
 
