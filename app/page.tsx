@@ -6,9 +6,10 @@ import { supabase } from '@/lib/supabase'
 import {
   ARCHETYPES_MALE, ARCHETYPES_FEMALE,
   CHARACTER_NAMES_MALE, CHARACTER_NAMES_FEMALE,
-  PERSONALITIES
+  PERSONALITIES, getDisplayName
 } from '@/lib/constants'
-import { getTranslations, getLanguage, Language } from '@/lib/i18n'
+import { getTranslations } from '@/lib/i18n'
+import { useUser } from '@/lib/UserContext'
 
 interface Char {
   archetype: string
@@ -40,72 +41,31 @@ function getGradient(key: string): string {
   return GRADIENTS[Math.abs(hash) % GRADIENTS.length]
 }
 
-// Muestra el nombre canónico si el character_name es un rol antiguo
-function getDisplayName(c: any): string {
-  if (!c) return ''
-  const allRoles = [
-    ...Object.values(ARCHETYPES_FEMALE.es),
-    ...Object.values(ARCHETYPES_FEMALE.en),
-    ...Object.values(ARCHETYPES_MALE.es),
-    ...Object.values(ARCHETYPES_MALE.en),
-  ]
-  if (allRoles.includes(c.character_name)) {
-    const map = c.gender === 'female' ? CHARACTER_NAMES_FEMALE : CHARACTER_NAMES_MALE
-    return map[c.archetype] || c.character_name
-  }
-  return c.character_name
-}
-
 export default function HomePage() {
   const router = useRouter()
-  const [gems, setGems] = useState(0)
-  const [hookRemaining, setHookRemaining] = useState(0)
-  const [loading, setLoading] = useState(true)
-  const [lang, setLang] = useState<Language>('es')
+  const { user, loading: userLoading, lang, isTelegram } = useUser()
+
+  const [activeChar, setActiveChar] = useState<any>(null)
   const [search, setSearch] = useState('')
   const [tab, setTab] = useState<'all' | 'male' | 'female'>('all')
-  const [activeChar, setActiveChar] = useState<any>(null)
-  const [isTelegram, setIsTelegram] = useState(false)
 
+  // Cargar personaje activo (dato específico del home, no cacheado globalmente)
   useEffect(() => {
-    import('@twa-dev/sdk').then(async (mod) => {
-      const WebApp = mod.default
-      WebApp.ready()
-      WebApp.expand()
-      setIsTelegram(true)
-      const u = WebApp.initDataUnsafe?.user
-      const detectedLang = getLanguage(u?.language_code)
-      setLang(detectedLang)
-      if (u?.id) await loadUser(u.id)
-      else setLoading(false)
-    }).catch(() => setLoading(false))
-  }, [])
-
-  const loadUser = async (telegramId: number) => {
-    const tid = telegramId.toString()
-    try {
-      const { data } = await supabase.from('users').select('*').eq('telegram_id', tid).maybeSingle()
-      if (data) {
-        setGems(data.gems || 0)
-        setHookRemaining(data.hook_messages_remaining || 0)
-        const { data: ac } = await supabase
-          .from('user_characters')
-          .select('*')
-          .eq('telegram_id', tid)
-          .eq('is_active', true)
-          .maybeSingle()
-        if (ac) setActiveChar(ac)
-      }
-    } catch (e) {
-      console.error(e)
-    } finally {
-      setLoading(false)
-    }
-  }
+    if (!user?.telegram_id) return
+    supabase
+      .from('user_characters')
+      .select('*')
+      .eq('telegram_id', user.telegram_id)
+      .eq('is_active', true)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) setActiveChar(data)
+      })
+  }, [user?.telegram_id])
 
   const t = getTranslations(lang)
 
-  // FEMENINAS PRIMERO
+  // Femeninas primero
   const all: Char[] = []
   const femaleMap = ARCHETYPES_FEMALE[lang] as Record<string, string>
   const maleMap = ARCHETYPES_MALE[lang] as Record<string, string>
@@ -132,9 +92,9 @@ export default function HomePage() {
   })
 
   const filtered = all
-    .filter(c => (tab === 'all' ? true : c.gender === tab))
+    .filter((c) => (tab === 'all' ? true : c.gender === tab))
     .filter(
-      c =>
+      (c) =>
         !search ||
         c.name.toLowerCase().includes(search.toLowerCase()) ||
         c.role.toLowerCase().includes(search.toLowerCase())
@@ -144,7 +104,8 @@ export default function HomePage() {
     router.push('/characters')
   }
 
-  if (loading) {
+  // Solo mostramos spinner si aún no tenemos NADA cacheado ni cargado
+  if (userLoading && !user) {
     return (
       <div className="spinner-full">
         <div className="spinner" />
@@ -165,8 +126,12 @@ export default function HomePage() {
               background: 'linear-gradient(135deg, #7c5cff 0%, #a855f7 100%)',
             }}
           />
-          <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 8 }}>{t.openFromTelegram}</h1>
-          <p style={{ fontSize: 14, color: '#8b8b9e', marginBottom: 24 }}>{t.openFromTelegramDesc}</p>
+          <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 8 }}>
+            {t.openFromTelegram}
+          </h1>
+          <p style={{ fontSize: 14, color: '#8b8b9e', marginBottom: 24 }}>
+            {t.openFromTelegramDesc}
+          </p>
           <a
             href="https://t.me/TabooRealmBot"
             style={{
@@ -186,6 +151,9 @@ export default function HomePage() {
     )
   }
 
+  const gems = user?.gems || 0
+  const hookRemaining = user?.hook_messages_remaining || 0
+
   return (
     <div style={{ paddingBottom: 24 }}>
       <header
@@ -200,7 +168,14 @@ export default function HomePage() {
           borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: 12,
+          }}
+        >
           <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0, letterSpacing: '-0.02em' }}>
             Taboo<span style={{ color: '#a78bfa' }}>Realm</span>
           </h1>
@@ -224,7 +199,12 @@ export default function HomePage() {
 
         <div style={{ position: 'relative' }}>
           <svg
-            style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)' }}
+            style={{
+              position: 'absolute',
+              left: 12,
+              top: '50%',
+              transform: 'translateY(-50%)',
+            }}
             width="16"
             height="16"
             viewBox="0 0 24 24"
@@ -258,7 +238,8 @@ export default function HomePage() {
             margin: '12px 16px 0',
             padding: '12px 16px',
             borderRadius: 12,
-            background: 'linear-gradient(135deg, rgba(124,92,255,0.2), rgba(168,85,247,0.1))',
+            background:
+              'linear-gradient(135deg, rgba(124,92,255,0.2), rgba(168,85,247,0.1))',
             border: '1px solid rgba(124,92,255,0.3)',
           }}
         >
@@ -279,7 +260,8 @@ export default function HomePage() {
               gap: 12,
               padding: 12,
               borderRadius: 16,
-              background: 'linear-gradient(90deg, rgba(124,92,255,0.15), rgba(168,85,247,0.1))',
+              background:
+                'linear-gradient(90deg, rgba(124,92,255,0.15), rgba(168,85,247,0.1))',
               border: '1px solid rgba(124,92,255,0.3)',
               textAlign: 'left',
               cursor: 'pointer',
