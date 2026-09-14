@@ -27,10 +27,10 @@ export default function BottomNav() {
 
   const t = getTranslations(lang)
 
+  // Solo 3 items: Inicio, Chats, Tienda
   const items = [
     { href: '/', label: t.home, icon: HomeIcon },
     { href: '/chats', label: t.chats, icon: ChatIcon },
-    { href: '/characters', label: t.characters, icon: PlusIcon },
     { href: '/shop', label: t.shop, icon: DiamondIcon },
   ]
 
@@ -86,23 +86,6 @@ function ChatIcon({ active }: { active: boolean }) {
         fill={active ? 'currentColor' : 'none'}
         fillOpacity={active ? 0.15 : 0}
       />
-    </svg>
-  )
-}
-
-function PlusIcon({ active }: { active: boolean }) {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-      <circle
-        cx="12"
-        cy="12"
-        r="9"
-        stroke="currentColor"
-        strokeWidth="2"
-        fill={active ? 'currentColor' : 'none'}
-        fillOpacity={active ? 0.15 : 0}
-      />
-      <path d="M12 8v8M8 12h8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
     </svg>
   )
 }
