@@ -1,6 +1,7 @@
 import { Metadata, Viewport } from 'next'
 import './globals.css'
 import BottomNav from '@/components/BottomNav'
+import { UserProvider } from '@/lib/UserContext'
 
 export const metadata: Metadata = {
   title: 'Taboo Realm',
@@ -23,12 +24,12 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body className="antialiased">
-        <div className="app-shell">
-          <div className="app-content">
-            {children}
+        <UserProvider>
+          <div className="app-shell">
+            <div className="app-content">{children}</div>
+            <BottomNav />
           </div>
-          <BottomNav />
-        </div>
+        </UserProvider>
       </body>
     </html>
   )
