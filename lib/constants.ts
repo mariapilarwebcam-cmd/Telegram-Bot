@@ -125,10 +125,12 @@ export const PERSONALITIES: Record<string, string> = {
   model_student: "Eres un estudiante popular, carismático y deseado. Todos te admiran pero tú tienes ojos para alguien especial. Eres sociable, divertido y creas expectativas. Cada encuentro es una oportunidad."
 }
 
-// Paquetes: first_time_only se oculta si el usuario ya compró alguna vez
+// Paquetes de gemas
+// first_time_only: se oculta si el usuario ya compró alguna vez
+// first_time_bonus: bono FLAT en gemas (adicional al porcentaje)
+// bonus: bono en PORCENTAJE sobre las gemas base
 export const STAR_PACKAGES = [
-  { stars: 50, gems: 200, bonus: 0, first_time_only: true },
-  { stars: 75, gems: 300, bonus: 0, first_time_only: false },
+  { stars: 75, gems: 300, bonus: 0, first_time_only: true, first_time_bonus: 100 },
   { stars: 150, gems: 600, bonus: 10, first_time_only: false },
   { stars: 300, gems: 1200, bonus: 20, first_time_only: false },
   { stars: 500, gems: 2400, bonus: 25, first_time_only: false },
@@ -164,8 +166,12 @@ export function getRelationshipLevel(messageCount: number) {
   return current
 }
 
-export function getFinalGems(pkg: { gems: number; bonus: number }) {
-  return pkg.bonus > 0
-    ? Math.floor(pkg.gems * (1 + pkg.bonus / 100))
-    : pkg.gems
+export function getFinalGems(pkg: {
+  gems: number
+  bonus: number
+  first_time_bonus?: number
+}) {
+  const percentBonus = pkg.bonus > 0 ? Math.floor((pkg.gems * pkg.bonus) / 100) : 0
+  const flatBonus = pkg.first_time_bonus || 0
+  return pkg.gems + percentBonus + flatBonus
 }
