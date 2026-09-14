@@ -3,49 +3,31 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { STAR_PACKAGES } from '@/lib/constants'
-import { getTranslations, getLanguage, Language } from '@/lib/i18n'
+import { getTranslations } from '@/lib/i18n'
+import { useUser } from '@/lib/UserContext'
 
 export default function ShopPage() {
-  const [user, setUser] = useState<any>(null)
-  const [gems, setGems] = useState(0)
-  const [loading, setLoading] = useState(true)
+  const { user, loading: userLoading, lang, refresh } = useUser()
   const [purchasing, setPurchasing] = useState<number | null>(null)
-  const [lang, setLang] = useState<Language>('es')
   const [hasPurchased, setHasPurchased] = useState(false)
+  const [checking, setChecking] = useState(true)
 
   useEffect(() => {
-    import('@twa-dev/sdk').then((mod) => {
-      const WebApp = mod.default
-      WebApp.ready()
-      WebApp.expand()
-      const u = WebApp.initDataUnsafe?.user
-      if (u?.id) {
-        setLang(getLanguage(u.language_code))
-        load(u.id)
-      } else setLoading(false)
-    }).catch(() => setLoading(false))
-  }, [])
-
-  const load = async (telegramId: number) => {
-    const tid = telegramId.toString()
-    try {
-      const { data } = await supabase.from('users').select('*').eq('telegram_id', tid).maybeSingle()
-      if (data) {
-        setUser(data)
-        setGems(data.gems || 0)
-      }
-      const { data: purchases } = await supabase
-        .from('star_purchases')
-        .select('id')
-        .eq('telegram_id', tid)
-        .limit(1)
-      setHasPurchased(!!purchases && purchases.length > 0)
-    } catch (e) {
-      console.error(e)
-    } finally {
-      setLoading(false)
+    if (userLoading) return
+    if (!user?.telegram_id) {
+      setChecking(false)
+      return
     }
-  }
+    supabase
+      .from('star_purchases')
+      .select('id')
+      .eq('telegram_id', user.telegram_id)
+      .limit(1)
+      .then(({ data }) => {
+        setHasPurchased(!!data && data.length > 0)
+        setChecking(false)
+      })
+  }, [user?.telegram_id, userLoading])
 
   const buy = async (idx: number) => {
     if (!user) return
@@ -55,7 +37,7 @@ export default function ShopPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          telegram_id: user.telegram_id.toString(),
+          telegram_id: user.telegram_id,
           package_id: idx,
         }),
       })
@@ -64,7 +46,15 @@ export default function ShopPage() {
         import('@twa-dev/sdk').then((mod) => {
           const WebApp = mod.default
           WebApp.openInvoice(data.invoice_link, async (status: string) => {
-            if (status === 'paid') await load(Number(user.telegram_id))
+            if (status === 'paid') {
+              await refresh()
+              const { data: p } = await supabase
+                .from('star_purchases')
+                .select('id')
+                .eq('telegram_id', user.telegram_id)
+                .limit(1)
+              setHasPurchased(!!p && p.length > 0)
+            }
             setPurchasing(null)
           })
         })
@@ -80,13 +70,15 @@ export default function ShopPage() {
 
   const t = getTranslations(lang)
 
-  if (loading) {
+  if (userLoading || checking) {
     return (
       <div className="spinner-full">
         <div className="spinner" />
       </div>
     )
   }
+
+  const gems = user?.gems || 0
 
   const visiblePackages = STAR_PACKAGES
     .map((pkg, idx) => ({ ...pkg, originalIndex: idx }))
@@ -114,7 +106,6 @@ export default function ShopPage() {
         </div>
       </header>
 
-      {/* Premium banner */}
       <section style={{ padding: '20px 16px 0' }}>
         <div
           style={{
@@ -159,7 +150,6 @@ export default function ShopPage() {
         </div>
       </section>
 
-      {/* Packages */}
       <section style={{ padding: '24px 16px 0' }}>
         <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>{t.packages}</h2>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -254,7 +244,6 @@ export default function ShopPage() {
         </div>
       </section>
 
-      {/* Info */}
       <section style={{ padding: '24px 16px' }}>
         <div
           style={{
