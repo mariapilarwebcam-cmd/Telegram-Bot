@@ -16,6 +16,7 @@ export async function POST(request: Request) {
 
     if (!user) return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
 
+    // ✅ PREMIUM GATE
     const { data: purchases } = await supabaseAdmin
       .from('star_purchases')
       .select('id')
@@ -26,8 +27,8 @@ export async function POST(request: Request) {
       return NextResponse.json({
         error: 'premium_required',
         message: user.language === 'en'
-          ? 'Image generation is a Premium feature. Buy Stars in the Shop to unlock it.'
-          : 'La generación de imágenes es Premium. Compra Stars en la Tienda para desbloquearla.'
+          ? 'Image generation is a Premium feature. Buy gems with Stars to unlock it.'
+          : 'La generación de imágenes es Premium. Compra gemas con Stars para desbloquearla.'
       }, { status: 403 })
     }
 
