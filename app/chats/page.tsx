@@ -3,8 +3,9 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { getTranslations, getLanguage, Language } from '@/lib/i18n'
+import { getTranslations } from '@/lib/i18n'
 import { getRelationshipLevel, getDisplayName } from '@/lib/constants'
+import { useUser } from '@/lib/UserContext'
 
 interface ChatRow {
   id: number
@@ -34,26 +35,22 @@ function getGradient(key: string) {
 
 export default function ChatsPage() {
   const router = useRouter()
+  const { user, loading: userLoading, lang } = useUser()
   const [chats, setChats] = useState<ChatRow[]>([])
   const [loading, setLoading] = useState(true)
-  const [lang, setLang] = useState<Language>('es')
 
   useEffect(() => {
-    import('@twa-dev/sdk').then((mod) => {
-      const WebApp = mod.default
-      WebApp.ready()
-      WebApp.expand()
-      const u = WebApp.initDataUnsafe?.user
-      if (u?.id) {
-        setLang(getLanguage(u.language_code))
-        loadChats(u.id)
-      } else setLoading(false)
-    }).catch(() => setLoading(false))
-  }, [])
+    if (userLoading) return
+    if (!user?.telegram_id) {
+      setLoading(false)
+      return
+    }
+    loadChats(user.telegram_id)
+  }, [user?.telegram_id, userLoading])
 
-  const loadChats = async (telegramId: number) => {
-    const tid = telegramId.toString()
+  const loadChats = async (tid: string) => {
     try {
+      // 1 sola consulta: personajes
       const { data: chars } = await supabase
         .from('user_characters')
         .select('id, character_name, archetype, gender')
@@ -65,32 +62,35 @@ export default function ChatsPage() {
         return
       }
 
-      const rows: ChatRow[] = []
-      for (const c of chars) {
-        const { data: msgs } = await supabase
-          .from('conversation_history')
-          .select('content, created_at')
-          .eq('telegram_id', tid)
-          .eq('character_id', c.id)
-          .order('created_at', { ascending: false })
-          .limit(1)
+      // 1 sola consulta: TODO el historial del usuario
+      const { data: history } = await supabase
+        .from('conversation_history')
+        .select('character_id, content, created_at')
+        .eq('telegram_id', tid)
+        .order('created_at', { ascending: false })
 
-        const { count } = await supabase
-          .from('conversation_history')
-          .select('*', { count: 'exact', head: true })
-          .eq('telegram_id', tid)
-          .eq('character_id', c.id)
-
-        rows.push({
-          id: c.id,
-          character_name: getDisplayName(c),  // ✅ nombre, no rol
-          archetype: c.archetype,
-          gender: c.gender,
-          lastMessage: msgs?.[0]?.content,
-          lastAt: msgs?.[0]?.created_at,
-          messageCount: count || 0,
-        })
+      // Agrupar en memoria
+      const byChar: Record<number, { lastMessage: string; lastAt: string; count: number }> = {}
+      for (const h of history || []) {
+        if (!byChar[h.character_id]) {
+          byChar[h.character_id] = {
+            lastMessage: h.content,
+            lastAt: h.created_at,
+            count: 0,
+          }
+        }
+        byChar[h.character_id].count++
       }
+
+      const rows: ChatRow[] = chars.map((c) => ({
+        id: c.id,
+        character_name: getDisplayName(c),
+        archetype: c.archetype,
+        gender: c.gender,
+        lastMessage: byChar[c.id]?.lastMessage,
+        lastAt: byChar[c.id]?.lastAt,
+        messageCount: byChar[c.id]?.count || 0,
+      }))
 
       rows.sort((a, b) => (b.lastAt || '').localeCompare(a.lastAt || ''))
       setChats(rows)
