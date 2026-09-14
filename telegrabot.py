@@ -26,14 +26,14 @@ BASE_DAILY_GEMS = 5
 GEMS_PER_REFERRAL = 5
 MAX_REFERRALS_PER_DAY = 2
 MAX_DAILY_GEMS = BASE_DAILY_GEMS + (GEMS_PER_REFERRAL * MAX_REFERRALS_PER_DAY)
-STARTING_GEMS = 10
+STARTING_GEMS = 15
 
 STAR_PACKAGES = [
-    {"stars": 50, "gems": 200, "bonus": 0, "first_time": True},
-    {"stars": 75, "gems": 300, "bonus": 0, "first_time": False},
-    {"stars": 150, "gems": 600, "bonus": 5, "first_time": False},
-    {"stars": 300, "gems": 1200, "bonus": 10, "first_time": False},
-    {"stars": 500, "gems": 2000, "bonus": 15, "first_time": False},
+    {"stars": 75, "gems": 300, "bonus": 0, "first_time": True},
+    {"stars": 150, "gems": 600, "bonus": 10, "first_time": False},
+    {"stars": 300, "gems": 1200, "bonus": 20, "first_time": False},
+    {"stars": 500, "gems": 2400, "bonus": 25, "first_time": False},
+    {"stars": 1000, "gems": 5000, "bonus": 25, "first_time": False},
 ]
 
 ARCHETYPES_MALE = {
@@ -63,7 +63,7 @@ ARCHETYPES_FEMALE = {
         "stepsister": "🌸 Hermanastra", "teacher": "📚 Profesora",
         "neighbor": "🏠 Vecina", "boss": "💼 Jefa",
         "trainer": "🏋️ Entrenadora personal", "model": "📸 Modelo/Influencer",
-        "musician": "🎵 Músico", "actor": "🎬 Actriz", "doctor": "⚕️ Doctora/Enfermera",
+        "musician": "🎵 Música", "actor": "🎬 Actriz", "doctor": "⚕️ Doctora/Enfermera",
         "chef": "👩‍🍳 Chef", "artist": "🎨 Artista", "writer": "✍️ Escritora",
         "secretary": "💼 Secretaria", "model_student": "🎓 Estudiante popular"
     },
@@ -133,23 +133,20 @@ async def create_user(telegram_id: int, username: str, first_name: str,
     }
     result = supabase.table('users').insert(user_data).execute()
 
+    # Nota: la recompensa al referente se paga cuando el referido
+    # envía 3 mensajes (verificado en /api/chat). Aquí solo registramos
+    # el referral pendiente.
+
     if referred_by and result.data:
-        supabase.table('referrals').insert({
-            'referrer_id': str(referred_by),
-            'referred_id': str(telegram_id)
-        }).execute()
-        referrer = await get_user(referred_by)
-        if referrer:
-            supabase.table('users').update({
-                'gems': referrer['gems'] + GEMS_PER_REFERRAL,
-                'total_referrals': (referrer.get('total_referrals') or 0) + 1
-            }).eq('telegram_id', str(referred_by)).execute()
-            supabase.table('gem_transactions').insert({
-                'telegram_id': str(referred_by),
-                'amount': GEMS_PER_REFERRAL,
-                'transaction_type': 'referral',
-                'description': 'Nuevo referido'
+        try:
+            supabase.table('referrals').insert({
+                'referrer_id': str(referred_by),
+                'referred_id': str(telegram_id),
+                'reward_paid': False,
+                'referred_message_count': 0
             }).execute()
+        except Exception as e:
+            logger.error(f"Error creando referral: {e}")
 
     return result.data[0] if result.data else None
 
@@ -168,6 +165,14 @@ async def add_gems(telegram_id: int, amount: int, transaction_type: str, descrip
 
 async def get_user_by_referral_code(referral_code: str):
     result = supabase.table('users').select('*').eq('referral_code', referral_code).execute()
+    return result.data[0] if result.data else None
+
+async def get_user_by_username(username: str):
+    """Busca un usuario por username (sin @)."""
+    clean = username.replace('@', '').strip()
+    if not clean:
+        return None
+    result = supabase.table('users').select('*').ilike('username', clean).execute()
     return result.data[0] if result.data else None
 
 async def record_star_purchase(telegram_id: int, stars: int, gems: int, is_first_purchase: bool, charge_id: str):
@@ -194,7 +199,6 @@ def get_main_keyboard(language: str) -> ReplyKeyboardMarkup:
     return builder.as_markup(resize_keyboard=True, one_time_keyboard=False)
 
 # ==================== HANDLERS ====================
-# IMPORTANTE: los handlers específicos van ANTES del genérico process_name
 
 @router.message(CommandStart())
 async def cmd_start(message: Message, command: CommandObject = None):
@@ -203,8 +207,13 @@ async def cmd_start(message: Message, command: CommandObject = None):
     first_name = message.from_user.first_name or ""
     referred_by = None
 
+    # Resolver referido desde link del bot (?start=xxx)
     if command and command.args:
-        referrer = await get_user_by_referral_code(command.args)
+        arg = command.args
+        # Buscar por username primero, si no por referral_code
+        referrer = await get_user_by_username(arg)
+        if not referrer:
+            referrer = await get_user_by_referral_code(arg)
         if referrer and str(referrer['telegram_id']) != str(telegram_id):
             referred_by = referrer['telegram_id']
 
@@ -417,9 +426,9 @@ async def process_successful_payment(message: Message):
     lang = user.get('language', 'es') if user else 'es'
 
     if lang == 'es':
-        text = f"✅ ¡Compra exitosa! Has recibido {gems} gemas.\n\n🎉 ¡Disfruta la experiencia completa!"
+        text = f"✅ ¡Compra exitosa! Has recibido {gems} gemas.\n\n🎉 ¡Ahora tienes acceso a audio e imágenes!"
     else:
-        text = f"✅ Purchase successful! You received {gems} gems.\n\n🎉 Enjoy the full experience!"
+        text = f"✅ Purchase successful! You received {gems} gems.\n\n🎉 You now have access to audio and images!"
     await message.answer(text)
 
 @router.message(F.text.in_({"🎁 Invitar", "🎁 Invite"}))
@@ -430,14 +439,19 @@ async def cmd_invite(message: Message):
 
     lang = user.get('language', 'es')
     bot_info = await message.bot.get_me()
-    link = f"https://t.me/{bot_info.username}?start={user['referral_code']}"
+
+    # Priorizar username para link más limpio; fallback a referral_code
+    ref_param = user.get('username') or user['referral_code']
+    link = f"https://t.me/{bot_info.username}?startapp={ref_param}"
 
     if lang == 'es':
-        text = (f"🎁 Sistema de Referidos\n\n🔗 Tu enlace:\n{link}\n\n"
-                f"💡 ¡Comparte tu enlace y gana 5 gemas por cada amigo que se registre!")
+        text = (f"🎁 Sistema de Referidos\n\n"
+                f"🔗 Tu enlace:\n{link}\n\n"
+                f"💡 Comparte tu enlace. Cuando tu amigo mande 3 mensajes en la app, ganarás 5 gemas.")
     else:
-        text = (f"🎁 Referral System\n\n🔗 Your link:\n{link}\n\n"
-                f"💡 Share your link and earn 5 gems for each friend who registers!")
+        text = (f"🎁 Referral System\n\n"
+                f"🔗 Your link:\n{link}\n\n"
+                f"💡 Share your link. When your friend sends 3 messages in the app, you'll earn 5 gems.")
     await message.answer(text)
 
 @router.message(F.text.in_({"❓ Ayuda", "❓ Help"}))
