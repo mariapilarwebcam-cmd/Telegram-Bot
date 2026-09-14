@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { GEM_COSTS, getRelationshipLevel } from '@/lib/constants'
+import { GEM_COSTS, getRelationshipLevel, getDisplayName } from '@/lib/constants'
 import { getTranslations, getLanguage, Language } from '@/lib/i18n'
 
 interface Message {
@@ -56,6 +56,10 @@ export default function ChatPage() {
   const [newName, setNewName] = useState('')
   const [renaming, setRenaming] = useState(false)
 
+  // Control para auto-start de chat (solo la primera vez)
+  const [historyLoaded, setHistoryLoaded] = useState(false)
+  const [autoStartAttempted, setAutoStartAttempted] = useState(false)
+
   const endRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -76,7 +80,6 @@ export default function ChatPage() {
     endRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // Cerrar menú al tocar fuera
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
@@ -102,7 +105,7 @@ export default function ChatPage() {
       const { data: c } = await supabase.from('user_characters').select('*').eq('id', characterId).maybeSingle()
       if (c) {
         setCharacter(c)
-        setNewName(c.character_name)
+        setNewName(getDisplayName(c))
       }
 
       const { data: hist } = await supabase
@@ -112,11 +115,65 @@ export default function ChatPage() {
         .eq('character_id', characterId)
         .order('created_at', { ascending: true })
         .limit(50)
+
       setMessages(hist || [])
     } catch (e) {
       console.error(e)
+    } finally {
+      setHistoryLoaded(true)
     }
   }
+
+  // Auto-start: si no hay historial, el personaje habla primero (cobra 1 gema)
+  useEffect(() => {
+    if (!historyLoaded) return
+    if (!user || !character) return
+    if (messages.length > 0) return
+    if (autoStartAttempted) return
+    if (loading) return
+
+    const startChat = async () => {
+      setAutoStartAttempted(true)
+
+      // Si no tiene gemas ni hook mode → bloqueado
+      if (gems < GEM_COSTS.message && hookRemaining <= 0) {
+        setBlocked(true)
+        return
+      }
+
+      setLoading(true)
+      try {
+        const res = await fetch('/api/start-chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            telegram_id: user.telegram_id.toString(),
+            character_id: characterId,
+          }),
+        })
+        const data = await res.json()
+
+        if (res.ok) {
+          if (data.blocked) {
+            setBlocked(true)
+            return
+          }
+          if (data.already_started) return
+          if (data.response) {
+            setMessages([{ role: 'assistant', content: data.response }])
+            setGems(data.remaining_gems)
+          }
+        }
+      } catch (e) {
+        console.error('Error auto-start:', e)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    startChat()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [historyLoaded, user, character, messages.length])
 
   const send = async () => {
     if (!input.trim() || !user || loading) return
@@ -215,7 +272,7 @@ export default function ChatPage() {
           ...p,
           {
             role: 'assistant',
-            content: `*${character.character_name} te envía una foto*\n\n![Selfie](${data.image_url})`,
+            content: `*${getDisplayName(character)} te envía una foto*\n\n![Selfie](${data.image_url})`,
           },
         ])
         setGems(data.remaining_gems)
@@ -230,7 +287,7 @@ export default function ChatPage() {
 
   const doRename = async () => {
     if (!newName.trim() || !user || !character) return
-    if (newName.trim() === character.character_name) {
+    if (newName.trim() === getDisplayName(character)) {
       setShowRename(false)
       return
     }
@@ -292,10 +349,10 @@ export default function ChatPage() {
 
   const gradient = getGradient(character.archetype)
   const level = getRelationshipLevel(messages.length)
+  const displayName = getDisplayName(character)
 
   return (
     <div className="chat-page">
-      {/* Header */}
       <header className="chat-header">
         <button
           onClick={() => router.push('/chats')}
@@ -321,7 +378,7 @@ export default function ChatPage() {
         </button>
 
         <div className="avatar" style={{ background: gradient }}>
-          {character.character_name?.[0]?.toUpperCase()}
+          {displayName?.[0]?.toUpperCase()}
         </div>
 
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -335,7 +392,7 @@ export default function ChatPage() {
               whiteSpace: 'nowrap',
             }}
           >
-            {character.character_name}
+            {displayName}
           </p>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span
@@ -352,7 +409,6 @@ export default function ChatPage() {
           </div>
         </div>
 
-        {/* Menu 3 puntos */}
         <div className="menu-wrap" ref={menuRef}>
           <button
             className="menu-trigger"
@@ -408,18 +464,17 @@ export default function ChatPage() {
         </div>
       </header>
 
-      {/* Messages */}
       <div className="chat-messages">
-        {messages.length === 0 && (
+        {loading && messages.length === 0 && (
           <div style={{ textAlign: 'center', padding: '64px 24px' }}>
             <div
               className="avatar-xl"
               style={{ background: gradient, margin: '0 auto 16px' }}
             >
-              {character.character_name?.[0]?.toUpperCase()}
+              {displayName?.[0]?.toUpperCase()}
             </div>
             <p style={{ fontSize: 14, color: '#8b8b9e', margin: 0 }}>
-              {t.startConversation} {character.character_name}
+              {displayName} {t.online.toLowerCase()}...
             </p>
           </div>
         )}
@@ -432,7 +487,7 @@ export default function ChatPage() {
           />
         ))}
 
-        {loading && (
+        {loading && messages.length > 0 && (
           <div className="bubble-ai" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             <span className="dot" />
             <span className="dot" />
@@ -443,7 +498,6 @@ export default function ChatPage() {
         <div ref={endRef} />
       </div>
 
-      {/* Input bar */}
       <div className="chat-input-bar">
         <div className="chat-input-row">
           <button
@@ -514,7 +568,6 @@ export default function ChatPage() {
         </div>
       </div>
 
-      {/* Rename modal */}
       {showRename && (
         <div className="modal-backdrop">
           <div className="modal-box">
@@ -531,7 +584,7 @@ export default function ChatPage() {
               <button
                 onClick={() => {
                   setShowRename(false)
-                  setNewName(character.character_name)
+                  setNewName(displayName)
                 }}
                 className="modal-btn secondary"
               >
@@ -542,7 +595,7 @@ export default function ChatPage() {
                 disabled={
                   renaming ||
                   !newName.trim() ||
-                  newName.trim() === character.character_name ||
+                  newName.trim() === displayName ||
                   gems < GEM_COSTS.rename_character
                 }
                 className="modal-btn primary"
@@ -554,7 +607,6 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* Blocked modal */}
       {blocked && (
         <div className="modal-backdrop">
           <div className="modal-box danger">
@@ -574,7 +626,7 @@ export default function ChatPage() {
               />
             )}
             <p className="modal-desc">
-              {character.character_name} {t.blockedDesc}
+              {displayName} {t.blockedDesc}
             </p>
             <button
               onClick={() => router.push('/shop')}
@@ -609,7 +661,6 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* Image modal */}
       {showImageModal && (
         <div className="modal-backdrop">
           <div className="modal-box">
