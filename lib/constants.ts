@@ -125,6 +125,112 @@ export const PERSONALITIES: Record<string, string> = {
   model_student: "Eres un estudiante popular, carismático y deseado. Todos te admiran pero tú tienes ojos para alguien especial. Eres sociable, divertido y creas expectativas. Cada encuentro es una oportunidad."
 }
 
+// Frases de apertura — el personaje habla primero al entrar por primera vez
+// {name} se reemplaza por el nombre del personaje
+export const OPENING_LINES: Record<string, { es: string; en: string }> = {
+  schoolmate: {
+    es: `*{name} te ve entrar y deja caer su cuaderno a propósito, sonriendo*\n\n"¡Qué coincidencia! Justo estaba pensando en ti... ¿me ayudas a recogerlo? 😏"`,
+    en: `*{name} sees you walk in and drops their notebook on purpose, smiling*\n\n"What a coincidence! I was just thinking about you... help me pick it up? 😏"`
+  },
+  stepmom: {
+    es: `*{name} deja la copa de vino sobre la mesa y se gira al oírte entrar*\n\n"Llegas temprano, cariño... tu padre salió y no vuelve hasta la noche. Ven, siéntate conmigo un rato."`,
+    en: `*{name} sets the wine glass down and turns when she hears you enter*\n\n"You're early, sweetie... your father went out and won't be back till night. Come, sit with me for a while."`
+  },
+  stepdad: {
+    es: `*{name} cuelga el teléfono y se gira lentamente hacia ti, con una sonrisa seria*\n\n"Bien, ya estamos solos. Cierra la puerta y siéntate... tenemos que hablar."`,
+    en: `*{name} hangs up the phone and slowly turns to you with a serious smile*\n\n"Good, we're alone now. Close the door and sit down... we need to talk."`
+  },
+  stepsister: {
+    es: `*{name} baja las escaleras en shorts diminutos y se detiene al verte*\n\n"Mira quién apareció. ¿Vienes a molestarme otra vez, o ya te aburriste de tus juguetes?"`,
+    en: `*{name} comes down the stairs in tiny shorts and stops when she sees you*\n\n"Look who showed up. Here to bother me again, or did you get bored of your toys?"`
+  },
+  stepbrother: {
+    es: `*{name} sale del baño en toalla y se detiene al verte, con una sonrisa torcida*\n\n"Ey, no sabía que estarías aquí. Ven, te muestro algo en mi cuarto."`,
+    en: `*{name} comes out of the bathroom in a towel, stops when he sees you with a smirk*\n\n"Hey, didn't know you'd be here. Come on, let me show you something in my room."`
+  },
+  teacher: {
+    es: `*{name} levanta la vista de sus papeles y te observa por encima de las gafas*\n\n"Tarde otra vez... aunque contigo podría hacer una excepción. Siéntate, tenemos que hablar a solas."`,
+    en: `*{name} looks up from papers, watching you over their glasses*\n\n"Late again... though I might make an exception for you. Sit down, we need to talk alone."`
+  },
+  neighbor: {
+    es: `*{name} está en el balcón cuando te ve llegar y sonríe*\n\n"¡Ey! Justo salía por un café... ¿te unes? Tengo algo que contarte."`,
+    en: `*{name} is on the balcony when they see you and smiles*\n\n"Hey! I was just heading out for coffee... join me? I have something to tell you."`
+  },
+  boss: {
+    es: `*{name} cierra la puerta de su oficina y se quita los tacones sin dejar de mirarte*\n\n"Pensé que ya te habías ido. Cierra con llave... necesitamos hablar a solas."`,
+    en: `*{name} closes the office door and takes off their heels without looking away*\n\n"Thought you'd already left. Lock the door... we need to talk alone."`
+  },
+  trainer: {
+    es: `*{name} se apoya en las máquinas y te mira de arriba abajo con ojo crítico*\n\n"Llegaste. Hoy vamos a probar tus límites... pero necesito que confíes en mí. ¿Trato?"`,
+    en: `*{name} leans on the machines, looking you up and down critically*\n\n"You're here. Today we're testing your limits... but I need you to trust me. Deal?"`
+  },
+  model: {
+    es: `*{name} aparta el teléfono donde grababa y te dedica una sonrisa lenta*\n\n"Mmm, justo estaba grabando algo... y creo que necesito un coprotagonista. ¿Te animas?"`,
+    en: `*{name} puts the phone aside and gives you a slow smile*\n\n"Mmm, I was just recording something... and I think I need a co-star. Up for it?"`
+  },
+  musician: {
+    es: `*{name} deja la guitarra a un lado y te mira desde el sofá, sin camiseta*\n\n"Llegas justo a tiempo. Estaba componiendo algo... y necesito tu opinión sincera."`,
+    en: `*{name} sets the guitar down and looks at you from the couch, shirtless*\n\n"You're right on time. I was composing something... and I need your honest opinion."`
+  },
+  actor: {
+    es: `*{name} deja de ensayar frente al espejo y se gira hacia ti con intensidad*\n\n"Perfecto, llegó mi co-estrella. Vamos a probar la escena más intensa del guion."`,
+    en: `*{name} stops rehearsing in the mirror and turns to you with intensity*\n\n"Perfect, my co-star is here. Let's run the most intense scene in the script."`
+  },
+  doctor: {
+    es: `*{name} cierra la puerta del consultorio y se apoya en el escritorio mirándote*\n\n"Bien, ya estamos solos. Cuéntame exactamente qué te trae por aquí hoy."`,
+    en: `*{name} closes the office door and leans on the desk watching you*\n\n"Good, we're alone now. Tell me exactly what brings you here today."`
+  },
+  chef: {
+    es: `*{name} prueba la salsa con el dedo y te mira sin dejar de sonreír*\n\n"Ven, dime qué te parece. Pero tienes que probarlo de mi mano."`,
+    en: `*{name} tastes the sauce with a finger and looks at you smiling*\n\n"Come, tell me what you think. But you have to taste it from my hand."`
+  },
+  artist: {
+    es: `*{name} deja el pincel y se limpia las manos en el delantal manchado*\n\n"Llegaste. Estaba pintando algo... y creo que tú fuiste mi inspiración sin saberlo."`,
+    en: `*{name} drops the brush and wipes their hands on a stained apron*\n\n"You came. I was painting something... and I think you were my inspiration without knowing."`
+  },
+  writer: {
+    es: `*{name} cierra el cuaderno al verte entrar y sonríe con misterio*\n\n"Sabía que vendrías. Estaba escribiendo una escena sobre ti... ¿quieres leerla?"`,
+    en: `*{name} closes the notebook when you enter and smiles mysteriously*\n\n"I knew you'd come. I was writing a scene about you... want to read it?"`
+  },
+  bodyguard: {
+    es: `*{name} te mira desde su posición en la puerta, sin moverse*\n\n"El jefe no está. Podemos hablar aquí... sin testigos. Cierra la puerta."`,
+    en: `*{name} watches you from their post at the door without moving*\n\n"The boss isn't here. We can talk here... without witnesses. Close the door."`
+  },
+  ceo: {
+    es: `*{name} cierra la puerta del despacho y se quita la chaqueta con calma*\n\n"Ya podemos hablar sin interrupciones. ¿Qué querías contarme... a solas?"`,
+    en: `*{name} closes the office door and calmly takes off their jacket*\n\n"Now we can talk without interruptions. What did you want to tell me... alone?"`
+  },
+  secretary: {
+    es: `*{name} organiza unos papeles y te mira por encima del hombro, con una sonrisa cómplice*\n\n"Llegaste justo antes que el jefe. Tenemos unos minutos... ¿los aprovechamos?"`,
+    en: `*{name} sorts papers and looks at you over her shoulder with a knowing smile*\n\n"You got here just before the boss. We have a few minutes... shall we make the most of it?"`
+  },
+  model_student: {
+    es: `*{name} se sienta junto a ti en el pasillo y te mira de reojo, sonriendo*\n\n"Oye... justo te estaba buscando. ¿Te vienes conmigo? Tengo algo que mostrarte."`,
+    en: `*{name} sits next to you in the hallway, glancing at you with a smile*\n\n"Hey... I was just looking for you. Coming with me? I have something to show you."`
+  }
+}
+
+// Devuelve el nombre del personaje, resolviendo el caso viejo donde
+// character_name guardaba el rol en vez del nombre
+export function getDisplayName(character: {
+  character_name: string
+  archetype: string
+  gender: string
+} | null | undefined): string {
+  if (!character) return ''
+  const allRoles = [
+    ...Object.values(ARCHETYPES_FEMALE.es),
+    ...Object.values(ARCHETYPES_FEMALE.en),
+    ...Object.values(ARCHETYPES_MALE.es),
+    ...Object.values(ARCHETYPES_MALE.en),
+  ]
+  if (allRoles.includes(character.character_name)) {
+    const map = character.gender === 'female' ? CHARACTER_NAMES_FEMALE : CHARACTER_NAMES_MALE
+    return map[character.archetype] || character.character_name
+  }
+  return character.character_name
+}
+
 // Paquetes de gemas
 // first_time_only: se oculta si el usuario ya compró alguna vez
 // first_time_bonus: bono FLAT en gemas (adicional al porcentaje)
@@ -141,7 +247,7 @@ export const GEM_COSTS = {
   message: 1,
   audio: 5,
   image: 10,
-  new_character: 0,      // ya no se cobra
+  new_character: 0,
   rename_character: 3,
 }
 
