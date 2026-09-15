@@ -3,7 +3,6 @@
 import { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react'
 import { supabase } from '@/lib/supabase'
 import { getLanguage, Language } from '@/lib/i18n'
-import { loadTelegramSdk, getWebApp } from '@/lib/telegram'
 
 interface UserData {
   telegram_id: string
@@ -36,7 +35,7 @@ const UserContext = createContext<UserContextType>({
   refresh: async () => {},
 })
 
-// Cache en memoria (persiste entre navegaciones durante la sesión)
+// Cache en memoria (persiste toda la sesión)
 let memUserCache: UserData | null = null
 
 export function UserProvider({ children }: { children: ReactNode }) {
@@ -48,9 +47,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const referralProcessed = useRef(false)
   const initStarted = useRef(false)
 
-  // Hard timeout: si en 5 segundos no hay respuesta, liberar la UI
+  // ⏱️ HARD TIMEOUT: en 4 segundos liberamos loading SÍ O SÍ
   useEffect(() => {
-    const t = setTimeout(() => setLoading(false), 5000)
+    const t = setTimeout(() => {
+      setLoading(false)
+    }, 4000)
     return () => clearTimeout(t)
   }, [])
 
@@ -60,16 +61,20 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
     const init = async () => {
       try {
-        // Timeout de 2.5s para el SDK de Telegram
-        const WebApp: any = await Promise.race([
-          loadTelegramSdk(),
+        // SDK con timeout de 2.5s
+        const mod: any = await Promise.race([
+          import('@twa-dev/sdk'),
           new Promise((resolve) => setTimeout(() => resolve(null), 2500)),
         ])
 
-        if (!WebApp) {
+        if (!mod) {
           setLoading(false)
           return
         }
+
+        const WebApp = mod.default
+        try { WebApp.ready() } catch {}
+        try { WebApp.expand() } catch {}
 
         const u = WebApp.initDataUnsafe?.user
         if (!u?.id) {
@@ -81,13 +86,10 @@ export function UserProvider({ children }: { children: ReactNode }) {
         setTelegramId(u.id)
         setLang(getLanguage(u.language_code))
 
-        // Cargar usuario con timeout de 4s
-        const loaded = await loadUser(u.id)
-        if (!loaded) {
-          setLoading(false)
-        }
+        // Cargar usuario con timeout de 3s
+        await loadUser(u.id)
 
-        // Procesar referido en background (NO bloquea)
+        // Procesar referido en background (NO bloquea la UI)
         const startParam = WebApp.initDataUnsafe?.start_param
         if (startParam && !referralProcessed.current) {
           const processedKey = `taboo_ref_${u.id}_${startParam}`
@@ -118,14 +120,14 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const loadUser = async (id: number): Promise<boolean> => {
     const tid = id.toString()
     try {
-      // Query con timeout de 4s
+      // Query con timeout de 3s
       const result: any = await Promise.race([
         supabase
           .from('users')
           .select('telegram_id, first_name, username, gems, language, hook_messages_remaining, referral_code, total_referrals')
           .eq('telegram_id', tid)
           .maybeSingle(),
-        new Promise((resolve) => setTimeout(() => resolve({ data: null }), 4000)),
+        new Promise((resolve) => setTimeout(() => resolve({ data: null }), 3000)),
       ])
 
       if (result?.data) {
