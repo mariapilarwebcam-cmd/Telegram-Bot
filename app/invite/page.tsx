@@ -5,18 +5,31 @@ import { useUser } from '@/lib/UserContext'
 import { getTranslations } from '@/lib/i18n'
 
 export default function InvitePage() {
-  const { user, loading: userLoading, lang } = useUser()
+  const { user, loading: userLoading, lang, refresh, isTelegram } = useUser()
   const [copied, setCopied] = useState(false)
   const [timedOut, setTimedOut] = useState(false)
+  const [retrying, setRetrying] = useState(false)
 
   const t = getTranslations(lang)
 
-  // Timeout visual: si en 3s no hay user, mostramos fallback
   useEffect(() => {
     if (user) return
-    const to = setTimeout(() => setTimedOut(true), 3000)
+    const to = setTimeout(() => setTimedOut(true), 5000)
     return () => clearTimeout(to)
   }, [user])
+
+  const handleRetry = async () => {
+    setRetrying(true)
+    setTimedOut(false)
+    try {
+      await refresh()
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setRetrying(false)
+      setTimeout(() => setTimedOut(true), 5000)
+    }
+  }
 
   const handleCopy = async () => {
     if (!user) return
@@ -53,7 +66,7 @@ export default function InvitePage() {
     })
   }
 
-  // Estado 1: cargando Y sin timeout → spinner
+  // Spinner solo si aún carga Y no ha pasado el timeout
   if (userLoading && !timedOut && !user) {
     return (
       <div className="spinner-full">
@@ -62,8 +75,9 @@ export default function InvitePage() {
     )
   }
 
-  // Estado 2: no hay user después del timeout → fallback con botón recargar
+  // Fallback si no hay user tras el timeout
   if (!user) {
+    const noTelegram = !isTelegram
     return (
       <div className="page">
         <header className="page-header">
@@ -71,7 +85,7 @@ export default function InvitePage() {
         </header>
         <div
           style={{
-            padding: 40,
+            padding: '40px 24px',
             textAlign: 'center',
             display: 'flex',
             flexDirection: 'column',
@@ -80,23 +94,59 @@ export default function InvitePage() {
           }}
         >
           <div style={{ fontSize: 48 }}>⚠️</div>
-          <p style={{ color: '#8b8b9e', margin: 0 }}>
-            {lang === 'es'
-              ? 'No se pudieron cargar tus datos. Intenta de nuevo.'
-              : 'Could not load your data. Please try again.'}
+
+          <h2 style={{ fontSize: 16, fontWeight: 700, color: '#fff', margin: 0 }}>
+            {noTelegram
+              ? (lang === 'es' ? 'Abre esta app desde Telegram' : 'Open this app from Telegram')
+              : (lang === 'es' ? 'No se pudo cargar tu cuenta' : 'Could not load your account')
+            }
+          </h2>
+
+          <p style={{ color: '#8b8b9e', margin: 0, fontSize: 14, maxWidth: 300, lineHeight: 1.5 }}>
+            {noTelegram
+              ? (lang === 'es'
+                  ? 'Necesitas abrir esta Mini App desde el bot de Telegram, no desde el navegador.'
+                  : 'You need to open this Mini App from the Telegram bot, not from the browser.')
+              : (lang === 'es'
+                  ? 'Hubo un problema cargando tus datos. Intenta recargar. Si persiste, envía /start al bot primero.'
+                  : 'There was a problem loading your data. Try reloading. If it persists, send /start to the bot first.')
+            }
           </p>
+
+          {!noTelegram && (
+            <button
+              onClick={handleRetry}
+              disabled={retrying}
+              className="btn-primary"
+              style={{ opacity: retrying ? 0.6 : 1 }}
+            >
+              {retrying
+                ? (lang === 'es' ? 'Cargando...' : 'Loading...')
+                : (lang === 'es' ? 'Reintentar' : 'Retry')
+              }
+            </button>
+          )}
+
           <button
             onClick={() => window.location.reload()}
-            className="btn-primary"
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: '#6b6b7e',
+              fontSize: 13,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              padding: 8,
+            }}
           >
-            {lang === 'es' ? 'Recargar' : 'Reload'}
+            {lang === 'es' ? 'Recargar app' : 'Reload app'}
           </button>
         </div>
       </div>
     )
   }
 
-  // Estado 3: todo listo → render normal
+  // Render normal
   const refCode = user.username || user.referral_code
   const referralLink = `https://t.me/TabooRealmBot?startapp=${refCode}`
   const earnedGems = (user.total_referrals || 0) * 5
@@ -118,14 +168,7 @@ export default function InvitePage() {
           }}
         >
           <div style={{ fontSize: 48, marginBottom: 12 }}>🎁</div>
-          <h2
-            style={{
-              fontSize: 22,
-              fontWeight: 900,
-              color: '#fff',
-              margin: '0 0 6px 0',
-            }}
-          >
+          <h2 style={{ fontSize: 22, fontWeight: 900, color: '#fff', margin: '0 0 6px 0' }}>
             {t.inviteTitle}
           </h2>
           <p
@@ -278,25 +321,11 @@ export default function InvitePage() {
             <p style={{ fontSize: 12, color: '#8b8b9e', margin: 0 }}>
               {t.verifiedFriends}
             </p>
-            <p
-              style={{
-                fontSize: 24,
-                fontWeight: 800,
-                color: '#fff',
-                margin: '2px 0 0 0',
-              }}
-            >
+            <p style={{ fontSize: 24, fontWeight: 800, color: '#fff', margin: '2px 0 0 0' }}>
               {user.total_referrals || 0}
             </p>
           </div>
-          <div
-            style={{
-              fontSize: 12,
-              fontWeight: 700,
-              color: '#22c55e',
-              textAlign: 'right',
-            }}
-          >
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#22c55e', textAlign: 'right' }}>
             +{earnedGems} 💎
           </div>
         </div>
