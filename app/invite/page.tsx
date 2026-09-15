@@ -14,7 +14,7 @@ export default function InvitePage() {
 
   useEffect(() => {
     if (user) return
-    const to = setTimeout(() => setTimedOut(true), 5000)
+    const to = setTimeout(() => setTimedOut(true), 6000)
     return () => clearTimeout(to)
   }, [user])
 
@@ -27,7 +27,7 @@ export default function InvitePage() {
       console.error(e)
     } finally {
       setRetrying(false)
-      setTimeout(() => setTimedOut(true), 5000)
+      setTimeout(() => setTimedOut(true), 6000)
     }
   }
 
@@ -52,21 +52,21 @@ export default function InvitePage() {
       ? '¡Mira esta app! Chatea con personajes IA 🔥'
       : 'Check this app out! Chat with AI characters 🔥'
 
+    const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent(shareText)}`
+
     import('@twa-dev/sdk').then((mod) => {
       const WebApp = mod.default
-      const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent(shareText)}`
       try {
         WebApp.openTelegramLink(shareUrl)
       } catch {
         window.open(shareUrl, '_blank')
       }
     }).catch(() => {
-      const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent(shareText)}`
       window.open(shareUrl, '_blank')
     })
   }
 
-  // Spinner solo si aún carga Y no ha pasado el timeout
+  // Spinner solo si aún carga Y no ha pasado timeout
   if (userLoading && !timedOut && !user) {
     return (
       <div className="spinner-full">
@@ -97,19 +97,19 @@ export default function InvitePage() {
 
           <h2 style={{ fontSize: 16, fontWeight: 700, color: '#fff', margin: 0 }}>
             {noTelegram
-              ? (lang === 'es' ? 'Abre esta app desde Telegram' : 'Open this app from Telegram')
-              : (lang === 'es' ? 'No se pudo cargar tu cuenta' : 'Could not load your account')
+              ? (lang === 'es' ? 'Abre desde Telegram' : 'Open from Telegram')
+              : (lang === 'es' ? 'Cargando tu cuenta...' : 'Loading your account...')
             }
           </h2>
 
           <p style={{ color: '#8b8b9e', margin: 0, fontSize: 14, maxWidth: 300, lineHeight: 1.5 }}>
             {noTelegram
               ? (lang === 'es'
-                  ? 'Necesitas abrir esta Mini App desde el bot de Telegram, no desde el navegador.'
-                  : 'You need to open this Mini App from the Telegram bot, not from the browser.')
+                  ? 'Abre esta Mini App desde el bot en Telegram.'
+                  : 'Open this Mini App from the bot in Telegram.')
               : (lang === 'es'
-                  ? 'Hubo un problema cargando tus datos. Intenta recargar. Si persiste, envía /start al bot primero.'
-                  : 'There was a problem loading your data. Try reloading. If it persists, send /start to the bot first.')
+                  ? 'Hubo un problema de conexión. Reintenta o envía /start al bot.'
+                  : 'There was a connection issue. Retry or send /start to the bot.')
             }
           </p>
 
@@ -157,7 +157,6 @@ export default function InvitePage() {
         <h1 className="page-title">{t.inviteTitle}</h1>
       </header>
 
-      {/* Hero */}
       <section style={{ padding: '24px 16px 0' }}>
         <div
           style={{
@@ -186,7 +185,6 @@ export default function InvitePage() {
         </div>
       </section>
 
-      {/* Link */}
       <section style={{ padding: '24px 16px 0' }}>
         <p
           style={{
@@ -289,7 +287,6 @@ export default function InvitePage() {
         </div>
       </section>
 
-      {/* Stats */}
       <section style={{ padding: '24px 16px 0' }}>
         <div
           style={{
@@ -331,7 +328,6 @@ export default function InvitePage() {
         </div>
       </section>
 
-      {/* How it works */}
       <section style={{ padding: '24px 16px' }}>
         <div
           style={{
