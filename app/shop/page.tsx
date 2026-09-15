@@ -6,7 +6,7 @@ import { STAR_PACKAGES } from '@/lib/constants'
 import { getTranslations } from '@/lib/i18n'
 import { useUser } from '@/lib/UserContext'
 
-// Cache del flag "hasPurchased" por usuario
+// Cache del flag "hasPurchased" por usuario (persiste en la sesión)
 const purchaseCache: Record<string, boolean> = {}
 
 export default function ShopPage() {
@@ -16,13 +16,8 @@ export default function ShopPage() {
   const [checking, setChecking] = useState(true)
 
   useEffect(() => {
-    // Si aún carga user, esperar pero con timeout de seguridad
-    if (userLoading) {
-      const t = setTimeout(() => setChecking(false), 3000)
-      return () => clearTimeout(t)
-    }
     if (!user?.telegram_id) {
-      setChecking(false)
+      if (!userLoading) setChecking(false)
       return
     }
 
@@ -46,17 +41,20 @@ export default function ShopPage() {
         .eq('telegram_id', user.telegram_id)
         .limit(1),
       new Promise((resolve) => setTimeout(() => resolve({ data: null }), 3000)),
-    ]).then((result: any) => {
-      if (cancelled) return
-      const has = !!(result?.data && result.data.length > 0)
-      purchaseCache[user.telegram_id] = has
-      setHasPurchased(has)
-      setChecking(false)
-    }).catch(() => {
-      if (!cancelled) setChecking(false)
-    }).finally(() => {
-      clearTimeout(timeout)
-    })
+    ])
+      .then((result: any) => {
+        if (cancelled) return
+        const has = !!(result?.data && result.data.length > 0)
+        purchaseCache[user.telegram_id] = has
+        setHasPurchased(has)
+        setChecking(false)
+      })
+      .catch(() => {
+        if (!cancelled) setChecking(false)
+      })
+      .finally(() => {
+        clearTimeout(timeout)
+      })
 
     return () => {
       cancelled = true
@@ -83,7 +81,6 @@ export default function ShopPage() {
           WebApp.openInvoice(data.invoice_link, async (status: string) => {
             if (status === 'paid') {
               await refresh()
-              // Invalidate cache
               if (user.telegram_id) purchaseCache[user.telegram_id] = true
               setHasPurchased(true)
             }
@@ -102,20 +99,27 @@ export default function ShopPage() {
 
   const t = getTranslations(lang)
 
-  // Solo bloquear si NO tenemos usuario todavía Y lleva rato intentando
+  // Solo spinner si NO tenemos user todavía
   if (userLoading && !user) {
     return (
       <div className="spinner-full">
-        <div className="spinner" />
+        <div className="spinner"></div>
       </div>
     )
   }
 
   const gems = user?.gems || 0
 
+  // Filtro arreglado: muestra el primer paquete si NO ha comprado todavía
   const visiblePackages = STAR_PACKAGES
     .map((pkg, idx) => ({ ...pkg, originalIndex: idx }))
-    .filter((p) => !p.first_time_only || (!checking && !hasPurchased) || (!p.first_time_only))
+    .filter((p) => {
+      if (!p.first_time_only) return true
+      // Si aún estamos verificando, lo mostramos para no ocultar nada
+      if (checking) return true
+      // Si ya compró, ocultarlo
+      return !hasPurchased
+    })
 
   return (
     <div className="page">
