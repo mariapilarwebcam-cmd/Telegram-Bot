@@ -21,8 +21,18 @@ dp.include_router(router)
 
 app = FastAPI()
 
-@app.post("/bot/webhook")
-async def webhook_endpoint(request: Request):
+
+@app.api_route("/{path:path}", methods=["GET", "POST"])
+async def catch_all(request: Request, path: str):
+    """
+    Catch-all: Vercel pasa paths variables a esta función.
+    - GET → responder 'webhook alive' (útil para test)
+    - POST → procesar update de Telegram
+    """
+    if request.method == "GET":
+        return {"status": "webhook alive", "path": path}
+
+    # POST: procesar update de Telegram
     try:
         body = await request.json()
         update = Update(**body)
@@ -30,8 +40,7 @@ async def webhook_endpoint(request: Request):
         return {"status": "ok"}
     except Exception as e:
         logger.error(f"Error en webhook: {e}", exc_info=True)
-        return JSONResponse({"status": "error", "detail": str(e)}, status_code=500)
-
-@app.get("/bot/webhook")
-async def webhook_get():
-    return {"status": "webhook alive"}
+        return JSONResponse(
+            {"status": "error", "detail": str(e)},
+            status_code=500,
+        )
