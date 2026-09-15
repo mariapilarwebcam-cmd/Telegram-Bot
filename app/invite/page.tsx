@@ -1,34 +1,29 @@
 "use client"
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
 import { useUser } from '@/lib/UserContext'
 import { getTranslations } from '@/lib/i18n'
 
 export default function InvitePage() {
-  const router = useRouter()
   const { user, loading: userLoading, lang } = useUser()
   const [copied, setCopied] = useState(false)
+  const [timedOut, setTimedOut] = useState(false)
 
   const t = getTranslations(lang)
 
-  if (userLoading || !user) {
-    return (
-      <div className="spinner-full">
-        <div className="spinner" />
-      </div>
-    )
-  }
-
-  const refCode = user.username || user.referral_code
-  const referralLink = `https://t.me/TabooRealmBot?startapp=${refCode}`
-  const shareText = lang === 'es'
-    ? '¡Mira esta app! Chatea con personajes IA 🔥'
-    : 'Check this app out! Chat with AI characters 🔥'
+  // Timeout visual: si en 3s no hay user, mostramos fallback
+  useEffect(() => {
+    if (user) return
+    const to = setTimeout(() => setTimedOut(true), 3000)
+    return () => clearTimeout(to)
+  }, [user])
 
   const handleCopy = async () => {
+    if (!user) return
+    const refCode = user.username || user.referral_code
+    const link = `https://t.me/TabooRealmBot?startapp=${refCode}`
     try {
-      await navigator.clipboard.writeText(referralLink)
+      await navigator.clipboard.writeText(link)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch {
@@ -37,6 +32,13 @@ export default function InvitePage() {
   }
 
   const handleShare = () => {
+    if (!user) return
+    const refCode = user.username || user.referral_code
+    const referralLink = `https://t.me/TabooRealmBot?startapp=${refCode}`
+    const shareText = lang === 'es'
+      ? '¡Mira esta app! Chatea con personajes IA 🔥'
+      : 'Check this app out! Chat with AI characters 🔥'
+
     import('@twa-dev/sdk').then((mod) => {
       const WebApp = mod.default
       const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent(shareText)}`
@@ -45,8 +47,59 @@ export default function InvitePage() {
       } catch {
         window.open(shareUrl, '_blank')
       }
+    }).catch(() => {
+      const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent(shareText)}`
+      window.open(shareUrl, '_blank')
     })
   }
+
+  // Estado 1: cargando Y sin timeout → spinner
+  if (userLoading && !timedOut && !user) {
+    return (
+      <div className="spinner-full">
+        <div className="spinner" />
+      </div>
+    )
+  }
+
+  // Estado 2: no hay user después del timeout → fallback con botón recargar
+  if (!user) {
+    return (
+      <div className="page">
+        <header className="page-header">
+          <h1 className="page-title">{t.inviteTitle}</h1>
+        </header>
+        <div
+          style={{
+            padding: 40,
+            textAlign: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 16,
+          }}
+        >
+          <div style={{ fontSize: 48 }}>⚠️</div>
+          <p style={{ color: '#8b8b9e', margin: 0 }}>
+            {lang === 'es'
+              ? 'No se pudieron cargar tus datos. Intenta de nuevo.'
+              : 'Could not load your data. Please try again.'}
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            className="btn-primary"
+          >
+            {lang === 'es' ? 'Recargar' : 'Reload'}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Estado 3: todo listo → render normal
+  const refCode = user.username || user.referral_code
+  const referralLink = `https://t.me/TabooRealmBot?startapp=${refCode}`
+  const earnedGems = (user.total_referrals || 0) * 5
 
   return (
     <div className="page">
@@ -90,7 +143,7 @@ export default function InvitePage() {
         </div>
       </section>
 
-      {/* Referral link */}
+      {/* Link */}
       <section style={{ padding: '24px 16px 0' }}>
         <p
           style={{
@@ -128,7 +181,6 @@ export default function InvitePage() {
           </p>
         </div>
 
-        {/* Share actions */}
         <div style={{ display: 'flex', gap: 8 }}>
           <button
             onClick={handleCopy}
@@ -245,7 +297,7 @@ export default function InvitePage() {
               textAlign: 'right',
             }}
           >
-            +{((user.total_referrals || 0) * 5)} 💎
+            +{earnedGems} 💎
           </div>
         </div>
       </section>
@@ -260,7 +312,7 @@ export default function InvitePage() {
             padding: 16,
           }}
         >
-          <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
+          <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, marginTop: 0 }}>
             {t.howItWorks}
           </h3>
           <ul
@@ -291,6 +343,7 @@ export default function InvitePage() {
                     fontSize: 12,
                     fontWeight: 700,
                     flexShrink: 0,
+                    color: '#fff',
                   }}
                 >
                   {step.n}
