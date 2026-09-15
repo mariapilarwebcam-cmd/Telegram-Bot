@@ -19,6 +19,7 @@ export default function BottomNav() {
   }, [])
 
   useEffect(() => {
+    // Ocultar en chat individual
     setHide(pathname?.startsWith('/chat/') ?? false)
   }, [pathname])
 
