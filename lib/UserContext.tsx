@@ -47,7 +47,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const referralProcessed = useRef(false)
   const initStarted = useRef(false)
 
-  // ⏱️ Hard timeout: libera loading en 6s máximo
+  // Hard timeout: libera loading en 6s máximo
   useEffect(() => {
     const t = setTimeout(() => setLoading(false), 6000)
     return () => clearTimeout(t)
