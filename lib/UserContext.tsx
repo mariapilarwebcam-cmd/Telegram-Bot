@@ -35,8 +35,12 @@ const UserContext = createContext<UserContextType>({
   refresh: async () => {},
 })
 
-// Cache en memoria (persiste durante la sesión)
 let memUserCache: UserData | null = null
+
+function getTelegramWebApp(): any {
+  if (typeof window === 'undefined') return null
+  return (window as any).Telegram?.WebApp || null
+}
 
 export function UserProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserData | null>(memUserCache)
@@ -47,9 +51,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const referralProcessed = useRef(false)
   const initStarted = useRef(false)
 
-  // Hard timeout: libera loading en 6s máximo
+  // Hard timeout: libera loading en 8s máximo
   useEffect(() => {
-    const t = setTimeout(() => setLoading(false), 6000)
+    const t = setTimeout(() => setLoading(false), 8000)
     return () => clearTimeout(t)
   }, [])
 
@@ -59,25 +63,41 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
     const init = async () => {
       try {
-        // SDK con timeout de 3s
+        // 1. Intento por SDK dinámico
         const mod: any = await Promise.race([
           import('@twa-dev/sdk'),
           new Promise((resolve) => setTimeout(() => resolve(null), 3000)),
         ])
 
-        if (!mod) {
-          console.warn('[UserContext] SDK timeout')
-          setLoading(false)
-          return
+        const sdk = mod?.default
+        try { sdk?.ready?.() } catch {}
+        try { sdk?.expand?.() } catch {}
+
+        // 2. Obtener initDataUnsafe con fallbacks
+        let initDataUnsafe = sdk?.initDataUnsafe
+
+        // Fallback: leer directo de window.Telegram.WebApp
+        if (!initDataUnsafe?.user?.id) {
+          const tg = getTelegramWebApp()
+          if (tg?.initDataUnsafe?.user?.id) {
+            initDataUnsafe = tg.initDataUnsafe
+            try { tg.ready?.() } catch {}
+            try { tg.expand?.() } catch {}
+          }
         }
 
-        const WebApp = mod.default
-        try { WebApp.ready() } catch {}
-        try { WebApp.expand() } catch {}
+        // 3. Segundo intento tras 500ms (por si el SDK carga tarde)
+        if (!initDataUnsafe?.user?.id) {
+          await new Promise((r) => setTimeout(r, 500))
+          const tg = getTelegramWebApp()
+          if (tg?.initDataUnsafe?.user?.id) {
+            initDataUnsafe = tg.initDataUnsafe
+          }
+        }
 
-        const u = WebApp.initDataUnsafe?.user
+        const u = initDataUnsafe?.user
         if (!u?.id) {
-          console.warn('[UserContext] No Telegram user')
+          console.warn('[UserContext] No Telegram user found after all retries')
           setLoading(false)
           return
         }
@@ -86,7 +106,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         setTelegramId(u.id)
         setLang(getLanguage(u.language_code))
 
-        // Cargar usuario (con auto-create si no existe)
+        // Cargar o crear usuario
         await loadUser(u.id, {
           first_name: u.first_name || '',
           username: u.username || null,
@@ -94,7 +114,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         })
 
         // Procesar referido en background
-        const startParam = WebApp.initDataUnsafe?.start_param
+        const startParam = initDataUnsafe?.start_param
         if (startParam && !referralProcessed.current) {
           const processedKey = `taboo_ref_${u.id}_${startParam}`
           try {
@@ -127,14 +147,14 @@ export function UserProvider({ children }: { children: ReactNode }) {
   ): Promise<boolean> => {
     const tid = id.toString()
     try {
-      // Query con timeout de 5s
+      // Query con timeout de 6s
       const result: any = await Promise.race([
         supabase
           .from('users')
           .select('telegram_id, first_name, username, gems, language, hook_messages_remaining, referral_code, total_referrals')
           .eq('telegram_id', tid)
           .maybeSingle(),
-        new Promise((resolve) => setTimeout(() => resolve({ data: null, error: 'timeout' }), 5000)),
+        new Promise((resolve) => setTimeout(() => resolve({ data: null, error: 'timeout' }), 6000)),
       ])
 
       if (result?.data) {
@@ -146,7 +166,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
       // No existe → intentar crear via API
       if (telegramData) {
-        console.log('[UserContext] User not found, creating...')
+        console.log('[UserContext] User not found, attempting to create...')
         try {
           const res = await fetch('/api/init-user', {
             method: 'POST',
@@ -165,6 +185,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
             setUser(u)
             console.log('[UserContext] User created:', initData.created)
             return true
+          } else {
+            console.warn('[UserContext] init-user returned no user:', initData)
           }
         } catch (e) {
           console.error('[UserContext] init-user error:', e)
