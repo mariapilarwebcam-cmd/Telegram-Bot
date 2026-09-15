@@ -6,6 +6,9 @@ import { STAR_PACKAGES } from '@/lib/constants'
 import { getTranslations } from '@/lib/i18n'
 import { useUser } from '@/lib/UserContext'
 
+// Cache del flag "hasPurchased" por usuario
+const purchaseCache: Record<string, boolean> = {}
+
 export default function ShopPage() {
   const { user, loading: userLoading, lang, refresh } = useUser()
   const [purchasing, setPurchasing] = useState<number | null>(null)
@@ -13,20 +16,52 @@ export default function ShopPage() {
   const [checking, setChecking] = useState(true)
 
   useEffect(() => {
-    if (userLoading) return
+    // Si aún carga user, esperar pero con timeout de seguridad
+    if (userLoading) {
+      const t = setTimeout(() => setChecking(false), 3000)
+      return () => clearTimeout(t)
+    }
     if (!user?.telegram_id) {
       setChecking(false)
       return
     }
-    supabase
-      .from('star_purchases')
-      .select('id')
-      .eq('telegram_id', user.telegram_id)
-      .limit(1)
-      .then(({ data }) => {
-        setHasPurchased(!!data && data.length > 0)
-        setChecking(false)
-      })
+
+    // Cache hit
+    if (purchaseCache[user.telegram_id] !== undefined) {
+      setHasPurchased(purchaseCache[user.telegram_id])
+      setChecking(false)
+      return
+    }
+
+    // Query con timeout de 3s
+    let cancelled = false
+    const timeout = setTimeout(() => {
+      if (!cancelled) setChecking(false)
+    }, 3000)
+
+    Promise.race([
+      supabase
+        .from('star_purchases')
+        .select('id')
+        .eq('telegram_id', user.telegram_id)
+        .limit(1),
+      new Promise((resolve) => setTimeout(() => resolve({ data: null }), 3000)),
+    ]).then((result: any) => {
+      if (cancelled) return
+      const has = !!(result?.data && result.data.length > 0)
+      purchaseCache[user.telegram_id] = has
+      setHasPurchased(has)
+      setChecking(false)
+    }).catch(() => {
+      if (!cancelled) setChecking(false)
+    }).finally(() => {
+      clearTimeout(timeout)
+    })
+
+    return () => {
+      cancelled = true
+      clearTimeout(timeout)
+    }
   }, [user?.telegram_id, userLoading])
 
   const buy = async (idx: number) => {
@@ -48,12 +83,9 @@ export default function ShopPage() {
           WebApp.openInvoice(data.invoice_link, async (status: string) => {
             if (status === 'paid') {
               await refresh()
-              const { data: p } = await supabase
-                .from('star_purchases')
-                .select('id')
-                .eq('telegram_id', user.telegram_id)
-                .limit(1)
-              setHasPurchased(!!p && p.length > 0)
+              // Invalidate cache
+              if (user.telegram_id) purchaseCache[user.telegram_id] = true
+              setHasPurchased(true)
             }
             setPurchasing(null)
           })
@@ -70,7 +102,8 @@ export default function ShopPage() {
 
   const t = getTranslations(lang)
 
-  if (userLoading || checking) {
+  // Solo bloquear si NO tenemos usuario todavía Y lleva rato intentando
+  if (userLoading && !user) {
     return (
       <div className="spinner-full">
         <div className="spinner" />
@@ -82,7 +115,7 @@ export default function ShopPage() {
 
   const visiblePackages = STAR_PACKAGES
     .map((pkg, idx) => ({ ...pkg, originalIndex: idx }))
-    .filter((p) => !p.first_time_only || !hasPurchased)
+    .filter((p) => !p.first_time_only || (!checking && !hasPurchased) || (!p.first_time_only))
 
   return (
     <div className="page">
