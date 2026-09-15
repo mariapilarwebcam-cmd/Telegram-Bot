@@ -150,9 +150,6 @@ export default function HomePage() {
 
   const gems = user?.gems || 0
   const hookRemaining = user?.hook_messages_remaining || 0
-  const referralLink = user
-    ? `https://t.me/TabooRealmBot?startapp=${user.username || user.referral_code}`
-    : ''
 
   return (
     <div style={{ paddingBottom: 24 }}>
@@ -313,6 +310,88 @@ export default function HomePage() {
         </section>
       )}
 
+      {/* Card de referidos compacta */}
+      {user && (
+        <section style={{ padding: '12px 16px 0' }}>
+          <button
+            onClick={() => router.push('/invite')}
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              padding: 12,
+              borderRadius: 16,
+              background:
+                'linear-gradient(90deg, rgba(34,197,94,0.12), rgba(34,197,94,0.04))',
+              border: '1px solid rgba(34,197,94,0.3)',
+              textAlign: 'left',
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              color: 'inherit',
+            }}
+          >
+            <div
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 12,
+                background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 20,
+                flexShrink: 0,
+              }}
+            >
+              🎁
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p
+                style={{
+                  fontSize: 13,
+                  fontWeight: 700,
+                  margin: 0,
+                  color: '#fff',
+                }}
+              >
+                {t.inviteTitle}
+              </p>
+              <p
+                style={{
+                  fontSize: 11,
+                  color: '#8b8b9e',
+                  margin: '2px 0 0 0',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {t.inviteSubtitle}
+              </p>
+            </div>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                background: 'rgba(255,255,255,0.08)',
+                padding: '4px 10px',
+                borderRadius: 20,
+                flexShrink: 0,
+              }}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" fill="#22c55e" />
+              </svg>
+              <span style={{ fontSize: 12, fontWeight: 700, color: '#22c55e' }}>
+                +5
+              </span>
+            </div>
+          </button>
+        </section>
+      )}
+
       <div className="tabs">
         {[
           { id: 'all', label: t.all },
@@ -346,89 +425,6 @@ export default function HomePage() {
           </button>
         ))}
       </div>
-
-      {/* ============ SECCIÓN REFERIDOS ============ */}
-      {user && (
-        <section
-          style={{
-            margin: '24px 16px 0',
-            padding: 16,
-            borderRadius: 16,
-            background:
-              'linear-gradient(135deg, rgba(124,92,255,0.1), rgba(168,85,247,0.05))',
-            border: '1px solid rgba(124,92,255,0.3)',
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 12,
-              marginBottom: 12,
-            }}
-          >
-            <div style={{ fontSize: 24 }}>🎁</div>
-            <div style={{ flex: 1 }}>
-              <p style={{ fontSize: 14, fontWeight: 700, margin: 0, color: '#fff' }}>
-                {t.inviteTitle}
-              </p>
-              <p style={{ fontSize: 11, color: '#8b8b9e', margin: '2px 0 0 0' }}>
-                {t.inviteSubtitle}
-              </p>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', gap: 8 }}>
-            <input
-              readOnly
-              value={referralLink}
-              style={{
-                flex: 1,
-                background: 'rgba(0,0,0,0.3)',
-                border: '1px solid rgba(255,255,255,0.06)',
-                borderRadius: 10,
-                padding: '8px 10px',
-                fontSize: 11,
-                color: '#8b8b9e',
-                outline: 'none',
-                fontFamily: 'inherit',
-              }}
-            />
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText(referralLink)
-                alert(t.copied)
-              }}
-              style={{
-                background: 'linear-gradient(135deg, #7c5cff 0%, #a855f7 100%)',
-                color: '#fff',
-                padding: '8px 16px',
-                borderRadius: 10,
-                fontWeight: 600,
-                border: 'none',
-                cursor: 'pointer',
-                fontSize: 12,
-                fontFamily: 'inherit',
-              }}
-            >
-              {t.copy}
-            </button>
-          </div>
-
-          <p
-            style={{
-              fontSize: 11,
-              color: '#6b6b7e',
-              margin: '10px 0 0 0',
-            }}
-          >
-            {t.verifiedFriends}:{' '}
-            <span style={{ color: '#a78bfa', fontWeight: 700 }}>
-              {user.total_referrals || 0}
-            </span>
-          </p>
-        </section>
-      )}
     </div>
   )
 }
