@@ -19,7 +19,6 @@ export default function BottomNav() {
   }, [])
 
   useEffect(() => {
-    // Ocultar en chat individual (ya tiene su propio header)
     setHide(pathname?.startsWith('/chat/') ?? false)
   }, [pathname])
 
@@ -27,10 +26,11 @@ export default function BottomNav() {
 
   const t = getTranslations(lang)
 
-  // Solo 3 items: Inicio, Chats, Tienda
+  // 4 items: Inicio, Chats, Invitar, Tienda
   const items = [
     { href: '/', label: t.home, icon: HomeIcon },
     { href: '/chats', label: t.chats, icon: ChatIcon },
+    { href: '/invite', label: t.inviteNav, icon: GiftIcon },
     { href: '/shop', label: t.shop, icon: DiamondIcon },
   ]
 
@@ -79,6 +79,22 @@ function ChatIcon({ active }: { active: boolean }) {
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
       <path
         d="M21 12a8 8 0 0 1-8 8H7l-4 3v-6.5A8 8 0 0 1 3 12a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill={active ? 'currentColor' : 'none'}
+        fillOpacity={active ? 0.15 : 0}
+      />
+    </svg>
+  )
+}
+
+function GiftIcon({ active }: { active: boolean }) {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M20 12v9H4v-9M2 7h20v5H2zM12 22V7M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7zM12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"
         stroke="currentColor"
         strokeWidth="2"
         strokeLinecap="round"
