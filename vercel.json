@@ -1,7 +1,12 @@
 {
-  "framework": "nextjs",
-  "rewrites": [
-    { "source": "/api/webhook", "destination": "/api/index" },
-    { "source": "/api/health", "destination": "/api/index" }
+  "version": 2,
+  "builds": [
+    { "src": "api/index.py", "use": "@vercel/python" },
+    { "src": "package.json", "use": "@vercel/next" }
+  ],
+  "routes": [
+    { "src": "/api/webhook", "dest": "api/index.py" },
+    { "src": "/api/health", "dest": "api/index.py" },
+    { "src": "/(.*)", "dest": "/$1" }
   ]
 }
