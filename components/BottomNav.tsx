@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { getTranslations, getLanguage, Language } from '@/lib/i18n'
+import { loadTelegramSdk } from '@/lib/telegram'
 
 export default function BottomNav() {
   const pathname = usePathname()
@@ -11,15 +12,13 @@ export default function BottomNav() {
   const [hide, setHide] = useState(false)
 
   useEffect(() => {
-    import('@twa-dev/sdk').then((mod) => {
-      const WebApp = mod.default
-      const tgUser = WebApp.initDataUnsafe?.user
+    loadTelegramSdk().then((WebApp) => {
+      const tgUser = WebApp?.initDataUnsafe?.user
       if (tgUser) setLang(getLanguage(tgUser.language_code))
     }).catch(() => {})
   }, [])
 
   useEffect(() => {
-    // Ocultar en chat individual
     setHide(pathname?.startsWith('/chat/') ?? false)
   }, [pathname])
 
@@ -27,7 +26,6 @@ export default function BottomNav() {
 
   const t = getTranslations(lang)
 
-  // 4 items: Inicio, Chats, Invitar, Tienda
   const items = [
     { href: '/', label: t.home, icon: HomeIcon },
     { href: '/chats', label: t.chats, icon: ChatIcon },
@@ -47,6 +45,7 @@ export default function BottomNav() {
             <Link
               key={item.href}
               href={item.href}
+              prefetch={true}
               className={`bottom-nav-item ${active ? 'active' : ''}`}
             >
               <Icon active={active} />
