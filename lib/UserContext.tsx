@@ -35,7 +35,7 @@ const UserContext = createContext<UserContextType>({
   refresh: async () => {},
 })
 
-// Cache en memoria (persiste toda la sesión)
+// Cache en memoria (persiste durante la sesión)
 let memUserCache: UserData | null = null
 
 export function UserProvider({ children }: { children: ReactNode }) {
@@ -47,11 +47,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const referralProcessed = useRef(false)
   const initStarted = useRef(false)
 
-  // ⏱️ HARD TIMEOUT: en 4 segundos liberamos loading SÍ O SÍ
+  // ⏱️ Hard timeout: libera loading en 6s máximo
   useEffect(() => {
-    const t = setTimeout(() => {
-      setLoading(false)
-    }, 4000)
+    const t = setTimeout(() => setLoading(false), 6000)
     return () => clearTimeout(t)
   }, [])
 
@@ -61,13 +59,14 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
     const init = async () => {
       try {
-        // SDK con timeout de 2.5s
+        // SDK con timeout de 3s
         const mod: any = await Promise.race([
           import('@twa-dev/sdk'),
-          new Promise((resolve) => setTimeout(() => resolve(null), 2500)),
+          new Promise((resolve) => setTimeout(() => resolve(null), 3000)),
         ])
 
         if (!mod) {
+          console.warn('[UserContext] SDK timeout')
           setLoading(false)
           return
         }
@@ -78,6 +77,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
         const u = WebApp.initDataUnsafe?.user
         if (!u?.id) {
+          console.warn('[UserContext] No Telegram user')
           setLoading(false)
           return
         }
@@ -86,10 +86,14 @@ export function UserProvider({ children }: { children: ReactNode }) {
         setTelegramId(u.id)
         setLang(getLanguage(u.language_code))
 
-        // Cargar usuario con timeout de 3s
-        await loadUser(u.id)
+        // Cargar usuario (con auto-create si no existe)
+        await loadUser(u.id, {
+          first_name: u.first_name || '',
+          username: u.username || null,
+          language: getLanguage(u.language_code),
+        })
 
-        // Procesar referido en background (NO bloquea la UI)
+        // Procesar referido en background
         const startParam = WebApp.initDataUnsafe?.start_param
         if (startParam && !referralProcessed.current) {
           const processedKey = `taboo_ref_${u.id}_${startParam}`
@@ -103,13 +107,13 @@ export function UserProvider({ children }: { children: ReactNode }) {
                   new_user_id: u.id,
                   referral_code: startParam,
                 }),
-              }).catch(() => {})
+              }).catch((err) => console.warn('[UserContext] referral err:', err))
               referralProcessed.current = true
             }
           } catch {}
         }
       } catch (e) {
-        console.error('Init error:', e)
+        console.error('[UserContext] init error:', e)
         setLoading(false)
       }
     }
@@ -117,17 +121,20 @@ export function UserProvider({ children }: { children: ReactNode }) {
     init()
   }, [])
 
-  const loadUser = async (id: number): Promise<boolean> => {
+  const loadUser = async (
+    id: number,
+    telegramData?: { first_name: string; username: string | null; language: Language }
+  ): Promise<boolean> => {
     const tid = id.toString()
     try {
-      // Query con timeout de 3s
+      // Query con timeout de 5s
       const result: any = await Promise.race([
         supabase
           .from('users')
           .select('telegram_id, first_name, username, gems, language, hook_messages_remaining, referral_code, total_referrals')
           .eq('telegram_id', tid)
           .maybeSingle(),
-        new Promise((resolve) => setTimeout(() => resolve({ data: null }), 3000)),
+        new Promise((resolve) => setTimeout(() => resolve({ data: null, error: 'timeout' }), 5000)),
       ])
 
       if (result?.data) {
@@ -136,9 +143,37 @@ export function UserProvider({ children }: { children: ReactNode }) {
         setUser(u)
         return true
       }
+
+      // No existe → intentar crear via API
+      if (telegramData) {
+        console.log('[UserContext] User not found, creating...')
+        try {
+          const res = await fetch('/api/init-user', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              telegram_id: tid,
+              first_name: telegramData.first_name,
+              username: telegramData.username,
+              language: telegramData.language,
+            }),
+          })
+          const initData = await res.json()
+          if (initData?.user) {
+            const u = initData.user as UserData
+            memUserCache = u
+            setUser(u)
+            console.log('[UserContext] User created:', initData.created)
+            return true
+          }
+        } catch (e) {
+          console.error('[UserContext] init-user error:', e)
+        }
+      }
+
       return false
     } catch (e) {
-      console.error('Error cargando usuario:', e)
+      console.error('[UserContext] loadUser error:', e)
       return false
     } finally {
       setLoading(false)
