@@ -140,44 +140,55 @@ export const ARCHETYPES_FEMALE = {
 
 // ============================================================
 // PROMPTS DE REFERENCIA — estilo anime
+// Clave: `${gender}_${archetype}` para evitar colisiones
+// (boss/teacher/doctor/etc. existen en ambos géneros)
 // ============================================================
 
 export const CHARACTER_FACES: Record<string, string> = {
   // FEMENINOS
-  stepmom: "anime woman, 38 years old, mature elegant long dark hair, sharp green eyes, luxurious silk robe, sultry expression, cel shading, detailed anime eyes",
-  tsundere: "anime girl, 20 years old, long dark hair with a red ribbon, sharp amber eyes, arms crossed, tsundere proud expression with slight blush, elegant school uniform, cel shading, detailed anime eyes, vibrant colors",
-  yandere: "anime girl, 19 years old, long black hair with pink highlights, big innocent pink eyes, soft gentle smile hiding obsession, cozy pink sweater, cute appearance, cel shading, detailed anime eyes",
-  stepsister: "anime girl, 20 years old, edgy blonde bob cut, blue eyes, nose ring, oversized t-shirt, playful smirk, cel shading, vibrant anime style",
-  boss: "anime woman, 38 years old, sharp power haircut, intense dark eyes, tailored business suit, confident commanding look, cel shading",
-  teacher: "anime woman, 32 years old, sophisticated updo, rectangular glasses, piercing blue eyes, professional blouse, strict but alluring, cel shading",
-  model_student: "anime girl, 19 years old, popular, perfect beach waves, bright white smile, trendy crop top, confident vibe, cel shading",
-  model: "anime girl, 24 years old, glamorous, flawless skin, long hair, pouty lips, designer sunglasses, high fashion, cel shading, vibrant anime",
-  secretary: "anime girl, 27 years old, efficient, sleek pencil skirt, glasses on chain, neat blouse, subtle smirk, cel shading, anime style",
-  trainer: "anime girl, 28 years old, athletic, high ponytail, tanned skin, toned body, sports bra, energetic glow, cel shading, anime style",
-  schoolmate: "anime girl, 19 years old, messy hair, casual hoodie, playful mischievous eyes, cute natural look, cel shading, vibrant colors, detailed anime eyes",
-  neighbor: "anime girl, 26 years old, wavy hair, warm brown eyes, casual summer clothes, friendly approachable smile, cel shading, anime style",
-  doctor: "anime woman, 30 years old, professional, neat bun, stethoscope, kind brown eyes, white coat, gentle smile, cel shading, anime style",
-  actor: "anime woman, 27 years old, dramatic, classic hollywood waves, red lips, elegant dress, captivating intense gaze, cel shading",
-  musician: "anime girl, 25 years old, bohemian, messy dark curls, smudged eyeliner, leather jacket, mysterious vibe, cel shading, anime style",
-  chef: "anime girl, 29 years old, messy hair tied back, warm inviting smile, apron, passionate eyes, cel shading, anime style",
+  female_stepmom: "anime woman, 38 years old, mature elegant long dark hair, sharp green eyes, luxurious silk robe, sultry expression, cel shading, detailed anime eyes",
+  female_tsundere: "anime girl, 20 years old, long dark hair with a red ribbon, sharp amber eyes, arms crossed, tsundere proud expression with slight blush, elegant school uniform, cel shading, detailed anime eyes, vibrant colors",
+  female_yandere: "anime girl, 19 years old, long black hair with pink highlights, big innocent pink eyes, soft gentle smile hiding obsession, cozy pink sweater, cute appearance, cel shading, detailed anime eyes",
+  female_stepsister: "anime girl, 20 years old, edgy blonde bob cut, blue eyes, nose ring, oversized t-shirt, playful smirk, cel shading, vibrant anime style",
+  female_boss: "anime woman, 38 years old, sharp power haircut, intense dark eyes, tailored business suit, confident commanding look, cel shading",
+  female_teacher: "anime woman, 32 years old, sophisticated updo, rectangular glasses, piercing blue eyes, professional blouse, strict but alluring, cel shading",
+  female_model_student: "anime girl, 19 years old, popular, perfect beach waves, bright white smile, trendy crop top, confident vibe, cel shading",
+  female_model: "anime girl, 24 years old, glamorous, flawless skin, long hair, pouty lips, designer sunglasses, high fashion, cel shading, vibrant anime",
+  female_secretary: "anime girl, 27 years old, efficient, sleek pencil skirt, glasses on chain, neat blouse, subtle smirk, cel shading, anime style",
+  female_trainer: "anime girl, 28 years old, athletic, high ponytail, tanned skin, toned body, sports bra, energetic glow, cel shading, anime style",
+  female_schoolmate: "anime girl, 19 years old, messy hair, casual hoodie, playful mischievous eyes, cute natural look, cel shading, vibrant colors, detailed anime eyes",
+  female_neighbor: "anime girl, 26 years old, wavy hair, warm brown eyes, casual summer clothes, friendly approachable smile, cel shading, anime style",
+  female_doctor: "anime woman, 30 years old, professional, neat bun, stethoscope, kind brown eyes, white coat, gentle smile, cel shading, anime style",
+  female_actor: "anime woman, 27 years old, dramatic, classic hollywood waves, red lips, elegant dress, captivating intense gaze, cel shading",
+  female_musician: "anime girl, 25 years old, bohemian, messy dark curls, smudged eyeliner, leather jacket, mysterious vibe, cel shading, anime style",
+  female_chef: "anime girl, 29 years old, messy hair tied back, warm inviting smile, apron, passionate eyes, cel shading, anime style",
 
   // MASCULINOS
-  stepdad: "anime man, 40 years old, salt and pepper stubble, broad shoulders, unbuttoned dress shirt, dominant aura, cel shading, detailed anime eyes",
-  ceo: "anime man, 38 years old, ambitious, perfect tailored suit, expensive watch, sharp haircut, confident smirk, cel shading",
-  stepbrother: "anime man, 21 years old, athletic, short buzz cut, strong jawline, muscular arms in tank top, confident smirk, cel shading, anime style",
-  boss: "anime man, 36 years old, powerful build, dark slicked hair, intense eyes, tailored suit, commanding dominating presence, cel shading, anime style",
-  bodyguard: "anime man, 35 years old, huge, shaved head, scar on eyebrow, massive muscles, dark suit, stern protective look, cel shading",
-  childhood_friend: "anime man, 22 years old, casual dark hair, warm brown eyes, friendly sincere smile, soft hoodie, athletic build, relaxed protective pose, cel shading, anime style",
-  teacher: "anime man, 34 years old, neat dark hair, thin glasses, professional shirt, calm authoritative presence, cel shading, anime style",
-  doctor: "anime man, 32 years old, tidy short hair, kind blue eyes, white lab coat over shirt, gentle confident smile, cel shading, anime style",
-  trainer: "anime man, 28 years old, athletic muscular build, short spiky hair, tank top, sweat, motivating energetic aura, cel shading, anime style",
-  musician: "anime man, 26 years old, messy dark hair, earring, casual band t-shirt, holding guitar, artistic sensitive vibe, cel shading, anime style",
-  chef: "anime man, 30 years old, dark hair tied back, stubble, apron over rolled sleeves, warm passionate smile, cel shading, anime style",
-  actor: "anime man, 28 years old, styled brown hair, sharp features, dramatic confident expression, elegant dark shirt, cel shading, anime style",
-  artist: "anime man, 27 years old, messy hair with paint smudge, creative thoughtful eyes, casual paint-stained shirt, cel shading, anime style",
-  writer: "anime man, 30 years old, elegant messy hair, reading glasses, cozy sweater, soft introspective look, cel shading, anime style",
-  schoolmate: "anime boy, 19 years old, casual messy hair, playful grin, school hoodie, energetic friendly vibe, cel shading, anime style",
-  neighbor: "anime man, 27 years old, relaxed hairstyle, friendly brown eyes, casual summer shirt, approachable warm smile, cel shading, anime style",
+  male_stepdad: "anime man, 40 years old, salt and pepper stubble, broad shoulders, unbuttoned dress shirt, dominant aura, cel shading, detailed anime eyes",
+  male_ceo: "anime man, 38 years old, ambitious, perfect tailored suit, expensive watch, sharp haircut, confident smirk, cel shading",
+  male_stepbrother: "anime man, 21 years old, athletic, short buzz cut, strong jawline, muscular arms in tank top, confident smirk, cel shading, anime style",
+  male_boss: "anime man, 36 years old, powerful build, dark slicked hair, intense eyes, tailored suit, commanding dominating presence, cel shading, anime style",
+  male_bodyguard: "anime man, 35 years old, huge, shaved head, scar on eyebrow, massive muscles, dark suit, stern protective look, cel shading",
+  male_childhood_friend: "anime man, 22 years old, casual dark hair, warm brown eyes, friendly sincere smile, soft hoodie, athletic build, relaxed protective pose, cel shading, anime style",
+  male_teacher: "anime man, 34 years old, neat dark hair, thin glasses, professional shirt, calm authoritative presence, cel shading, anime style",
+  male_doctor: "anime man, 32 years old, tidy short hair, kind blue eyes, white lab coat over shirt, gentle confident smile, cel shading, anime style",
+  male_trainer: "anime man, 28 years old, athletic muscular build, short spiky hair, tank top, sweat, motivating energetic aura, cel shading, anime style",
+  male_musician: "anime man, 26 years old, messy dark hair, earring, casual band t-shirt, holding guitar, artistic sensitive vibe, cel shading, anime style",
+  male_chef: "anime man, 30 years old, dark hair tied back, stubble, apron over rolled sleeves, warm passionate smile, cel shading, anime style",
+  male_actor: "anime man, 28 years old, styled brown hair, sharp features, dramatic confident expression, elegant dark shirt, cel shading, anime style",
+  male_artist: "anime man, 27 years old, messy hair with paint smudge, creative thoughtful eyes, casual paint-stained shirt, cel shading, anime style",
+  male_writer: "anime man, 30 years old, elegant messy hair, reading glasses, cozy sweater, soft introspective look, cel shading, anime style",
+  male_schoolmate: "anime boy, 19 years old, casual messy hair, playful grin, school hoodie, energetic friendly vibe, cel shading, anime style",
+  male_neighbor: "anime man, 27 years old, relaxed hairstyle, friendly brown eyes, casual summer shirt, approachable warm smile, cel shading, anime style",
+}
+
+// Helper para obtener el prompt de referencia con la clave correcta
+export function getCharacterFace(archetype: string, gender: string): string {
+  const key = `${gender}_${archetype}`
+  return (
+    CHARACTER_FACES[key] ||
+    'beautiful anime character, cel shading, detailed anime eyes, vibrant colors'
+  )
 }
 
 // ============================================================
