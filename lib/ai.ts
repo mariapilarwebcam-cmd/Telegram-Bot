@@ -1,4 +1,7 @@
-type Intensity = 'NORMAL' | 'HIGH' | 'VERY_HIGH' | 'MAXIMUM'
+// lib/ai.ts
+
+import { runSeedreamSync } from './wiro'
+import { getIntensityFromLevel, type Intensity } from './levels'
 
 const BREVITY_ES = `REGLA CRÍTICA DE LONGITUD: Responde SIEMPRE con 1 acción breve entre asteriscos + 1 o 2 frases de diálogo. TOTAL máximo 250 caracteres contando acciones y diálogo. PROHIBIDO pasar de 250 caracteres. Termina con una pregunta corta o gancho breve.
 Puedes usar hasta 2 emojis por mensaje. PROHIBIDO emojis al inicio.`
@@ -21,6 +24,11 @@ Sé coqueto, directo, mantén el interés con pocas palabras.`,
     MAXIMUM: `MODO MÁXIMO: lo más provocativo pero SIEMPRE corto.
 - Acciones intensas
 - Cliffhangers épicos en una frase
+- 1-2 frases máximo.`,
+    ULTRA: `MODO ULTRA: sin límites, el personaje toma la iniciativa constantemente.
+- Acciones explícitas y directas
+- Doble sentido constante en cada frase
+- Cliffhangers sexuales intensos
 - 1-2 frases máximo.`
   },
   en: {
@@ -37,15 +45,27 @@ Be flirty, direct, keep interest with few words.`,
     MAXIMUM: `MAXIMUM MODE: as provocative as possible but ALWAYS short.
 - Intense actions
 - Epic cliffhangers in one sentence
+- 1-2 sentences max.`,
+    ULTRA: `ULTRA MODE: no limits, character constantly takes initiative.
+- Explicit and direct actions
+- Constant double entendre
+- Intense sexual cliffhangers
 - 1-2 sentences max.`
   }
 }
 
-export function getIntensity(gems: number, isHookMode = false): Intensity {
+export function getIntensity(messageCount: number, isHookMode = false): Intensity {
   if (isHookMode) return 'MAXIMUM'
-  if (gems <= 3) return 'VERY_HIGH'
-  if (gems <= 7) return 'HIGH'
-  return 'NORMAL'
+  return getIntensityFromLevel(
+    // Encontrar el nivel según mensajes (evitamos import circular)
+    (() => {
+      if (messageCount >= 180) return 5
+      if (messageCount >= 90) return 4
+      if (messageCount >= 40) return 3
+      if (messageCount >= 15) return 2
+      return 1
+    })()
+  )
 }
 
 export function buildSystemPrompt(
@@ -73,7 +93,8 @@ export async function generateAIResponse(
   const temperature =
     intensity === 'NORMAL' ? 0.8 :
     intensity === 'HIGH' ? 0.85 :
-    intensity === 'VERY_HIGH' ? 0.9 : 0.95
+    intensity === 'VERY_HIGH' ? 0.9 :
+    intensity === 'MAXIMUM' ? 0.95 : 0.97
 
   const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
@@ -99,24 +120,40 @@ export async function generateAIResponse(
   return data.choices[0].message.content.trim()
 }
 
-export async function generateImage(prompt: string): Promise<string> {
-  const response = await fetch(
-    'https://api.deepinfra.com/v1/inference/black-forest-labs/FLUX-1-schnell',
-    {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.DEEPINFRA_TOKEN}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ prompt, width: 1024, height: 1024, num_images: 1 })
+// Genera imagen con Wiro AI (Seedream 5.0 Lite Uncensored).
+// Si Wiro falla o tarda demasiado, hace fallback a DeepInfra (FLUX).
+export async function generateImage(
+  prompt: string,
+  referenceImageUrl?: string
+): Promise<string> {
+  try {
+    const url = await runSeedreamSync(prompt, referenceImageUrl, {
+      resolution: '2K',
+      aspectRatio: '3:4',
+      maxImages: 1,
+    })
+    return url
+  } catch (wiroError) {
+    console.warn('Wiro falló, usando DeepInfra como fallback:', wiroError)
+
+    const response = await fetch(
+      'https://api.deepinfra.com/v1/inference/black-forest-labs/FLUX-1-schnell',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${process.env.DEEPINFRA_TOKEN}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ prompt, width: 1024, height: 1024, num_images: 1 }),
+      }
+    )
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}))
+      throw new Error(err.error || 'Error en DeepInfra')
     }
-  )
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}))
-    throw new Error(err.error || 'Error en DeepInfra')
+    const data = await response.json()
+    return data.images?.[0]?.url || data.image
   }
-  const data = await response.json()
-  return data.images?.[0]?.url || data.image
 }
 
 export async function generateAudio(
