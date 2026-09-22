@@ -270,3 +270,26 @@ export function getFinalGems(pkg: {
   const flatBonus = pkg.first_time_bonus || 0
   return pkg.gems + percentBonus + flatBonus
 }
+
+// ============================================================
+// LEGACY COMPATIBILITY
+// Algunos componentes (chats/page.tsx, chat/page.tsx) aún
+// importan getRelationshipLevel. Lo mantenemos aquí para que
+// el build no falle. Internamente usa los nuevos cortes de nivel.
+// ============================================================
+
+export const RELATIONSHIP_LEVELS = [
+  { min: 0, key: 'levelStranger', color: '#8b8b9e' },
+  { min: 15, key: 'levelFriend', color: '#22c55e' },
+  { min: 40, key: 'levelClose', color: '#7c5cff' },
+  { min: 90, key: 'levelIntimate', color: '#a855f7' },
+  { min: 180, key: 'levelSpecial', color: '#ec4899' },
+]
+
+export function getRelationshipLevel(messageCount: number) {
+  let current = RELATIONSHIP_LEVELS[0]
+  for (const lvl of RELATIONSHIP_LEVELS) {
+    if (messageCount >= lvl.min) current = lvl
+  }
+  return current
+}
