@@ -1,7 +1,7 @@
 // lib/ai.ts
 
 import { runSeedreamSync } from './wiro'
-import { getIntensityFromLevel, type Intensity } from './levels'
+import { getIntensityFromLevel, getLevelFromMessages, type Intensity } from './levels'
 
 const BREVITY_ES = `REGLA CRÍTICA DE LONGITUD: Responde SIEMPRE con 1 acción breve entre asteriscos + 1 o 2 frases de diálogo. TOTAL máximo 250 caracteres contando acciones y diálogo. PROHIBIDO pasar de 250 caracteres. Termina con una pregunta corta o gancho breve.
 Puedes usar hasta 2 emojis por mensaje. PROHIBIDO emojis al inicio.`
@@ -29,7 +29,7 @@ Sé coqueto, directo, mantén el interés con pocas palabras.`,
 - Acciones explícitas y directas
 - Doble sentido constante en cada frase
 - Cliffhangers sexuales intensos
-- 1-2 frases máximo.`
+- 1-2 frases máximo.`,
   },
   en: {
     NORMAL: `Use asterisks for actions, gestures and expressions. Dialogue without asterisks.
@@ -50,22 +50,14 @@ Be flirty, direct, keep interest with few words.`,
 - Explicit and direct actions
 - Constant double entendre
 - Intense sexual cliffhangers
-- 1-2 sentences max.`
-  }
+- 1-2 sentences max.`,
+  },
 }
 
 export function getIntensity(messageCount: number, isHookMode = false): Intensity {
   if (isHookMode) return 'MAXIMUM'
-  return getIntensityFromLevel(
-    // Encontrar el nivel según mensajes (evitamos import circular)
-    (() => {
-      if (messageCount >= 180) return 5
-      if (messageCount >= 90) return 4
-      if (messageCount >= 40) return 3
-      if (messageCount >= 15) return 2
-      return 1
-    })()
-  )
+  const level = getLevelFromMessages(messageCount)
+  return getIntensityFromLevel(level.level)
 }
 
 export function buildSystemPrompt(
@@ -102,14 +94,14 @@ export async function generateAIResponse(
       'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
       'Content-Type': 'application/json',
       'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'https://vercel.app',
-      'X-Title': 'Taboo Realm'
+      'X-Title': 'Taboo Realm',
     },
     body: JSON.stringify({
       model: 'deepseek/deepseek-chat-v3-0324',
       messages: [{ role: 'system', content: systemPrompt }, ...messages],
       temperature,
-      max_tokens: 100
-    })
+      max_tokens: 100,
+    }),
   })
 
   if (!response.ok) {
@@ -120,8 +112,6 @@ export async function generateAIResponse(
   return data.choices[0].message.content.trim()
 }
 
-// Genera imagen con Wiro AI (Seedream 5.0 Lite Uncensored).
-// Si Wiro falla o tarda demasiado, hace fallback a DeepInfra (FLUX).
 export async function generateImage(
   prompt: string,
   referenceImageUrl?: string
@@ -174,9 +164,9 @@ export async function generateAudio(
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${process.env.DEEPINFRA_TOKEN}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ text, voice })
+      body: JSON.stringify({ text, voice }),
     }
   )
   if (!response.ok) {
