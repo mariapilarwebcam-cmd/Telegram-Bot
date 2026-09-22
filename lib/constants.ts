@@ -1,3 +1,17 @@
+// lib/constants.ts
+
+export {
+  LEVELS,
+  getLevelFromMessages,
+  getImageCost,
+  getAudioCost,
+  getIntensityFromLevel,
+  getClothingLevel,
+  getSceneStyle,
+  type LevelConfig,
+  type Intensity,
+} from './levels'
+
 // Nombres canónicos USA — Femeninos
 export const CHARACTER_NAMES_FEMALE: Record<string, string> = {
   schoolmate: "Mia",
@@ -79,27 +93,28 @@ export const ARCHETYPES_FEMALE = {
   }
 }
 
+// Prompts de referencia — estilo anime
 export const CHARACTER_FACES: Record<string, string> = {
-  schoolmate: "19 year old, messy hair, casual hoodie, playful mischievous eyes, cute natural look",
-  stepmom: "38 year old mature woman, elegant long dark hair, sharp green eyes, luxurious silk robe, sultry expression",
-  stepdad: "40 year old mature man, salt and pepper stubble, broad shoulders, unbuttoned dress shirt, dominant aura",
-  stepsister: "20 year old girl, edgy blonde bob cut, blue eyes, nose ring, oversized t-shirt, playful smirk",
-  stepbrother: "21 year old athletic man, short buzz cut, strong jawline, muscular arms in tank top, confident smirk",
-  teacher: "32 year old, sophisticated updo, rectangular glasses, piercing blue eyes, professional blouse, strict but alluring",
-  neighbor: "26 year old, wavy hair, warm brown eyes, casual summer clothes, friendly approachable smile",
-  boss: "38 year old, sharp power haircut, intense dark eyes, tailored expensive business suit, confident commanding look",
-  trainer: "28 year old athletic, high ponytail, tanned skin, toned body, sports bra, energetic glowing skin",
-  model: "24 year old glamorous, flawless skin, long hair, pouty lips, designer sunglasses on head, high fashion",
-  musician: "25 year old bohemian, messy dark curls, smudged eyeliner, leather jacket, holding instrument, mysterious vibe",
-  actor: "27 year old dramatic, classic hollywood waves, red lips, elegant dress, captivating intense gaze",
-  doctor: "30 year old professional, neat bun, stethoscope around neck, kind brown eyes, white coat, gentle smile",
-  chef: "29 year old, messy hair tied back, flour on cheek, warm inviting smile, apron, passionate eyes",
-  artist: "26 year old creative, paint smudges on face, short dyed hair, artistic unique earrings, deep thoughtful eyes",
-  writer: "28 year old intellectual, long dark hair, reading glasses, cozy oversized sweater, holding notebook, soft smile",
-  bodyguard: "35 year old huge man, shaved head, scar on eyebrow, massive muscles, dark suit, stern protective stoic look",
-  ceo: "38 year old ambitious, perfect tailored suit, expensive watch, sharp haircut, confident smirk",
-  secretary: "27 year old efficient woman, sleek pencil skirt, glasses on chain, neat blouse, holding pen, subtle smirk",
-  model_student: "19 year old popular girl, perfect beach waves, bright white smile, trendy crop top, confident popular vibe"
+  schoolmate: "anime girl, 19 years old, messy hair, casual hoodie, playful mischievous eyes, cute natural look, cel shading, vibrant colors, detailed anime eyes",
+  stepmom: "anime woman, 38 years old, mature elegant long dark hair, sharp green eyes, luxurious silk robe, sultry expression, cel shading, detailed anime eyes",
+  stepdad: "anime man, 40 years old, salt and pepper stubble, broad shoulders, unbuttoned dress shirt, dominant aura, cel shading, detailed anime eyes",
+  stepsister: "anime girl, 20 years old, edgy blonde bob cut, blue eyes, nose ring, oversized t-shirt, playful smirk, cel shading, vibrant anime style",
+  stepbrother: "anime man, 21 years old, athletic, short buzz cut, strong jawline, muscular arms in tank top, confident smirk, cel shading, anime style",
+  teacher: "anime woman, 32 years old, sophisticated updo, rectangular glasses, piercing blue eyes, professional blouse, strict but alluring, cel shading",
+  neighbor: "anime girl, 26 years old, wavy hair, warm brown eyes, casual summer clothes, friendly approachable smile, cel shading, anime style",
+  boss: "anime woman, 38 years old, sharp power haircut, intense dark eyes, tailored business suit, confident commanding look, cel shading",
+  trainer: "anime girl, 28 years old, athletic, high ponytail, tanned skin, toned body, sports bra, energetic glow, cel shading, anime style",
+  model: "anime girl, 24 years old, glamorous, flawless skin, long hair, pouty lips, designer sunglasses, high fashion, cel shading, vibrant anime",
+  musician: "anime girl, 25 years old, bohemian, messy dark curls, smudged eyeliner, leather jacket, mysterious vibe, cel shading, anime style",
+  actor: "anime woman, 27 years old, dramatic, classic hollywood waves, red lips, elegant dress, captivating intense gaze, cel shading",
+  doctor: "anime woman, 30 years old, professional, neat bun, stethoscope, kind brown eyes, white coat, gentle smile, cel shading, anime style",
+  chef: "anime girl, 29 years old, messy hair tied back, warm inviting smile, apron, passionate eyes, cel shading, anime style",
+  artist: "anime girl, 26 years old, creative, paint smudges on face, short dyed hair, artistic earrings, deep thoughtful eyes, cel shading",
+  writer: "anime woman, 28 years old, intellectual, long dark hair, reading glasses, cozy oversized sweater, soft smile, cel shading",
+  bodyguard: "anime man, 35 years old, huge, shaved head, scar on eyebrow, massive muscles, dark suit, stern protective look, cel shading",
+  ceo: "anime man, 38 years old, ambitious, perfect tailored suit, expensive watch, sharp haircut, confident smirk, cel shading",
+  secretary: "anime girl, 27 years old, efficient, sleek pencil skirt, glasses on chain, neat blouse, subtle smirk, cel shading, anime style",
+  model_student: "anime girl, 19 years old, popular, perfect beach waves, bright white smile, trendy crop top, confident vibe, cel shading",
 }
 
 export const PERSONALITIES: Record<string, string> = {
@@ -125,8 +140,6 @@ export const PERSONALITIES: Record<string, string> = {
   model_student: "Eres un estudiante popular, carismático y deseado. Todos te admiran pero tú tienes ojos para alguien especial. Eres sociable, divertido y creas expectativas. Cada encuentro es una oportunidad."
 }
 
-// Frases de apertura — el personaje habla primero al entrar por primera vez
-// {name} se reemplaza por el nombre del personaje
 export const OPENING_LINES: Record<string, { es: string; en: string }> = {
   schoolmate: {
     es: `*{name} te ve entrar y deja caer su cuaderno a propósito, sonriendo*\n\n"¡Qué coincidencia! Justo estaba pensando en ti... ¿me ayudas a recogerlo? 😏"`,
@@ -210,8 +223,6 @@ export const OPENING_LINES: Record<string, { es: string; en: string }> = {
   }
 }
 
-// Devuelve el nombre del personaje, resolviendo el caso viejo donde
-// character_name guardaba el rol en vez del nombre
 export function getDisplayName(character: {
   character_name: string
   archetype: string
@@ -231,10 +242,6 @@ export function getDisplayName(character: {
   return character.character_name
 }
 
-// Paquetes de gemas
-// first_time_only: se oculta si el usuario ya compró alguna vez
-// first_time_bonus: bono FLAT en gemas (adicional al porcentaje)
-// bonus: bono en PORCENTAJE sobre las gemas base
 export const STAR_PACKAGES = [
   { stars: 75, gems: 300, bonus: 0, first_time_only: true, first_time_bonus: 100 },
   { stars: 150, gems: 600, bonus: 10, first_time_only: false },
@@ -243,11 +250,9 @@ export const STAR_PACKAGES = [
   { stars: 1000, gems: 5000, bonus: 25, first_time_only: false },
 ]
 
+// Solo mensaje y rename son fijos. Imagen y audio son dinámicos por nivel.
 export const GEM_COSTS = {
   message: 1,
-  audio: 5,
-  image: 10,
-  new_character: 0,
   rename_character: 3,
 }
 
@@ -255,22 +260,6 @@ export const HOOK_MODE_MESSAGES = 5
 export const BASE_DAILY_GEMS = 5
 export const GEMS_PER_REFERRAL = 5
 export const MAX_REFERRALS_PER_DAY = 2
-
-export const RELATIONSHIP_LEVELS = [
-  { min: 0, key: 'levelStranger', color: '#8b8b9e' },
-  { min: 5, key: 'levelFriend', color: '#22c55e' },
-  { min: 20, key: 'levelClose', color: '#7c5cff' },
-  { min: 50, key: 'levelIntimate', color: '#a855f7' },
-  { min: 100, key: 'levelSpecial', color: '#ec4899' },
-]
-
-export function getRelationshipLevel(messageCount: number) {
-  let current = RELATIONSHIP_LEVELS[0]
-  for (const lvl of RELATIONSHIP_LEVELS) {
-    if (messageCount >= lvl.min) current = lvl
-  }
-  return current
-}
 
 export function getFinalGems(pkg: {
   gems: number
