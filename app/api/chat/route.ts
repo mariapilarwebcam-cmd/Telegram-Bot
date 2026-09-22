@@ -1,6 +1,14 @@
+// app/api/chat/route.ts
+
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
-import { PERSONALITIES, GEM_COSTS, HOOK_MODE_MESSAGES, GEMS_PER_REFERRAL } from '@/lib/constants'
+import {
+  GEM_COSTS,
+  HOOK_MODE_MESSAGES,
+  GEMS_PER_REFERRAL,
+  getLevelPersonality,
+} from '@/lib/constants'
+import { getLevelFromMessages } from '@/lib/levels'
 import { generateAIResponse, getIntensity, buildSystemPrompt } from '@/lib/ai'
 
 export async function POST(request: Request) {
@@ -37,7 +45,7 @@ export async function POST(request: Request) {
         blocked: true,
         response: blockedMessage,
         remaining_gems: 0,
-        hook_messages_remaining: 0
+        hook_messages_remaining: 0,
       })
     }
 
@@ -59,7 +67,7 @@ export async function POST(request: Request) {
         telegram_id: tid,
         amount: -GEM_COSTS.message,
         transaction_type: 'message',
-        description: 'Mensaje de chat'
+        description: 'Mensaje de chat',
       })
     } else {
       newHookRemaining = Math.max(0, hookRemaining - 1)
@@ -69,6 +77,7 @@ export async function POST(request: Request) {
         .eq('telegram_id', tid)
     }
 
+    // Historial reciente
     const { data: history } = await supabaseAdmin
       .from('conversation_history')
       .select('role, content')
@@ -77,24 +86,37 @@ export async function POST(request: Request) {
       .order('created_at', { ascending: false })
       .limit(10)
 
+    // Contar mensajes del usuario para el nivel
+    const { count: userMsgCount } = await supabaseAdmin
+      .from('conversation_history')
+      .select('*', { count: 'exact', head: true })
+      .eq('telegram_id', tid)
+      .eq('character_id', character_id)
+      .eq('role', 'user')
+
+    const level = getLevelFromMessages(userMsgCount || 0)
+
     const messages = (history || []).reverse().map((m: any) => ({
       role: m.role,
-      content: m.content
+      content: m.content,
     }))
     messages.push({ role: 'user', content: message })
 
-    const personality = PERSONALITIES[character.archetype] || ''
+    // Personalidad según nivel (usa LEVEL_PERSONALITIES si existe, si no PERSONALITIES base)
+    const personality = getLevelPersonality(character.archetype, level.level, lang)
+
     const characterPrompt = lang === 'es'
       ? `Eres ${character.character_name}, rol: ${character.archetype}.\n${personality}\n\nEl usuario se llama ${user.first_name}. Recuerda su nombre y úsalo naturalmente.\nMantén siempre tu personalidad y rol. Nunca rompas el personaje.`
       : `You are ${character.character_name}, role: ${character.archetype}.\n${personality}\n\nThe user's name is ${user.first_name}. Remember their name and use it naturally.\nAlways maintain your personality and role. Never break character.`
 
-    const intensity = getIntensity(newGems, isHookMode)
+    const intensity = getIntensity(userMsgCount || 0, isHookMode)
     const systemPrompt = buildSystemPrompt(lang, intensity, characterPrompt)
 
     let responseText: string
     try {
       responseText = await generateAIResponse(messages, systemPrompt, intensity)
     } catch (aiError) {
+      // Rollback de gemas
       await supabaseAdmin
         .from('users')
         .update({ gems: user.gems, hook_messages_remaining: hookRemaining })
@@ -105,7 +127,7 @@ export async function POST(request: Request) {
 
     await supabaseAdmin.from('conversation_history').insert([
       { telegram_id: tid, character_id, role: 'user', content: message },
-      { telegram_id: tid, character_id, role: 'assistant', content: responseText }
+      { telegram_id: tid, character_id, role: 'assistant', content: responseText },
     ])
 
     // ============ VERIFICACIÓN DE REFERIDOS ============
@@ -123,14 +145,14 @@ export async function POST(request: Request) {
           .eq('telegram_id', tid)
           .eq('role', 'user')
 
-        const userMsgCount = count || 0
+        const totalMsg = count || 0
 
         await supabaseAdmin
           .from('referrals')
-          .update({ referred_message_count: userMsgCount })
+          .update({ referred_message_count: totalMsg })
           .eq('id', referral.id)
 
-        if (userMsgCount >= 3) {
+        if (totalMsg >= 3) {
           const { data: refUser } = await supabaseAdmin
             .from('users')
             .select('gems, total_referrals')
@@ -142,7 +164,7 @@ export async function POST(request: Request) {
               .from('users')
               .update({
                 gems: (refUser.gems || 0) + GEMS_PER_REFERRAL,
-                total_referrals: (refUser.total_referrals || 0) + 1
+                total_referrals: (refUser.total_referrals || 0) + 1,
               })
               .eq('telegram_id', String(referral.referrer_id))
 
@@ -150,15 +172,12 @@ export async function POST(request: Request) {
               telegram_id: String(referral.referrer_id),
               amount: GEMS_PER_REFERRAL,
               transaction_type: 'referral',
-              description: 'Referido verificado (3+ mensajes)'
+              description: 'Referido verificado (3+ mensajes)',
             })
 
             await supabaseAdmin
               .from('referrals')
-              .update({
-                reward_paid: true,
-                reward_paid_at: new Date().toISOString()
-              })
+              .update({ reward_paid: true, reward_paid_at: new Date().toISOString() })
               .eq('id', referral.id)
           }
         }
@@ -179,7 +198,8 @@ export async function POST(request: Request) {
       remaining_gems: newGems,
       hook_messages_remaining: newHookRemaining,
       is_hook_mode: isHookMode,
-      intensity
+      intensity,
+      level: level.level,
     })
   } catch (error: any) {
     console.error('Error en chat:', error)
