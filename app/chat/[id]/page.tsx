@@ -3,7 +3,8 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { GEM_COSTS, getRelationshipLevel, getDisplayName } from '@/lib/constants'
+import { GEM_COSTS, getDisplayName } from '@/lib/constants'
+import { getLevelFromMessages, getImageCost, getAudioCost } from '@/lib/levels'
 import { getTranslations } from '@/lib/i18n'
 import { useUser } from '@/lib/UserContext'
 
@@ -45,7 +46,6 @@ export default function ChatPage() {
   const [blocked, setBlocked] = useState(false)
   const [blockedMessage, setBlockedMessage] = useState('')
 
-  // Modal premium genérico
   const [showPremiumModal, setShowPremiumModal] = useState(false)
   const [premiumModalReason, setPremiumModalReason] = useState<'audio' | 'image'>('audio')
 
@@ -102,7 +102,6 @@ export default function ChatPage() {
     return () => document.removeEventListener('mousedown', handler)
   }, [menuOpen])
 
-  // Auto-start
   useEffect(() => {
     if (!historyLoaded || !user || !character) return
     if (messages.length > 0 || autoStartAttempted || loading) return
@@ -199,7 +198,6 @@ export default function ChatPage() {
   const playAudio = async () => {
     if (!user) return
 
-    // ✅ PREMIUM CHECK PRIMERO
     if (!isPremium) {
       setPremiumModalReason('audio')
       setShowPremiumModal(true)
@@ -208,7 +206,15 @@ export default function ChatPage() {
 
     const last = [...messages].reverse().find((m) => m.role === 'assistant')
     if (!last) return alert(t.noMessageToPlay)
-    if ((user.gems || 0) < GEM_COSTS.audio) return alert(t.audioNeed)
+
+    const currentAudioCost = getAudioCost(currentLevel.level)
+    if ((user.gems || 0) < currentAudioCost) {
+      return alert(
+        lang === 'es'
+          ? `Necesitas ${currentAudioCost} gemas`
+          : `You need ${currentAudioCost} gems`
+      )
+    }
 
     setGeneratingAudio(true)
     try {
@@ -229,7 +235,7 @@ export default function ChatPage() {
         setPremiumModalReason('audio')
         setShowPremiumModal(true)
       } else {
-        alert(data.error || t.errorGeneric)
+        alert(data.message || data.error || t.errorGeneric)
       }
     } catch {
       alert(t.errorConnection)
@@ -242,14 +248,20 @@ export default function ChatPage() {
     if (!user || !character) return
     if (!imageDescription.trim()) return
 
-    // ✅ PREMIUM CHECK PRIMERO
     if (!isPremium) {
       setPremiumModalReason('image')
       setShowPremiumModal(true)
       return
     }
 
-    if ((user.gems || 0) < GEM_COSTS.image) return alert(t.imageNeed)
+    if ((user.gems || 0) < currentImageCost) {
+      return alert(
+        lang === 'es'
+          ? `Necesitas ${currentImageCost} gemas`
+          : `You need ${currentImageCost} gems`
+      )
+    }
+
     setGeneratingImage(true)
     setShowImageModal(false)
     try {
@@ -292,8 +304,12 @@ export default function ChatPage() {
       setShowPremiumModal(true)
       return
     }
-    if ((user?.gems || 0) < GEM_COSTS.image) {
-      alert(t.imageNeed)
+    if ((user?.gems || 0) < currentImageCost) {
+      alert(
+        lang === 'es'
+          ? `Necesitas ${currentImageCost} gemas`
+          : `You need ${currentImageCost} gems`
+      )
       return
     }
     setShowImageModal(true)
@@ -305,7 +321,11 @@ export default function ChatPage() {
       setShowRename(false)
       return
     }
-    if ((user.gems || 0) < GEM_COSTS.rename_character) return alert(t.renameNeed)
+    if ((user.gems || 0) < GEM_COSTS.rename_character) {
+      return alert(
+        lang === 'es' ? `Necesitas ${GEM_COSTS.rename_character} gemas` : `You need ${GEM_COSTS.rename_character} gems`
+      )
+    }
     if (!confirm(t.confirmRename)) return
 
     setRenaming(true)
@@ -344,7 +364,7 @@ export default function ChatPage() {
     html = html.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
     html = html.replace(
       /!\[([^\]]*)\]\(([^)]+)\)/g,
-      '<img src="$2" alt="$1" style="border-radius:14px;max-width:100%;margin-top:8px;" />'
+      '<img src="$2" alt="$1" style="border-radius:16px;max-width:100%;margin-top:8px;box-shadow:0 8px 24px rgba(168,85,247,0.3);" />'
     )
     html = html.replace(/\*([^*\n]+)\*/g, '<span class="chat-action">*$1*</span>')
     return html
@@ -353,6 +373,12 @@ export default function ChatPage() {
   const t = getTranslations(lang)
   const gems = user?.gems || 0
   const hookRemaining = user?.hook_messages_remaining || 0
+
+  // Calcular nivel y costos dinámicos
+  const userMessageCount = messages.filter((m) => m.role === 'user').length
+  const currentLevel = getLevelFromMessages(userMessageCount)
+  const currentImageCost = getImageCost(currentLevel.level)
+  const currentAudioCost = getAudioCost(currentLevel.level)
 
   if (userLoading || characterLoading || !character) {
     return (
@@ -363,7 +389,6 @@ export default function ChatPage() {
   }
 
   const gradient = getGradient(character.archetype)
-  const level = getRelationshipLevel(messages.length)
   const displayName = getDisplayName(character)
 
   return (
@@ -412,9 +437,9 @@ export default function ChatPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span
               className="level-badge"
-              style={{ color: level.color, background: `${level.color}20` }}
+              style={{ color: currentLevel.color, background: `${currentLevel.color}20` }}
             >
-              {t[level.key as keyof typeof t]}
+              {t[currentLevel.badgeKey as keyof typeof t]}
             </span>
             {hookRemaining > 0 && (
               <span style={{ fontSize: 10, color: '#a78bfa' }}>
@@ -468,7 +493,7 @@ export default function ChatPage() {
             background: 'rgba(255,255,255,0.05)',
             padding: '5px 10px',
             borderRadius: 20,
-            border: '1px solid rgba(255,255,255,0.06)',
+            border: '1px solid rgba(168,85,247,0.3)',
           }}
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
@@ -519,11 +544,11 @@ export default function ChatPage() {
         <div className="chat-input-row">
           <button
             onClick={playAudio}
-            disabled={generatingAudio || (isPremium && gems < GEM_COSTS.audio)}
+            disabled={generatingAudio || (isPremium && gems < currentAudioCost)}
             className="chat-icon-btn"
-            title={t.audioTooltip}
+            title={`${t.audioTooltip} (${currentAudioCost}💎)`}
             style={{
-              opacity: isPremium && gems < GEM_COSTS.audio ? 0.3 : 1,
+              opacity: isPremium && gems < currentAudioCost ? 0.3 : 1,
             }}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
@@ -545,9 +570,9 @@ export default function ChatPage() {
           <button
             onClick={tryOpenImageModal}
             className="chat-icon-btn"
-            title={t.imageTooltip}
+            title={`${t.imageTooltip} (${currentImageCost}💎)`}
             style={{
-              opacity: isPremium && gems < GEM_COSTS.image ? 0.3 : 1,
+              opacity: isPremium && gems < currentImageCost ? 0.3 : 1,
             }}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
@@ -583,7 +608,6 @@ export default function ChatPage() {
         </div>
       </div>
 
-      {/* PREMIUM MODAL */}
       {showPremiumModal && (
         <div className="modal-backdrop">
           <div className="modal-box">
@@ -629,7 +653,6 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* RENAME MODAL */}
       {showRename && (
         <div className="modal-backdrop">
           <div className="modal-box">
@@ -669,7 +692,6 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* BLOCKED MODAL */}
       {blocked && (
         <div className="modal-backdrop">
           <div className="modal-box danger">
@@ -678,7 +700,7 @@ export default function ChatPage() {
               <div
                 style={{
                   background: 'rgba(0,0,0,0.3)',
-                  border: '1px solid rgba(255,255,255,0.06)',
+                  border: '1px solid rgba(168,85,247,0.2)',
                   borderRadius: 12,
                   padding: 16,
                   marginBottom: 16,
@@ -729,12 +751,13 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* IMAGE MODAL */}
       {showImageModal && (
         <div className="modal-backdrop">
           <div className="modal-box">
             <h3 className="modal-title">{t.generateSelfie}</h3>
-            <p className="modal-desc">{t.generateSelfieDesc}</p>
+            <p className="modal-desc">
+              {t.generateSelfieDesc.replace('10', String(currentImageCost))}
+            </p>
             <textarea
               value={imageDescription}
               onChange={(e) => setImageDescription(e.target.value)}
@@ -753,7 +776,7 @@ export default function ChatPage() {
                 disabled={generatingImage || !imageDescription.trim()}
                 className="modal-btn primary"
               >
-                {generatingImage ? t.generating : t.generate}
+                {generatingImage ? t.generating : `${t.generate} (${currentImageCost}💎)`}
               </button>
             </div>
           </div>
