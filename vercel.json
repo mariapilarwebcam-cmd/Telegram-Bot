@@ -2,7 +2,13 @@
   "functions": {
     "api/bot/webhook.py": {
       "runtime": "@vercel/python@4.3.0",
-      "maxDuration": 30
+      "maxDuration": 60
+    },
+    "app/api/generate-image/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/image-status/route.ts": {
+      "maxDuration": 10
     }
   }
 }
