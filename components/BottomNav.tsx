@@ -34,7 +34,23 @@ export default function BottomNav() {
   ]
 
   return (
-    <nav className="bottom-nav">
+    <nav
+      className="bottom-nav"
+      style={{
+        position: 'fixed',
+        bottom: 0,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        width: '100%',
+        maxWidth: 480,
+        zIndex: 999,
+        background: 'rgba(10, 5, 16, 0.94)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        borderTop: '1px solid rgba(168, 85, 247, 0.2)',
+        boxShadow: '0 -8px 32px rgba(168, 85, 247, 0.15)',
+      }}
+    >
       <div className="bottom-nav-inner">
         {items.map((item) => {
           const active =
