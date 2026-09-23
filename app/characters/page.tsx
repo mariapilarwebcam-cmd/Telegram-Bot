@@ -1,14 +1,14 @@
 "use client"
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
 import {
   ARCHETYPES_MALE, ARCHETYPES_FEMALE,
   CHARACTER_NAMES_MALE, CHARACTER_NAMES_FEMALE,
   PERSONALITIES, getCharacterImageUrl,
 } from '@/lib/constants'
-import { getTranslations, getLanguage, Language } from '@/lib/i18n'
+import { getTranslations } from '@/lib/i18n'
+import { useUser } from '@/lib/UserContext'
 
 interface Char {
   archetype: string
@@ -42,40 +42,9 @@ function getGradient(key: string) {
 
 export default function CharactersPage() {
   const router = useRouter()
-  const [user, setUser] = useState<any>(null)
-  const [gems, setGems] = useState(0)
-  const [loading, setLoading] = useState(true)
-  const [lang, setLang] = useState<Language>('es')
+  const { user, loading: userLoading, lang } = useUser()
   const [tab, setTab] = useState<'all' | 'male' | 'female'>('all')
   const [creating, setCreating] = useState<string | null>(null)
-
-  useEffect(() => {
-    import('@twa-dev/sdk').then((mod) => {
-      const WebApp = mod.default
-      WebApp.ready()
-      WebApp.expand()
-      const u = WebApp.initDataUnsafe?.user
-      if (u?.id) {
-        setLang(getLanguage(u.language_code))
-        loadUser(u.id)
-      } else setLoading(false)
-    }).catch(() => setLoading(false))
-  }, [])
-
-  const loadUser = async (telegramId: number) => {
-    try {
-      const { data } = await supabase
-        .from('users').select('*').eq('telegram_id', telegramId.toString()).maybeSingle()
-      if (data) {
-        setUser(data)
-        setGems(data.gems || 0)
-      }
-    } catch (e) {
-      console.error(e)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const t = getTranslations(lang)
 
@@ -104,7 +73,8 @@ export default function CharactersPage() {
     })
   })
 
-  const filtered = tab === 'all' ? all : all.filter(c => c.gender === tab)
+  const filtered = tab === 'all' ? all : all.filter((c) => c.gender === tab)
+  const gems = user?.gems || 0
 
   const pick = async (c: Char) => {
     if (!user) {
@@ -131,7 +101,7 @@ export default function CharactersPage() {
       try {
         data = await res.json()
       } catch {
-        data = { error: `HTTP ${res.status} sin JSON` }
+        data = { error: `HTTP ${res.status}` }
       }
 
       if (res.ok && data.character_id) {
@@ -141,15 +111,15 @@ export default function CharactersPage() {
           ? `${data.error}: ${data.detail}`
           : (data.error || `Error HTTP ${res.status}`)
         alert(msg)
+        setCreating(null)
       }
     } catch (err: any) {
       alert('Error de conexión: ' + (err?.message || 'desconocido'))
-    } finally {
       setCreating(null)
     }
   }
 
-  if (loading) {
+  if (userLoading && !user) {
     return (
       <div className="spinner-full">
         <div className="spinner" />
@@ -199,13 +169,14 @@ export default function CharactersPage() {
         {filtered.map((c) => {
           const key = `${c.gender}_${c.archetype}`
           const imageUrl = getCharacterImageUrl(c.archetype, c.gender)
+          const isCreating = creating === key
           return (
             <button
               key={key}
               onClick={() => pick(c)}
               disabled={creating !== null}
               className="char-card"
-              style={{ opacity: creating === key ? 0.5 : 1 }}
+              style={{ opacity: isCreating ? 0.5 : 1 }}
             >
               <div className="char-card-img" style={{ background: c.gradient }}>
                 {imageUrl && (
@@ -216,15 +187,22 @@ export default function CharactersPage() {
                     onError={(e) => {
                       ;(e.target as HTMLImageElement).style.display = 'none'
                     }}
+                  />
+                )}
+                {isCreating && (
+                  <div
                     style={{
                       position: 'absolute',
                       inset: 0,
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'cover',
-                      objectPosition: 'center top',
+                      background: 'rgba(0,0,0,0.4)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      zIndex: 5,
                     }}
-                  />
+                  >
+                    <div className="spinner" />
+                  </div>
                 )}
                 <div className="char-card-overlay" />
                 <div className="char-card-text">
