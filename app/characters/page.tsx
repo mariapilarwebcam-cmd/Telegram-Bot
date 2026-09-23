@@ -134,8 +134,6 @@ export default function CharactersPage() {
         data = { error: `HTTP ${res.status} sin JSON` }
       }
 
-      console.log('[characters] select-character response:', res.status, data)
-
       if (res.ok && data.character_id) {
         router.push(`/chat/${data.character_id}`)
       } else {
@@ -145,7 +143,6 @@ export default function CharactersPage() {
         alert(msg)
       }
     } catch (err: any) {
-      console.error('[characters] fetch error:', err)
       alert('Error de conexión: ' + (err?.message || 'desconocido'))
     } finally {
       setCreating(null)
@@ -217,7 +214,6 @@ export default function CharactersPage() {
                     alt={c.name}
                     loading="lazy"
                     onError={(e) => {
-                      console.warn('[characters] image failed:', imageUrl)
                       ;(e.target as HTMLImageElement).style.display = 'none'
                     }}
                     style={{
@@ -226,6 +222,7 @@ export default function CharactersPage() {
                       width: '100%',
                       height: '100%',
                       objectFit: 'cover',
+                      objectPosition: 'center top',
                     }}
                   />
                 )}
