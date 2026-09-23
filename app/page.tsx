@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase'
 import {
   ARCHETYPES_MALE, ARCHETYPES_FEMALE,
   CHARACTER_NAMES_MALE, CHARACTER_NAMES_FEMALE,
-  PERSONALITIES, getDisplayName
+  PERSONALITIES, getDisplayName, getCharacterImageUrl
 } from '@/lib/constants'
 import { getTranslations } from '@/lib/i18n'
 import { useUser } from '@/lib/UserContext'
@@ -268,9 +268,24 @@ export default function HomePage() {
           >
             <div
               className="avatar-lg"
-              style={{ background: getGradient(activeChar.archetype) }}
+              style={{
+                background: getGradient(activeChar.archetype),
+                overflow: 'hidden',
+                position: 'relative',
+              }}
             >
-              {getDisplayName(activeChar)?.[0]?.toUpperCase()}
+              {(() => {
+                const img = getCharacterImageUrl(activeChar.archetype, activeChar.gender)
+                return img ? (
+                  <img
+                    src={img}
+                    alt=""
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                ) : (
+                  getDisplayName(activeChar)?.[0]?.toUpperCase()
+                )
+              })()}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <p
@@ -409,21 +424,41 @@ export default function HomePage() {
       </div>
 
       <div className="char-grid">
-        {filtered.map((c) => (
-          <button
-            key={`${c.gender}_${c.archetype}`}
-            onClick={openCharacter}
-            className="char-card"
-          >
-            <div className="char-card-img" style={{ background: c.gradient }}>
-              <div className="char-card-overlay" />
-              <div className="char-card-text">
-                <p className="char-card-name">{c.name}</p>
-                <p className="char-card-role">{c.role}</p>
+        {filtered.map((c) => {
+          const imageUrl = getCharacterImageUrl(c.archetype, c.gender)
+          return (
+            <button
+              key={`${c.gender}_${c.archetype}`}
+              onClick={openCharacter}
+              className="char-card"
+            >
+              <div className="char-card-img" style={{ background: c.gradient }}>
+                {imageUrl && (
+                  <img
+                    src={imageUrl}
+                    alt={c.name}
+                    loading="lazy"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none'
+                    }}
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                    }}
+                  />
+                )}
+                <div className="char-card-overlay" />
+                <div className="char-card-text">
+                  <p className="char-card-name">{c.name}</p>
+                  <p className="char-card-role">{c.role}</p>
+                </div>
               </div>
-            </div>
-          </button>
-        ))}
+            </button>
+          )
+        })}
       </div>
     </div>
   )
