@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { getTranslations } from '@/lib/i18n'
-import { getRelationshipLevel, getDisplayName } from '@/lib/constants'
+import { getRelationshipLevel, getDisplayName, getCharacterImageUrl } from '@/lib/constants'
 import { useUser } from '@/lib/UserContext'
 
 interface ChatRow {
@@ -50,7 +50,6 @@ export default function ChatsPage() {
 
   const loadChats = async (tid: string) => {
     try {
-      // 1 sola consulta: personajes
       const { data: chars } = await supabase
         .from('user_characters')
         .select('id, character_name, archetype, gender')
@@ -62,14 +61,12 @@ export default function ChatsPage() {
         return
       }
 
-      // 1 sola consulta: TODO el historial del usuario
       const { data: history } = await supabase
         .from('conversation_history')
         .select('character_id, content, created_at')
         .eq('telegram_id', tid)
         .order('created_at', { ascending: false })
 
-      // Agrupar en memoria
       const byChar: Record<number, { lastMessage: string; lastAt: string; count: number }> = {}
       for (const h of history || []) {
         if (!byChar[h.character_id]) {
@@ -146,6 +143,7 @@ export default function ChatsPage() {
         <div className="chat-list">
           {chats.map((c) => {
             const level = getRelationshipLevel(c.messageCount)
+            const avatar = getCharacterImageUrl(c.archetype, c.gender)
             return (
               <button
                 key={c.id}
@@ -154,9 +152,29 @@ export default function ChatsPage() {
               >
                 <div
                   className="avatar-lg"
-                  style={{ background: getGradient(c.archetype) }}
+                  style={{
+                    background: getGradient(c.archetype),
+                    overflow: 'hidden',
+                    position: 'relative',
+                  }}
                 >
-                  {c.character_name?.[0]?.toUpperCase()}
+                  {avatar ? (
+                    <img
+                      src={avatar}
+                      alt=""
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                        objectPosition: 'center 20%',
+                      }}
+                      onError={(e) => {
+                        ;(e.target as HTMLImageElement).style.display = 'none'
+                      }}
+                    />
+                  ) : (
+                    c.character_name?.[0]?.toUpperCase()
+                  )}
                 </div>
                 <div className="chat-row-body">
                   <div className="chat-row-top">
