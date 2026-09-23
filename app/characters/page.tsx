@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase'
 import {
   ARCHETYPES_MALE, ARCHETYPES_FEMALE,
   CHARACTER_NAMES_MALE, CHARACTER_NAMES_FEMALE,
-  PERSONALITIES
+  PERSONALITIES, getCharacterImageUrl,
 } from '@/lib/constants'
 import { getTranslations, getLanguage, Language } from '@/lib/i18n'
 
@@ -79,7 +79,6 @@ export default function CharactersPage() {
 
   const t = getTranslations(lang)
 
-  // FEMENINAS PRIMERO
   const all: Char[] = []
   const femaleMap = ARCHETYPES_FEMALE[lang] as Record<string, string>
   const maleMap = ARCHETYPES_MALE[lang] as Record<string, string>
@@ -107,7 +106,6 @@ export default function CharactersPage() {
 
   const filtered = tab === 'all' ? all : all.filter(c => c.gender === tab)
 
-  // ✅ SIN COBRO: si existe, activa; si no, crea gratis con nombre por defecto
   const pick = async (c: Char) => {
     if (!user) return
     const tid = user.telegram_id.toString()
@@ -201,6 +199,7 @@ export default function CharactersPage() {
       <div className="char-grid">
         {filtered.map((c) => {
           const key = `${c.gender}_${c.archetype}`
+          const imageUrl = getCharacterImageUrl(c.archetype, c.gender)
           return (
             <button
               key={key}
@@ -210,6 +209,23 @@ export default function CharactersPage() {
               style={{ opacity: creating === key ? 0.5 : 1 }}
             >
               <div className="char-card-img" style={{ background: c.gradient }}>
+                {imageUrl && (
+                  <img
+                    src={imageUrl}
+                    alt={c.name}
+                    loading="lazy"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none'
+                    }}
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                    }}
+                  />
+                )}
                 <div className="char-card-overlay" />
                 <div className="char-card-text">
                   <p className="char-card-name">{c.name}</p>
