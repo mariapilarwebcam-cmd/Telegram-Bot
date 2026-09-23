@@ -458,7 +458,7 @@ html, body {
 
 .char-card-img {
   width: 100%;
-  aspect-ratio: 3 / 4;
+  aspect-ratio: 2 / 3;
   border-radius: 20px;
   position: relative;
   overflow: hidden;
@@ -466,10 +466,16 @@ html, body {
   border: 1.5px solid rgba(240, 171, 252, 0.15);
 }
 
+/* Fuerza que la cara siempre quede visible (centro arriba) */
+.char-card-img img {
+  object-position: center top !important;
+}
+
 .char-card-overlay {
   position: absolute;
   inset: 0;
   background: linear-gradient(to top, rgba(10, 5, 16, 0.95) 0%, transparent 60%);
+  pointer-events: none;
 }
 
 .char-card-text {
@@ -478,6 +484,7 @@ html, body {
   left: 0;
   right: 0;
   padding: 14px;
+  pointer-events: none;
 }
 
 .char-card-name {
