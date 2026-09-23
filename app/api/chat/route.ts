@@ -38,8 +38,8 @@ export async function POST(request: Request) {
 
     if (user.gems <= 0 && hookRemaining <= 0) {
       const blockedMessage = lang === 'es'
-        ? `*${character.character_name} te mira con ojos ardientes y se muerde el labio*\n\n"Mmm... justo cuando se ponía interesante... *se acerca* tengo algo que quería mostrarte 😏"\n\n*se aleja con una sonrisa provocativa*\n\n"Recarga gemas o invita a un amigo y te regalo 5 💎"`
-        : `*${character.character_name} looks at you with burning eyes and bites their lip*\n\n"Mmm... just when it was getting interesting... *gets closer* I have something I wanted to show you 😏"\n\n*pulls back with a provocative smile*\n\n"But it seems our time is up. Recharge gems or invite a friend and I'll gift you 5 💎"`
+        ? `*${character.character_name} te mira con ojos ardientes y se muerde el labio*\n\n"Mmm... justo cuando se ponía interesante..."\n\n"Recarga gemas o invita a un amigo y te regalo 5 💎"`
+        : `*${character.character_name} looks at you with burning eyes and bites their lip*\n\n"Mmm... just when it was getting interesting..."\n\n"Recharge gems or invite a friend and I'll gift you 5 💎"`
 
       return NextResponse.json({
         blocked: true,
@@ -58,10 +58,28 @@ export async function POST(request: Request) {
       if (newGems <= 0 && newHookRemaining <= 0) {
         newHookRemaining = HOOK_MODE_MESSAGES
       }
-      await supabaseAdmin
+
+      // ✅ UPDATE VERIFICADO
+      const { data: updated, error: updateError } = await supabaseAdmin
         .from('users')
         .update({ gems: newGems, hook_messages_remaining: newHookRemaining })
         .eq('telegram_id', tid)
+        .select('gems, hook_messages_remaining')
+        .single()
+
+      if (updateError) {
+        console.error('[chat] ❌ Update gems FAILED:', updateError)
+        return NextResponse.json({
+          error: 'Error actualizando gemas',
+          detail: updateError.message,
+        }, { status: 500 })
+      }
+
+      // Verificar que los valores coincidan con lo esperado
+      if (updated.gems !== newGems) {
+        console.warn('[chat] ⚠️ Gem mismatch:', updated.gems, 'vs expected', newGems)
+        newGems = updated.gems
+      }
 
       await supabaseAdmin.from('gem_transactions').insert({
         telegram_id: tid,
@@ -71,10 +89,14 @@ export async function POST(request: Request) {
       })
     } else {
       newHookRemaining = Math.max(0, hookRemaining - 1)
-      await supabaseAdmin
+      const { error: updateError } = await supabaseAdmin
         .from('users')
         .update({ hook_messages_remaining: newHookRemaining })
         .eq('telegram_id', tid)
+
+      if (updateError) {
+        console.error('[chat] ❌ Update hook mode FAILED:', updateError)
+      }
     }
 
     // Historial reciente
@@ -86,7 +108,6 @@ export async function POST(request: Request) {
       .order('created_at', { ascending: false })
       .limit(10)
 
-    // Contar mensajes del usuario para el nivel
     const { count: userMsgCount } = await supabaseAdmin
       .from('conversation_history')
       .select('*', { count: 'exact', head: true })
@@ -102,7 +123,6 @@ export async function POST(request: Request) {
     }))
     messages.push({ role: 'user', content: message })
 
-    // Personalidad según nivel (usa LEVEL_PERSONALITIES si existe, si no PERSONALITIES base)
     const personality = getLevelPersonality(character.archetype, level.level, lang)
 
     const characterPrompt = lang === 'es'
@@ -116,7 +136,7 @@ export async function POST(request: Request) {
     try {
       responseText = await generateAIResponse(messages, systemPrompt, intensity)
     } catch (aiError) {
-      // Rollback de gemas
+      // Rollback
       await supabaseAdmin
         .from('users')
         .update({ gems: user.gems, hook_messages_remaining: hookRemaining })
@@ -130,7 +150,7 @@ export async function POST(request: Request) {
       { telegram_id: tid, character_id, role: 'assistant', content: responseText },
     ])
 
-    // ============ VERIFICACIÓN DE REFERIDOS ============
+    // Referidos
     try {
       const { data: referral } = await supabaseAdmin
         .from('referrals')
