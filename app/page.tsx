@@ -280,7 +280,12 @@ export default function HomePage() {
                   <img
                     src={img}
                     alt=""
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                      objectPosition: 'center top',
+                    }}
                   />
                 ) : (
                   getDisplayName(activeChar)?.[0]?.toUpperCase()
@@ -325,7 +330,6 @@ export default function HomePage() {
         </section>
       )}
 
-      {/* Card de referidos compacta */}
       {user && (
         <section style={{ padding: '12px 16px 0' }}>
           <button
@@ -439,7 +443,7 @@ export default function HomePage() {
                     alt={c.name}
                     loading="lazy"
                     onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = 'none'
+                      ;(e.target as HTMLImageElement).style.display = 'none'
                     }}
                     style={{
                       position: 'absolute',
@@ -447,6 +451,7 @@ export default function HomePage() {
                       width: '100%',
                       height: '100%',
                       objectFit: 'cover',
+                      objectPosition: 'center top',
                     }}
                   />
                 )}
