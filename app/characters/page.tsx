@@ -107,7 +107,10 @@ export default function CharactersPage() {
   const filtered = tab === 'all' ? all : all.filter(c => c.gender === tab)
 
   const pick = async (c: Char) => {
-    if (!user) return
+    if (!user) {
+      alert('Usuario no cargado. Cierra y vuelve a abrir la Mini App.')
+      return
+    }
     const tid = user.telegram_id.toString()
     const key = `${c.gender}_${c.archetype}`
     setCreating(key)
@@ -123,15 +126,27 @@ export default function CharactersPage() {
           character_name: c.name,
         }),
       })
-      const data = await res.json()
+
+      let data: any = null
+      try {
+        data = await res.json()
+      } catch {
+        data = { error: `HTTP ${res.status} sin JSON` }
+      }
+
+      console.log('[characters] select-character response:', res.status, data)
 
       if (res.ok && data.character_id) {
         router.push(`/chat/${data.character_id}`)
       } else {
-        alert(data.error || 'Error')
+        const msg = data.detail
+          ? `${data.error}: ${data.detail}`
+          : (data.error || `Error HTTP ${res.status}`)
+        alert(msg)
       }
-    } catch {
-      alert('Error de conexión')
+    } catch (err: any) {
+      console.error('[characters] fetch error:', err)
+      alert('Error de conexión: ' + (err?.message || 'desconocido'))
     } finally {
       setCreating(null)
     }
@@ -202,7 +217,8 @@ export default function CharactersPage() {
                     alt={c.name}
                     loading="lazy"
                     onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = 'none'
+                      console.warn('[characters] image failed:', imageUrl)
+                      ;(e.target as HTMLImageElement).style.display = 'none'
                     }}
                     style={{
                       position: 'absolute',
