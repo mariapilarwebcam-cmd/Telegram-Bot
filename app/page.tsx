@@ -266,12 +266,22 @@ export default function HomePage() {
               color: 'inherit',
             }}
           >
+            {/* AVATAR — inline sizing bulletproof */}
             <div
-              className="avatar-lg"
               style={{
-                background: getGradient(activeChar.archetype),
+                width: 48,
+                height: 48,
+                minWidth: 48,
+                minHeight: 48,
+                maxWidth: 48,
+                maxHeight: 48,
+                borderRadius: '50%',
                 overflow: 'hidden',
                 position: 'relative',
+                background: getGradient(activeChar.archetype),
+                flexShrink: 0,
+                border: '2px solid rgba(240, 171, 252, 0.3)',
+                boxShadow: '0 0 20px rgba(168, 85, 247, 0.5)',
               }}
             >
               {(() => {
@@ -281,14 +291,28 @@ export default function HomePage() {
                     src={img}
                     alt=""
                     style={{
+                      display: 'block',
                       width: '100%',
                       height: '100%',
                       objectFit: 'cover',
-                      objectPosition: 'center top',
+                      objectPosition: 'center 20%',
                     }}
                   />
                 ) : (
-                  getDisplayName(activeChar)?.[0]?.toUpperCase()
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: '100%',
+                      height: '100%',
+                      color: '#fff',
+                      fontWeight: 700,
+                      fontSize: 18,
+                    }}
+                  >
+                    {getDisplayName(activeChar)?.[0]?.toUpperCase()}
+                  </div>
                 )
               })()}
             </div>
@@ -317,7 +341,7 @@ export default function HomePage() {
                 {getDisplayName(activeChar)}
               </p>
             </div>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
               <path
                 d="m9 6 6 6-6 6"
                 stroke="#a78bfa"
@@ -354,6 +378,7 @@ export default function HomePage() {
               style={{
                 width: 40,
                 height: 40,
+                minWidth: 40,
                 borderRadius: 12,
                 background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
                 display: 'flex',
@@ -366,14 +391,7 @@ export default function HomePage() {
               🎁
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <p
-                style={{
-                  fontSize: 13,
-                  fontWeight: 700,
-                  margin: 0,
-                  color: '#fff',
-                }}
-              >
+              <p style={{ fontSize: 13, fontWeight: 700, margin: 0, color: '#fff' }}>
                 {t.inviteTitle}
               </p>
               <p
@@ -403,9 +421,7 @@ export default function HomePage() {
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
                 <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" fill="#22c55e" />
               </svg>
-              <span style={{ fontSize: 12, fontWeight: 700, color: '#22c55e' }}>
-                +5
-              </span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: '#22c55e' }}>+5</span>
             </div>
           </button>
         </section>
@@ -444,14 +460,6 @@ export default function HomePage() {
                     loading="lazy"
                     onError={(e) => {
                       ;(e.target as HTMLImageElement).style.display = 'none'
-                    }}
-                    style={{
-                      position: 'absolute',
-                      inset: 0,
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'cover',
-                      objectPosition: 'center top',
                     }}
                   />
                 )}
