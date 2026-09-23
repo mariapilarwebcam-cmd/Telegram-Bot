@@ -113,38 +113,25 @@ export default function CharactersPage() {
     setCreating(key)
 
     try {
-      const { data: existing } = await supabase
-        .from('user_characters')
-        .select('*')
-        .eq('telegram_id', tid)
-        .eq('archetype', c.archetype)
-        .eq('gender', c.gender)
-        .maybeSingle()
+      const res = await fetch('/api/select-character', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          telegram_id: tid,
+          archetype: c.archetype,
+          gender: c.gender,
+          character_name: c.name,
+        }),
+      })
+      const data = await res.json()
 
-      await supabase.from('user_characters').update({ is_active: false }).eq('telegram_id', tid)
-
-      if (existing) {
-        await supabase.from('user_characters').update({ is_active: true }).eq('id', existing.id)
-        router.push(`/chat/${existing.id}`)
+      if (res.ok && data.character_id) {
+        router.push(`/chat/${data.character_id}`)
       } else {
-        const { data, error } = await supabase
-          .from('user_characters')
-          .insert({
-            telegram_id: tid,
-            character_name: c.name,
-            gender: c.gender,
-            archetype: c.archetype,
-            personality: PERSONALITIES[c.archetype] || '',
-            is_active: true,
-          })
-          .select()
-          .single()
-
-        if (error) throw error
-        router.push(`/chat/${data.id}`)
+        alert(data.error || 'Error')
       }
-    } catch (e: any) {
-      alert('Error: ' + e.message)
+    } catch {
+      alert('Error de conexión')
     } finally {
       setCreating(null)
     }
