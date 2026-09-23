@@ -473,4 +473,337 @@ export default function ChatPage() {
                   setShowRename(true)
                 }}
               >
-                <svg width="16" height="16" viewBox="0 0 
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                {t.renameTitle}
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            background: 'rgba(255,255,255,0.05)',
+            padding: '5px 10px',
+            borderRadius: 20,
+            border: '1px solid rgba(168,85,247,0.3)',
+            flexShrink: 0,
+          }}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+            <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" fill="#a78bfa" />
+          </svg>
+          <span style={{ fontSize: 12, fontWeight: 600 }}>{gems}</span>
+        </div>
+      </header>
+
+      <div className="chat-messages">
+        {loading && messages.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '64px 24px' }}>
+            <div
+              className="avatar-xl"
+              style={{
+                background: gradient,
+                margin: '0 auto 16px',
+                overflow: 'hidden',
+                position: 'relative',
+              }}
+            >
+              {characterAvatar ? (
+                <img
+                  src={characterAvatar}
+                  alt=""
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                    objectPosition: 'center 20%',
+                  }}
+                />
+              ) : (
+                displayName?.[0]?.toUpperCase()
+              )}
+            </div>
+            <p style={{ fontSize: 14, color: '#8b8b9e', margin: 0 }}>
+              {displayName} {t.online.toLowerCase()}...
+            </p>
+          </div>
+        )}
+
+        {messages.map((m, i) => (
+          <div
+            key={i}
+            className={m.role === 'user' ? 'bubble-user' : 'bubble-ai'}
+            dangerouslySetInnerHTML={{ __html: formatMessage(m.content) }}
+          />
+        ))}
+
+        {loading && messages.length > 0 && (
+          <div
+            className="bubble-ai"
+            style={{ display: 'flex', gap: 6, alignItems: 'center' }}
+          >
+            <span className="dot" />
+            <span className="dot" />
+            <span className="dot" />
+          </div>
+        )}
+
+        <div ref={endRef} />
+      </div>
+
+      <div className="chat-input-bar">
+        <div className="chat-input-row">
+          <button
+            onClick={playAudio}
+            disabled={generatingAudio || (isPremium && gems < currentAudioCost)}
+            className="chat-icon-btn"
+            title={`${t.audioTooltip} (${currentAudioCost}💎)`}
+            style={{
+              opacity: isPremium && gems < currentAudioCost ? 0.3 : 1,
+            }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M11 5 6 9H2v6h4l5 4V5z"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+            </svg>
+          </button>
+
+          <button
+            onClick={tryOpenImageModal}
+            className="chat-icon-btn"
+            title={`${t.imageTooltip} (${currentImageCost}💎)`}
+            style={{
+              opacity: isPremium && gems < currentImageCost ? 0.3 : 1,
+            }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="2" />
+              <circle cx="9" cy="10" r="2" stroke="currentColor" strokeWidth="2" />
+              <path
+                d="m4 18 5-5 4 4 3-3 4 4"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && send()}
+            placeholder={t.writeMessage}
+            disabled={loading}
+            className="chat-input"
+          />
+
+          <button
+            onClick={send}
+            disabled={loading || !input.trim()}
+            className="chat-send-btn"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <path d="m4 4 17 8-17 8V4z" fill="#fff" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      {showPremiumModal && (
+        <div className="modal-backdrop">
+          <div className="modal-box">
+            <div
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: 16,
+                margin: '0 auto 16px',
+                background: 'linear-gradient(135deg, #7c5cff 0%, #a855f7 100%)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 28,
+              }}
+            >
+              {premiumModalReason === 'audio' ? '🔊' : '📸'}
+            </div>
+            <h3 className="modal-title" style={{ textAlign: 'center' }}>
+              {t.premiumFeatureTitle}
+            </h3>
+            <p className="modal-desc" style={{ textAlign: 'center', marginBottom: 20 }}>
+              {premiumModalReason === 'audio' ? t.premiumAudio : t.premiumImage}
+            </p>
+            <div className="modal-btn-row">
+              <button
+                onClick={() => setShowPremiumModal(false)}
+                className="modal-btn secondary"
+              >
+                {t.close}
+              </button>
+              <button
+                onClick={() => {
+                  setShowPremiumModal(false)
+                  router.push('/shop')
+                }}
+                className="modal-btn primary"
+              >
+                {t.goToShop}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showRename && (
+        <div className="modal-backdrop">
+          <div className="modal-box">
+            <h3 className="modal-title">{t.renameTitle}</h3>
+            <p className="modal-desc">{t.renameDesc}</p>
+            <input
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder={t.renamePlaceholder}
+              maxLength={30}
+              className="modal-input"
+            />
+            <div className="modal-btn-row">
+              <button
+                onClick={() => {
+                  setShowRename(false)
+                  setNewName(displayName)
+                }}
+                className="modal-btn secondary"
+              >
+                {t.close}
+              </button>
+              <button
+                onClick={doRename}
+                disabled={
+                  renaming ||
+                  !newName.trim() ||
+                  newName.trim() === displayName ||
+                  gems < GEM_COSTS.rename_character
+                }
+                className="modal-btn primary"
+              >
+                {renaming ? t.saving : `${t.save} (${GEM_COSTS.rename_character})`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {blocked && (
+        <div className="modal-backdrop">
+          <div className="modal-box danger">
+            <h3 className="modal-title">{t.blockedTitle}</h3>
+            {blockedMessage && (
+              <div
+                style={{
+                  background: 'rgba(0,0,0,0.3)',
+                  border: '1px solid rgba(168,85,247,0.2)',
+                  borderRadius: 12,
+                  padding: 16,
+                  marginBottom: 16,
+                  fontSize: 14,
+                  lineHeight: 1.5,
+                }}
+                dangerouslySetInnerHTML={{ __html: formatMessage(blockedMessage) }}
+              />
+            )}
+            <p className="modal-desc">
+              {displayName} {t.blockedDesc}
+            </p>
+            <button
+              onClick={() => router.push('/shop')}
+              className="modal-btn primary"
+              style={{ width: '100%', marginBottom: 8 }}
+            >
+              {t.rechargeUnlock}
+            </button>
+            <button
+              onClick={() => router.push('/')}
+              className="modal-btn secondary"
+              style={{
+                width: '100%',
+                background: 'rgba(255,255,255,0.05)',
+                color: '#fff',
+                marginBottom: 8,
+              }}
+            >
+              {t.inviteFriend}
+            </button>
+            <button
+              onClick={() => setBlocked(false)}
+              style={{
+                width: '100%',
+                background: 'transparent',
+                border: 'none',
+                color: '#8b8b9e',
+                padding: 8,
+                fontSize: 13,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              {t.close}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showImageModal && (
+        <div className="modal-backdrop">
+          <div className="modal-box">
+            <h3 className="modal-title">{t.generateSelfie}</h3>
+            <p className="modal-desc">
+              {t.generateSelfieDesc.replace('10', String(currentImageCost))}
+            </p>
+            <textarea
+              value={imageDescription}
+              onChange={(e) => setImageDescription(e.target.value)}
+              placeholder={t.selfiePlaceholder}
+              className="modal-textarea"
+            />
+            <div className="modal-btn-row">
+              <button
+                onClick={() => setShowImageModal(false)}
+                className="modal-btn secondary"
+              >
+                {t.close}
+              </button>
+              <button
+                onClick={generateImage}
+                disabled={generatingImage || !imageDescription.trim()}
+                className="modal-btn primary"
+              >
+                {generatingImage ? t.generating : `${t.generate} (${currentImageCost}💎)`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
