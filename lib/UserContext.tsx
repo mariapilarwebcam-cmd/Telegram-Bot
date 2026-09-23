@@ -63,7 +63,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
     const init = async () => {
       try {
-        // 1. Intento por SDK dinámico
         const mod: any = await Promise.race([
           import('@twa-dev/sdk'),
           new Promise((resolve) => setTimeout(() => resolve(null), 3000)),
@@ -73,10 +72,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
         try { sdk?.ready?.() } catch {}
         try { sdk?.expand?.() } catch {}
 
-        // 2. Obtener initDataUnsafe con fallbacks
         let initDataUnsafe = sdk?.initDataUnsafe
 
-        // Fallback: leer directo de window.Telegram.WebApp
         if (!initDataUnsafe?.user?.id) {
           const tg = getTelegramWebApp()
           if (tg?.initDataUnsafe?.user?.id) {
@@ -86,7 +83,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
           }
         }
 
-        // 3. Segundo intento tras 500ms (por si el SDK carga tarde)
         if (!initDataUnsafe?.user?.id) {
           await new Promise((r) => setTimeout(r, 500))
           const tg = getTelegramWebApp()
@@ -106,14 +102,12 @@ export function UserProvider({ children }: { children: ReactNode }) {
         setTelegramId(u.id)
         setLang(getLanguage(u.language_code))
 
-        // Cargar o crear usuario
         await loadUser(u.id, {
           first_name: u.first_name || '',
           username: u.username || null,
           language: getLanguage(u.language_code),
         })
 
-        // Procesar referido en background
         const startParam = initDataUnsafe?.start_param
         if (startParam && !referralProcessed.current) {
           const processedKey = `taboo_ref_${u.id}_${startParam}`
@@ -141,13 +135,33 @@ export function UserProvider({ children }: { children: ReactNode }) {
     init()
   }, [])
 
+  // Refresca el usuario cuando la mini app vuelve a estar visible
+  useEffect(() => {
+    if (!telegramId) return
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        loadUser(telegramId)
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibility)
+    // También al volver el foco (iOS)
+    window.addEventListener('focus', handleVisibility)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility)
+      window.removeEventListener('focus', handleVisibility)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [telegramId])
+
   const loadUser = async (
     id: number,
     telegramData?: { first_name: string; username: string | null; language: Language }
   ): Promise<boolean> => {
     const tid = id.toString()
     try {
-      // Query con timeout de 6s
       const result: any = await Promise.race([
         supabase
           .from('users')
@@ -164,9 +178,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
         return true
       }
 
-      // No existe → intentar crear via API
+      // Si no existe y tenemos datos de Telegram, crear vía API
       if (telegramData) {
-        console.log('[UserContext] User not found, attempting to create...')
         try {
           const res = await fetch('/api/init-user', {
             method: 'POST',
@@ -183,10 +196,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
             const u = initData.user as UserData
             memUserCache = u
             setUser(u)
-            console.log('[UserContext] User created:', initData.created)
             return true
-          } else {
-            console.warn('[UserContext] init-user returned no user:', initData)
           }
         } catch (e) {
           console.error('[UserContext] init-user error:', e)
