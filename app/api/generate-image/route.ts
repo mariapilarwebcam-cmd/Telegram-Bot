@@ -2,7 +2,7 @@
 
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
-import { CHARACTER_FACES } from '@/lib/constants'
+import { getCharacterFace, getCharacterImageUrl } from '@/lib/constants'
 import { generateImage } from '@/lib/ai'
 import { getLevelFromMessages, getImageCost, getClothingLevel, getSceneStyle } from '@/lib/levels'
 
@@ -63,15 +63,11 @@ export async function POST(request: Request) {
       }, { status: 402 })
     }
 
-    // Reference image por arquetipo (bucket character-references)
-    const fileName = `${character.gender}_${character.archetype}.jpg`
-    const { data: urlData } = supabaseAdmin.storage
-      .from('character-references')
-      .getPublicUrl(fileName)
-    const referenceUrl = urlData?.publicUrl || undefined
+    // Reference image desde Cloudflare R2 (URL pública)
+    const referenceUrl = getCharacterImageUrl(character.archetype, character.gender)
 
     // Prompt escalado con estética anime
-    const facePrompt = CHARACTER_FACES[character.archetype] || 'beautiful anime character'
+    const facePrompt = getCharacterFace(character.archetype, character.gender)
     const clothing = getClothingLevel(level.level)
     const scene = getSceneStyle(level.level)
 
@@ -79,7 +75,7 @@ export async function POST(request: Request) {
 
     let imageUrl: string
     try {
-      imageUrl = await generateImage(imagePrompt, referenceUrl)
+      imageUrl = await generateImage(imagePrompt, referenceUrl || undefined)
     } catch (imgError) {
       console.error('Image generation error:', imgError)
       return NextResponse.json({ error: 'Error al generar la imagen' }, { status: 500 })
