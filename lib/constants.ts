@@ -141,7 +141,6 @@ export const ARCHETYPES_FEMALE = {
 // ============================================================
 // PROMPTS DE REFERENCIA — estilo anime
 // Clave: `${gender}_${archetype}` para evitar colisiones
-// (boss/teacher/doctor/etc. existen en ambos géneros)
 // ============================================================
 
 export const CHARACTER_FACES: Record<string, string> = {
@@ -189,6 +188,13 @@ export function getCharacterFace(archetype: string, gender: string): string {
     CHARACTER_FACES[key] ||
     'beautiful anime character, cel shading, detailed anime eyes, vibrant colors'
   )
+}
+
+// Helper para construir la URL pública de la imagen del personaje (R2)
+export function getCharacterImageUrl(archetype: string, gender: string): string {
+  const base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || ''
+  if (!base) return ''
+  return `${base.replace(/\/$/, '')}/${gender}_${archetype}.jpg`
 }
 
 // ============================================================
