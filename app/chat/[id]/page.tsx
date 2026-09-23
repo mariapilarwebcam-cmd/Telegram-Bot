@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { GEM_COSTS, getDisplayName } from '@/lib/constants'
+import { GEM_COSTS, getDisplayName, getCharacterImageUrl } from '@/lib/constants'
 import { getLevelFromMessages, getImageCost, getAudioCost } from '@/lib/levels'
 import { getTranslations } from '@/lib/i18n'
 import { useUser } from '@/lib/UserContext'
@@ -390,6 +390,7 @@ export default function ChatPage() {
 
   const gradient = getGradient(character.archetype)
   const displayName = getDisplayName(character)
+  const characterAvatar = getCharacterImageUrl(character.archetype, character.gender)
 
   return (
     <div className="chat-page">
@@ -417,8 +418,19 @@ export default function ChatPage() {
           </svg>
         </button>
 
-        <div className="avatar" style={{ background: gradient }}>
-          {displayName?.[0]?.toUpperCase()}
+        <div
+          className="avatar"
+          style={{ background: gradient, overflow: 'hidden', position: 'relative' }}
+        >
+          {characterAvatar ? (
+            <img
+              src={characterAvatar}
+              alt=""
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            />
+          ) : (
+            displayName?.[0]?.toUpperCase()
+          )}
         </div>
 
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -508,9 +520,22 @@ export default function ChatPage() {
           <div style={{ textAlign: 'center', padding: '64px 24px' }}>
             <div
               className="avatar-xl"
-              style={{ background: gradient, margin: '0 auto 16px' }}
+              style={{
+                background: gradient,
+                margin: '0 auto 16px',
+                overflow: 'hidden',
+                position: 'relative',
+              }}
             >
-              {displayName?.[0]?.toUpperCase()}
+              {characterAvatar ? (
+                <img
+                  src={characterAvatar}
+                  alt=""
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+              ) : (
+                displayName?.[0]?.toUpperCase()
+              )}
             </div>
             <p style={{ fontSize: 14, color: '#8b8b9e', margin: 0 }}>
               {displayName} {t.online.toLowerCase()}...
