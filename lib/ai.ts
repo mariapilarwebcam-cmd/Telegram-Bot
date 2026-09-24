@@ -2,6 +2,7 @@
 
 import { runSeedreamSync } from './wiro'
 import { getIntensityFromLevel, getLevelFromMessages, type Intensity } from './levels'
+import { getLevelFromMessages as getLevel } from './levels'
 
 const BREVITY_ES = `REGLA CRÍTICA DE LONGITUD: Responde SIEMPRE con 1 acción breve entre asteriscos + 1 o 2 frases de diálogo. TOTAL máximo 250 caracteres contando acciones y diálogo. PROHIBIDO pasar de 250 caracteres. Termina con una pregunta corta o gancho breve.
 Puedes usar hasta 2 emojis por mensaje. PROHIBIDO emojis al inicio.`
@@ -112,38 +113,59 @@ export async function generateAIResponse(
   return data.choices[0].message.content.trim()
 }
 
+/**
+ * Genera imagen con estrategia híbrida:
+ *   - Niveles 1, 2, 3 → DeepInfra FLUX-1-schnell (barato, SFW)
+ *   - Niveles 4, 5    → Wiro Seedream (premium, NSFW + reference image)
+ */
 export async function generateImage(
   prompt: string,
-  referenceImageUrl?: string
+  referenceImageUrl?: string,
+  level: number = 1
 ): Promise<string> {
-  try {
-    const url = await runSeedreamSync(prompt, referenceImageUrl, {
-      resolution: '2K',
-      aspectRatio: '3:4',
-      maxImages: 1,
-    })
-    return url
-  } catch (wiroError) {
-    console.warn('Wiro falló, usando DeepInfra como fallback:', wiroError)
-
-    const response = await fetch(
-      'https://api.deepinfra.com/v1/inference/black-forest-labs/FLUX-1-schnell',
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${process.env.DEEPINFRA_TOKEN}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ prompt, width: 1024, height: 1024, num_images: 1 }),
-      }
-    )
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}))
-      throw new Error(err.error || 'Error en DeepInfra')
+  if (level <= 3) {
+    // ── Niveles 1-3: DeepInfra FLUX-1-schnell ──
+    return generateImageDeepInfra(prompt)
+  } else {
+    // ── Niveles 4-5: Wiro Seedream con reference image ──
+    try {
+      return await runSeedreamSync(prompt, referenceImageUrl, {
+        resolution: '2K',
+        aspectRatio: '3:4',
+        maxImages: 1,
+      })
+    } catch (wiroError) {
+      console.warn('Wiro falló, usando DeepInfra como fallback:', wiroError)
+      return generateImageDeepInfra(prompt)
     }
-    const data = await response.json()
-    return data.images?.[0]?.url || data.image
   }
+}
+
+async function generateImageDeepInfra(prompt: string): Promise<string> {
+  const response = await fetch(
+    'https://api.deepinfra.com/v1/inference/black-forest-labs/FLUX-1-schnell',
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.DEEPINFRA_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        prompt,
+        width: 1024,
+        height: 1024,
+        num_images: 1,
+      }),
+    }
+  )
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}))
+    throw new Error(err.error || 'Error en DeepInfra')
+  }
+
+  const data = await response.json()
+  return data.images?.[0]?.url || data.image
 }
 
 export async function generateAudio(
