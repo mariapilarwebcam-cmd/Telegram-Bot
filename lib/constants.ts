@@ -335,14 +335,14 @@ export const STAR_PACKAGES = [
 ]
 
 // ── CRYPTO (USDT en TON) ────────────────────────────────────
-// Bonus: +15% en planes 1-3, +20% en planes 4-5
+// Bonus: +20% en planes 1-3, +25% en planes 4-5
 // Extra: +100 gemas flat SOLO en el primer paquete (primera compra)
 export const CRYPTO_PACKAGES = [
-  { usdt: 1.99,  gems: 300,  bonus: 15, first_time_only: true,  first_time_bonus: 100 },
-  { usdt: 4.99,  gems: 600,  bonus: 15, first_time_only: false },
-  { usdt: 9.99,  gems: 1200, bonus: 15, first_time_only: false },
-  { usdt: 19.99, gems: 2400, bonus: 20, first_time_only: false },
-  { usdt: 39.99, gems: 5000, bonus: 20, first_time_only: false },
+  { usdt: 1.99,  gems: 300,  bonus: 20, first_time_only: true,  first_time_bonus: 100 },
+  { usdt: 2.99,  gems: 600,  bonus: 20, first_time_only: false },
+  { usdt: 5.99,  gems: 1200, bonus: 20, first_time_only: false },
+  { usdt: 9.99,  gems: 2400, bonus: 25, first_time_only: false },
+  { usdt: 19.99, gems: 5000, bonus: 25, first_time_only: false },
 ]
 
 export const GEM_COSTS = {
