@@ -4,8 +4,9 @@ import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { CRYPTO_PACKAGES, getFinalCryptoGems } from '@/lib/constants'
 
-// ⚠️ Tu wallet de Tonkeeper para recibir USDT
-const RECIPIENT_WALLET = process.env.TON_RECIPIENT_WALLET || 'UQCt76T3JPW3WrpsfIz6Tc1eVrvkrQpwV0-3sk1so4P8Vd4-'
+const RECIPIENT_WALLET =
+  process.env.NEXT_PUBLIC_TON_RECIPIENT_WALLET ||
+  'UQCt76T3JPW3WrpsfIz6Tc1eVrvkrQpwV0-3sk1so4P8Vd4-'
 
 export async function POST(request: Request) {
   try {
@@ -70,7 +71,7 @@ export async function POST(request: Request) {
         usdt: pkg.usdt,
         gems: pkg.gems,
         bonus: pkg.bonus,
-        first_time_bonus_percent: pkg.first_time_bonus_percent || 0,
+        first_time_bonus: pkg.first_time_bonus || 0,
         total_gems: finalGems,
       },
     })
