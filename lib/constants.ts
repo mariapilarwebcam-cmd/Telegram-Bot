@@ -325,9 +325,9 @@ export function getDisplayName(character: {
 
 // ── STARS ────────────────────────────────────────────────────
 // Bonus: +5% en todos los planes
-// Extra: +75 gemas flat SOLO en el primer paquete (primera compra)
+// Extra: +50 gemas flat SOLO en el primer paquete (primera compra)
 export const STAR_PACKAGES = [
-  { stars: 75,   gems: 300,  bonus: 5, first_time_only: true,  first_time_bonus: 75 },
+  { stars: 100,  gems: 300,  bonus: 5, first_time_only: true,  first_time_bonus: 50 },
   { stars: 150,  gems: 600,  bonus: 5, first_time_only: false },
   { stars: 300,  gems: 1200, bonus: 5, first_time_only: false },
   { stars: 500,  gems: 2400, bonus: 5, first_time_only: false },
