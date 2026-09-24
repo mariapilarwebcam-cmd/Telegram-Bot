@@ -2,6 +2,7 @@ import { Metadata, Viewport } from 'next'
 import './globals.css'
 import BottomNav from '@/components/BottomNav'
 import { UserProvider } from '@/lib/UserContext'
+import { TonConnectProvider } from './providers'
 
 export const metadata: Metadata = {
   title: 'Taboo Realm',
@@ -25,10 +26,12 @@ export default function RootLayout({
     <html lang="es">
       <body className="antialiased">
         <UserProvider>
-          <div className="app-shell">
-            <div className="app-content">{children}</div>
-            <BottomNav />
-          </div>
+          <TonConnectProvider>
+            <div className="app-shell">
+              <div className="app-content">{children}</div>
+              <BottomNav />
+            </div>
+          </TonConnectProvider>
         </UserProvider>
       </body>
     </html>
