@@ -246,7 +246,9 @@ body:has(.chat-page) {
   color: #6b5b8e;
 }
 
-.chat-icon-btn {
+/* ============ BOTONES DE ÍCONO (audio, cámara, enviar) ============ */
+.chat-icon-btn,
+.chat-send-btn {
   width: 40px;
   height: 40px;
   border-radius: 50%;
@@ -265,7 +267,8 @@ body:has(.chat-page) {
     inset 0 0 8px rgba(168, 85, 247, 0.1);
 }
 
-.chat-icon-btn:hover:not(:disabled) {
+.chat-icon-btn:hover:not(:disabled),
+.chat-send-btn:hover:not(:disabled) {
   background: rgba(168, 85, 247, 0.22);
   box-shadow:
     0 0 18px rgba(168, 85, 247, 0.6),
@@ -274,59 +277,22 @@ body:has(.chat-page) {
   transform: scale(1.05);
 }
 
-.chat-icon-btn:disabled {
-  opacity: 0.3;
-  box-shadow: none;
-}
-
-/* ============ BOTÓN ENVIAR NEÓN ============ */
-.chat-send-btn {
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #a855f7 0%, #ec4899 100%);
-  color: #fff;
-  border: 1px solid rgba(240, 171, 252, 0.4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: all 0.25s ease;
-  padding: 0;
-  box-shadow:
-    0 0 14px rgba(168, 85, 247, 0.7),
-    0 0 28px rgba(236, 72, 153, 0.5),
-    inset 0 0 10px rgba(255, 255, 255, 0.15);
-  position: relative;
-}
-
-.chat-send-btn:hover:not(:disabled) {
-  box-shadow:
-    0 0 22px rgba(168, 85, 247, 0.95),
-    0 0 42px rgba(236, 72, 153, 0.7),
-    inset 0 0 14px rgba(255, 255, 255, 0.3);
-  transform: scale(1.08);
-}
-
+.chat-icon-btn:active:not(:disabled),
 .chat-send-btn:active:not(:disabled) {
   transform: scale(0.96);
 }
 
+.chat-icon-btn:disabled,
 .chat-send-btn:disabled {
-  opacity: 0.35;
+  opacity: 0.3;
   box-shadow: none;
-  filter: grayscale(0.5);
 }
 
 @media (max-width: 360px) {
-  .chat-icon-btn {
+  .chat-icon-btn,
+  .chat-send-btn {
     width: 34px;
     height: 34px;
-  }
-  .chat-send-btn {
-    width: 36px;
-    height: 36px;
   }
   .chat-input-row {
     gap: 4px;
@@ -426,6 +392,15 @@ body:has(.chat-page) {
   overflow: hidden;
 }
 
+.avatar img,
+.avatar-lg img,
+.avatar-xl img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 10%;
+}
+
 /* ============ LISTS ============ */
 .chat-list {
   display: flex;
@@ -509,7 +484,7 @@ body:has(.chat-page) {
   text-shadow: 0 0 6px currentColor;
 }
 
-/* ============ CHARACTER CARDS — aspect ratio 3/5 ============ */
+/* ============ CHARACTER CARDS ============ */
 .char-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -542,13 +517,14 @@ body:has(.chat-page) {
   border: 1.5px solid rgba(240, 171, 252, 0.15);
 }
 
+/* object-position: center top → ancla la imagen arriba. Nunca corta la cabeza. */
 .char-card-img img {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: center 5%;
+  object-position: center top;
 }
 
 .char-card-overlay {
