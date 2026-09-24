@@ -367,3 +367,43 @@ export function getRelationshipLevel(messageCount: number) {
   }
   return current
 }
+
+// ============================================================
+// PAQUETES CRYPTO (USDT en TON) — Integración directa TON Connect
+// ============================================================
+// Reglas de bonos:
+//   Stars primera compra  → +100 gemas flat (solo en el plan de 75 Stars)
+//   Crypto primera compra → +20% sobre gemas base (solo en el plan de 1.99 USDT)
+//   Después de la 1ª compra:
+//     Stars  → +5% a +25% según paquete
+//     Crypto → +15% en todos los paquetes
+// ============================================================
+
+export const CRYPTO_PACKAGES = [
+  // Primera compra exclusiva — +20% en la primera compra con cripto
+  { usdt: 1.99, gems: 300, bonus: 0, first_time_only: true, first_time_bonus_percent: 20 },
+  // Paquetes regulares — +15% siempre
+  { usdt: 4.99, gems: 600, bonus: 15, first_time_only: false },
+  { usdt: 9.99, gems: 1200, bonus: 15, first_time_only: false },
+  { usdt: 19.99, gems: 2400, bonus: 15, first_time_only: false },
+  { usdt: 39.99, gems: 5000, bonus: 15, first_time_only: false },
+]
+
+export function getFinalCryptoGems(pkg: {
+  gems: number
+  bonus: number
+  first_time_bonus_percent?: number
+}) {
+  const percentBonus = pkg.bonus > 0 ? Math.floor((pkg.gems * pkg.bonus) / 100) : 0
+  const firstTimeBonus = pkg.first_time_bonus_percent
+    ? Math.floor((pkg.gems * pkg.first_time_bonus_percent) / 100)
+    : 0
+  return pkg.gems + percentBonus + firstTimeBonus
+}
+
+// ============================================================
+// TON CONNECT CONFIG
+// ============================================================
+export const TON_RECIPIENT_WALLET =
+  process.env.NEXT_PUBLIC_TON_RECIPIENT_WALLET ||
+  'UQCt76T3JPW3WrpsfIz6Tc1eVrvkrQpwV0-3sk1so4P8Vd4-'
