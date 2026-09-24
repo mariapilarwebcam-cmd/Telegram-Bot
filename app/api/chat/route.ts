@@ -59,13 +59,11 @@ export async function POST(request: Request) {
         newHookRemaining = HOOK_MODE_MESSAGES
       }
 
-      // ✅ UPDATE VERIFICADO
-      const { data: updated, error: updateError } = await supabaseAdmin
+      // ✅ FIX: sin .select().single() — solo verificamos el error
+      const { error: updateError } = await supabaseAdmin
         .from('users')
         .update({ gems: newGems, hook_messages_remaining: newHookRemaining })
         .eq('telegram_id', tid)
-        .select('gems, hook_messages_remaining')
-        .single()
 
       if (updateError) {
         console.error('[chat] ❌ Update gems FAILED:', updateError)
@@ -73,12 +71,6 @@ export async function POST(request: Request) {
           error: 'Error actualizando gemas',
           detail: updateError.message,
         }, { status: 500 })
-      }
-
-      // Verificar que los valores coincidan con lo esperado
-      if (updated.gems !== newGems) {
-        console.warn('[chat] ⚠️ Gem mismatch:', updated.gems, 'vs expected', newGems)
-        newGems = updated.gems
       }
 
       await supabaseAdmin.from('gem_transactions').insert({
