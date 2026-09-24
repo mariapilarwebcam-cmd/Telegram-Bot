@@ -163,7 +163,6 @@ html, body {
   overflow: hidden;
 }
 
-/* El chat NO usa BottomNav, así que quita padding y reserva */
 body:has(.chat-page) .app-content {
   padding-bottom: 0 !important;
   height: 100dvh;
@@ -493,8 +492,8 @@ body:has(.chat-page) {
 .char-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-  padding: 16px;
+  gap: 10px;
+  padding: 12px;
 }
 
 .char-card {
@@ -514,7 +513,7 @@ body:has(.chat-page) {
 
 .char-card-img {
   width: 100%;
-  aspect-ratio: 3 / 4;
+  aspect-ratio: 3 / 4.5;
   border-radius: 20px;
   position: relative;
   overflow: hidden;
@@ -528,13 +527,13 @@ body:has(.chat-page) {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: center 20%;
+  object-position: center 5%;
 }
 
 .char-card-overlay {
   position: absolute;
   inset: 0;
-  background: linear-gradient(to top, rgba(10, 5, 16, 0.95) 0%, transparent 60%);
+  background: linear-gradient(to top, rgba(10, 5, 16, 0.95) 0%, transparent 55%);
   pointer-events: none;
 }
 
@@ -543,14 +542,14 @@ body:has(.chat-page) {
   bottom: 0;
   left: 0;
   right: 0;
-  padding: 14px;
+  padding: 12px;
   pointer-events: none;
 }
 
 .char-card-name {
   color: #fff;
   font-weight: 800;
-  font-size: 16px;
+  font-size: 15px;
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
