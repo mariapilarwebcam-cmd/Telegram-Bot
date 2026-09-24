@@ -177,7 +177,6 @@ export function getCharacterFace(archetype: string, gender: string): string {
 
 // ============================================================
 // URL de imagen desde Cloudflare R2
-// Cache busting: incrementa IMAGE_CACHE_VERSION cuando cambies imágenes
 // ============================================================
 const IMAGE_CACHE_VERSION = '2'
 
@@ -324,12 +323,14 @@ export function getDisplayName(character: {
 // PAQUETES Y COSTOS
 // ============================================================
 
+// Stars: +5% base en todos los planes
+// +75 gemas extras SOLO en el primer paquete (primera compra)
 export const STAR_PACKAGES = [
-  { stars: 75, gems: 300, bonus: 0, first_time_only: true, first_time_bonus: 100 },
-  { stars: 150, gems: 600, bonus: 10, first_time_only: false },
-  { stars: 300, gems: 1200, bonus: 20, first_time_only: false },
-  { stars: 500, gems: 2400, bonus: 25, first_time_only: false },
-  { stars: 1000, gems: 5000, bonus: 25, first_time_only: false },
+  { stars: 75, gems: 300, bonus: 5, first_time_only: true, first_time_bonus: 75 },
+  { stars: 150, gems: 600, bonus: 5, first_time_only: false },
+  { stars: 300, gems: 1200, bonus: 5, first_time_only: false },
+  { stars: 500, gems: 2400, bonus: 5, first_time_only: false },
+  { stars: 1000, gems: 5000, bonus: 5, first_time_only: false },
 ]
 
 export const GEM_COSTS = {
@@ -372,33 +373,27 @@ export function getRelationshipLevel(messageCount: number) {
 // PAQUETES CRYPTO (USDT en TON) — Integración directa TON Connect
 // ============================================================
 // Reglas de bonos:
-//   Stars primera compra  → +100 gemas flat (solo en el plan de 75 Stars)
-//   Crypto primera compra → +20% sobre gemas base (solo en el plan de 1.99 USDT)
-//   Después de la 1ª compra:
-//     Stars  → +5% a +25% según paquete
-//     Crypto → +15% en todos los paquetes
+//   Plan 1 (1ª compra): 300 base + 15% + 100 flat = 445 gemas
+//   Planes 2-3:         +15%
+//   Planes 4-5:         +20% (últimos dos)
 // ============================================================
 
 export const CRYPTO_PACKAGES = [
-  // Primera compra exclusiva — +20% en la primera compra con cripto
-  { usdt: 1.99, gems: 300, bonus: 0, first_time_only: true, first_time_bonus_percent: 20 },
-  // Paquetes regulares — +15% siempre
+  { usdt: 1.99, gems: 300, bonus: 15, first_time_only: true, first_time_bonus: 100 },
   { usdt: 4.99, gems: 600, bonus: 15, first_time_only: false },
   { usdt: 9.99, gems: 1200, bonus: 15, first_time_only: false },
-  { usdt: 19.99, gems: 2400, bonus: 15, first_time_only: false },
-  { usdt: 39.99, gems: 5000, bonus: 15, first_time_only: false },
+  { usdt: 19.99, gems: 2400, bonus: 20, first_time_only: false },
+  { usdt: 39.99, gems: 5000, bonus: 20, first_time_only: false },
 ]
 
 export function getFinalCryptoGems(pkg: {
   gems: number
   bonus: number
-  first_time_bonus_percent?: number
+  first_time_bonus?: number
 }) {
   const percentBonus = pkg.bonus > 0 ? Math.floor((pkg.gems * pkg.bonus) / 100) : 0
-  const firstTimeBonus = pkg.first_time_bonus_percent
-    ? Math.floor((pkg.gems * pkg.first_time_bonus_percent) / 100)
-    : 0
-  return pkg.gems + percentBonus + firstTimeBonus
+  const flatBonus = pkg.first_time_bonus || 0
+  return pkg.gems + percentBonus + flatBonus
 }
 
 // ============================================================
