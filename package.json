@@ -10,6 +10,9 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
+    "@ton-pay/api": "^0.3.2",
+    "@ton-pay/ui-react": "^0.3.2",
+    "@tonconnect/ui-react": "^2.4.2",
     "@twa-dev/sdk": "^7.0.0",
     "lucide-react": "^0.294.0",
     "next": "14.0.4",
