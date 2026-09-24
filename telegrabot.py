@@ -25,13 +25,22 @@ BASE_DAILY_GEMS = 5
 GEMS_PER_REFERRAL = 5
 STARTING_GEMS = 15
 
+# ── STARS ────────────────────────────────────────────────────
+# Bonus: +5% en todos los planes
+# Extra: +75 gemas flat SOLO en el primer paquete (primera compra)
 STAR_PACKAGES = [
-    {"stars": 75, "gems": 300, "bonus": 0, "first_time": True},
-    {"stars": 150, "gems": 600, "bonus": 10, "first_time": False},
-    {"stars": 300, "gems": 1200, "bonus": 20, "first_time": False},
-    {"stars": 500, "gems": 2400, "bonus": 25, "first_time": False},
-    {"stars": 1000, "gems": 5000, "bonus": 25, "first_time": False},
+    {"stars": 75,   "gems": 300,  "bonus": 5, "first_time": True,  "flat_bonus": 75},
+    {"stars": 150,  "gems": 600,  "bonus": 5, "first_time": False, "flat_bonus": 0},
+    {"stars": 300,  "gems": 1200, "bonus": 5, "first_time": False, "flat_bonus": 0},
+    {"stars": 500,  "gems": 2400, "bonus": 5, "first_time": False, "flat_bonus": 0},
+    {"stars": 1000, "gems": 5000, "bonus": 5, "first_time": False, "flat_bonus": 0},
 ]
+
+def calc_final_gems(pkg: dict) -> int:
+    """Calcula gemas finales: base + % bonus + flat bonus (si aplica)"""
+    percent = int(pkg['gems'] * pkg['bonus'] / 100) if pkg.get('bonus', 0) > 0 else 0
+    flat = pkg.get('flat_bonus', 0)
+    return pkg['gems'] + percent + flat
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
@@ -93,7 +102,6 @@ async def create_user_immediately(
         logger.error(f"Error insertando usuario: {e}")
         return None
 
-    # Crear referral pendiente si vino con código
     if referred_by and result.data:
         try:
             supabase.table('referrals').insert({
@@ -187,7 +195,6 @@ async def cmd_start(message: Message, command: CommandObject = None):
     first_name = message.from_user.first_name or ""
     language = detect_language(message.from_user.language_code)
 
-    # Resolver referido desde deep link
     referred_by = None
     if command and command.args:
         arg = command.args
@@ -197,26 +204,18 @@ async def cmd_start(message: Message, command: CommandObject = None):
         if referrer and str(referrer['telegram_id']) != str(telegram_id):
             referred_by = referrer['telegram_id']
 
-    # Verificar si existe
     user = await get_user(telegram_id)
 
     if not user:
-        # Crear usuario INMEDIATAMENTE
         user = await create_user_immediately(
-            telegram_id,
-            username,
-            first_name,
-            language,
+            telegram_id, username, first_name, language,
             int(referred_by) if referred_by else None
         )
-
         if not user:
             await message.answer("❌ Error al crear tu cuenta. Intenta de nuevo con /start")
             return
-
         await send_mini_app_message(message, language, is_new_user=True)
     else:
-        # Usuario existente
         lang = user.get('language', language) or language
         await send_mini_app_message(message, lang, is_new_user=False)
 
@@ -244,7 +243,7 @@ async def cmd_shop(message: Message):
     if language == 'es':
         text = "💎 *Tienda de Gemas*\n\nSelecciona un paquete:\n\n"
         for i, pkg in enumerate(STAR_PACKAGES):
-            final_gems = int(pkg['gems'] * (1 + pkg['bonus'] / 100)) if pkg['bonus'] > 0 else pkg['gems']
+            final_gems = calc_final_gems(pkg)
             line = f"⭐ {pkg['stars']} Stars → 💎 {final_gems} gemas"
             if pkg['first_time']:
                 line += " (¡Primera vez!)"
@@ -253,7 +252,7 @@ async def cmd_shop(message: Message):
     else:
         text = "💎 *Gem Store*\n\nSelect a package:\n\n"
         for i, pkg in enumerate(STAR_PACKAGES):
-            final_gems = int(pkg['gems'] * (1 + pkg['bonus'] / 100)) if pkg['bonus'] > 0 else pkg['gems']
+            final_gems = calc_final_gems(pkg)
             line = f"⭐ {pkg['stars']} Stars → 💎 {final_gems} gems"
             if pkg['first_time']:
                 line += " (First time!)"
@@ -275,7 +274,7 @@ async def process_purchase(callback: CallbackQuery):
         return await callback.answer("❌ Paquete no válido", show_alert=True)
 
     pkg = STAR_PACKAGES[package_index]
-    gems = int(pkg['gems'] * (1 + pkg['bonus'] / 100)) if pkg['bonus'] > 0 else pkg['gems']
+    gems = calc_final_gems(pkg)
 
     user = await get_user(telegram_id)
     if not user:
@@ -313,7 +312,7 @@ async def process_successful_payment(message: Message):
         return await message.answer("⚠️ Error al procesar la compra.")
 
     pkg = STAR_PACKAGES[pkg_idx]
-    gems = int(pkg['gems'] * (1 + pkg['bonus'] / 100)) if pkg['bonus'] > 0 else pkg['gems']
+    gems = calc_final_gems(pkg)
 
     await record_star_purchase(
         telegram_id, pkg['stars'], gems,
