@@ -177,13 +177,14 @@ export function getCharacterFace(archetype: string, gender: string): string {
 
 // ============================================================
 // URL de imagen desde Cloudflare R2
-// Fallback: si no hay env var, retorna cadena vacía (no rompe UI)
+// Cache busting: incrementa IMAGE_CACHE_VERSION cuando cambies imágenes
 // ============================================================
+const IMAGE_CACHE_VERSION = '2'
+
 export function getCharacterImageUrl(archetype: string, gender: string): string {
   const base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL
 
   if (!base) {
-    // Se ejecuta en el cliente, así que solo warn una vez
     if (typeof window !== 'undefined' && !(window as any).__r2Warned) {
       ;(window as any).__r2Warned = true
       console.error(
@@ -195,7 +196,7 @@ export function getCharacterImageUrl(archetype: string, gender: string): string 
     return ''
   }
 
-  return `${base.replace(/\/$/, '')}/${gender}_${archetype}.jpg`
+  return `${base.replace(/\/$/, '')}/${gender}_${archetype}.jpg?v=${IMAGE_CACHE_VERSION}`
 }
 
 // ============================================================
