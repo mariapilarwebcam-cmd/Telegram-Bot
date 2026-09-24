@@ -184,11 +184,17 @@ export default function ChatPage() {
           setHookRemaining(data.hook_messages_remaining ?? 0)
         }
       } else {
-        alert(data.error || 'Error')
+        // ✅ Muestra el error REAL durante el debug
+        const errMsg = data.detail
+          ? `${data.error || 'Error'}: ${data.detail}`
+          : (data.error || `Error HTTP ${res.status}`)
+        console.error('[chat] API error:', data)
+        alert(errMsg)
         setMessages((p) => p.slice(0, -1))
       }
-    } catch {
-      alert('Error de conexión')
+    } catch (err: any) {
+      console.error('[chat] fetch error:', err)
+      alert('Error de conexión: ' + (err?.message || 'desconocido'))
       setMessages((p) => p.slice(0, -1))
     } finally {
       setLoading(false)
@@ -416,7 +422,7 @@ export default function ChatPage() {
                 width: '100%',
                 height: '100%',
                 objectFit: 'cover',
-                objectPosition: 'center 20%',
+                objectPosition: 'center 10%',
               }}
             />
           ) : (
@@ -527,7 +533,7 @@ export default function ChatPage() {
                     width: '100%',
                     height: '100%',
                     objectFit: 'cover',
-                    objectPosition: 'center 20%',
+                    objectPosition: 'center 10%',
                   }}
                 />
               ) : (
@@ -622,9 +628,16 @@ export default function ChatPage() {
             onClick={send}
             disabled={loading || !input.trim()}
             className="chat-send-btn"
+            title="Enviar"
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-              <path d="m4 4 17 8-17 8V4z" fill="#fff" />
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <path
+                d="m4 4 17 8-17 8V4z"
+                fill="currentColor"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinejoin="round"
+              />
             </svg>
           </button>
         </div>
