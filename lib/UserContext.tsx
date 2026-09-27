@@ -13,6 +13,9 @@ interface UserData {
   hook_messages_remaining: number
   referral_code: string
   total_referrals: number
+  streak_count: number
+  longest_streak: number
+  last_daily_claim: string | null
 }
 
 interface UserContextType {
@@ -42,6 +45,9 @@ function getTelegramWebApp(): any {
   return (window as any).Telegram?.WebApp || null
 }
 
+const USER_SELECT =
+  'telegram_id, first_name, username, gems, language, hook_messages_remaining, referral_code, total_referrals, streak_count, longest_streak, last_daily_claim'
+
 export function UserProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserData | null>(memUserCache)
   const [loading, setLoading] = useState(!memUserCache)
@@ -51,7 +57,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const referralProcessed = useRef(false)
   const initStarted = useRef(false)
 
-  // Hard timeout: libera loading en 8s máximo
   useEffect(() => {
     const t = setTimeout(() => setLoading(false), 8000)
     return () => clearTimeout(t)
@@ -135,7 +140,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
     init()
   }, [])
 
-  // Refresca el usuario cuando la mini app vuelve a estar visible
   useEffect(() => {
     if (!telegramId) return
 
@@ -146,14 +150,12 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }
 
     document.addEventListener('visibilitychange', handleVisibility)
-    // También al volver el foco (iOS)
     window.addEventListener('focus', handleVisibility)
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibility)
       window.removeEventListener('focus', handleVisibility)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [telegramId])
 
   const loadUser = async (
@@ -163,11 +165,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     const tid = id.toString()
     try {
       const result: any = await Promise.race([
-        supabase
-          .from('users')
-          .select('telegram_id, first_name, username, gems, language, hook_messages_remaining, referral_code, total_referrals')
-          .eq('telegram_id', tid)
-          .maybeSingle(),
+        supabase.from('users').select(USER_SELECT).eq('telegram_id', tid).maybeSingle(),
         new Promise((resolve) => setTimeout(() => resolve({ data: null, error: 'timeout' }), 6000)),
       ])
 
@@ -178,7 +176,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
         return true
       }
 
-      // Si no existe y tenemos datos de Telegram, crear vía API
       if (telegramData) {
         try {
           const res = await fetch('/api/init-user', {
