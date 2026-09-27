@@ -1,3 +1,5 @@
+// lib/i18n.ts
+
 export const translations = {
   es: {
     welcome: 'Hola',
@@ -112,6 +114,18 @@ export const translations = {
     premiumFeatureTitle: 'Función Premium',
     premiumFeatureDesc: 'Esta función está disponible solo para usuarios que han comprado gemas con Stars.',
     goToShop: 'Ir a la tienda',
+    // ─── Racha y recompensas diarias ───
+    streakTitle: 'Racha diaria',
+    streakDays: 'días seguidos',
+    streakBroken: 'Racha reiniciada',
+    streakLongest: 'Récord',
+    dailyBase: 'Base diaria',
+    dailyReferrals: 'Bonus referidos activos',
+    dailyStreak: 'Bonus racha',
+    alreadyClaimed: 'Ya reclamaste hoy',
+    nextClaimIn: 'Próxima en',
+    claimReward: 'Reclamar recompensa',
+    activeReferrals: 'referidos activos',
   },
   en: {
     welcome: 'Hello',
@@ -224,6 +238,18 @@ export const translations = {
     premiumFeatureTitle: 'Premium feature',
     premiumFeatureDesc: 'This feature is only available to users who bought gems with Stars.',
     goToShop: 'Go to shop',
+    // ─── Streak and daily rewards ───
+    streakTitle: 'Daily streak',
+    streakDays: 'days in a row',
+    streakBroken: 'Streak reset',
+    streakLongest: 'Best',
+    dailyBase: 'Daily base',
+    dailyReferrals: 'Active referrals bonus',
+    dailyStreak: 'Streak bonus',
+    alreadyClaimed: 'Already claimed today',
+    nextClaimIn: 'Next in',
+    claimReward: 'Claim reward',
+    activeReferrals: 'active referrals',
   },
 }
 
