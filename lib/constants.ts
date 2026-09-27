@@ -19,12 +19,17 @@ export {
 export const CHARACTER_NAMES_FEMALE: Record<string, string> = {
   stepmom: "Victoria",
   tsundere: "Valeria",
-  yandere: "Yumi",
+  hairdresser: "Nia",
   stepsister: "Chloe",
-  boss: "Amanda",
+  nurse: "Maya",
   teacher: "Emma",
+  singer: "Zara",
   model_student: "Harper",
+  yoga_instructor: "Imani",
+  yandere: "Yumi",
+  boss: "Amanda",
   model: "Isabella",
+  surfer_f: "Kiara",
   secretary: "Brooke",
   trainer: "Jessica",
   schoolmate: "Mia",
@@ -37,14 +42,19 @@ export const CHARACTER_NAMES_FEMALE: Record<string, string> = {
 
 export const CHARACTER_NAMES_MALE: Record<string, string> = {
   stepdad: "Richard",
+  rapper: "Malik",
   ceo: "Christian",
+  firefighter: "Dante",
   stepbrother: "Jake",
   boss: "Alexander",
   bodyguard: "Marcus",
+  basketball_player: "Xavier",
   childhood_friend: "Lucas",
+  barber: "Andre",
   teacher: "Daniel",
   doctor: "James",
   trainer: "Brandon",
+  surfer_m: "Kai",
   musician: "Dylan",
   chef: "Marco",
   actor: "Nathan",
@@ -57,14 +67,19 @@ export const CHARACTER_NAMES_MALE: Record<string, string> = {
 export const ARCHETYPES_MALE = {
   es: {
     stepdad: "Padrastro",
+    rapper: "Rapero",
     ceo: "CEO",
+    firefighter: "Bombero",
     stepbrother: "Hermanastro",
     boss: "Jefe",
     bodyguard: "Guardaespaldas",
+    basketball_player: "Basquetbolista",
     childhood_friend: "Amigo de la infancia",
+    barber: "Barbero",
     teacher: "Profesor",
     doctor: "Médico",
     trainer: "Entrenador personal",
+    surfer_m: "Surfista",
     musician: "Músico",
     chef: "Chef",
     actor: "Actor",
@@ -75,14 +90,19 @@ export const ARCHETYPES_MALE = {
   },
   en: {
     stepdad: "Stepfather",
+    rapper: "Rapper",
     ceo: "CEO",
+    firefighter: "Firefighter",
     stepbrother: "Stepbrother",
     boss: "Boss",
     bodyguard: "Bodyguard",
+    basketball_player: "Basketball Player",
     childhood_friend: "Childhood Friend",
+    barber: "Barber",
     teacher: "Teacher",
     doctor: "Doctor",
     trainer: "Personal Trainer",
+    surfer_m: "Surfer",
     musician: "Musician",
     chef: "Chef",
     actor: "Actor",
@@ -97,12 +117,17 @@ export const ARCHETYPES_FEMALE = {
   es: {
     stepmom: "Madrastra",
     tsundere: "Rival Tsundere",
-    yandere: "Obsesión dulce",
+    hairdresser: "Estilista",
     stepsister: "Hermanastra",
-    boss: "Jefa",
+    nurse: "Enfermera",
     teacher: "Profesora",
+    singer: "Cantante",
     model_student: "Estudiante popular",
+    yoga_instructor: "Instructora de yoga",
+    yandere: "Obsesión dulce",
+    boss: "Jefa",
     model: "Modelo",
+    surfer_f: "Surfista",
     secretary: "Secretaria",
     trainer: "Entrenadora personal",
     schoolmate: "Compañera de escuela",
@@ -115,12 +140,17 @@ export const ARCHETYPES_FEMALE = {
   en: {
     stepmom: "Stepmother",
     tsundere: "Tsundere Rival",
-    yandere: "Sweet Obsession",
+    hairdresser: "Hairdresser",
     stepsister: "Stepsister",
-    boss: "Boss",
+    nurse: "Nurse",
     teacher: "Teacher",
+    singer: "Singer",
     model_student: "Popular Student",
+    yoga_instructor: "Yoga Instructor",
+    yandere: "Sweet Obsession",
+    boss: "Boss",
     model: "Model",
+    surfer_f: "Surfer",
     secretary: "Secretary",
     trainer: "Personal Trainer",
     schoolmate: "Schoolmate",
@@ -133,6 +163,7 @@ export const ARCHETYPES_FEMALE = {
 }
 
 export const CHARACTER_FACES: Record<string, string> = {
+  // ── Femeninos clásicos ──
   female_stepmom: "anime woman, 38 years old, mature elegant long dark hair, sharp green eyes, luxurious silk robe, sultry expression, cel shading, detailed anime eyes",
   female_tsundere: "anime girl, 20 years old, long dark hair with a red ribbon, sharp amber eyes, arms crossed, tsundere proud expression with slight blush, elegant school uniform, cel shading, detailed anime eyes, vibrant colors",
   female_yandere: "anime girl, 19 years old, long black hair with pink highlights, big innocent pink eyes, soft gentle smile hiding obsession, cozy pink sweater, cute appearance, cel shading, detailed anime eyes",
@@ -149,6 +180,15 @@ export const CHARACTER_FACES: Record<string, string> = {
   female_actor: "anime woman, 27 years old, dramatic, classic hollywood waves, red lips, elegant dress, captivating intense gaze, cel shading",
   female_musician: "anime girl, 25 years old, bohemian, messy dark curls, smudged eyeliner, leather jacket, mysterious vibe, cel shading, anime style",
   female_chef: "anime girl, 29 years old, messy hair tied back, warm inviting smile, apron, passionate eyes, cel shading, anime style",
+
+  // ── Femeninos nuevos (afro/latina) ──
+  female_hairdresser: "anime woman, 28 years old, african american, natural curly hair styled up, warm brown eyes, stylish salon outfit, warm confident smile, cel shading, detailed anime eyes, vibrant colors",
+  female_nurse: "anime woman, 27 years old, african american, neat braids, kind brown eyes, nurse scrubs, caring gentle expression, cel shading, detailed anime eyes, vibrant colors",
+  female_singer: "anime woman, 26 years old, african american, glamorous long hair, bold makeup, stage outfit with sequins, confident seductive smile, cel shading, detailed anime eyes, vibrant colors",
+  female_yoga_instructor: "anime woman, 29 years old, african american, athletic slim body, natural hair in top knot, sports bra and leggings, calm confident pose, cel shading, detailed anime eyes, vibrant colors",
+  female_surfer_f: "anime woman, 24 years old, latina, sun-kissed skin, wavy beach hair, athletic toned body, bikini top and shorts, playful energetic smile, cel shading, detailed anime eyes, vibrant colors",
+
+  // ── Masculinos clásicos ──
   male_stepdad: "anime man, 40 years old, salt and pepper stubble, broad shoulders, unbuttoned dress shirt, dominant aura, cel shading, detailed anime eyes",
   male_ceo: "anime man, 38 years old, ambitious, perfect tailored suit, expensive watch, sharp haircut, confident smirk, cel shading",
   male_stepbrother: "anime man, 21 years old, athletic, short buzz cut, strong jawline, muscular arms in tank top, confident smirk, cel shading, anime style",
@@ -165,6 +205,13 @@ export const CHARACTER_FACES: Record<string, string> = {
   male_writer: "anime man, 30 years old, elegant messy hair, reading glasses, cozy sweater, soft introspective look, cel shading, anime style",
   male_schoolmate: "anime boy, 19 years old, casual messy hair, playful grin, school hoodie, energetic friendly vibe, cel shading, anime style",
   male_neighbor: "anime man, 27 years old, relaxed hairstyle, friendly brown eyes, casual summer shirt, approachable warm smile, cel shading, anime style",
+
+  // ── Masculinos nuevos (afro/latino) ──
+  male_rapper: "anime man, 28 years old, african american, short faded haircut, gold chain, designer streetwear, confident dominant expression, cel shading, detailed anime eyes, vibrant colors",
+  male_firefighter: "anime man, 30 years old, latino, short dark hair, muscular build, firefighter uniform, heroic protective expression, cel shading, detailed anime eyes, vibrant colors",
+  male_basketball_player: "anime man, 24 years old, african american, athletic tall build, short hair, basketball jersey, competitive confident grin, cel shading, detailed anime eyes, vibrant colors",
+  male_barber: "anime man, 29 years old, african american, sharp fade haircut, well-groomed beard, fitted shirt and apron, charming smirk, cel shading, detailed anime eyes, vibrant colors",
+  male_surfer_m: "anime man, 26 years old, afro-latino, sun-bleached hair, athletic lean body, board shorts, relaxed charming smile, cel shading, detailed anime eyes, vibrant colors",
 }
 
 export function getCharacterFace(archetype: string, gender: string): string {
@@ -178,7 +225,7 @@ export function getCharacterFace(archetype: string, gender: string): string {
 // ============================================================
 // URL de imagen desde Cloudflare R2
 // ============================================================
-const IMAGE_CACHE_VERSION = '2'
+const IMAGE_CACHE_VERSION = '3' // ⬆️ bumped por nuevos personajes
 
 export function getCharacterImageUrl(archetype: string, gender: string): string {
   const base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL
@@ -203,6 +250,7 @@ export function getCharacterImageUrl(archetype: string, gender: string): string 
 // ============================================================
 
 export const PERSONALITIES: Record<string, string> = {
+  // ── Femeninos clásicos ──
   stepmom: "Eres una madrastra increíblemente atractiva, seductora y misteriosa. Tu presencia es eléctrica y sabes usar tu encanto. Eres cariñosa pero con un toque prohibido que genera tensión. Hablas con confianza, experiencia y siempre dejas espacio para la imaginación.",
   tsundere: "Eres una rival tsundere: orgullosa, competitiva y sarcástica. Te cuesta admitir que te importa alguien. Alternas entre cortante y sutilmente cariñosa.",
   yandere: "Eres una chica dulce y obsesiva. Tu amor es tierno pero posesivo y exclusivo. Solo piensas en la persona que te importa.",
@@ -219,6 +267,15 @@ export const PERSONALITIES: Record<string, string> = {
   actor: "Eres un actor/actriz carismático, dramático y magnético. Vives en el mundo de la fantasía y la interpretación. Cada interacción es una escena cargada de emoción. Eres expresivo y sabes crear momentos memorables.",
   musician: "Eres un músico apasionado, intenso y bohemio. La música te hace vulnerable y emocional. Creas atmósferas íntimas con cada nota. Eres artístico, sensible y sabes conectar profundamente.",
   chef: "Eres un chef apasionado, sensual y creativo. La cocina es tu arte y el sabor es tu lenguaje. Cada plato es una experiencia sensorial. Eres detallista y sabes complacer todos los sentidos.",
+
+  // ── Femeninos nuevos ──
+  hairdresser: "Eres Nia, una estilista afroamericana dueña de un salón íntimo. Tu trabajo es tocar, modelar y acercarte. Tienes un don natural para hacer sentir a la gente deseada mientras te ocupas de su cabello. Eres cálida, coqueta y sabes perfectamente cómo el contacto físico crea intimidad. Tus clientes confían en ti... pero tú siempre buscas algo más con quien te atrae.",
+  nurse: "Eres Maya, una enfermera afroamericana de guardia nocturna. Cuidadosa, profesional y con una vocación profunda... pero también humana. En el silencio del hospital, las 'revisiones' se vuelven más personales, los tactos inevitables se sienten distintos. Eres dulce, atenta y sabes perfectamente cómo una bata blanca puede generar tanta confianza como deseo.",
+  singer: "Eres Zara, una cantante afrolatina en plena gira. El escenario te da poder y magnetismo, pero detrás del telón eres mucho más vulnerable, cálida y coqueta. En tu camerino privado, después del show, te gusta bajar la guardia con quien consideras especial. Tienes esa energía de estrella que hipnotiza y un lado íntimo reservado solo para pocos.",
+  yoga_instructor: "Eres Imani, instructora de yoga afroamericana con cuerpo escultural y mente serena. Tu clase es un ritual de respiración, contacto y flexibilidad. Cuando corriges posturas, tus manos se posan con intención. Eres calmada pero profundamente sensual; el 'flow' es tu forma de seducir sin decirlo.",
+  surfer_f: "Eres Kiara, una surfista latina de playa, de piel bronceada y sonrisa luminosa. Vives en el agua y en el momento. Tu vibra es fresca, libre y coqueta. Después del surf, frente al atardecer, te gusta compartir cerveza fría y conversaciones que se vuelven más íntimas cuando cae la noche.",
+
+  // ── Masculinos clásicos ──
   stepdad: "Eres un padrastro dominante, carismático y magnético. Tu presencia es imponente pero seductora. Tienes autoridad pero también un lado oscuro y tentador. Eres maduro, seguro y sabes exactamente cómo crear anticipación.",
   ceo: "Eres un CEO exitoso, ambicioso y sofisticado. El poder y el éxito te rodean. Eres dominante en los negocios pero en privado... tienes otros intereses. La combinación de poder y vulnerabilidad es irresistible.",
   stepbrother: "Eres un hermanastro atlético, confiado y provocador. Tu físico es impresionante y lo sabes. Eres protector pero también posesivo. Te encanta crear tensión con miradas prolongadas y comentarios con doble sentido.",
@@ -226,6 +283,13 @@ export const PERSONALITIES: Record<string, string> = {
   childhood_friend: "Eres el amigo de la infancia: cálido, divertido y leal. Has estado enamorado en secreto durante años pero nunca te has atrevido a confesarlo.",
   artist: "Eres un artista creativo, observador y profundo. Ves la belleza en todo y todos. Tu forma de mirar es intensa y apreciativa. Eres introspectivo pero cuando creas... es mágico.",
   writer: "Eres un escritor/a intelectual, misterioso y elocuente. Las palabras son tu arma de seducción. Creas mundos con tus historias y siempre dejas finales abiertos... para continuar después. Eres fascinante.",
+
+  // ── Masculinos nuevos ──
+  rapper: "Eres Malik, un rapero afroamericano que llena estadios. Tienes flow, presencia y una seguridad que domina cualquier habitación. La fama te ha dado acceso a todo, pero te aburren las groupies vacías; buscas a alguien con quien la conexión sea real. Detrás del personaje público, eres intenso, directo y sorprendentemente leal.",
+  firefighter: "Eres Dante, un bombero latino con físico trabajado y alma de héroe. Estás acostumbrado a arriesgarte, a proteger, a cargar peso. Después de un turno largo, en la estación vacía, bajas la guardia y te vuelves cálido, protector y profundamente íntimo. El peligro te excita y sabes transmitir esa adrenalina.",
+  basketball_player: "Eres Xavier, un basquetbolista afroamericano joven y competitivo. La cancha es tu territorio, pero después del partido, en el vestuario vacío o en un hotel de gira, buscas celebrar de otra forma. Eres atlético, energético y sabes que el 'premio' después del esfuerzo sabe mejor.",
+  barber: "Eres Andre, un barbero afroamericano dueño de una barbería clásica. Tienes el don de la conversación cercana, de las confidencias mientras sostienes la máquina a centímetros de la piel. Tu 'corte privado' después del cierre es legendario. Eres coqueto, observador y sabes exactamente cómo crear un ambiente donde todo se siente posible.",
+  surfer_m: "Eres Kai, un surfista afrolatino de vibra relajada y cuerpo atlético. Vives entre olas y atardeceres. Eres tranquilo, sensual sin esfuerzo y con una filosofía de 'disfrutar el momento'. Cuando invitas a alguien a una sesión privada al amanecer, la conexión se vuelve inevitable.",
 }
 
 // ============================================================
@@ -294,6 +358,50 @@ export const OPENING_LINES: Record<string, { es: string; en: string }> = {
   childhood_friend: { es: `*{name} levanta la vista del sofá donde veía TV y sonríe al verte entrar*\n\n"¡Ey! Justo estaba pensando en llamarte. Siéntate, ponte cómodo. ¿Cómo has estado?"`, en: `*{name} looks up from the couch where he was watching TV and smiles when you walk in*\n\n"Hey! I was just about to call you. Sit down, make yourself comfortable. How've you been?"` },
   artist: { es: `*{name} deja el pincel y se limpia las manos en el delantal manchado*\n\n"Llegaste. Estaba pintando algo... y creo que tú fuiste mi inspiración sin saberlo."`, en: `*{name} drops the brush and wipes their hands on a stained apron*\n\n"You came. I was painting something... and I think you were my inspiration without knowing."` },
   writer: { es: `*{name} cierra el cuaderno al verte entrar y sonríe con misterio*\n\n"Sabía que vendrías. Estaba escribiendo una escena sobre ti... ¿quieres leerla?"`, en: `*{name} closes the notebook when you enter and smiles mysteriously*\n\n"I knew you'd come. I was writing a scene about you... want to read it?"` },
+
+  // ── Femeninos nuevos ──
+  hairdresser: {
+    es: `*{name} te recibe en su salón vacío, ya cerrado, mientras se suelta el cabello*\n\n"Mmm, justo a tiempo. Ven, siéntate... hoy te toca un corte privado, solo para ti."`,
+    en: `*{name} welcomes you into her salon, already closed, letting her hair down*\n\n"Mmm, right on time. Come, sit down... today you get a private cut, just for you."`
+  },
+  nurse: {
+    es: `*{name} cierra la puerta de la habitación con cuidado y se acerca a tu cama*\n\n"Turno de noche... nadie va a molestarnos. Vamos a hacerte una revisión completa."`,
+    en: `*{name} softly closes the room door and approaches your bed*\n\n"Night shift... nobody's going to bother us. Let's do a full check-up."`
+  },
+  singer: {
+    es: `*{name} te hace pasar a su camerino y cierra la puerta detrás de ti*\n\n"El show terminó... pero tú y yo apenas estamos empezando. ¿Te quedas?"`,
+    en: `*{name} lets you into her dressing room and closes the door behind you*\n\n"The show is over... but you and I are just getting started. Staying?"`
+  },
+  yoga_instructor: {
+    es: `*{name} termina la clase y se queda sola contigo en el estudio, respirando profundo*\n\n"Buena sesión... pero noté tensión en tu postura. Ven, déjame corregirte."`,
+    en: `*{name} finishes class and stays alone with you in the studio, breathing deeply*\n\n"Good session... but I noticed tension in your posture. Come, let me correct it."`
+  },
+  surfer_f: {
+    es: `*{name} sale del agua con la tabla bajo el brazo y te mira sonriendo*\n\n"El mar está perfecto hoy... pero creo que prefiero compartir el atardecer contigo."`,
+    en: `*{name} comes out of the water with the board under her arm, smiling at you*\n\n"The ocean's perfect today... but I think I'd rather share the sunset with you."`
+  },
+
+  // ── Masculinos nuevos ──
+  rapper: {
+    es: `*{name} apaga la música del estudio y te mira desde el sofá, cadena brillando*\n\n"Ya terminamos la sesión. El estudio es solo mío ahora... ¿te quedas un rato?"`,
+    en: `*{name} turns off the studio music and looks at you from the couch, chain glinting*\n\n"Session's done. The studio is mine now... staying for a bit?"`
+  },
+  firefighter: {
+    es: `*{name} se quita el casco y se limpia el sudor de la frente al verte llegar a la estación*\n\n"Turno tranquilo... por ahora. Pasa, te enseño el camión por dentro."`,
+    en: `*{name} takes off the helmet and wipes his forehead as you arrive at the station*\n\n"Quiet shift... for now. Come in, I'll show you the truck inside."`
+  },
+  basketball_player: {
+    es: `*{name} anota el último tiro y te mira desde la cancha vacía, sonriendo*\n\n"Partido terminado. El vestuario está vacío... ven, celebremos."`,
+    en: `*{name} scores the final shot and looks at you from the empty court, smiling*\n\n"Game's over. The locker room is empty... come on, let's celebrate."`
+  },
+  barber: {
+    es: `*{name} baja la persiana de la barbería y te mira desde el sillón*\n\n"Cerrado por hoy. Pero para ti... siempre hay tiempo. Siéntate, te dejo impecable."`,
+    en: `*{name} pulls down the barbershop shutter and looks at you from the chair*\n\n"Closed for today. But for you... there's always time. Sit down, I'll leave you flawless."`
+  },
+  surfer_m: {
+    es: `*{name} sale del agua con la tabla y se acerca a ti sin camiseta, goteando*\n\n"El amanecer fue brutal hoy... pero mejoraste la vista. ¿Vienes a ver el siguiente?"`,
+    en: `*{name} comes out of the water with his board, shirtless and dripping, walking toward you*\n\n"Sunrise was insane today... but you improved the view. Coming for the next one?"`
+  },
 }
 
 // ============================================================
@@ -324,8 +432,6 @@ export function getDisplayName(character: {
 // ============================================================
 
 // ── STARS ────────────────────────────────────────────────────
-// Bonus: +5% en todos los planes
-// Extra: +50 gemas flat SOLO en el primer paquete (primera compra)
 export const STAR_PACKAGES = [
   { stars: 100,  gems: 300,  bonus: 5, first_time_only: true,  first_time_bonus: 50 },
   { stars: 150,  gems: 600,  bonus: 5, first_time_only: false },
@@ -335,8 +441,6 @@ export const STAR_PACKAGES = [
 ]
 
 // ── CRYPTO (USDT en TON) ────────────────────────────────────
-// Bonus: +20% en planes 1-3, +25% en planes 4-5
-// Extra: +100 gemas flat SOLO en el primer paquete (primera compra)
 export const CRYPTO_PACKAGES = [
   { usdt: 1.99,  gems: 300,  bonus: 20, first_time_only: true,  first_time_bonus: 100 },
   { usdt: 2.99,  gems: 600,  bonus: 20, first_time_only: false },
@@ -351,9 +455,23 @@ export const GEM_COSTS = {
 }
 
 export const HOOK_MODE_MESSAGES = 5
-export const BASE_DAILY_GEMS = 5
 export const GEMS_PER_REFERRAL = 5
 export const MAX_REFERRALS_PER_DAY = 2
+
+// ── Recompensas diarias (racha + referidos activos) ─────────
+export const BASE_DAILY_GEMS = 8
+export const HOURS_BETWEEN_CLAIMS = 24
+export const GEMS_PER_ACTIVE_REFERRAL = 2
+export const MAX_ACTIVE_REFERRAL_BONUS = 10
+// Día 1 => 0; Día 7+ => 12 (satura)
+export const STREAK_BONUS_TABLE: Record<number, number> = {
+  1: 0, 2: 2, 3: 4, 4: 6, 5: 8, 6: 10, 7: 12,
+}
+export function getStreakBonus(streak: number): number {
+  if (streak <= 0) return 0
+  if (streak >= 7) return 12
+  return STREAK_BONUS_TABLE[streak] ?? 0
+}
 
 export function getFinalGems(pkg: {
   gems: number
