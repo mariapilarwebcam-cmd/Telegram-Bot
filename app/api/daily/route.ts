@@ -30,7 +30,7 @@ export async function POST(request: Request) {
 
     const now = Date.now()
 
-    // ── Cooldown ────────────────────────────────────────────
+    // ── Cooldown 24h ────────────────────────────────────────
     if (user.last_daily_claim) {
       const hoursSince =
         (now - new Date(user.last_daily_claim).getTime()) / 3_600_000
@@ -73,8 +73,7 @@ export async function POST(request: Request) {
 
     const longestStreak = Math.max(user.longest_streak || 0, newStreak)
 
-    // ── Contar referidos ACTIVOS ────────────────────────────
-    // Activo = creado hace >24h Y con mensaje en las últimas 48h
+    // ── Referidos ACTIVOS (>24h antigüedad + mensaje en 48h) ─
     let activeReferrals = 0
     try {
       const { data: referrals } = await supabaseAdmin
