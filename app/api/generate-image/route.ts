@@ -11,6 +11,7 @@ import { getLevelFromMessages, getImageCost, getClothingLevel, getSceneStyle } f
 // Se inyecta en el prompt cuando NO se usa reference image.
 // ============================================================
 const CHARACTER_DNA: Record<string, string> = {
+  // ── Femeninos clásicos ──
   female_stepmom: "mature woman, long dark hair, green eyes, elegant",
   female_tsundere: "young woman, long dark navy hair, red ribbon, amber eyes",
   female_yandere: "young woman, long black hair with pink highlights, pink eyes",
@@ -27,6 +28,15 @@ const CHARACTER_DNA: Record<string, string> = {
   female_actor: "woman, hollywood waves, red lips, elegant dress",
   female_musician: "young woman, dark curls, smudged eyeliner, leather jacket",
   female_chef: "woman, messy hair tied back, warm smile, apron",
+
+  // ── Femeninos nuevos (afro/latina) ──
+  female_hairdresser: "black woman, natural curly hair styled up, warm brown eyes, stylish salon outfit, confident smile",
+  female_nurse: "black woman, neat braids, kind brown eyes, nurse scrubs, caring expression",
+  female_singer: "black woman, glamorous long hair, bold makeup, sequined stage outfit, seductive smile",
+  female_yoga_instructor: "black woman, athletic slim body, natural hair in top knot, sports bra, calm pose",
+  female_surfer_f: "latina woman, sun-kissed skin, wavy beach hair, athletic body, bikini top, playful smile",
+
+  // ── Masculinos clásicos ──
   male_stepdad: "mature man, salt and pepper hair, broad shoulders, dress shirt",
   male_ceo: "man, sharp haircut, steel-blue eyes, tailored suit, expensive watch",
   male_stepbrother: "young man, buzz cut, strong jawline, muscular, tank top",
@@ -43,6 +53,13 @@ const CHARACTER_DNA: Record<string, string> = {
   male_writer: "man, messy hair, reading glasses, cozy sweater",
   male_schoolmate: "young man, casual messy hair, playful grin, school hoodie",
   male_neighbor: "man, relaxed hair, brown eyes, casual summer shirt",
+
+  // ── Masculinos nuevos (afro/latino) ──
+  male_rapper: "black man, short faded haircut, gold chain, designer streetwear, dominant expression",
+  male_firefighter: "latino man, short dark hair, muscular build, firefighter uniform, heroic look",
+  male_basketball_player: "black man, athletic tall build, short hair, basketball jersey, confident grin",
+  male_barber: "black man, sharp fade haircut, well-groomed beard, fitted shirt and apron, charming smirk",
+  male_surfer_m: "afro-latino man, sun-bleached hair, athletic lean body, board shorts, relaxed smile",
 }
 
 // ── Prompts SFW para niveles 1-3 (sin contenido NSFW) ──
