@@ -13,8 +13,14 @@ import { generateAIResponse, getIntensity, buildSystemPrompt } from '@/lib/ai'
 
 export async function POST(request: Request) {
   try {
-    const { telegram_id, character_id, message } = await request.json()
-    const tid = String(telegram_id)
+    // ✅ AUTH: telegram_id validado por el middleware
+    const tid = request.headers.get('x-telegram-id-validated')
+    if (!tid) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    }
+
+    // Body sin telegram_id (ya no es fuente de verdad)
+    const { character_id, message } = await request.json()
 
     const { data: user } = await supabaseAdmin
       .from('users')
@@ -59,7 +65,6 @@ export async function POST(request: Request) {
         newHookRemaining = HOOK_MODE_MESSAGES
       }
 
-      // ✅ FIX: sin .select().single() — solo verificamos el error
       const { error: updateError } = await supabaseAdmin
         .from('users')
         .update({ gems: newGems, hook_messages_remaining: newHookRemaining })
