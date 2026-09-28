@@ -14,13 +14,16 @@ if (!anonKey) {
   throw new Error('❌ FATAL: Falta NEXT_PUBLIC_SUPABASE_ANON_KEY')
 }
 
-const looksLikeJWT = (key: string) => key.startsWith('eyJ') && key.length > 100
+// ✅ Validación más permisiva: solo verificamos que no esté vacía
+// Supabase cambió el formato de las keys en 2024 (ahora pueden empezar
+// con sb_publishable_... en vez de eyJ)
+const isValidKey = (key: string) => key.length > 40
 
-if (serviceRoleKey && !looksLikeJWT(serviceRoleKey)) {
-  console.error('🚨 SUPABASE_SERVICE_ROLE_KEY tiene formato inválido. Debe empezar con "eyJ".')
+if (serviceRoleKey && !isValidKey(serviceRoleKey)) {
+  console.error('🚨 SUPABASE_SERVICE_ROLE_KEY tiene formato inválido (muy corta).')
 }
-if (!looksLikeJWT(anonKey)) {
-  console.error('🚨 NEXT_PUBLIC_SUPABASE_ANON_KEY tiene formato inválido.')
+if (!isValidKey(anonKey)) {
+  console.error('🚨 NEXT_PUBLIC_SUPABASE_ANON_KEY tiene formato inválido (muy corta).')
 }
 
 if (!serviceRoleKey) {
@@ -29,7 +32,7 @@ if (!serviceRoleKey) {
     'Las rutas API usarán la ANON KEY y fallarán al escribir. ' +
     'Añádela en Vercel y REDEPLOYA.'
   )
-} else if (looksLikeJWT(serviceRoleKey)) {
+} else if (isValidKey(serviceRoleKey)) {
   console.log('✅ supabaseAdmin inicializado con SERVICE_ROLE_KEY')
 }
 
