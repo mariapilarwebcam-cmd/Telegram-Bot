@@ -29,31 +29,31 @@ try {
     ratelimiters = {
       chat: new Ratelimit({
         redis,
-        limiter: Ratelimit.slidingWindow(60, '1 m'), // ✅ Subido de 30 a 60 msgs/min
+        limiter: Ratelimit.slidingWindow(60, '1 m'),
         prefix: 'rl:chat',
         analytics: false,
       }),
       image: new Ratelimit({
         redis,
-        limiter: Ratelimit.slidingWindow(5, '1 m'), // 5 imágenes/min
+        limiter: Ratelimit.slidingWindow(5, '1 m'),
         prefix: 'rl:image',
         analytics: false,
       }),
       audio: new Ratelimit({
         redis,
-        limiter: Ratelimit.slidingWindow(10, '1 m'), // 10 audios/min
+        limiter: Ratelimit.slidingWindow(10, '1 m'),
         prefix: 'rl:audio',
         analytics: false,
       }),
       auth: new Ratelimit({
         redis,
-        limiter: Ratelimit.slidingWindow(20, '1 m'), // 20 intentos/min
+        limiter: Ratelimit.slidingWindow(20, '1 m'),
         prefix: 'rl:auth',
         analytics: false,
       }),
       generic: new Ratelimit({
         redis,
-        limiter: Ratelimit.slidingWindow(150, '1 m'), // ✅ Subido a 150/min para endpoints varios
+        limiter: Ratelimit.slidingWindow(150, '1 m'),
         prefix: 'rl:generic',
         analytics: false,
       }),
@@ -69,7 +69,13 @@ try {
 }
 
 // ── Endpoints públicos (sin auth, sin rate limit estricto) ───
-const PUBLIC_ENDPOINTS = ['/api/health', '/api/webhook', '/api/bot']
+// ✅ AÑADIDO /api/bot para que el webhook de Python funcione
+const PUBLIC_ENDPOINTS = [
+  '/api/health',
+  '/api/webhook',
+  '/api/bot',      // ← bot Python en Vercel
+  '/api/bot/',     // ← por si acaso
+]
 
 // ── Dev bypass ───────────────────────────────────────────────
 const DEV_BYPASS =
@@ -106,13 +112,15 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next()
   }
 
-  // Endpoints públicos: pasan sin auth ni rate limit
+  // ✅ Endpoints públicos: pasan sin auth ni rate limit
+  //    El bot Python y el webhook de Telegram NO envían header Authorization,
+  //    así que deben quedar exentos.
   if (PUBLIC_ENDPOINTS.some((p) => pathname.startsWith(p))) {
     return NextResponse.next()
   }
 
   // ══════════════════════════════════════════════════════════
-  // 1. RATE LIMITING (primero, es más barato que el HMAC)
+  // 1. RATE LIMITING
   // ══════════════════════════════════════════════════════════
   const ip = getClientIp(req)
   const limiter = pickLimiter(pathname)
@@ -142,7 +150,6 @@ export async function middleware(req: NextRequest) {
         )
       }
     } catch (e: any) {
-      // Fail-open: si Redis falla, dejamos pasar (evita bloquear toda la app)
       console.error('[middleware] rate limit error (fail-open):', e?.message)
     }
   }
@@ -150,8 +157,6 @@ export async function middleware(req: NextRequest) {
   // ══════════════════════════════════════════════════════════
   // 2. AUTH: validar initData
   // ══════════════════════════════════════════════════════════
-
-  // Dev bypass
   if (DEV_BYPASS) {
     const requestHeaders = new Headers(req.headers)
     requestHeaders.set('x-telegram-id-validated', DEV_TELEGRAM_ID)
