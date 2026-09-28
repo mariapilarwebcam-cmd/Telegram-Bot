@@ -21,7 +21,7 @@ SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_KEY')
 MINI_APP_URL = os.getenv('MINI_APP_URL', 'https://tu-dominio.vercel.app')
 
-BASE_DAILY_GEMS = 5
+BASE_DAILY_GEMS = 8
 GEMS_PER_REFERRAL = 5
 STARTING_GEMS = 15
 
