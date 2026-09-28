@@ -19,6 +19,11 @@ logger = logging.getLogger(__name__)
 
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 
+# ✅ Dispatcher a nivel de módulo — NO tiene estado del event loop
+# Solo se crea UNA VEZ y se reutiliza en todas las peticiones
+dp = Dispatcher()
+dp.include_router(router)
+
 app = FastAPI()
 
 
@@ -28,17 +33,14 @@ async def catch_all(request: Request, path: str):
     Catch-all: Vercel pasa paths variables a esta función.
     - GET → responder 'webhook alive' (útil para test)
     - POST → procesar update de Telegram
-
-    ✅ IMPORTANTE: Bot y Dispatcher se crean DENTRO del handler
-    para evitar 'Event loop is closed' entre invocaciones de Lambda.
     """
     if request.method == "GET":
         return {"status": "webhook alive", "path": path}
 
-    # ✅ Crear Bot y Dispatcher nuevos en CADA petición
+    # ✅ Bot NUEVO en cada petición
+    # La sesión aiohttp del Bot SÍ está vinculada al event loop,
+    # por eso debe recrearse. El Dispatcher NO.
     bot = Bot(token=TELEGRAM_BOT_TOKEN)
-    dp = Dispatcher()
-    dp.include_router(router)
 
     try:
         body = await request.json()
