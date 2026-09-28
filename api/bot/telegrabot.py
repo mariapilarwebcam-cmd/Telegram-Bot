@@ -25,9 +25,6 @@ BASE_DAILY_GEMS = 8
 GEMS_PER_REFERRAL = 5
 STARTING_GEMS = 15
 
-# ── STARS ────────────────────────────────────────────────────
-# Bonus: +5% en todos los planes
-# Extra: +50 gemas flat SOLO en el primer paquete (primera compra)
 STAR_PACKAGES = [
     {"stars": 100,  "gems": 300,  "bonus": 5, "first_time": True,  "flat_bonus": 50},
     {"stars": 150,  "gems": 600,  "bonus": 5, "first_time": False, "flat_bonus": 0},
@@ -37,7 +34,6 @@ STAR_PACKAGES = [
 ]
 
 def calc_final_gems(pkg: dict) -> int:
-    """Calcula gemas finales: base + % bonus + flat bonus (si aplica)"""
     percent = int(pkg['gems'] * pkg['bonus'] / 100) if pkg.get('bonus', 0) > 0 else 0
     flat = pkg.get('flat_bonus', 0)
     return pkg['gems'] + percent + flat
@@ -55,7 +51,6 @@ def generate_referral_code() -> str:
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
 
 def detect_language(language_code: Optional[str]) -> str:
-    """Detecta idioma de Telegram. Solo 'es' explícito usa español, todo lo demás inglés."""
     if not language_code:
         return 'en'
     return 'es' if language_code.lower().startswith('es') else 'en'
@@ -82,7 +77,6 @@ async def create_user_immediately(
     language: str,
     referred_by: Optional[int] = None
 ):
-    """Crea usuario con valores por defecto. Sin personaje todavía."""
     referral_code = generate_referral_code()
     user_data = {
         'telegram_id': str(telegram_id),
@@ -134,13 +128,13 @@ async def record_star_purchase(telegram_id: int, stars: int, gems: int, is_first
         'stars_amount': stars,
         'gems_amount': gems,
         'is_first_purchase': is_first_purchase,
-        'telegram_charge_id': charge_id
+        'telegram_charge_id': charge_id,
+        'payment_method': 'stars'
     }).execute()
     supabase.table('users').update({'hook_messages_remaining': 0}).eq('telegram_id', str(telegram_id)).execute()
     await add_gems(telegram_id, gems, 'purchase', f'Compra con {stars} stars')
 
 def get_main_keyboard(language: str) -> ReplyKeyboardMarkup:
-    """Solo botón grande de Mini App"""
     builder = ReplyKeyboardBuilder()
     if language == 'es':
         builder.row(KeyboardButton(text="🎭 Abrir Mini App", web_app=WebAppInfo(url=MINI_APP_URL)))
@@ -149,7 +143,6 @@ def get_main_keyboard(language: str) -> ReplyKeyboardMarkup:
     return builder.as_markup(resize_keyboard=True, one_time_keyboard=False, is_persistent=True)
 
 async def send_mini_app_message(message: Message, lang: str, is_new_user: bool = False):
-    """Envía el mensaje principal con el botón a la Mini App"""
     if lang == 'es':
         if is_new_user:
             text = (
@@ -219,7 +212,10 @@ async def cmd_start(message: Message, command: CommandObject = None):
         lang = user.get('language', language) or language
         await send_mini_app_message(message, lang, is_new_user=False)
 
-@router.message(F.text.in_({"💎 Balance"}))
+
+# ✅ Balance: acepta /balance, /saldo, o texto "💎 Balance"
+@router.message(Command("balance", "saldo", "gems"))
+@router.message(F.text.in_({"💎 Balance", "💎 Saldo"}))
 async def cmd_balance(message: Message):
     user = await get_user(message.from_user.id)
     if not user:
@@ -231,6 +227,9 @@ async def cmd_balance(message: Message):
         text = f"💎 *Your Balance*\n\nGems: *{user['gems']}*\n\n💡 Open the Mini App for more details."
     await message.answer(text, parse_mode="Markdown")
 
+
+# ✅ Tienda: acepta /shop, /tienda, o texto
+@router.message(Command("shop", "tienda", "store"))
 @router.message(F.text.in_({"🛒 Tienda", "🛒 Shop"}))
 async def cmd_shop(message: Message):
     user = await get_user(message.from_user.id)
@@ -261,6 +260,7 @@ async def cmd_shop(message: Message):
 
     builder.adjust(1)
     await message.answer(text, reply_markup=builder.as_markup(), parse_mode="Markdown")
+
 
 @router.callback_query(F.data.startswith('buy_'))
 async def process_purchase(callback: CallbackQuery):
@@ -299,9 +299,11 @@ async def process_purchase(callback: CallbackQuery):
         logger.error(f"Error al enviar invoice: {e}")
         await callback.answer("❌ Error al enviar la factura", show_alert=True)
 
+
 @router.pre_checkout_query()
 async def process_pre_checkout(pre_checkout_query: PreCheckoutQuery):
     await pre_checkout_query.answer(ok=True)
+
 
 @router.message(F.successful_payment)
 async def process_successful_payment(message: Message):
@@ -329,6 +331,9 @@ async def process_successful_payment(message: Message):
         text = f"✅ Purchase successful! You received *{gems} gems*.\n\n🎉 You now have access to audio and images!"
     await message.answer(text, parse_mode="Markdown", reply_markup=get_main_keyboard(lang))
 
+
+# ✅ Invitar: acepta /invite, /invitar, o texto
+@router.message(Command("invite", "invitar", "referral", "ref"))
 @router.message(F.text.in_({"🎁 Invitar", "🎁 Invite"}))
 async def cmd_invite(message: Message):
     user = await get_user(message.from_user.id)
@@ -351,6 +356,9 @@ async def cmd_invite(message: Message):
                 f"💡 Share your link. When your friend sends 3 messages, you'll earn *5 gems*.")
     await message.answer(text, parse_mode="Markdown")
 
+
+# ✅ Ayuda: acepta /help, /ayuda, o texto
+@router.message(Command("help", "ayuda", "start_help"))
 @router.message(F.text.in_({"❓ Ayuda", "❓ Help"}))
 async def cmd_help(message: Message):
     user = await get_user(message.from_user.id)
