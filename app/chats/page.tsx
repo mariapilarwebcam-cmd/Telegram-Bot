@@ -61,13 +61,18 @@ export default function ChatsPage() {
         return
       }
 
+      // ✅ NUEVO: incluir `role` para poder filtrar
       const { data: history } = await supabase
         .from('conversation_history')
-        .select('character_id, content, created_at')
+        .select('character_id, content, created_at, role')
         .eq('telegram_id', tid)
         .order('created_at', { ascending: false })
 
-      const byChar: Record<number, { lastMessage: string; lastAt: string; count: number }> = {}
+      const byChar: Record<
+        number,
+        { lastMessage: string; lastAt: string; count: number }
+      > = {}
+
       for (const h of history || []) {
         if (!byChar[h.character_id]) {
           byChar[h.character_id] = {
@@ -76,7 +81,10 @@ export default function ChatsPage() {
             count: 0,
           }
         }
-        byChar[h.character_id].count++
+        // ✅ NUEVO: contar SOLO mensajes del usuario
+        if (h.role === 'user') {
+          byChar[h.character_id].count++
+        }
       }
 
       const rows: ChatRow[] = chars.map((c) => ({
@@ -142,6 +150,7 @@ export default function ChatsPage() {
       ) : (
         <div className="chat-list">
           {chats.map((c) => {
+            // ✅ Ahora messageCount = solo mensajes del usuario → niveles alineados
             const level = getRelationshipLevel(c.messageCount)
             const avatar = getCharacterImageUrl(c.archetype, c.gender)
             return (
