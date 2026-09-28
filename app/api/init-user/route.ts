@@ -1,3 +1,5 @@
+// app/api/init-user/route.ts
+
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 
@@ -12,12 +14,14 @@ function generateReferralCode(): string {
 
 export async function POST(request: Request) {
   try {
-    const { telegram_id, first_name, username, language } = await request.json()
-    const tid = String(telegram_id)
-
-    if (!tid || tid === 'undefined') {
-      return NextResponse.json({ error: 'telegram_id requerido' }, { status: 400 })
+    // ✅ AUTH: telegram_id validado por el middleware
+    const tid = request.headers.get('x-telegram-id-validated')
+    if (!tid) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
+
+    // Body sin telegram_id (ya no es fuente de verdad)
+    const { first_name, username, language } = await request.json()
 
     // Verificar si ya existe
     const { data: existing } = await supabaseAdmin
