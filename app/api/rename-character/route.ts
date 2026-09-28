@@ -6,13 +6,18 @@ import { GEM_COSTS } from '@/lib/constants'
 
 export async function POST(request: Request) {
   try {
-    const { telegram_id, character_id, new_name } = await request.json()
-    const tid = String(telegram_id)
+    // ✅ AUTH: telegram_id validado por el middleware
+    const tid = request.headers.get('x-telegram-id-validated')
+    if (!tid) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    }
+
+    // Body sin telegram_id (ya no es fuente de verdad)
+    const { character_id, new_name } = await request.json()
     const cid = Number(character_id)
     const name = String(new_name || '').trim()
 
     // Validaciones básicas
-    if (!tid) return NextResponse.json({ error: 'telegram_id requerido' }, { status: 400 })
     if (!cid) return NextResponse.json({ error: 'character_id requerido' }, { status: 400 })
     if (!name) return NextResponse.json({ error: 'Nombre vacío' }, { status: 400 })
     if (name.length > 30) return NextResponse.json({ error: 'Nombre demasiado largo (máx 30)' }, { status: 400 })
