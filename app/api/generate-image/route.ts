@@ -96,8 +96,14 @@ const NSFW_SCENE_PROMPTS: Record<number, string> = {
 
 export async function POST(request: Request) {
   try {
-    const { telegram_id, character_id, description } = await request.json()
-    const tid = String(telegram_id)
+    // ✅ AUTH: telegram_id validado por el middleware
+    const tid = request.headers.get('x-telegram-id-validated')
+    if (!tid) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    }
+
+    // Body sin telegram_id (ya no es fuente de verdad)
+    const { character_id, description } = await request.json()
 
     const { data: user } = await supabaseAdmin
       .from('users')
