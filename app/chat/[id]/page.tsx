@@ -47,7 +47,6 @@ export default function ChatPage() {
   const [blocked, setBlocked] = useState(false)
   const [blockedMessage, setBlockedMessage] = useState('')
 
-  // ✅ NUEVO: Contador exacto de mensajes del usuario (viene de DB)
   const [totalUserMessages, setTotalUserMessages] = useState(0)
 
   const [showPremiumModal, setShowPremiumModal] = useState(false)
@@ -80,9 +79,16 @@ export default function ChatPage() {
 
     Promise.all([
       supabase.from('user_characters').select('*').eq('id', characterId).maybeSingle(),
-      supabase.from('conversation_history').select('*').eq('telegram_id', tid).eq('character_id', characterId).order('created_at', { ascending: true }).limit(50),
+      // ✅ FIX: doble sort — created_at ASC, id ASC como desempate
+      supabase
+        .from('conversation_history')
+        .select('*')
+        .eq('telegram_id', tid)
+        .eq('character_id', characterId)
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true })
+        .limit(50),
       supabase.from('star_purchases').select('id').eq('telegram_id', tid).limit(1),
-      // ✅ NUEVO: contar TODOS los mensajes del usuario para calcular el nivel correcto
       supabase
         .from('conversation_history')
         .select('*', { count: 'exact', head: true })
@@ -94,14 +100,25 @@ export default function ChatPage() {
         setCharacter(charRes.data)
         setNewName(getDisplayName(charRes.data))
       }
-      const deduped = (histRes.data || []).filter((msg: any, idx: number, arr: any[]) => {
+
+      // ✅ FIX extra: re-ordenar en JS como red de seguridad por si Supabase
+      // no aplica el tie-breaker correctamente en versiones antiguas
+      const raw = histRes.data || []
+      const sorted = [...raw].sort((a: any, b: any) => {
+        const cmp = String(a.created_at).localeCompare(String(b.created_at))
+        if (cmp !== 0) return cmp
+        return (a.id || 0) - (b.id || 0)
+      })
+
+      // Deduplicar consecutivos idénticos
+      const deduped = sorted.filter((msg: any, idx: number, arr: any[]) => {
         if (idx === 0) return true
         const prev = arr[idx - 1]
         return !(prev.role === msg.role && prev.content === msg.content)
       })
+
       setMessages(deduped)
       setIsPremium(!!premRes.data && premRes.data.length > 0)
-      // ✅ NUEVO: guardar count exacto
       setTotalUserMessages(countRes.count || 0)
       setCharacterLoading(false)
       setHistoryLoaded(true)
@@ -110,18 +127,16 @@ export default function ChatPage() {
 
   // ── Scroll al final cuando cambian los mensajes ──
   useEffect(() => {
-    // Pequeño delay para asegurar que el DOM ya renderizó
     const t = setTimeout(() => {
       endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
     }, 50)
     return () => clearTimeout(t)
   }, [messages])
 
-  // ✅ NUEVO: Scroll al final cuando la app vuelve del background
+  // ── Scroll al final al volver del background ──
   useEffect(() => {
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
-        // Delay para que el navegador restaure el layout
         setTimeout(() => {
           endRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' })
         }, 150)
@@ -226,7 +241,6 @@ export default function ChatPage() {
           setMessages((p) => [...p, { role: 'assistant', content: data.response }])
           setGems(data.remaining_gems)
           setHookRemaining(data.hook_messages_remaining ?? 0)
-          // ✅ NUEVO: incrementar contador de mensajes del usuario
           setTotalUserMessages((prev) => prev + 1)
         }
       } else {
@@ -406,7 +420,6 @@ export default function ChatPage() {
   const gems = user?.gems || 0
   const hookRemaining = user?.hook_messages_remaining || 0
 
-  // ✅ FIX: usar totalUserMessages en lugar de contar los mensajes locales
   const currentLevel = getLevelFromMessages(totalUserMessages)
   const currentImageCost = getImageCost(currentLevel.level)
   const currentAudioCost = getAudioCost(currentLevel.level)
@@ -588,7 +601,7 @@ export default function ChatPage() {
 
         {messages.map((m, i) => (
           <div
-            key={i}
+            key={m.id || i}
             className={m.role === 'user' ? 'bubble-user' : 'bubble-ai'}
             dangerouslySetInnerHTML={{ __html: formatMessage(m.content) }}
           />
