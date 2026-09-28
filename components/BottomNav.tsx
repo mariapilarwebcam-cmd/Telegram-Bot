@@ -29,7 +29,7 @@ export default function BottomNav() {
   const items = [
     { href: '/', label: t.home, icon: HomeIcon },
     { href: '/chats', label: t.chats, icon: ChatIcon },
-    { href: '/invite', label: t.inviteNav, icon: GiftIcon },
+    { href: '/invite', label: t.rewardsNav, icon: GiftIcon },
     { href: '/shop', label: t.shop, icon: DiamondIcon },
   ]
 
