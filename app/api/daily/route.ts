@@ -15,8 +15,11 @@ const REFERRAL_ACTIVE_WINDOW_H = 48  // y haber mandado mensaje en las últimas 
 
 export async function POST(request: Request) {
   try {
-    const { telegram_id } = await request.json()
-    const tid = String(telegram_id)
+    // ✅ AUTH: telegram_id validado por el middleware
+    const tid = request.headers.get('x-telegram-id-validated')
+    if (!tid) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    }
 
     const { data: user } = await supabaseAdmin
       .from('users')
