@@ -1,7 +1,6 @@
 // lib/telegram-fetch.ts
 "use client"
 
-// Variable global del módulo: se rellena desde UserContext
 let cachedInitData: string | null = null
 
 export function setInitDataRaw(data: string) {
