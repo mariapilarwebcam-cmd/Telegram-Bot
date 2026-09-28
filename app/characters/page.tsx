@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { tgFetch } from '@/lib/telegram-fetch'
 import {
   ARCHETYPES_MALE, ARCHETYPES_FEMALE,
   CHARACTER_NAMES_MALE, CHARACTER_NAMES_FEMALE,
@@ -74,7 +75,6 @@ export default function CharactersPage() {
     })
   })
 
-  // ✅ FIX: Fantasy SOLO aparece en su tab, nunca en Todo/Mujeres/Hombres
   const filtered = all.filter((c) => {
     const isFantasy = FANTASY_ARCHETYPES.includes(c.archetype)
     if (tab === 'fantasy') return isFantasy
@@ -90,16 +90,14 @@ export default function CharactersPage() {
       alert('Usuario no cargado. Cierra y vuelve a abrir la Mini App.')
       return
     }
-    const tid = user.telegram_id.toString()
     const key = `${c.gender}_${c.archetype}`
     setCreating(key)
 
     try {
-      const res = await fetch('/api/select-character', {
+      const res = await tgFetch('/api/select-character', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          telegram_id: tid,
           archetype: c.archetype,
           gender: c.gender,
           character_name: c.name,
