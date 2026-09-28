@@ -131,13 +131,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
           try {
             if (!sessionStorage.getItem(processedKey)) {
               sessionStorage.setItem(processedKey, '1')
-              // Import dinámico para usar tgFetch
               const { tgFetch } = await import('@/lib/telegram-fetch')
               tgFetch('/api/referral', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                  new_user_id: u.id,
                   referral_code: startParam,
                 }),
               }).catch((err) => console.warn('[UserContext] referral err:', err))
@@ -197,7 +195,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              telegram_id: tid,
               first_name: telegramData.first_name,
               username: telegramData.username,
               language: telegramData.language,
