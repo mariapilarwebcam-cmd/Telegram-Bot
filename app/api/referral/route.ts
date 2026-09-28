@@ -1,10 +1,18 @@
+// app/api/referral/route.ts
+
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 
 export async function POST(request: Request) {
   try {
-    const { new_user_id, referral_code } = await request.json()
-    const newTid = String(new_user_id)
+    // ✅ AUTH: newTid viene del header validado (es el usuario que abre la app)
+    const newTid = request.headers.get('x-telegram-id-validated')
+    if (!newTid) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    }
+
+    // Body sin new_user_id (ya no es fuente de verdad)
+    const { referral_code } = await request.json()
     const code = String(referral_code || '').replace('@', '').trim()
 
     if (!code) return NextResponse.json({ error: 'Código inválido' }, { status: 400 })
