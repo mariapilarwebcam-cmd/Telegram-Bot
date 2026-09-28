@@ -8,7 +8,6 @@ from dotenv import load_dotenv
 import logging
 
 # ✅ Fix para Vercel: añadir la carpeta del archivo al sys.path
-# Esto permite importar telegrabot.py que está en la misma carpeta
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 load_dotenv()
@@ -20,10 +19,6 @@ logger = logging.getLogger(__name__)
 
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 
-bot = Bot(token=TELEGRAM_BOT_TOKEN)
-dp = Dispatcher()
-dp.include_router(router)
-
 app = FastAPI()
 
 
@@ -33,11 +28,18 @@ async def catch_all(request: Request, path: str):
     Catch-all: Vercel pasa paths variables a esta función.
     - GET → responder 'webhook alive' (útil para test)
     - POST → procesar update de Telegram
+
+    ✅ IMPORTANTE: Bot y Dispatcher se crean DENTRO del handler
+    para evitar 'Event loop is closed' entre invocaciones de Lambda.
     """
     if request.method == "GET":
         return {"status": "webhook alive", "path": path}
 
-    # POST: procesar update de Telegram
+    # ✅ Crear Bot y Dispatcher nuevos en CADA petición
+    bot = Bot(token=TELEGRAM_BOT_TOKEN)
+    dp = Dispatcher()
+    dp.include_router(router)
+
     try:
         body = await request.json()
         update = Update(**body)
@@ -49,3 +51,9 @@ async def catch_all(request: Request, path: str):
             {"status": "error", "detail": str(e)},
             status_code=500,
         )
+    finally:
+        # ✅ Cerrar la sesión HTTP del bot para liberar recursos
+        try:
+            await bot.session.close()
+        except Exception:
+            pass
