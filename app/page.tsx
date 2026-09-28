@@ -90,10 +90,13 @@ export default function HomePage() {
     })
   })
 
+  // ✅ FIX: Fantasy SOLO aparece en su tab, nunca en Todo/Mujeres/Hombres
   const filtered = all
     .filter((c) => {
+      const isFantasy = FANTASY_ARCHETYPES.includes(c.archetype)
+      if (tab === 'fantasy') return isFantasy
+      if (isFantasy) return false
       if (tab === 'all') return true
-      if (tab === 'fantasy') return FANTASY_ARCHETYPES.includes(c.archetype)
       return c.gender === tab
     })
     .filter(
