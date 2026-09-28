@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { tgFetch } from '@/lib/telegram-fetch'
 import {
   ARCHETYPES_MALE, ARCHETYPES_FEMALE,
   CHARACTER_NAMES_MALE, CHARACTER_NAMES_FEMALE,
@@ -49,6 +50,8 @@ export default function HomePage() {
   const [activeChar, setActiveChar] = useState<any>(null)
   const [search, setSearch] = useState('')
   const [tab, setTab] = useState<'all' | 'male' | 'female' | 'fantasy'>('all')
+  // ✅ NUEVO: bloquea taps mientras se está abriendo
+  const [creating, setCreating] = useState<string | null>(null)
 
   useEffect(() => {
     if (!user?.telegram_id) return
@@ -90,7 +93,6 @@ export default function HomePage() {
     })
   })
 
-  // ✅ FIX: Fantasy SOLO aparece en su tab, nunca en Todo/Mujeres/Hombres
   const filtered = all
     .filter((c) => {
       const isFantasy = FANTASY_ARCHETYPES.includes(c.archetype)
@@ -106,8 +108,48 @@ export default function HomePage() {
         c.role.toLowerCase().includes(search.toLowerCase())
     )
 
-  const openCharacter = () => {
-    router.push('/characters')
+  // ✅ NUEVO: pick() abre el personaje directamente
+  const pick = async (c: Char) => {
+    if (!user) {
+      alert('Usuario no cargado. Cierra y vuelve a abrir la Mini App.')
+      return
+    }
+    if (creating !== null) return  // evita doble tap
+
+    const key = `${c.gender}_${c.archetype}`
+    setCreating(key)
+
+    try {
+      const res = await tgFetch('/api/select-character', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          archetype: c.archetype,
+          gender: c.gender,
+          character_name: c.name,
+        }),
+      })
+
+      let data: any = null
+      try {
+        data = await res.json()
+      } catch {
+        data = { error: `HTTP ${res.status}` }
+      }
+
+      if (res.ok && data.character_id) {
+        router.push(`/chat/${data.character_id}`)
+      } else {
+        const msg = data.detail
+          ? `${data.error}: ${data.detail}`
+          : (data.error || `Error HTTP ${res.status}`)
+        alert(msg)
+        setCreating(null)
+      }
+    } catch (err: any) {
+      alert('Error de conexión: ' + (err?.message || 'desconocido'))
+      setCreating(null)
+    }
   }
 
   if (userLoading && !user) {
@@ -453,12 +495,16 @@ export default function HomePage() {
 
       <div className="char-grid">
         {filtered.map((c) => {
+          const key = `${c.gender}_${c.archetype}`
           const imageUrl = getCharacterImageUrl(c.archetype, c.gender)
+          const isCreating = creating === key
           return (
             <button
-              key={`${c.gender}_${c.archetype}`}
-              onClick={openCharacter}
+              key={key}
+              onClick={() => pick(c)}
+              disabled={creating !== null}
               className="char-card"
+              style={{ opacity: isCreating ? 0.5 : 1 }}
             >
               <div className="char-card-img" style={{ background: c.gradient }}>
                 {imageUrl && (
@@ -470,6 +516,21 @@ export default function HomePage() {
                       ;(e.target as HTMLImageElement).style.display = 'none'
                     }}
                   />
+                )}
+                {isCreating && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      background: 'rgba(0,0,0,0.4)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      zIndex: 5,
+                    }}
+                  >
+                    <div className="spinner" />
+                  </div>
                 )}
                 <div className="char-card-overlay" />
                 <div className="char-card-text">
