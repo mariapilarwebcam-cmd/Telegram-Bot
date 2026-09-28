@@ -101,6 +101,12 @@ export async function generateAIResponse(
       messages: [{ role: 'system', content: systemPrompt }, ...messages],
       temperature,
       max_tokens: 100,
+      // ✅ FIX: Priorizar proveedores por VELOCIDAD
+      // OpenRouter elegirá el proveedor más rápido (Crusoe, NovitaAI, etc.)
+      // Esto acelera la respuesta 2-3x sin afectar el costo.
+      provider: {
+        sort: 'throughput',
+      },
     }),
   })
 
@@ -109,6 +115,17 @@ export async function generateAIResponse(
     throw new Error(err.error?.message || 'Error en OpenRouter')
   }
   const data = await response.json()
+
+  // 🔍 Log de tokens para monitorear el costo real
+  if (data.usage) {
+    console.log('[ai] tokens:', {
+      prompt: data.usage.prompt_tokens,
+      completion: data.usage.completion_tokens,
+      total: data.usage.total_tokens,
+      cached: data.usage.prompt_tokens_details?.cached_tokens || 0,
+    })
+  }
+
   return data.choices[0].message.content.trim()
 }
 
