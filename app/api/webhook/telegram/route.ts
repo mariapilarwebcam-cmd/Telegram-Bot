@@ -56,7 +56,8 @@ export async function POST(request: Request) {
           stars_amount: pkg.stars,
           gems_amount: gemsToAdd,
           is_first_purchase: pkg.first_time_only || false,
-          telegram_charge_id: payment.telegram_payment_charge_id
+          telegram_charge_id: payment.telegram_payment_charge_id,
+          payment_method: 'stars',
         })
       }
     }
