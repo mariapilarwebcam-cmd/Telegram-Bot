@@ -21,12 +21,15 @@ let ratelimiters: {
 } | null = null
 
 try {
-  if (
-    process.env.UPSTASH_REDIS_REST_URL &&
-    process.env.UPSTASH_REDIS_REST_TOKEN
-  ) {
-    // ✅ fromEnv() funciona igual con el cliente cloudflare
-    redis = Redis.fromEnv()
+  const upstashUrl = process.env.UPSTASH_REDIS_REST_URL?.trim()
+  const upstashToken = process.env.UPSTASH_REDIS_REST_TOKEN?.trim()
+
+  if (upstashUrl && upstashToken) {
+    // ✅ Constructor explícito — lee las env vars en runtime (no en build)
+    redis = new Redis({
+      url: upstashUrl,
+      token: upstashToken,
+    })
 
     ratelimiters = {
       chat: new Ratelimit({
@@ -60,13 +63,16 @@ try {
         analytics: false,
       }),
     }
+
+    console.log('[middleware] ✅ Upstash Redis inicializado correctamente')
   } else {
     console.warn(
-      '[middleware] Upstash no configurado — rate limiting deshabilitado.'
+      '[middleware] ⚠️ Upstash no configurado — rate limiting deshabilitado. ' +
+      `URL: ${upstashUrl ? 'OK' : 'MISSING'}, TOKEN: ${upstashToken ? 'OK' : 'MISSING'}`
     )
   }
 } catch (e: any) {
-  console.error('[middleware] Error inicializando Upstash:', e?.message)
+  console.error('[middleware] ❌ Error inicializando Upstash:', e?.message)
 }
 
 // ── Endpoints públicos ───────────────────────────────────────
