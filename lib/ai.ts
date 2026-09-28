@@ -2,7 +2,6 @@
 
 import { runSeedreamSync } from './wiro'
 import { getIntensityFromLevel, getLevelFromMessages, type Intensity } from './levels'
-import { getLevelFromMessages as getLevel } from './levels'
 
 const BREVITY_ES = `REGLA CRÍTICA DE LONGITUD: Responde SIEMPRE con 1 acción breve entre asteriscos + 1 o 2 frases de diálogo. TOTAL máximo 250 caracteres contando acciones y diálogo. PROHIBIDO pasar de 250 caracteres. Termina con una pregunta corta o gancho breve.
 Puedes usar hasta 2 emojis por mensaje. PROHIBIDO emojis al inicio.`
