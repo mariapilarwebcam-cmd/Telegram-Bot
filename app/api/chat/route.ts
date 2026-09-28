@@ -96,14 +96,15 @@ export async function POST(request: Request) {
       }
     }
 
-    // Historial reciente
+    // ✅ Historial reciente — reducido a 8 mensajes (4 usuario + 4 asistente)
+    // Balance óptimo entre memoria contextual y velocidad de respuesta.
     const { data: history } = await supabaseAdmin
       .from('conversation_history')
       .select('role, content')
       .eq('telegram_id', tid)
       .eq('character_id', character_id)
       .order('created_at', { ascending: false })
-      .limit(10)
+      .limit(8)
 
     const { count: userMsgCount } = await supabaseAdmin
       .from('conversation_history')
