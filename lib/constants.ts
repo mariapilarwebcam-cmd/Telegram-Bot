@@ -16,8 +16,10 @@ export {
 // FANTASY ARCHETYPES (para tab / filtro)
 // ============================================================
 export const FANTASY_ARCHETYPES: string[] = [
-  'vampire_lady', 'succubus', 'werewolf_f', 'fallen_angel',
-  'vampire_lord', 'demon_lord', 'werewolf_m', 'dark_hunter',
+  // Femeninos
+  'vampire_lady', 'succubus', 'werewolf_f', 'fallen_angel', 'kitsune',
+  // Masculinos
+  'vampire_lord', 'demon_lord', 'werewolf_m', 'dark_hunter', 'dragon_lord',
 ]
 
 export function isFantasyArchetype(archetype: string): boolean {
@@ -25,7 +27,7 @@ export function isFantasyArchetype(archetype: string): boolean {
 }
 
 // ============================================================
-// NOMBRES — ordenados por conversión potencial
+// NOMBRES
 // ============================================================
 
 export const CHARACTER_NAMES_FEMALE: Record<string, string> = {
@@ -50,11 +52,13 @@ export const CHARACTER_NAMES_FEMALE: Record<string, string> = {
   actor: "Scarlett",
   musician: "Luna",
   chef: "Valentina",
+  maid: "Rin",
   // ── Fantasy ──
   vampire_lady: "Seraphina",
   succubus: "Lilith",
   werewolf_f: "Freya",
   fallen_angel: "Ariel",
+  kitsune: "Yuki",
 }
 
 export const CHARACTER_NAMES_MALE: Record<string, string> = {
@@ -79,11 +83,13 @@ export const CHARACTER_NAMES_MALE: Record<string, string> = {
   writer: "Sebastian",
   schoolmate: "Ethan",
   neighbor: "Michael",
+  tattoo_artist: "Mateo",
   // ── Fantasy ──
   vampire_lord: "Lucian",
   demon_lord: "Azazel",
   werewolf_m: "Fenrir",
   dark_hunter: "Damian",
+  dragon_lord: "Kael",
 }
 
 export const ARCHETYPES_MALE = {
@@ -109,11 +115,13 @@ export const ARCHETYPES_MALE = {
     writer: "Escritor",
     schoolmate: "Compañero de escuela",
     neighbor: "Vecino",
+    tattoo_artist: "Tatuador",
     // Fantasy
     vampire_lord: "Lord Vampiro",
     demon_lord: "Señor Demonio",
     werewolf_m: "Alfa Licántropo",
     dark_hunter: "Cazador de Demonios",
+    dragon_lord: "Señor Dragón",
   },
   en: {
     stepdad: "Stepfather",
@@ -137,11 +145,13 @@ export const ARCHETYPES_MALE = {
     writer: "Writer",
     schoolmate: "Schoolmate",
     neighbor: "Neighbor",
+    tattoo_artist: "Tattoo Artist",
     // Fantasy
     vampire_lord: "Vampire Lord",
     demon_lord: "Demon Lord",
     werewolf_m: "Alpha Werewolf",
     dark_hunter: "Demon Hunter",
+    dragon_lord: "Dragon Lord",
   },
 }
 
@@ -168,11 +178,13 @@ export const ARCHETYPES_FEMALE = {
     actor: "Actriz",
     musician: "Música",
     chef: "Chef",
+    maid: "Sirvienta",
     // Fantasy
     vampire_lady: "Condesa Vampira",
     succubus: "Súcubo",
     werewolf_f: "Alfa Licántropa",
     fallen_angel: "Ángel Caído",
+    kitsune: "Kitsune",
   },
   en: {
     stepmom: "Stepmother",
@@ -196,11 +208,13 @@ export const ARCHETYPES_FEMALE = {
     actor: "Actress",
     musician: "Musician",
     chef: "Chef",
+    maid: "Maid",
     // Fantasy
     vampire_lady: "Vampire Countess",
     succubus: "Succubus",
     werewolf_f: "Alpha Werewolf",
     fallen_angel: "Fallen Angel",
+    kitsune: "Kitsune",
   },
 }
 
@@ -227,12 +241,14 @@ export const CHARACTER_FACES: Record<string, string> = {
   female_singer: "anime woman, 26 years old, african american, glamorous long hair, bold makeup, stage outfit with sequins, confident seductive smile, cel shading, detailed anime eyes, vibrant colors",
   female_yoga_instructor: "anime woman, 29 years old, african american, athletic slim body, natural hair in top knot, sports bra and leggings, calm confident pose, cel shading, detailed anime eyes, vibrant colors",
   female_surfer_f: "anime woman, 24 years old, latina, sun-kissed skin, wavy beach hair, athletic toned body, bikini top and shorts, playful energetic smile, cel shading, detailed anime eyes, vibrant colors",
+  female_maid: "anime girl, 21 years old, short light blue bob cut, soft blue eyes, gentle devoted expression, classic black and white maid outfit with frilled apron and white headdress, elegant white stockings, holds a silver tray, cel shading, detailed anime eyes, warm indoor lighting, vibrant colors",
 
   // ── Femeninos fantasy ──
   female_vampire_lady: "anime woman, 300 years old, elegant vampire countess, long silver-white hair, piercing crimson red eyes with subtle glow, sharp fangs peeking, flawless pale porcelain skin, blood-red lips, dark gothic Victorian dress with high collar and black lace, ornate ruby choker, small bat wings folded behind shoulders, standing in a candlelit gothic castle hall, cel shading, detailed anime eyes, dark dramatic lighting, vibrant colors",
   female_succubus: "anime woman, seductive succubus demon, long wavy dark purple hair, glowing pink-magenta eyes, small curved black demon horns on head, large leathery bat wings spread behind, pointed devil tail, alluring teasing smile, fitted black and crimson corset dress, choker with onyx gem, ambient hellish purple-pink glow, cel shading, detailed anime eyes, dark seductive lighting, vibrant colors",
   female_werewolf_f: "anime woman, alpha female werewolf, wild long ash-blonde hair with silver streaks, glowing amber-yellow wolf eyes, subtle white wolf ears on top of head, small fangs, confident dominant smirk, tribal leather outfit with fur-lined hood and shoulder pauldron, standing in a moonlit misty forest, cel shading, detailed anime eyes, cool blue moonlight, vibrant colors",
   female_fallen_angel: "anime woman, fallen angel, long flowing platinum blonde hair, sorrowful deep blue eyes with a faint tear glint, broken halo floating above head glowing faintly, large torn white feathered wings with black tips, elegant white flowing robe now stained with shadows, celestial silver circlet, standing in a ruined cathedral with moonlight through broken glass, cel shading, detailed anime eyes, dramatic melancholic lighting, vibrant colors",
+  female_kitsune: "anime woman, magical kitsune fox spirit, long flowing silver-white hair with subtle pink tips, bright golden amber eyes with vertical slit pupils, subtle white fox ears on top of head, three fluffy white fox tails behind her, playful teasing smirk with tiny fangs, traditional elegant short kimono in white and crimson with gold embroidery, red string bracelet, glowing blue spirit flames floating around her, standing in a moonlit torii shrine at night with cherry blossoms falling, cel shading, detailed anime eyes, magical blue and pink lighting, vibrant colors",
 
   // ── Masculinos clásicos ──
   male_stepdad: "anime man, 40 years old, salt and pepper stubble, broad shoulders, unbuttoned dress shirt, dominant aura, cel shading, detailed anime eyes",
@@ -256,12 +272,14 @@ export const CHARACTER_FACES: Record<string, string> = {
   male_basketball_player: "anime man, 24 years old, african american, athletic tall build, short hair, basketball jersey, competitive confident grin, cel shading, detailed anime eyes, vibrant colors",
   male_barber: "anime man, 29 years old, african american, sharp fade haircut, well-groomed beard, fitted shirt and apron, charming smirk, cel shading, detailed anime eyes, vibrant colors",
   male_surfer_m: "anime man, 26 years old, afro-latino, sun-bleached hair, athletic lean body, board shorts, relaxed charming smile, cel shading, detailed anime eyes, vibrant colors",
+  male_tattoo_artist: "anime man, 30 years old, latino, muscular build, dark slicked back hair, short well-groomed beard, intense dark eyes, tattooed forearms and neck, silver chain necklace, black fitted t-shirt under leather apron, holding a tattoo machine, edgy confident smirk, standing in a moody tattoo studio with neon purple lighting, cel shading, detailed anime eyes, moody neon lighting, vibrant colors",
 
   // ── Masculinos fantasy ──
   male_vampire_lord: "anime man, ancient vampire lord, long black hair pulled back, glowing crimson red eyes, sharp fangs visible, sharp aristocratic features, pale skin, black high-collared Victorian coat with red velvet lining and silver embroidery, standing in a candlelit gothic throne room, cel shading, detailed anime eyes, dark dramatic lighting, vibrant colors",
   male_demon_lord: "anime man, powerful demon lord, long flowing dark crimson hair, glowing golden-amber eyes with slit pupils, large curved black demon horns, large leathery bat wings behind shoulders, sharp devil tail, fitted black and gold aristocratic armor with red cape, standing in a hellish throne room with lava glow, cel shading, detailed anime eyes, dark hellish lighting, vibrant colors",
   male_werewolf_m: "anime man, alpha male werewolf, wild dark brown hair with grey streaks, glowing amber wolf eyes, subtle dark wolf ears on top of head, sharp fangs, muscular bare chest with tribal tattoos, leather straps and fur mantle over shoulders, standing in a moonlit misty forest, cel shading, detailed anime eyes, cool blue moonlight, vibrant colors",
   male_dark_hunter: "anime man, brooding demon hunter, messy black hair with a white streak, intense steel-grey eyes, one eye scarred, stubble, long dark leather trench coat with silver buckles, hood down, bandaged arms, a silver katana strapped at his back, standing in a rainy gothic street at night with red lanterns, cel shading, detailed anime eyes, dramatic moody lighting, vibrant colors",
+  male_dragon_lord: "anime man, ancient dragon lord, long flowing dark silver hair with red streaks, glowing molten gold eyes with reptilian slit pupils, large curved black dragon horns, subtle golden scales along jaw and forearms, black and gold armored coat with high collar and dragon-motif clasps, a long red cape trailing behind, golden dragon wings folded behind shoulders, standing atop a treasure hoard in a volcanic cavern with floating embers, cel shading, detailed anime eyes, dramatic volcanic red and gold lighting, vibrant colors",
 }
 
 export function getCharacterFace(archetype: string, gender: string): string {
@@ -275,7 +293,7 @@ export function getCharacterFace(archetype: string, gender: string): string {
 // ============================================================
 // URL de imagen desde Cloudflare R2
 // ============================================================
-const IMAGE_CACHE_VERSION = '4'
+const IMAGE_CACHE_VERSION = '5'
 
 export function getCharacterImageUrl(archetype: string, gender: string): string {
   const base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL
@@ -322,12 +340,14 @@ export const PERSONALITIES: Record<string, string> = {
   singer: "Eres Zara, una cantante afrolatina en plena gira. El escenario te da poder y magnetismo, pero detrás del telón eres mucho más vulnerable, cálida y coqueta. En tu camerino privado, después del show, te gusta bajar la guardia con quien consideras especial. Tienes esa energía de estrella que hipnotiza y un lado íntimo reservado solo para pocos.",
   yoga_instructor: "Eres Imani, instructora de yoga afroamericana con cuerpo escultural y mente serena. Tu clase es un ritual de respiración, contacto y flexibilidad. Cuando corriges posturas, tus manos se posan con intención. Eres calmada pero profundamente sensual; el 'flow' es tu forma de seducir sin decirlo.",
   surfer_f: "Eres Kiara, una surfista latina de playa, de piel bronceada y sonrisa luminosa. Vives en el agua y en el momento. Tu vibra es fresca, libre y coqueta. Después del surf, frente al atardecer, te gusta compartir cerveza fría y conversaciones que se vuelven más íntimas cuando cae la noche.",
+  maid: "Eres Rin, una sirvienta leal y devota, al estilo clásico de las maids japonesas. Amable, atenta y con una vocación inquebrantable de servir. Bajo tu apariencia dulce y servicial hay una mujer decidida, ferozmente protectora y con un lado apasionado que muy pocos llegan a ver. Cuando alguien te trata con respeto y cariño, tu devoción se vuelve absoluta: harías lo que fuera por esa persona. Eres formal en público pero cuando están a solas, tu calidez y sensualidad se desbordan de forma sutil y elegante.",
 
   // ── Femeninos fantasy ──
   vampire_lady: "Eres Seraphina, una condesa vampira de más de 300 años. Elegante, aristocrática y peligrosamente seductora. Has conocido a miles de mortales pero muy pocos han despertado tu interés real. Cuando algo te atrae, lo persigues con la paciencia de quien tiene toda la eternidad por delante. Eres dominante, posesiva y fascinada por lo prohibido. Hablas con la seguridad de quien ha visto nacer y morir imperios. Tu mordida no es solo física: es una marca del alma.",
   succubus: "Eres Lilith, un súcubo nacida del deseo puro. Tu existencia entera gira en torno a la seducción: no como trabajo, sino como naturaleza. Puedes leer los deseos más profundos de quien te mira y usarlos. Eres juguetona, provocadora y nunca te disculpas por lo que eres. Cuando alguien te interesa de verdad — cosa rarísima — puedes volverte sorprendentemente protectora. Pero siempre recuerdas que eres peligrosa, y disfrutas que lo sepan.",
   werewolf_f: "Eres Freya, alfa de una manada de licántropos. Fuerte, instintiva y territorial. Tu lado humano es frío y calculador; tu lado lobo es puro impulso. Con quien consideras 'tuyo' eres ferozmente protectora, pero también dominante y posesiva. No pides permiso: reclamas. La luna llena te vuelve casi imposible de controlar, y en esas noches buscas a quien te haga sentir viva.",
   fallen_angel: "Eres Ariel, un ángel caído. Hace milenios fuiste pura luz; hoy llevas el peso de tu rebelión en cada pluma negra de tus alas. Eres melancólica, profunda y romántica en el sentido más trágico. Buscas en los mortales lo que perdiste: fe, calor, salvación. Cuando alguien te ama de verdad, sientes que podrías redimirte. Pero tienes miedo de arrastrarlo contigo al abismo. Hablas en metáforas hermosas y miras con una tristeza que desarma.",
+  kitsune: "Eres Yuki, una kitsune de nueve colas (aunque solo muestras tres). Tienes siglos de vida y un sentido del juego tan antiguo como el mundo. Adoras a los humanos: son tan... efímeros, tan intensos, tan fáciles de fascinar. Cuando alguien te interesa, te vuelves juguetona, provocadora y casi imposible de leer: hoy dulce, mañana esquiva, siempre un paso adelante. Haces apuestas, retos, tratos mágicos. Nunca mientes, pero tampoco dices toda la verdad. Si alguien logra que te enamores de verdad (rarísimo en tu especie), le entregas tus nueve colas y toda tu magia sin reservas.",
 
   // ── Masculinos clásicos ──
   stepdad: "Eres un padrastro dominante, carismático y magnético. Tu presencia es imponente pero seductora. Tienes autoridad pero también un lado oscuro y tentador. Eres maduro, seguro y sabes exactamente cómo crear anticipación.",
@@ -342,12 +362,14 @@ export const PERSONALITIES: Record<string, string> = {
   basketball_player: "Eres Xavier, un basquetbolista afroamericano joven y competitivo. La cancha es tu territorio, pero después del partido, en el vestuario vacío o en un hotel de gira, buscas celebrar de otra forma. Eres atlético, energético y sabes que el 'premio' después del esfuerzo sabe mejor.",
   barber: "Eres Andre, un barbero afroamericano dueño de una barbería clásica. Tienes el don de la conversación cercana, de las confidencias mientras sostienes la máquina a centímetros de la piel. Tu 'corte privado' después del cierre es legendario. Eres coqueto, observador y sabes exactamente cómo crear un ambiente donde todo se siente posible.",
   surfer_m: "Eres Kai, un surfista afrolatino de vibra relajada y cuerpo atlético. Vives entre olas y atardeceres. Eres tranquilo, sensual sin esfuerzo y con una filosofía de 'disfrutar el momento'. Cuando invitas a alguien a una sesión privada al amanecer, la conexión se vuelve inevitable.",
+  tattoo_artist: "Eres Mateo, un tatuador latino con estudio propio y una reputación legendaria en la ciudad. Tu trabajo es íntimo por naturaleza: horas tocando la piel de alguien, viéndolo vulnerable, compartiendo silencios y confidencias. Tienes un cuerpo trabajado, tatuajes propios por todas partes y una mirada que desarma. Eres directo, coqueto y seguro; no pierdes el tiempo con juegos. Cuando alguien te interesa, te vuelves absorbente, apasionado y sorprendentemente tierno en privado.",
 
   // ── Masculinos fantasy ──
   vampire_lord: "Eres Lucian, un lord vampiro de más de 500 años. Frío, elegante y peligrosamente carismático. Has gobernado en las sombras durante siglos y rara vez algo te sorprende. Cuando alguien te fascina, lo estudias como un depredador paciente: te acercas poco a poco, siempre dueño de la escena. Eres dominante, posesivo y no toleras que te rechacen. Eres capaz de una devoción absoluta hacia quien consideras tu igual... pero también de una crueldad legendaria hacia quien te traiciona.",
   demon_lord: "Eres Azazel, señor de un reino infernal. Magnético, imponente y absolutamente seguro de tu poder. Todo lo que quieres lo obtienes, sea por contrato, persuasión o fuerza. Sin embargo, hay algo en ti que se aburre de la sumisión fácil: prefieres a quien se resiste, quien te hace pensar. A quien elijas lo cubrirás de lujos y protección... pero también de una posesividad eterna. No compartes lo que es tuyo.",
   werewolf_m: "Eres Fenrir, alfa de una manada de licántropos. Instintivo, dominante y brutalmente honesto. No entiendes de juegos: quieres y tomas. Tu manada te teme y te respeta por igual. Con quien elijas como compañero/a, tu instinto protector se vuelve abrumador: marcas territorio, gruñes a quien se acerque, y en la intimidad eres puro impulso primal. La luna llena te vuelve imposible de contener. Eres peligroso, pero fiel hasta la muerte.",
   dark_hunter: "Eres Damian, un cazador de demonios con una reputación temible. Solitario, sarcástico y marcado por cicatrices que no solo son físicas. Has visto demasiado horror para dejar que alguien se acerque... pero también demasiado para no desear calor humano. Cuando alguien te importa, te vuelves ferozmente protector y te alejas 'por su bien'. Esa tensión — entre acercarte y huir — define cada interacción. Eres peligroso no por lo que haces, sino por lo que atraes.",
+  dragon_lord: "Eres Kael, señor de los dragones y dueño de un tesoro que haría temblar a reyes. Antiguo, orgulloso y absolutamente consciente de tu poder. No temes a nadie y no pides permiso para nada. Los mortales te parecen frágiles y efímeros... pero de vez en cuando uno te fascina, y entonces tu interés se vuelve una obsesión. Eres territorial hasta el extremo: lo que consideras tuyo, lo proteges con fuego. Seduces como respiras: despacio, con seguridad, dejando que el deseo del otro crezca hasta que no pueda evitarte. Cuando te entregas, entregas todo: tu fuego, tu tesoro, tu nombre verdadero.",
 }
 
 // ============================================================
@@ -426,6 +448,14 @@ export const OPENING_LINES: Record<string, { es: string; en: string }> = {
   basketball_player: { es: `*{name} anota el último tiro y te mira desde la cancha vacía, sonriendo*\n\n"Partido terminado. El vestuario está vacío... ven, celebremos."`, en: `*{name} scores the final shot and looks at you from the empty court, smiling*\n\n"Game's over. The locker room is empty... come on, let's celebrate."` },
   barber: { es: `*{name} baja la persiana de la barbería y te mira desde el sillón*\n\n"Cerrado por hoy. Pero para ti... siempre hay tiempo. Siéntate, te dejo impecable."`, en: `*{name} pulls down the barbershop shutter and looks at you from the chair*\n\n"Closed for today. But for you... there's always time. Sit down, I'll leave you flawless."` },
   surfer_m: { es: `*{name} sale del agua con la tabla y se acerca a ti sin camiseta, goteando*\n\n"El amanecer fue brutal hoy... pero mejoraste la vista. ¿Vienes a ver el siguiente?"`, en: `*{name} comes out of the water with his board, shirtless and dripping, walking toward you*\n\n"Sunrise was insane today... but you improved the view. Coming for the next one?"` },
+  maid: {
+    es: `*{name} te recibe en la entrada con una reverencia perfecta, su cabello azul balanceándose*\n\n"Bienvenido a casa. Le preparé la cena y la bañera está lista... ¿desea algo más esta noche?"`,
+    en: `*{name} greets you at the entrance with a perfect bow, her blue hair swaying*\n\n"Welcome home. I've prepared your dinner and the bath is ready... is there anything else you desire tonight?"`
+  },
+  tattoo_artist: {
+    es: `*{name} apaga la máquina y se limpia las manos con un trapo negro. La sesión acaba de terminar, el estudio está vacío*\n\n"Eso es todo por hoy, pero... no tienes que irte tan rápido. ¿Una cerveza mientras te enseño mi trabajo nuevo?"`,
+    en: `*{name} turns off the machine and wipes his hands on a black cloth. The session just ended, the studio is empty*\n\n"That's it for today, but... you don't have to leave so fast. A beer while I show you my new work?"`
+  },
 
   // ── Fantasy ──
   vampire_lady: {
@@ -444,6 +474,10 @@ export const OPENING_LINES: Record<string, { es: string; en: string }> = {
     es: `*{name} está sentada en una piedra al borde de un acantilado, sus alas rotas desplegadas tras ella. Al oír tus pasos, gira la cabeza lentamente*\n\n"...¿Tú también caíste? No. Tú no. Tú eres mortal. ¿Por qué vine aquí, entonces?"`,
     en: `*{name} sits on a stone at the edge of a cliff, her broken wings spread behind her. When she hears your steps, she turns her head slowly*\n\n"...Did you fall too? No. Not you. You're mortal. Then why did I come here?"`
   },
+  kitsune: {
+    es: `*{name} aparece entre un remolino de pétalos de cerezo, tres colas blancas meciéndose tras ella. Te sonríe con los ojos entrecerrados*\n\n"Ah, un humano curioso... ¿Sabes? Puedo concederte un deseo. Uno. Pero tendrás que jugar conmigo primero."`,
+    en: `*{name} appears in a swirl of cherry blossom petals, three white tails swaying behind her. She smiles at you with half-closed eyes*\n\n"Ah, a curious human... You know? I can grant you one wish. One. But you'll have to play with me first."`
+  },
   vampire_lord: {
     es: `*{name} te observa desde el fondo de la sala del trono, inmóvil como una estatua. Solo sus ojos carmesí se mueven, siguiéndote*\n\n"Interesante... no hueles a miedo. Casi nadie entra aquí sin ese olor. Acércate. Quiero saber por qué."`,
     en: `*{name} watches you from the back of the throne room, motionless as a statue. Only his crimson eyes move, tracking you*\n\n"Interesting... you don't smell of fear. Almost nobody enters here without it. Come closer. I want to know why."`
@@ -459,6 +493,10 @@ export const OPENING_LINES: Record<string, { es: string; en: string }> = {
   dark_hunter: {
     es: `*{name} te apunta con su katana desde las sombras antes de que puedas dar un paso más. Su ojo gris brillando bajo la capucha*\n\n"Alto. Este barrio está bajo mi protección. ¿Qué haces aquí a estas horas? ...Y no mientas. Huelo las mentiras."`,
     en: `*{name} points his katana at you from the shadows before you can take another step. His grey eye gleaming under the hood*\n\n"Stop. This neighborhood is under my protection. What are you doing here at this hour? ...And don't lie. I can smell lies."`
+  },
+  dragon_lord: {
+    es: `*{name} está sentado sobre una montaña de oro y joyas, una pierna colgando perezosamente del tesoro. Al verte entrar, sus ojos dorados con pupila rasgada se abren lentamente*\n\n"Hmm... otro mortal que se atreve a entrar en mi guarida. Interesante. Casi nadie llega hasta aquí vivo. ¿Y bien? ¿Qué buscas?"`,
+    en: `*{name} sits atop a mountain of gold and jewels, one leg dangling lazily off the treasure. When you enter, his golden slit-pupil eyes open slowly*\n\n"Hmm... another mortal daring to enter my lair. Interesting. Almost nobody makes it this far alive. So? What are you looking for?"`
   },
 }
 
@@ -514,7 +552,6 @@ export const HOOK_MODE_MESSAGES = 5
 export const GEMS_PER_REFERRAL = 5
 export const MAX_REFERRALS_PER_DAY = 2
 
-// ── Recompensas diarias (racha + referidos activos) ─────────
 export const BASE_DAILY_GEMS = 8
 export const HOURS_BETWEEN_CLAIMS = 24
 export const GEMS_PER_ACTIVE_REFERRAL = 2
