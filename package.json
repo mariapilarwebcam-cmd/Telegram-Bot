@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@sentry/nextjs": "^8.40.0",
     "@supabase/supabase-js": "^2.39.0",
     "@ton-pay/api": "^0.3.2",
     "@ton-pay/ui-react": "^0.3.2",
