@@ -110,6 +110,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ status: 'pending', reason: 'amount_mismatch' })
     }
 
+    // 5b. Verificar que el paquete first_time_only siga disponible para el usuario
+    // (evita que alguien reclame el bonus de primera compra dos veces)
+    if (pkg.first_time_only) {
+      const { data: priorPurchases } = await supabaseAdmin
+        .from('star_purchases')
+        .select('id')
+        .eq('telegram_id', telegramId)
+        .limit(1)
+      if (priorPurchases && priorPurchases.length > 0) {
+        console.warn('[check-crypto-payment] Paquete first_time ya usado:', telegramId)
+        return NextResponse.json({ status: 'pending', reason: 'first_time_used' })
+      }
+    }
+
     // 6. Acreditar gemas
     const gemsToAdd = getFinalCryptoGems(pkg)
     const txHash = matchedEvent.event_id || `tx_${Date.now()}`
