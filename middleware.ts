@@ -1,9 +1,10 @@
 // middleware.ts (raíz del proyecto)
-// Combina: validación de initData + rate limiting por IP
 
 import { NextResponse, NextRequest } from 'next/server'
 import { Ratelimit } from '@upstash/ratelimit'
-import { Redis } from '@upstash/redis'
+// ✅ Import Edge-compatible (usa solo fetch, no Node APIs)
+import { Redis } from '@upstash/redis/cloudflare'
+
 import {
   validateTelegramInitData,
   extractInitData,
@@ -24,6 +25,7 @@ try {
     process.env.UPSTASH_REDIS_REST_URL &&
     process.env.UPSTASH_REDIS_REST_TOKEN
   ) {
+    // ✅ fromEnv() funciona igual con el cliente cloudflare
     redis = Redis.fromEnv()
 
     ratelimiters = {
@@ -60,21 +62,19 @@ try {
     }
   } else {
     console.warn(
-      '[middleware] Upstash no configurado — rate limiting deshabilitado. ' +
-      'Añade UPSTASH_REDIS_REST_URL y UPSTASH_REDIS_REST_TOKEN.'
+      '[middleware] Upstash no configurado — rate limiting deshabilitado.'
     )
   }
 } catch (e: any) {
   console.error('[middleware] Error inicializando Upstash:', e?.message)
 }
 
-// ── Endpoints públicos (sin auth, sin rate limit estricto) ───
-// ✅ AÑADIDO /api/bot para que el webhook de Python funcione
+// ── Endpoints públicos ───────────────────────────────────────
 const PUBLIC_ENDPOINTS = [
   '/api/health',
   '/api/webhook',
-  '/api/bot',      // ← bot Python en Vercel
-  '/api/bot/',     // ← por si acaso
+  '/api/bot',
+  '/api/bot/',
 ]
 
 // ── Dev bypass ───────────────────────────────────────────────
@@ -107,21 +107,15 @@ function pickLimiter(pathname: string): Ratelimit | null {
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
 
-  // Solo aplica a /api/*
   if (!pathname.startsWith('/api/')) {
     return NextResponse.next()
   }
 
-  // ✅ Endpoints públicos: pasan sin auth ni rate limit
-  //    El bot Python y el webhook de Telegram NO envían header Authorization,
-  //    así que deben quedar exentos.
   if (PUBLIC_ENDPOINTS.some((p) => pathname.startsWith(p))) {
     return NextResponse.next()
   }
 
-  // ══════════════════════════════════════════════════════════
-  // 1. RATE LIMITING
-  // ══════════════════════════════════════════════════════════
+  // ══════════ RATE LIMITING ══════════
   const ip = getClientIp(req)
   const limiter = pickLimiter(pathname)
 
@@ -154,9 +148,7 @@ export async function middleware(req: NextRequest) {
     }
   }
 
-  // ══════════════════════════════════════════════════════════
-  // 2. AUTH: validar initData
-  // ══════════════════════════════════════════════════════════
+  // ══════════ AUTH ══════════
   if (DEV_BYPASS) {
     const requestHeaders = new Headers(req.headers)
     requestHeaders.set('x-telegram-id-validated', DEV_TELEGRAM_ID)
