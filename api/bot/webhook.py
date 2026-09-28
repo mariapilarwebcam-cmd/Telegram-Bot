@@ -1,10 +1,15 @@
+import sys
+import os
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from aiogram import Bot, Dispatcher
 from aiogram.types import Update
 from dotenv import load_dotenv
-import os
 import logging
+
+# ✅ Fix para Vercel: añadir la carpeta del archivo al sys.path
+# Esto permite importar telegrabot.py que está en la misma carpeta
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 load_dotenv()
 
