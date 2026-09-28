@@ -33,6 +33,7 @@ const CHARACTER_DNA: Record<string, string> = {
   female_yoga_instructor: "black woman, athletic slim body, natural hair in top knot, sports bra, calm pose",
   female_surfer_f: "latina woman, sun-kissed skin, wavy beach hair, athletic body, bikini top, playful smile",
   female_maid: "young woman, short light blue bob hair, soft blue eyes, classic black and white maid outfit with frilled apron, white headdress, devoted gentle expression",
+  female_goth_dom: "elegant gothic dominatrix, long black hair with violet streaks, sharp crimson red eyes with cat-eye makeup, dark red lips, pale porcelain skin, black leather corset dress with silver buckles, silver spike choker, long black opera gloves, dark lacy thigh-high stockings",
 
   // ── Femeninos fantasy ──
   female_vampire_lady: "elegant vampire woman, long silver-white hair, glowing crimson red eyes, pale porcelain skin, dark gothic Victorian dress with high collar, ruby choker, small bat wings",
@@ -40,6 +41,10 @@ const CHARACTER_DNA: Record<string, string> = {
   female_werewolf_f: "alpha female werewolf, wild ash-blonde hair with silver streaks, glowing amber wolf eyes, subtle white wolf ears, tribal leather outfit with fur mantle",
   female_fallen_angel: "fallen angel woman, long platinum blonde hair, sorrowful blue eyes, broken halo glowing faintly, large torn white feathered wings with black tips, elegant white robe",
   female_kitsune: "magical kitsune fox spirit woman, long silver-white hair with pink tips, glowing golden amber slit eyes, white fox ears, three fluffy white fox tails, traditional white and crimson short kimono, glowing blue spirit flames",
+  female_elf: "elegant high elf archer, long flowing golden blonde hair with subtle braids, bright emerald green eyes, pointed elf ears, flawless pale skin, emerald green and silver woodland outfit with leaf embroidery, silver arm guard, ornate silver circlet with gem, silver longbow",
+  female_witch: "mysterious witch sorceress, long wavy midnight-black hair with deep purple streaks, sharp violet eyes, fitted dark purple and black lace corset dress, black choker with glowing crystal, subtle pointed black witch hat tilted back, large black raven on shoulder, glowing purple potion vial, ornate silver rings",
+  female_nun_fantasy: "devoted fantasy nun, long dark brown hair mostly hidden under a white coif, gentle conflicted blue eyes, soft rosy cheeks, classic black and white nun habit with silver cross pendant, delicate silver rosary on wrist, holding a small worn leather bible",
+  female_demon_girl: "playful young demon girl, short wild red hair with black tips, glowing amber-gold slit eyes, two small curved dark red demon horns, thin pointed devil tail with arrow tip, small black leathery bat wings, fitted black and crimson gothic mini-dress with silver lace, choker with silver skull pendant",
 
   // ── Masculinos clásicos ──
   male_stepdad: "mature man, salt and pepper hair, broad shoulders, dress shirt",
@@ -64,6 +69,7 @@ const CHARACTER_DNA: Record<string, string> = {
   male_barber: "black man, sharp fade haircut, well-groomed beard, fitted shirt and apron, charming smirk",
   male_surfer_m: "afro-latino man, sun-bleached hair, athletic lean body, board shorts, relaxed smile",
   male_tattoo_artist: "latino man, muscular build, dark slicked back hair, short beard, tattooed forearms and neck, silver chain, black t-shirt and leather apron, edgy confident smirk",
+  male_mma_fighter: "muscular MMA fighter, short buzz cut with faded sides, sharp angular jawline, light stubble, intense dark brown eyes, small brow cut, athletic tape wrapped around both hands, fitted black tank top, professional MMA shorts, silver dog-tag necklace",
 
   // ── Masculinos fantasy ──
   male_vampire_lord: "ancient vampire lord, long black hair pulled back, glowing crimson red eyes, sharp fangs, pale skin, black high-collared Victorian coat with red velvet lining",
@@ -71,6 +77,10 @@ const CHARACTER_DNA: Record<string, string> = {
   male_werewolf_m: "alpha male werewolf, wild dark brown hair with grey streaks, glowing amber wolf eyes, subtle dark wolf ears, muscular bare chest with tribal tattoos, leather straps and fur mantle",
   male_dark_hunter: "brooding demon hunter, messy black hair with white streak, intense steel-grey eyes, scarred face, long dark leather trench coat, silver katana on back, bandaged arms",
   male_dragon_lord: "ancient dragon lord, long flowing dark silver hair with red streaks, glowing molten gold slit eyes, large curved black dragon horns, subtle golden scales on jaw and forearms, black and gold armored coat with high collar, golden dragon wings folded behind",
+  male_elf_prince: "elegant elf prince, long flowing silver-blonde hair with subtle waves, sharp piercing emerald green eyes, pointed elf ears, refined aristocratic features, emerald green and gold regal outfit with silver embroidery and leaf motifs, ornate silver crown circlet with small emerald, long white cape with gold trim, silver longbow",
+  male_oni_male: "powerful oni demon warrior, muscular imposing build, wild short dark red hair tied in topknot, glowing molten gold slit eyes, two sharp black horns, subtle red tiger-stripe markings on forearms and shoulders, sharp fangs in fierce grin, traditional short dark red kimono open chest showing muscular torso, red rope belt, large black kanabo club over shoulder",
+  male_knight: "noble knight, wavy shoulder-length chestnut hair, kind blue-grey eyes, strong square jaw with light stubble, faint cheek scar, polished silver plate armor with gold accents and sacred engravings, crimson red cape over one shoulder, ornate silver cross pendant, silver longsword pointed down in ceremonial stance",
+  male_angel_m: "celestial angel, long flowing golden-blonde hair with soft waves, luminous pale blue eyes with soft glow, flawless serene features, faint golden forehead markings, glowing golden halo floating above head, large pristine white feathered wings, elegant flowing white and gold celestial robe with sacred engravings, golden bracers on both wrists, gold chain necklace with small glowing gem",
 }
 
 const SFW_SCENE_PROMPTS: Record<number, string> = {
