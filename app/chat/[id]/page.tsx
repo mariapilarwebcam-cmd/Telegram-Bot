@@ -66,6 +66,8 @@ export default function ChatPage() {
 
   const endRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
+  // ✅ Bloquea dobles envíos por doble-tap
+  const sendingRef = useRef(false)
 
   useEffect(() => {
     if (userLoading) return
@@ -82,7 +84,13 @@ export default function ChatPage() {
         setCharacter(charRes.data)
         setNewName(getDisplayName(charRes.data))
       }
-      setMessages(histRes.data || [])
+      // ✅ Deduplicar mensajes consecutivos idénticos (defensa extra)
+      const deduped = (histRes.data || []).filter((msg: any, idx: number, arr: any[]) => {
+        if (idx === 0) return true
+        const prev = arr[idx - 1]
+        return !(prev.role === msg.role && prev.content === msg.content)
+      })
+      setMessages(deduped)
       setIsPremium(!!premRes.data && premRes.data.length > 0)
       setCharacterLoading(false)
       setHistoryLoaded(true)
@@ -150,10 +158,14 @@ export default function ChatPage() {
   }, [historyLoaded, user, character, messages.length])
 
   const send = async () => {
-    if (!input.trim() || !user || loading) return
+    // ✅ Bloqueo sincrónico: ignora dobles-taps
+    if (!input.trim() || !user || loading || sendingRef.current) return
+    sendingRef.current = true
+
     const gems = user.gems || 0
     const hookRemaining = user.hook_messages_remaining || 0
     if (gems < GEM_COSTS.message && hookRemaining <= 0) {
+      sendingRef.current = false
       setBlocked(true)
       return
     }
@@ -195,6 +207,7 @@ export default function ChatPage() {
       alert('Error de conexión: ' + (err?.message || 'desconocido'))
       setMessages((p) => p.slice(0, -1))
     } finally {
+      sendingRef.current = false
       setLoading(false)
     }
   }
