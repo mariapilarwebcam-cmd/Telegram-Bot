@@ -16,6 +16,7 @@ export const translations = {
     all: 'Todo',
     male: 'Hombres',
     female: 'Mujeres',
+    fantasy: 'Fantasía',
     activeCharacter: 'Tu personaje activo',
     continueChat: 'Continuar chat',
     selectCharacter: 'Selecciona un personaje',
@@ -99,7 +100,6 @@ export const translations = {
     saving: 'Guardando...',
     renameSuccess: 'Nombre actualizado',
     confirmRename: '¿Renombrar por 3 gemas?',
-    // Referidos
     inviteNav: 'Invitar',
     inviteTitle: 'Invita y gana',
     inviteSubtitle: 'Gana 5 gemas cuando tu amigo mande 3 mensajes',
@@ -110,7 +110,6 @@ export const translations = {
     step1: 'Comparte tu enlace con un amigo',
     step2: 'Tu amigo abre la app y empieza a chatear',
     step3: 'Cuando mande 3 mensajes, recibes 5 gemas',
-    // Premium gating
     premiumFeatureTitle: 'Función Premium',
     premiumFeatureDesc: 'Esta función está disponible solo para usuarios que han comprado gemas con Stars.',
     goToShop: 'Ir a la tienda',
@@ -142,6 +141,7 @@ export const translations = {
     all: 'All',
     male: 'Men',
     female: 'Women',
+    fantasy: 'Fantasy',
     activeCharacter: 'Your active character',
     continueChat: 'Continue chat',
     selectCharacter: 'Select a character',
