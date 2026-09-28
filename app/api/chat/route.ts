@@ -13,13 +13,11 @@ import { generateAIResponse, getIntensity, buildSystemPrompt } from '@/lib/ai'
 
 export async function POST(request: Request) {
   try {
-    // ✅ AUTH: telegram_id validado por el middleware
     const tid = request.headers.get('x-telegram-id-validated')
     if (!tid) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
-    // Body sin telegram_id (ya no es fuente de verdad)
     const { character_id, message } = await request.json()
 
     const { data: user } = await supabaseAdmin
@@ -96,14 +94,14 @@ export async function POST(request: Request) {
       }
     }
 
-    // ✅ Historial reciente — reducido a 8 mensajes (4 usuario + 4 asistente)
-    // Balance óptimo entre memoria contextual y velocidad de respuesta.
+    // ✅ FIX: doble sort para contexto determinista
     const { data: history } = await supabaseAdmin
       .from('conversation_history')
       .select('role, content')
       .eq('telegram_id', tid)
       .eq('character_id', character_id)
       .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
       .limit(8)
 
     const { count: userMsgCount } = await supabaseAdmin
@@ -115,7 +113,15 @@ export async function POST(request: Request) {
 
     const level = getLevelFromMessages(userMsgCount || 0)
 
-    const messages = (history || []).reverse().map((m: any) => ({
+    // ✅ Re-ordenar en JS como red de seguridad
+    const rawHistory = history || []
+    const sortedHistory = [...rawHistory].sort((a: any, b: any) => {
+      const cmp = String(a.created_at || '').localeCompare(String(b.created_at || ''))
+      if (cmp !== 0) return cmp
+      return (a.id || 0) - (b.id || 0)
+    })
+
+    const messages = sortedHistory.reverse().map((m: any) => ({
       role: m.role,
       content: m.content,
     }))
@@ -134,7 +140,6 @@ export async function POST(request: Request) {
     try {
       responseText = await generateAIResponse(messages, systemPrompt, intensity)
     } catch (aiError) {
-      // Rollback
       await supabaseAdmin
         .from('users')
         .update({ gems: user.gems, hook_messages_remaining: hookRemaining })
