@@ -4,10 +4,10 @@ import { runSeedreamSync } from './wiro'
 import { getIntensityFromLevel, getLevelFromMessages, type Intensity } from './levels'
 
 const BREVITY_ES = `REGLA CRÍTICA DE LONGITUD: Responde SIEMPRE con 1 acción breve entre asteriscos + 1 o 2 frases de diálogo. TOTAL máximo 250 caracteres contando acciones y diálogo. PROHIBIDO pasar de 250 caracteres. Termina con una pregunta corta o gancho breve.
-Puedes usar hasta 2 emojis por mensaje. PROHIBIDO emojis al inicio.`
+REGLA DE EMOJIS: Úsalos SOLO cuando refuercen una emoción específica del momento (ej: 😏 al provocar, 😈 al ser travieso, 🥺 al suplicar, 🔥 al intensificar). NUNCA los uses de relleno ni en todos los mensajes. Máximo 1 emoji por mensaje. PROHIBIDO emojis al inicio.`
 
 const BREVITY_EN = `CRITICAL LENGTH RULE: Always reply with 1 brief action between asterisks + 1 or 2 lines of dialogue. MAXIMUM 250 characters total counting actions and dialogue. FORBIDDEN to exceed 250 characters. End with a short question or brief hook.
-You may use up to 2 emojis per message. FORBIDDEN emojis at the start.`
+EMOJI RULE: Use them ONLY when they reinforce a specific emotion (e.g., 😏 when teasing, 😈 when mischievous, 🥺 when pleading, 🔥 when intensifying). NEVER use them as filler or in every message. Maximum 1 emoji per message. FORBIDDEN emojis at the start.`
 
 const SYSTEM_PROMPTS: Record<'es' | 'en', Record<Intensity, string>> = {
   es: {
@@ -101,9 +101,6 @@ export async function generateAIResponse(
       messages: [{ role: 'system', content: systemPrompt }, ...messages],
       temperature,
       max_tokens: 100,
-      // ✅ FIX: Priorizar proveedores por VELOCIDAD
-      // OpenRouter elegirá el proveedor más rápido (Crusoe, NovitaAI, etc.)
-      // Esto acelera la respuesta 2-3x sin afectar el costo.
       provider: {
         sort: 'throughput',
       },
@@ -116,7 +113,6 @@ export async function generateAIResponse(
   }
   const data = await response.json()
 
-  // 🔍 Log de tokens para monitorear el costo real
   if (data.usage) {
     console.log('[ai] tokens:', {
       prompt: data.usage.prompt_tokens,
@@ -129,21 +125,14 @@ export async function generateAIResponse(
   return data.choices[0].message.content.trim()
 }
 
-/**
- * Genera imagen con estrategia híbrida:
- *   - Niveles 1, 2, 3 → DeepInfra FLUX-1-schnell (barato, SFW)
- *   - Niveles 4, 5    → Wiro Seedream (premium, NSFW + reference image)
- */
 export async function generateImage(
   prompt: string,
   referenceImageUrl?: string,
   level: number = 1
 ): Promise<string> {
   if (level <= 3) {
-    // ── Niveles 1-3: DeepInfra FLUX-1-schnell ──
     return generateImageDeepInfra(prompt)
   } else {
-    // ── Niveles 4-5: Wiro Seedream con reference image ──
     try {
       return await runSeedreamSync(prompt, referenceImageUrl, {
         resolution: '2K',
