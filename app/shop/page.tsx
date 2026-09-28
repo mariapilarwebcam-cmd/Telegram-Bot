@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
+import { tgFetch } from '@/lib/telegram-fetch'
 import {
   STAR_PACKAGES,
   CRYPTO_PACKAGES,
@@ -72,7 +73,6 @@ export default function ShopPage() {
     }
   }, [user?.telegram_id, userLoading])
 
-  // Limpia el polling al desmontar
   useEffect(() => {
     return () => {
       if (pollRef.current) {
@@ -83,17 +83,16 @@ export default function ShopPage() {
   }, [])
 
   // ═══════════════════════════════════════
-  // COMPRA CON STARS (existente)
+  // COMPRA CON STARS
   // ═══════════════════════════════════════
   const buyWithStars = async (idx: number) => {
     if (!user) return
     setPurchasing(idx)
     try {
-      const res = await fetch('/api/create-invoice', {
+      const res = await tgFetch('/api/create-invoice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          telegram_id: user.telegram_id,
           package_id: idx,
         }),
       })
@@ -137,7 +136,7 @@ export default function ShopPage() {
     setPendingStatus(lang === 'es' ? 'Verificando pago…' : 'Verifying payment…')
 
     let attempts = 0
-    const MAX_ATTEMPTS = 20 // 20 × 4s = 80s máx
+    const MAX_ATTEMPTS = 20
 
     pollRef.current = setInterval(async () => {
       attempts++
@@ -152,7 +151,7 @@ export default function ShopPage() {
       }
 
       try {
-        const res = await fetch('/api/check-crypto-payment', {
+        const res = await tgFetch('/api/check-crypto-payment', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ reference }),
@@ -186,12 +185,10 @@ export default function ShopPage() {
     if (!user) return
     setPurchasing(idx)
     try {
-      // 1. Pedir datos del pago al backend
-      const res = await fetch('/api/create-crypto-invoice', {
+      const res = await tgFetch('/api/create-crypto-invoice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          telegram_id: user.telegram_id,
           package_id: idx,
         }),
       })
@@ -204,7 +201,6 @@ export default function ShopPage() {
 
       const { payment_data } = data
 
-      // 2. Enviar la transacción USDT firmada por el usuario
       const result = await pay(async (senderAddr: string) => {
         const transfer = await createTonPayTransfer(
           {
@@ -216,7 +212,7 @@ export default function ShopPage() {
             commentToSender: `Taboo Realm — ${payment_data.amount} USDT`,
           },
           {
-            chain: 'mainnet', // ⚠️ cambia a 'testnet' si estás probando
+            chain: 'mainnet',
           }
         )
         return {
@@ -228,13 +224,12 @@ export default function ShopPage() {
 
       console.log('[shop] crypto payment sent:', result)
 
-      // 3. Empezar a hacer polling al backend para confirmar
       startPolling(payment_data.reference)
     } catch (e: any) {
       console.error('[shop] crypto error:', e)
       const msg = e?.message || String(e)
       if (msg.toLowerCase().includes('user rejected') || msg.toLowerCase().includes('cancel')) {
-        // Usuario canceló — no hacer nada
+        // Usuario canceló
       } else {
         alert(
           lang === 'es'
@@ -246,10 +241,6 @@ export default function ShopPage() {
       setPurchasing(null)
     }
   }
-
-  // ═══════════════════════════════════════
-  // Render
-  // ═══════════════════════════════════════
 
   if (userLoading && !user) {
     return (
@@ -299,7 +290,6 @@ export default function ShopPage() {
         </div>
       </header>
 
-      {/* Banner Premium */}
       <section style={{ padding: '20px 16px 0' }}>
         <div
           style={{
@@ -344,7 +334,6 @@ export default function ShopPage() {
         </div>
       </section>
 
-      {/* Selector de método */}
       <section style={{ padding: '20px 16px 0' }}>
         <div style={{ display: 'flex', gap: 8 }}>
           <button
@@ -412,7 +401,6 @@ export default function ShopPage() {
         </div>
       </section>
 
-      {/* Aviso de pago pendiente */}
       {pendingReference && (
         <section style={{ padding: '16px 16px 0' }}>
           <div
@@ -434,7 +422,6 @@ export default function ShopPage() {
         </section>
       )}
 
-      {/* Paquetes */}
       <section style={{ padding: '24px 16px 0' }}>
         <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>
           {t.packages}
@@ -649,8 +636,6 @@ export default function ShopPage() {
               })}
         </div>
       </section>
-
-      {/* ❌ Instrucciones eliminadas — los precios son variables por nivel */}
     </div>
   )
 }
