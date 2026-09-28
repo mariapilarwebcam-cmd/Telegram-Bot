@@ -12,6 +12,13 @@ const USDT_MASTER = 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs'
 
 export async function POST(request: Request) {
   try {
+    // ✅ AUTH: telegram_id validado por el middleware
+    const tidFromAuth = request.headers.get('x-telegram-id-validated')
+    if (!tidFromAuth) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    }
+
+    // Body sin telegram_id (ya no es fuente de verdad)
     const { reference } = await request.json()
     if (!reference || typeof reference !== 'string') {
       return NextResponse.json({ error: 'Reference requerido' }, { status: 400 })
@@ -25,6 +32,15 @@ export async function POST(request: Request) {
 
     const telegramId = parts[1]
     const packageIndex = parseInt(parts[2])
+
+    // ✅ Verificar que el reference pertenece a este usuario
+    if (telegramId !== tidFromAuth) {
+      console.warn('[check-crypto-payment] Reference no coincide:', { telegramId, tidFromAuth })
+      return NextResponse.json(
+        { error: 'Reference no coincide con la sesión' },
+        { status: 403 }
+      )
+    }
 
     if (
       isNaN(packageIndex) ||
@@ -111,7 +127,6 @@ export async function POST(request: Request) {
     }
 
     // 5b. Verificar que el paquete first_time_only siga disponible para el usuario
-    // (evita que alguien reclame el bonus de primera compra dos veces)
     if (pkg.first_time_only) {
       const { data: priorPurchases } = await supabaseAdmin
         .from('star_purchases')
