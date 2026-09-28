@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react'
 import { supabase } from '@/lib/supabase'
 import { getLanguage, Language } from '@/lib/i18n'
+import { setInitDataRaw } from '@/lib/telegram-fetch'
 
 interface UserData {
   telegram_id: string
@@ -78,11 +79,13 @@ export function UserProvider({ children }: { children: ReactNode }) {
         try { sdk?.expand?.() } catch {}
 
         let initDataUnsafe = sdk?.initDataUnsafe
+        let initDataRaw = sdk?.initData || ''
 
         if (!initDataUnsafe?.user?.id) {
           const tg = getTelegramWebApp()
           if (tg?.initDataUnsafe?.user?.id) {
             initDataUnsafe = tg.initDataUnsafe
+            initDataRaw = tg.initData || initDataRaw
             try { tg.ready?.() } catch {}
             try { tg.expand?.() } catch {}
           }
@@ -93,6 +96,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
           const tg = getTelegramWebApp()
           if (tg?.initDataUnsafe?.user?.id) {
             initDataUnsafe = tg.initDataUnsafe
+            initDataRaw = tg.initData || initDataRaw
           }
         }
 
@@ -101,6 +105,14 @@ export function UserProvider({ children }: { children: ReactNode }) {
           console.warn('[UserContext] No Telegram user found after all retries')
           setLoading(false)
           return
+        }
+
+        // ✅ Registrar initData para tgFetch
+        if (initDataRaw) {
+          setInitDataRaw(initDataRaw)
+          console.log('[UserContext] initData registrado, length:', initDataRaw.length)
+        } else {
+          console.warn('[UserContext] No initData raw disponible')
         }
 
         setIsTelegram(true)
@@ -119,7 +131,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
           try {
             if (!sessionStorage.getItem(processedKey)) {
               sessionStorage.setItem(processedKey, '1')
-              fetch('/api/referral', {
+              // Import dinámico para usar tgFetch
+              const { tgFetch } = await import('@/lib/telegram-fetch')
+              tgFetch('/api/referral', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -178,7 +192,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
       if (telegramData) {
         try {
-          const res = await fetch('/api/init-user', {
+          const { tgFetch } = await import('@/lib/telegram-fetch')
+          const res = await tgFetch('/api/init-user', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
