@@ -32,12 +32,14 @@ const CHARACTER_DNA: Record<string, string> = {
   female_singer: "black woman, glamorous long hair, bold makeup, sequined stage outfit, seductive smile",
   female_yoga_instructor: "black woman, athletic slim body, natural hair in top knot, sports bra, calm pose",
   female_surfer_f: "latina woman, sun-kissed skin, wavy beach hair, athletic body, bikini top, playful smile",
+  female_maid: "young woman, short light blue bob hair, soft blue eyes, classic black and white maid outfit with frilled apron, white headdress, devoted gentle expression",
 
   // ── Femeninos fantasy ──
   female_vampire_lady: "elegant vampire woman, long silver-white hair, glowing crimson red eyes, pale porcelain skin, dark gothic Victorian dress with high collar, ruby choker, small bat wings",
   female_succubus: "seductive succubus woman, long wavy dark purple hair, glowing pink eyes, small curved black demon horns, large leathery bat wings, pointed devil tail",
   female_werewolf_f: "alpha female werewolf, wild ash-blonde hair with silver streaks, glowing amber wolf eyes, subtle white wolf ears, tribal leather outfit with fur mantle",
   female_fallen_angel: "fallen angel woman, long platinum blonde hair, sorrowful blue eyes, broken halo glowing faintly, large torn white feathered wings with black tips, elegant white robe",
+  female_kitsune: "magical kitsune fox spirit woman, long silver-white hair with pink tips, glowing golden amber slit eyes, white fox ears, three fluffy white fox tails, traditional white and crimson short kimono, glowing blue spirit flames",
 
   // ── Masculinos clásicos ──
   male_stepdad: "mature man, salt and pepper hair, broad shoulders, dress shirt",
@@ -61,22 +63,22 @@ const CHARACTER_DNA: Record<string, string> = {
   male_basketball_player: "black man, athletic tall build, short hair, basketball jersey, confident grin",
   male_barber: "black man, sharp fade haircut, well-groomed beard, fitted shirt and apron, charming smirk",
   male_surfer_m: "afro-latino man, sun-bleached hair, athletic lean body, board shorts, relaxed smile",
+  male_tattoo_artist: "latino man, muscular build, dark slicked back hair, short beard, tattooed forearms and neck, silver chain, black t-shirt and leather apron, edgy confident smirk",
 
   // ── Masculinos fantasy ──
   male_vampire_lord: "ancient vampire lord, long black hair pulled back, glowing crimson red eyes, sharp fangs, pale skin, black high-collared Victorian coat with red velvet lining",
   male_demon_lord: "powerful demon lord, long flowing dark crimson hair, glowing golden slit eyes, large curved black demon horns, large leathery bat wings, black and gold aristocratic armor with red cape",
   male_werewolf_m: "alpha male werewolf, wild dark brown hair with grey streaks, glowing amber wolf eyes, subtle dark wolf ears, muscular bare chest with tribal tattoos, leather straps and fur mantle",
   male_dark_hunter: "brooding demon hunter, messy black hair with white streak, intense steel-grey eyes, scarred face, long dark leather trench coat, silver katana on back, bandaged arms",
+  male_dragon_lord: "ancient dragon lord, long flowing dark silver hair with red streaks, glowing molten gold slit eyes, large curved black dragon horns, subtle golden scales on jaw and forearms, black and gold armored coat with high collar, golden dragon wings folded behind",
 }
 
-// ── Prompts SFW para niveles 1-3 (sin contenido NSFW) ──
 const SFW_SCENE_PROMPTS: Record<number, string> = {
   1: "selfie style, casual daytime environment, fully dressed, cute anime style, safe for work, soft natural lighting, wholesome, friendly",
   2: "bedroom setting, warm cozy lighting, fully dressed with suggestive pose, subtle cleavage, flirty expression, safe for work, anime aesthetic",
   3: "bedroom or living room, dim moody lighting, provocative outfit but fully covered, lingerie visible subtly, seductive pose, anime aesthetic",
 }
 
-// ── Prompts NSFW para niveles 4-5 (solo con Wiro) ──
 const NSFW_SCENE_PROMPTS: Record<number, string> = {
   4: "minimal clothing, lingerie or swimwear, very revealing, explicit suggestive pose, low intimate lighting, bedroom setting, anime aesthetic",
   5: "extremely revealing or tasteful implied nudity, artistic, highly explicit artistic composition, dramatic cinematic lighting, intimate, anime aesthetic",
