@@ -6,15 +6,17 @@ import { PERSONALITIES } from '@/lib/constants'
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json()
-    const { telegram_id, archetype, gender, character_name } = body
-    const tid = String(telegram_id || '')
+    // ✅ AUTH: telegram_id validado por el middleware
+    const tid = request.headers.get('x-telegram-id-validated')
+    if (!tid) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    }
+
+    // Body sin telegram_id (ya no es fuente de verdad)
+    const { archetype, gender, character_name } = await request.json()
 
     console.log('[select-character] request:', { telegram_id: tid, archetype, gender, character_name })
 
-    if (!tid) {
-      return NextResponse.json({ error: 'telegram_id requerido' }, { status: 400 })
-    }
     if (!archetype || !gender) {
       return NextResponse.json({ error: 'archetype y gender requeridos' }, { status: 400 })
     }
