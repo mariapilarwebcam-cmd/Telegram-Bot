@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { tgFetch } from '@/lib/telegram-fetch'
 import { GEM_COSTS, getDisplayName, getCharacterImageUrl } from '@/lib/constants'
 import { getLevelFromMessages, getImageCost, getAudioCost } from '@/lib/levels'
 import { getTranslations } from '@/lib/i18n'
@@ -118,11 +119,10 @@ export default function ChatPage() {
 
       setLoading(true)
       try {
-        const res = await fetch('/api/start-chat', {
+        const res = await tgFetch('/api/start-chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            telegram_id: user.telegram_id,
             character_id: characterId,
           }),
         })
@@ -163,11 +163,10 @@ export default function ChatPage() {
     setMessages((p) => [...p, { role: 'user', content: text }])
 
     try {
-      const res = await fetch('/api/chat', {
+      const res = await tgFetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          telegram_id: user.telegram_id,
           character_id: characterId,
           message: text,
         }),
@@ -184,7 +183,6 @@ export default function ChatPage() {
           setHookRemaining(data.hook_messages_remaining ?? 0)
         }
       } else {
-        // ✅ Muestra el error REAL durante el debug
         const errMsg = data.detail
           ? `${data.error || 'Error'}: ${data.detail}`
           : (data.error || `Error HTTP ${res.status}`)
@@ -220,11 +218,10 @@ export default function ChatPage() {
 
     setGeneratingAudio(true)
     try {
-      const res = await fetch('/api/generate-audio', {
+      const res = await tgFetch('/api/generate-audio', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          telegram_id: user.telegram_id,
           character_id: characterId,
           text: last.content,
         }),
@@ -263,11 +260,10 @@ export default function ChatPage() {
     setGeneratingImage(true)
     setShowImageModal(false)
     try {
-      const res = await fetch('/api/generate-image', {
+      const res = await tgFetch('/api/generate-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          telegram_id: user.telegram_id,
           character_id: characterId,
           description: imageDescription,
         }),
@@ -322,11 +318,10 @@ export default function ChatPage() {
 
     setRenaming(true)
     try {
-      const res = await fetch('/api/rename-character', {
+      const res = await tgFetch('/api/rename-character', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          telegram_id: user.telegram_id,
           character_id: characterId,
           new_name: newName.trim(),
         }),
