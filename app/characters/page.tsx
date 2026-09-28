@@ -6,6 +6,7 @@ import {
   ARCHETYPES_MALE, ARCHETYPES_FEMALE,
   CHARACTER_NAMES_MALE, CHARACTER_NAMES_FEMALE,
   PERSONALITIES, getCharacterImageUrl,
+  FANTASY_ARCHETYPES,
 } from '@/lib/constants'
 import { getTranslations } from '@/lib/i18n'
 import { useUser } from '@/lib/UserContext'
@@ -43,7 +44,7 @@ function getGradient(key: string) {
 export default function CharactersPage() {
   const router = useRouter()
   const { user, loading: userLoading, lang } = useUser()
-  const [tab, setTab] = useState<'all' | 'male' | 'female'>('all')
+  const [tab, setTab] = useState<'all' | 'male' | 'female' | 'fantasy'>('all')
   const [creating, setCreating] = useState<string | null>(null)
 
   const t = getTranslations(lang)
@@ -73,7 +74,12 @@ export default function CharactersPage() {
     })
   })
 
-  const filtered = tab === 'all' ? all : all.filter((c) => c.gender === tab)
+  const filtered = all.filter((c) => {
+    if (tab === 'all') return true
+    if (tab === 'fantasy') return FANTASY_ARCHETYPES.includes(c.archetype)
+    return c.gender === tab
+  })
+
   const gems = user?.gems || 0
 
   const pick = async (c: Char) => {
@@ -154,6 +160,7 @@ export default function CharactersPage() {
           { id: 'all', label: t.all },
           { id: 'female', label: t.female },
           { id: 'male', label: t.male },
+          { id: 'fantasy', label: `✨ ${t.fantasy}` },
         ].map((x) => (
           <button
             key={x.id}
