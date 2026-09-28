@@ -6,7 +6,8 @@ import { supabase } from '@/lib/supabase'
 import {
   ARCHETYPES_MALE, ARCHETYPES_FEMALE,
   CHARACTER_NAMES_MALE, CHARACTER_NAMES_FEMALE,
-  PERSONALITIES, getDisplayName, getCharacterImageUrl
+  PERSONALITIES, getDisplayName, getCharacterImageUrl,
+  FANTASY_ARCHETYPES,
 } from '@/lib/constants'
 import { getTranslations } from '@/lib/i18n'
 import { useUser } from '@/lib/UserContext'
@@ -47,7 +48,7 @@ export default function HomePage() {
 
   const [activeChar, setActiveChar] = useState<any>(null)
   const [search, setSearch] = useState('')
-  const [tab, setTab] = useState<'all' | 'male' | 'female'>('all')
+  const [tab, setTab] = useState<'all' | 'male' | 'female' | 'fantasy'>('all')
 
   useEffect(() => {
     if (!user?.telegram_id) return
@@ -90,7 +91,11 @@ export default function HomePage() {
   })
 
   const filtered = all
-    .filter((c) => (tab === 'all' ? true : c.gender === tab))
+    .filter((c) => {
+      if (tab === 'all') return true
+      if (tab === 'fantasy') return FANTASY_ARCHETYPES.includes(c.archetype)
+      return c.gender === tab
+    })
     .filter(
       (c) =>
         !search ||
@@ -266,7 +271,6 @@ export default function HomePage() {
               color: 'inherit',
             }}
           >
-            {/* AVATAR — inline sizing bulletproof */}
             <div
               style={{
                 width: 48,
@@ -432,6 +436,7 @@ export default function HomePage() {
           { id: 'all', label: t.all },
           { id: 'female', label: t.female },
           { id: 'male', label: t.male },
+          { id: 'fantasy', label: `✨ ${t.fantasy}` },
         ].map((x) => (
           <button
             key={x.id}
