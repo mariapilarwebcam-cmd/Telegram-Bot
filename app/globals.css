@@ -617,7 +617,7 @@ body:has(.chat-page) {
 }
 
 .empty-desc {
-  font-size: 14;
+  font-size: 14px;
   color: #a395c9;
   margin: 0 0 24px 0;
 }
@@ -896,18 +896,63 @@ body:has(.chat-page) {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* ✅ NUEVO: pulso suave para el banner de oferta de foto */
+/* ============================================================
+   ✅ BANNER DE OFERTA DE FOTO — ANIMACIONES
+   ============================================================ */
+
+/* Pulso suave (banner sin gemas suficientes / no premium) */
 @keyframes pulseSoft {
   0%, 100% {
-    box-shadow: 0 0 12px rgba(236, 72, 153, 0.35);
+    box-shadow: 0 0 12px rgba(168, 85, 247, 0.4);
     transform: scale(1);
   }
   50% {
     box-shadow:
-      0 0 24px rgba(236, 72, 153, 0.7),
-      0 0 36px rgba(168, 85, 247, 0.5);
-    transform: scale(1.015);
+      0 0 20px rgba(168, 85, 247, 0.6),
+      0 0 30px rgba(168, 85, 247, 0.35);
+    transform: scale(1.01);
   }
+}
+
+/* Pulso GLOW fuerte (banner con gemas suficientes — MAX conversión) */
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow:
+      0 0 14px rgba(236, 72, 153, 0.6),
+      0 0 26px rgba(168, 85, 247, 0.45),
+      inset 0 0 12px rgba(236, 72, 153, 0.15);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow:
+      0 0 26px rgba(236, 72, 153, 1),
+      0 0 50px rgba(168, 85, 247, 0.75),
+      0 0 80px rgba(236, 72, 153, 0.5),
+      inset 0 0 22px rgba(240, 171, 252, 0.3);
+    transform: scale(1.025);
+  }
+}
+
+/* Barrido de luz (shimmer) que cruza el banner */
+@keyframes shimmer {
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+
+/* Emoji flotando arriba y abajo */
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+/* Badge y flecha pulsando */
+@keyframes badgePulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.15); }
 }
 
 /* ============ SCROLLBAR ============ */
