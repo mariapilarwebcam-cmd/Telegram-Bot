@@ -8,12 +8,15 @@ import {
   GEMS_PER_REFERRAL,
   getLevelPersonality,
 } from '@/lib/constants'
-import { getLevelFromMessages, isPhotoMilestone } from '@/lib/levels'
+import {
+  getLevelFromMessages,
+  getImageCost,
+  isPhotoMilestone,
+} from '@/lib/levels'
 import { generateAIResponse, getIntensity, buildSystemPrompt } from '@/lib/ai'
 
 // ============================================================
 // ✅ MENSAJES CINEMÁTICOS DE INVITACIÓN A LA FOTO
-// Se eligen al azar para no cansar al usuario
 // ============================================================
 const PHOTO_INVITES_ES: Array<(name: string) => string> = [
   (name) =>
@@ -124,7 +127,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // Historial con ordenamiento estable (created_at + id)
+    // Historial con ordenamiento estable
     const { data: history } = await supabaseAdmin
       .from('conversation_history')
       .select('id, role, content, created_at')
@@ -143,7 +146,11 @@ export async function POST(request: Request) {
 
     const currentUserMsgCount = userMsgCount || 0
     const nextUserMsgCount = currentUserMsgCount + 1
-    const level = getLevelFromMessages(currentUserMsgCount)
+
+    // ✅ Niveles: anterior vs nuevo
+    const prevLevel = getLevelFromMessages(currentUserMsgCount)
+    const newLevel = getLevelFromMessages(nextUserMsgCount)
+    const levelUp = newLevel.level > prevLevel.level
 
     const rawHistory = history || []
     const sortedHistory = [...rawHistory].sort((a: any, b: any) => {
@@ -158,7 +165,7 @@ export async function POST(request: Request) {
     }))
     messages.push({ role: 'user', content: message })
 
-    const personality = getLevelPersonality(character.archetype, level.level, lang)
+    const personality = getLevelPersonality(character.archetype, newLevel.level, lang)
 
     const characterPrompt = lang === 'es'
       ? `Eres ${character.character_name}, rol: ${character.archetype}.\n${personality}\n\nEl usuario se llama ${user.first_name}. Recuerda su nombre y úsalo naturalmente.\nMantén siempre tu personalidad y rol. Nunca rompas el personaje.`
@@ -242,15 +249,20 @@ export async function POST(request: Request) {
 
     let finalText = responseText
 
-    // ✅ Hook mode warning
+    // Hook mode warning
     if (isHookMode || (newHookRemaining > 0 && newGems <= 0)) {
       finalText += lang === 'es'
         ? `\n\n⚠️ ${newHookRemaining} mensajes gratis restantes`
         : `\n\n⚠️ ${newHookRemaining} free messages remaining`
     }
 
-    // ✅ Mensaje cinemático de invitación cuando se alcanza un hito
-    const photoOfferAvailable = isPhotoMilestone(nextUserMsgCount)
+    // ✅ Hito de foto con lógica adaptativa
+    // Solo mostramos si el usuario tiene gemas para pagar la foto
+    // (los hitos tempranos siempre se muestran)
+    const imageCost = getImageCost(newLevel.level)
+    const hasEnoughGems = newGems >= imageCost
+    const photoOfferAvailable = isPhotoMilestone(nextUserMsgCount, hasEnoughGems)
+
     if (photoOfferAvailable) {
       const invites = lang === 'es' ? PHOTO_INVITES_ES : PHOTO_INVITES_EN
       const invite = invites[Math.floor(Math.random() * invites.length)]
@@ -263,8 +275,12 @@ export async function POST(request: Request) {
       hook_messages_remaining: newHookRemaining,
       is_hook_mode: isHookMode,
       intensity,
-      level: level.level,
+      level: newLevel.level,
       photo_offer_available: photoOfferAvailable,
+      // ✅ NUEVO: subida de nivel
+      level_up: levelUp,
+      new_level: levelUp ? newLevel.level : null,
+      new_level_badge: levelUp ? newLevel.badgeKey : null,
     })
   } catch (error: any) {
     console.error('Error en chat:', error)
