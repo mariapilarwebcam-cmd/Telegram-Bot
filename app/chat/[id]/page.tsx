@@ -32,6 +32,21 @@ function getGradient(key: string) {
   return GRADIENTS[Math.abs(h) % GRADIENTS.length]
 }
 
+// ✅ Copy del modal de subida de nivel (recibe el nombre del personaje)
+const LEVEL_UP_COPY_ES: Record<number, (name: string) => string> = {
+  2: (n) => `✨ ${n} empieza a abrirse contigo. Sus mensajes serán más cercanos.`,
+  3: (n) => `🔥 ${n} ya no te ve como un desconocido. Esto se pone interesante...`,
+  4: (n) => `💜 Confianza absoluta. Ahora ${n} sí te muestra quién es de verdad.`,
+  5: (n) => `😈 Algo prohibido. Nadie ha llegado tan lejos con ${n}.`,
+}
+
+const LEVEL_UP_COPY_EN: Record<number, (name: string) => string> = {
+  2: (n) => `✨ ${n} is opening up to you. Her messages will be closer.`,
+  3: (n) => `🔥 ${n} no longer sees you as a stranger. Things are getting interesting...`,
+  4: (n) => `💜 Absolute trust. Now ${n} truly shows you who she is.`,
+  5: (n) => `😈 Something forbidden. No one has gotten this far with ${n}.`,
+}
+
 export default function ChatPage() {
   const { id } = useParams()
   const router = useRouter()
@@ -49,6 +64,12 @@ export default function ChatPage() {
 
   const [totalUserMessages, setTotalUserMessages] = useState(0)
   const [photoOfferActive, setPhotoOfferActive] = useState(false)
+
+  // ✅ Modal de subida de nivel
+  const [levelUpModal, setLevelUpModal] = useState<{
+    level: number
+    badgeKey: string
+  } | null>(null)
 
   const [showPremiumModal, setShowPremiumModal] = useState(false)
   const [premiumModalReason, setPremiumModalReason] = useState<'audio' | 'image'>('audio')
@@ -229,8 +250,15 @@ export default function ChatPage() {
           setGems(data.remaining_gems)
           setHookRemaining(data.hook_messages_remaining ?? 0)
           setTotalUserMessages((prev) => prev + 1)
-          // ✅ Solo se activa si el backend lo confirma
           setPhotoOfferActive(!!data.photo_offer_available)
+
+          // ✅ Subida de nivel
+          if (data.level_up && data.new_level && data.new_level_badge) {
+            setLevelUpModal({
+              level: data.new_level,
+              badgeKey: data.new_level_badge,
+            })
+          }
         }
       } else {
         const errMsg = data.detail
@@ -310,7 +338,6 @@ export default function ChatPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           character_id: characterId,
-          // ✅ NO enviamos description: el backend construye la escena
         }),
       })
       const data = await res.json()
@@ -340,18 +367,24 @@ export default function ChatPage() {
   // ✅ CTA del banner: 3 rutas según estado del usuario
   const handleBannerTap = () => {
     if (!isPremium) {
-      // No premium → llevar a tienda
       setPremiumModalReason('image')
       setShowPremiumModal(true)
       return
     }
     if ((user?.gems || 0) < currentImageCost) {
-      // Sin gemas suficientes → ir a tienda
       router.push('/shop')
       return
     }
-    // Todo OK → generar imagen directo (el personaje decide el prompt)
     generateImage()
+  }
+
+  // ✅ CTA del modal de subida de nivel: cierra modal y dispara el banner
+  const handleLevelUpCTA = () => {
+    setLevelUpModal(null)
+    // Pequeño delay para que el usuario vea el chat antes de la acción
+    setTimeout(() => {
+      handleBannerTap()
+    }, 200)
   }
 
   const doRename = async () => {
@@ -426,7 +459,6 @@ export default function ChatPage() {
   const displayName = getDisplayName(character)
   const characterAvatar = getCharacterImageUrl(character.archetype, character.gender)
 
-  // ✅ Estado del banner
   const canAfford = gems >= currentImageCost
   const missingGems = Math.max(0, currentImageCost - gems)
 
@@ -616,7 +648,6 @@ export default function ChatPage() {
       </div>
 
       <div className="chat-input-bar">
-        {/* ✅ BANNER AGRESIVO DE OFERTA DE FOTO — 3 ESTADOS */}
         {photoOfferActive && (
           <div
             onClick={handleBannerTap}
@@ -643,7 +674,6 @@ export default function ChatPage() {
                 : 'pulseSoft 2.4s ease-in-out infinite',
             }}
           >
-            {/* Shimmer overlay (barrido de luz) */}
             <div
               style={{
                 position: 'absolute',
@@ -656,7 +686,6 @@ export default function ChatPage() {
               }}
             />
 
-            {/* Emoji flotante */}
             <div
               style={{
                 fontSize: 30,
@@ -671,7 +700,6 @@ export default function ChatPage() {
             </div>
 
             <div style={{ flex: 1, minWidth: 0, position: 'relative', zIndex: 1 }}>
-              {/* Badge superior */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
                 <span
                   style={{
@@ -703,14 +731,13 @@ export default function ChatPage() {
                   }}
                 >
                   {!isPremium
-                    ? (lang === 'es' ? 'PREMIUM' : 'PREMIUM')
+                    ? 'PREMIUM'
                     : canAfford
-                    ? (lang === 'es' ? '→' : '→')
+                    ? '→'
                     : (lang === 'es' ? 'IR A TIENDA' : 'GO TO SHOP')}
                 </span>
               </div>
 
-              {/* Texto principal */}
               <p
                 style={{
                   fontSize: 13,
@@ -726,7 +753,6 @@ export default function ChatPage() {
                   : `${displayName} wants to send you something special`}
               </p>
 
-              {/* Coste / faltante */}
               <p
                 style={{
                   fontSize: 11,
@@ -743,7 +769,6 @@ export default function ChatPage() {
               </p>
             </div>
 
-            {/* Flecha pulsante */}
             <svg
               width="22"
               height="22"
@@ -846,6 +871,98 @@ export default function ChatPage() {
           </button>
         </div>
       </div>
+
+      {/* ✅ MODAL DE SUBIDA DE NIVEL */}
+      {levelUpModal && (
+        <div className="modal-backdrop">
+          <div className="modal-box level-up-modal">
+            <div
+              style={{
+                fontSize: 52,
+                textAlign: 'center',
+                marginBottom: 4,
+                animation: 'levelUpSparkle 1.6s ease-in-out infinite',
+                filter: 'drop-shadow(0 0 20px rgba(240,171,252,0.9))',
+              }}
+            >
+              ✨
+            </div>
+
+            <p
+              style={{
+                fontSize: 10,
+                fontWeight: 900,
+                letterSpacing: '0.18em',
+                color: '#f0abfc',
+                textAlign: 'center',
+                margin: 0,
+                textShadow: '0 0 12px rgba(236,72,153,0.6)',
+              }}
+            >
+              {lang === 'es' ? 'HAS SUBIDO DE NIVEL' : 'LEVEL UP'}
+            </p>
+
+            <h2
+              className="modal-title"
+              style={{
+                textAlign: 'center',
+                fontSize: 26,
+                marginTop: 6,
+                marginBottom: 0,
+                background: 'linear-gradient(135deg, #f0abfc, #ec4899)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+              }}
+            >
+              {t[levelUpModal.badgeKey as keyof typeof t]}
+            </h2>
+
+            <div
+              style={{
+                marginTop: 20,
+                padding: 16,
+                borderRadius: 14,
+                background: 'rgba(168,85,247,0.12)',
+                border: '1px solid rgba(168,85,247,0.3)',
+              }}
+            >
+              <p
+                style={{
+                  fontSize: 14,
+                  color: '#f5f0ff',
+                  margin: 0,
+                  textAlign: 'center',
+                  lineHeight: 1.55,
+                }}
+              >
+                {lang === 'es'
+                  ? LEVEL_UP_COPY_ES[levelUpModal.level]?.(displayName)
+                  : LEVEL_UP_COPY_EN[levelUpModal.level]?.(displayName)}
+              </p>
+            </div>
+
+            <div className="modal-btn-row" style={{ marginTop: 20 }}>
+              <button
+                onClick={() => setLevelUpModal(null)}
+                className="modal-btn secondary"
+              >
+                {lang === 'es' ? 'Seguir' : 'Continue'}
+              </button>
+              <button
+                onClick={handleLevelUpCTA}
+                className="modal-btn primary"
+                style={{
+                  background: 'linear-gradient(135deg, #ec4899 0%, #a855f7 100%)',
+                  boxShadow: '0 4px 24px rgba(236,72,153,0.7)',
+                }}
+              >
+                {lang === 'es' ? '📸 Ver sorpresa' : '📸 See surprise'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showPremiumModal && (
         <div className="modal-backdrop">
