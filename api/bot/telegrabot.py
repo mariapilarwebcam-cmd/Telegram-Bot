@@ -2,14 +2,15 @@ import os
 import random
 import string
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, Router, F
 from aiogram.filters import Command, CommandStart, CommandObject
 from aiogram.types import (
     Message, CallbackQuery, LabeledPrice, PreCheckoutQuery,
-    ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
+    ReplyKeyboardMarkup, KeyboardButton, WebAppInfo,
+    InlineKeyboardMarkup,
 )
 from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 from supabase import create_client, Client
@@ -75,7 +76,7 @@ async def create_user_immediately(
     username: str,
     first_name: str,
     language: str,
-    referred_by: Optional[int] = None
+    pending_referral_code: Optional[str] = None,
 ):
     referral_code = generate_referral_code()
     user_data = {
@@ -85,9 +86,11 @@ async def create_user_immediately(
         'language': language,
         'gems': STARTING_GEMS,
         'referral_code': referral_code,
-        'referred_by': str(referred_by) if referred_by else None,
+        'referred_by': None,
         'total_referrals': 0,
-        'hook_messages_remaining': 0
+        'hook_messages_remaining': 0,
+        'age_verified': False,
+        'pending_referral_code': pending_referral_code,
     }
 
     try:
@@ -95,17 +98,6 @@ async def create_user_immediately(
     except Exception as e:
         logger.error(f"Error insertando usuario: {e}")
         return None
-
-    if referred_by and result.data:
-        try:
-            supabase.table('referrals').insert({
-                'referrer_id': str(referred_by),
-                'referred_id': str(telegram_id),
-                'reward_paid': False,
-                'referred_message_count': 0
-            }).execute()
-        except Exception as e:
-            logger.error(f"Error creando referral: {e}")
 
     return result.data[0] if result.data else None
 
@@ -133,6 +125,104 @@ async def record_star_purchase(telegram_id: int, stars: int, gems: int, is_first
     }).execute()
     supabase.table('users').update({'hook_messages_remaining': 0}).eq('telegram_id', str(telegram_id)).execute()
     await add_gems(telegram_id, gems, 'purchase', f'Compra con {stars} stars')
+
+# ==================== AGE VERIFICATION ====================
+
+def get_age_warning_text(language: str) -> str:
+    if language == 'es':
+        return (
+            "🔞 *Contenido para adultos (+18)*\n\n"
+            "Esta experiencia contiene contenido para adultos, incluyendo "
+            "temas de romance intenso y situaciones sugerentes.\n\n"
+            "Al continuar confirmas que:\n"
+            "• Tienes *18 años o más*\n"
+            "• Cumples con las leyes de tu país\n"
+            "• Aceptas ver contenido para adultos\n\n"
+            "*¿Confirmas que eres mayor de edad?*"
+        )
+    return (
+        "🔞 *Adult Content (+18)*\n\n"
+        "This experience contains adult content, including "
+        "intense romantic themes and suggestive situations.\n\n"
+        "By continuing you confirm that:\n"
+        "• You are *18 years or older*\n"
+        "• You comply with the laws of your country\n"
+        "• You accept viewing adult content\n\n"
+        "*Do you confirm you are of legal age?*"
+    )
+
+def get_age_keyboard(language: str) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    if language == 'es':
+        builder.button(text="✅ Sí, soy mayor de 18", callback_data="age_confirm")
+        builder.button(text="❌ No, soy menor", callback_data="age_decline")
+    else:
+        builder.button(text="✅ Yes, I'm 18+", callback_data="age_confirm")
+        builder.button(text="❌ No, I'm underage", callback_data="age_decline")
+    builder.adjust(1)
+    return builder.as_markup()
+
+async def send_age_warning(message: Message, language: str):
+    await message.answer(
+        get_age_warning_text(language),
+        parse_mode="Markdown",
+        reply_markup=get_age_keyboard(language),
+    )
+
+# ==================== REFERRAL APPLICATION ====================
+
+async def apply_pending_referral(telegram_id: int, ref_code: str) -> bool:
+    """Aplica el referral pendiente (crea registro en tabla referrals)."""
+    if not ref_code:
+        return False
+
+    try:
+        referrer = await get_user_by_username(ref_code)
+        if not referrer:
+            referrer = await get_user_by_referral_code(ref_code)
+
+        if not referrer:
+            logger.warning(f"Referrer not found for code: {ref_code}")
+            return False
+
+        if str(referrer['telegram_id']) == str(telegram_id):
+            # Self-referral: ignorar
+            return False
+
+        # ¿Ya existe un referral para este usuario?
+        existing = supabase.table('referrals').select('id').eq(
+            'referred_id', str(telegram_id)
+        ).execute()
+
+        if existing.data and len(existing.data) > 0:
+            # Ya hay uno, no duplicar
+            supabase.table('users').update({
+                'pending_referral_code': None
+            }).eq('telegram_id', str(telegram_id)).execute()
+            return False
+
+        # Crear referral
+        supabase.table('referrals').insert({
+            'referrer_id': str(referrer['telegram_id']),
+            'referred_id': str(telegram_id),
+            'reward_paid': False,
+            'referred_message_count': 0,
+        }).execute()
+
+        # Actualizar user
+        supabase.table('users').update({
+            'referred_by': str(referrer['telegram_id']),
+            'pending_referral_code': None,
+        }).eq('telegram_id', str(telegram_id)).execute()
+
+        logger.info(f"Referral applied: {telegram_id} referred by {referrer['telegram_id']}")
+        return True
+
+    except Exception as e:
+        logger.error(f"Error applying referral: {e}")
+        return False
+
+# ==================== KEYBOARD / MESSAGE ====================
 
 def get_main_keyboard(language: str) -> ReplyKeyboardMarkup:
     builder = ReplyKeyboardBuilder()
@@ -188,32 +278,112 @@ async def cmd_start(message: Message, command: CommandObject = None):
     first_name = message.from_user.first_name or ""
     language = detect_language(message.from_user.language_code)
 
-    referred_by = None
+    # Parsear referral code del deep link (?start=CODE)
+    ref_code: Optional[str] = None
     if command and command.args:
-        arg = command.args
-        referrer = await get_user_by_username(arg)
-        if not referrer:
-            referrer = await get_user_by_referral_code(arg)
-        if referrer and str(referrer['telegram_id']) != str(telegram_id):
-            referred_by = referrer['telegram_id']
+        arg = command.args.strip()
+        if arg:
+            ref_code = arg
 
     user = await get_user(telegram_id)
 
     if not user:
+        # Crear usuario con pending_referral_code (se aplicará tras verificar edad)
         user = await create_user_immediately(
             telegram_id, username, first_name, language,
-            int(referred_by) if referred_by else None
+            pending_referral_code=ref_code
         )
         if not user:
             await message.answer("❌ Error al crear tu cuenta. Intenta de nuevo con /start")
             return
-        await send_mini_app_message(message, language, is_new_user=True)
+        # Usuario nuevo: verificar edad
+        await send_age_warning(message, language)
+        return
+
+    # Usuario existe: si trae un ref code nuevo y no está verificado, actualizarlo
+    if ref_code and not user.get('age_verified'):
+        try:
+            supabase.table('users').update({
+                'pending_referral_code': ref_code
+            }).eq('telegram_id', str(telegram_id)).execute()
+            user['pending_referral_code'] = ref_code
+        except Exception as e:
+            logger.error(f"Error updating pending_referral: {e}")
+
+    # Si no ha verificado la edad → mostrar advertencia
+    if not user.get('age_verified'):
+        await send_age_warning(message, user.get('language', language) or language)
+        return
+
+    # Ya verificado → mostrar Mini App directo
+    lang = user.get('language', language) or language
+    await send_mini_app_message(message, lang, is_new_user=False)
+
+
+@router.callback_query(F.data == "age_confirm")
+async def on_age_confirm(callback: CallbackQuery):
+    telegram_id = callback.from_user.id
+    user = await get_user(telegram_id)
+
+    if not user:
+        await callback.answer("⚠️ Usa /start primero", show_alert=True)
+        return
+
+    lang = user.get('language', 'es') or 'es'
+
+    # Marcar como verificado
+    try:
+        supabase.table('users').update({
+            'age_verified': True,
+            'age_verified_at': datetime.now(timezone.utc).isoformat(),
+        }).eq('telegram_id', str(telegram_id)).execute()
+    except Exception as e:
+        logger.error(f"Error updating age_verified: {e}")
+        await callback.answer("⚠️ Error. Intenta de nuevo", show_alert=True)
+        return
+
+    # Aplicar referral pendiente (si hay)
+    pending_ref = user.get('pending_referral_code')
+    if pending_ref:
+        await apply_pending_referral(telegram_id, pending_ref)
+
+    # Borrar el mensaje de advertencia
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
+
+    await callback.answer("✅")
+
+    # Mostrar bienvenida + botón Mini App
+    await send_mini_app_message(callback.message, lang, is_new_user=True)
+
+
+@router.callback_query(F.data == "age_decline")
+async def on_age_decline(callback: CallbackQuery):
+    user = await get_user(callback.from_user.id)
+    lang = user.get('language', 'es') if user else 'es'
+
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
+
+    if lang == 'es':
+        text = (
+            "Entendido. Esta experiencia es solo para mayores de 18 años.\n\n"
+            "Vuelve cuando cumplas la mayoría de edad. 👋"
+        )
     else:
-        lang = user.get('language', language) or language
-        await send_mini_app_message(message, lang, is_new_user=False)
+        text = (
+            "Understood. This experience is for users 18 and older only.\n\n"
+            "Come back when you're of legal age. 👋"
+        )
+
+    await callback.message.answer(text)
+    await callback.answer()
 
 
-# ✅ Balance: acepta /balance, /saldo, o texto "💎 Balance"
 @router.message(Command("balance", "saldo", "gems"))
 @router.message(F.text.in_({"💎 Balance", "💎 Saldo"}))
 async def cmd_balance(message: Message):
@@ -228,7 +398,6 @@ async def cmd_balance(message: Message):
     await message.answer(text, parse_mode="Markdown")
 
 
-# ✅ Tienda: acepta /shop, /tienda, o texto
 @router.message(Command("shop", "tienda", "store"))
 @router.message(F.text.in_({"🛒 Tienda", "🛒 Shop"}))
 async def cmd_shop(message: Message):
@@ -332,7 +501,6 @@ async def process_successful_payment(message: Message):
     await message.answer(text, parse_mode="Markdown", reply_markup=get_main_keyboard(lang))
 
 
-# ✅ Invitar: acepta /invite, /invitar, o texto
 @router.message(Command("invite", "invitar", "referral", "ref"))
 @router.message(F.text.in_({"🎁 Invitar", "🎁 Invite"}))
 async def cmd_invite(message: Message):
@@ -344,7 +512,8 @@ async def cmd_invite(message: Message):
     bot_info = await message.bot.get_me()
 
     ref_param = user.get('username') or user['referral_code']
-    link = f"https://t.me/{bot_info.username}?startapp={ref_param}"
+    # ✅ Cambio: usamos ?start= (deep link al bot) en lugar de ?startapp=
+    link = f"https://t.me/{bot_info.username}?start={ref_param}"
 
     if lang == 'es':
         text = (f"🎁 *Sistema de Referidos*\n\n"
@@ -357,7 +526,6 @@ async def cmd_invite(message: Message):
     await message.answer(text, parse_mode="Markdown")
 
 
-# ✅ Ayuda: acepta /help, /ayuda, o texto
 @router.message(Command("help", "ayuda", "start_help"))
 @router.message(F.text.in_({"❓ Ayuda", "❓ Help"}))
 async def cmd_help(message: Message):
