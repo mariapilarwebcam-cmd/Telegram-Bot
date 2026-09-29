@@ -37,7 +37,6 @@ function getGradient(key: string) {
   return GRADIENTS[Math.abs(h) % GRADIENTS.length]
 }
 
-// Copy del modal de subida de nivel
 const LEVEL_UP_COPY_ES: Record<number, (name: string) => string> = {
   2: (n) => `✨ ${n} empieza a abrirse contigo. Sus mensajes serán más cercanos.`,
   3: (n) => `🔥 ${n} ya no te ve como un desconocido. Esto se pone interesante...`,
@@ -70,7 +69,6 @@ export default function ChatPage() {
   const [totalUserMessages, setTotalUserMessages] = useState(0)
   const [photoOfferActive, setPhotoOfferActive] = useState(false)
 
-  // Modal de subida de nivel
   const [levelUpModal, setLevelUpModal] = useState<{
     level: number
     badgeKey: string
@@ -828,4 +826,285 @@ export default function ChatPage() {
             onClick={handleBannerTap}
             disabled={generatingImage}
             className="chat-icon-btn"
-            title={`
+            title={`${t.imageTooltip} (${currentImageCost}💎)`}
+            style={{
+              opacity: isPremium && gems < currentImageCost ? 0.4 : 1,
+              boxShadow: photoOfferActive
+                ? '0 0 20px rgba(236,72,153,0.9), 0 0 30px rgba(168,85,247,0.6)'
+                : undefined,
+              borderColor: photoOfferActive ? '#ec4899' : undefined,
+            }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="2" />
+              <circle cx="9" cy="10" r="2" stroke="currentColor" strokeWidth="2" />
+              <path
+                d="m4 18 5-5 4 4 3-3 4 4"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && send()}
+            placeholder={t.writeMessage}
+            disabled={loading}
+            className="chat-input"
+          />
+
+          <button
+            onClick={send}
+            disabled={loading || !input.trim()}
+            className="chat-send-btn"
+            title="Enviar"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <path
+                d="m4 4 17 8-17 8V4z"
+                fill="currentColor"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      {levelUpModal && (
+        <div className="modal-backdrop">
+          <div className="modal-box level-up-modal">
+            <div
+              style={{
+                fontSize: 52,
+                textAlign: 'center',
+                marginBottom: 4,
+                animation: 'levelUpSparkle 1.6s ease-in-out infinite',
+                filter: 'drop-shadow(0 0 20px rgba(240,171,252,0.9))',
+              }}
+            >
+              ✨
+            </div>
+
+            <p
+              style={{
+                fontSize: 10,
+                fontWeight: 900,
+                letterSpacing: '0.18em',
+                color: '#f0abfc',
+                textAlign: 'center',
+                margin: 0,
+                textShadow: '0 0 12px rgba(236,72,153,0.6)',
+              }}
+            >
+              {lang === 'es' ? 'HAS SUBIDO DE NIVEL' : 'LEVEL UP'}
+            </p>
+
+            <h2
+              className="modal-title"
+              style={{
+                textAlign: 'center',
+                fontSize: 26,
+                marginTop: 6,
+                marginBottom: 0,
+                background: 'linear-gradient(135deg, #f0abfc, #ec4899)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+              }}
+            >
+              {t[levelUpModal.badgeKey as keyof typeof t]}
+            </h2>
+
+            <div
+              style={{
+                marginTop: 20,
+                padding: 16,
+                borderRadius: 14,
+                background: 'rgba(168,85,247,0.12)',
+                border: '1px solid rgba(168,85,247,0.3)',
+              }}
+            >
+              <p
+                style={{
+                  fontSize: 14,
+                  color: '#f5f0ff',
+                  margin: 0,
+                  textAlign: 'center',
+                  lineHeight: 1.55,
+                }}
+              >
+                {lang === 'es'
+                  ? LEVEL_UP_COPY_ES[levelUpModal.level]?.(displayName)
+                  : LEVEL_UP_COPY_EN[levelUpModal.level]?.(displayName)}
+              </p>
+            </div>
+
+            <div className="modal-btn-row" style={{ marginTop: 20 }}>
+              <button
+                onClick={() => setLevelUpModal(null)}
+                className="modal-btn secondary"
+              >
+                {lang === 'es' ? 'Seguir' : 'Continue'}
+              </button>
+              <button
+                onClick={handleLevelUpCTA}
+                className="modal-btn primary"
+                style={{
+                  background: 'linear-gradient(135deg, #ec4899 0%, #a855f7 100%)',
+                  boxShadow: '0 4px 24px rgba(236,72,153,0.7)',
+                }}
+              >
+                {lang === 'es' ? '📸 Ver sorpresa' : '📸 See surprise'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPremiumModal && (
+        <div className="modal-backdrop">
+          <div className="modal-box">
+            <div
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: 16,
+                margin: '0 auto 16px',
+                background: 'linear-gradient(135deg, #7c5cff 0%, #a855f7 100%)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 28,
+              }}
+            >
+              {premiumModalReason === 'audio' ? '🔊' : '📸'}
+            </div>
+            <h3 className="modal-title" style={{ textAlign: 'center' }}>
+              {t.premiumFeatureTitle}
+            </h3>
+            <p className="modal-desc" style={{ textAlign: 'center', marginBottom: 20 }}>
+              {premiumModalReason === 'audio' ? t.premiumAudio : t.premiumImage}
+            </p>
+            <div className="modal-btn-row">
+              <button onClick={() => setShowPremiumModal(false)} className="modal-btn secondary">
+                {t.close}
+              </button>
+              <button
+                onClick={() => {
+                  setShowPremiumModal(false)
+                  router.push('/shop')
+                }}
+                className="modal-btn primary"
+              >
+                {t.goToShop}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showRename && (
+        <div className="modal-backdrop">
+          <div className="modal-box">
+            <h3 className="modal-title">{t.renameTitle}</h3>
+            <p className="modal-desc">{t.renameDesc}</p>
+            <input
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder={t.renamePlaceholder}
+              maxLength={30}
+              className="modal-input"
+            />
+            <div className="modal-btn-row">
+              <button
+                onClick={() => {
+                  setShowRename(false)
+                  setNewName(displayName)
+                }}
+                className="modal-btn secondary"
+              >
+                {t.close}
+              </button>
+              <button
+                onClick={doRename}
+                disabled={
+                  renaming ||
+                  !newName.trim() ||
+                  newName.trim() === displayName ||
+                  gems < GEM_COSTS.rename_character
+                }
+                className="modal-btn primary"
+              >
+                {renaming ? t.saving : `${t.save} (${GEM_COSTS.rename_character})`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {blocked && (
+        <div className="modal-backdrop">
+          <div className="modal-box danger">
+            <h3 className="modal-title">{t.blockedTitle}</h3>
+            {blockedMessage && (
+              <div
+                style={{
+                  background: 'rgba(0,0,0,0.3)',
+                  border: '1px solid rgba(168,85,247,0.2)',
+                  borderRadius: 12,
+                  padding: 16,
+                  marginBottom: 16,
+                  fontSize: 14,
+                  lineHeight: 1.5,
+                }}
+                dangerouslySetInnerHTML={{ __html: formatMessage(blockedMessage) }}
+              />
+            )}
+            <p className="modal-desc">
+              {displayName} {t.blockedDesc}
+            </p>
+            <button
+              onClick={() => router.push('/shop')}
+              className="modal-btn primary"
+              style={{ width: '100%', marginBottom: 8 }}
+            >
+              {t.rechargeUnlock}
+            </button>
+            <button
+              onClick={() => router.push('/')}
+              className="modal-btn secondary"
+              style={{
+                width: '100%',
+                background: 'rgba(255,255,255,0.05)',
+                color: '#fff',
+                marginBottom: 8,
+              }}
+            >
+              {t.inviteFriend}
+            </button>
+            <button
+              onClick={() => setBlocked(false)}
+              style={{
+                width: '100%',
+                background: 'transparent',
+                border: 'none',
+                color: '#8b8b9e',
+                padding: 8,
+                fontSize: 13,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              {t.close}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
