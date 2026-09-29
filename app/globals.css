@@ -955,6 +955,48 @@ body:has(.chat-page) {
   50% { transform: scale(1.15); }
 }
 
+/* ============================================================
+   ✅ MODAL DE SUBIDA DE NIVEL
+   ============================================================ */
+
+.level-up-modal {
+  position: relative;
+  overflow: hidden;
+}
+
+.level-up-modal::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(236, 72, 153, 0.18), transparent 50%),
+    radial-gradient(circle at 80% 80%, rgba(168, 85, 247, 0.18), transparent 50%);
+  pointer-events: none;
+  animation: levelUpGlow 3s ease-in-out infinite alternate;
+  z-index: 0;
+}
+
+.level-up-modal > * {
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes levelUpGlow {
+  0% { opacity: 0.5; }
+  100% { opacity: 1; }
+}
+
+@keyframes levelUpSparkle {
+  0%, 100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.15) rotate(-5deg);
+    opacity: 0.9;
+  }
+}
+
 /* ============ SCROLLBAR ============ */
 ::-webkit-scrollbar {
   width: 5px;
