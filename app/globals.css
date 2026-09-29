@@ -617,7 +617,7 @@ body:has(.chat-page) {
 }
 
 .empty-desc {
-  font-size: 14px;
+  font-size: 14;
   color: #a395c9;
   margin: 0 0 24px 0;
 }
@@ -860,40 +860,17 @@ body:has(.chat-page) {
   box-shadow: 0 4px 16px rgba(236, 72, 153, 0.5);
 }
 
-/* Tablet pequeña / móvil grande */
 @media (max-width: 480px) {
-  .tabs {
-    gap: 8px;
-    padding: 12px 16px;
-  }
-  .tab {
-    padding: 8px 16px;
-    font-size: 14px;
-  }
+  .tabs { gap: 8px; padding: 12px 16px; }
+  .tab { padding: 8px 16px; font-size: 14px; }
 }
-
-/* Móvil mediano */
 @media (max-width: 400px) {
-  .tabs {
-    gap: 6px;
-    padding: 12px 12px;
-  }
-  .tab {
-    padding: 7px 14px;
-    font-size: 13px;
-  }
+  .tabs { gap: 6px; padding: 12px 12px; }
+  .tab { padding: 7px 14px; font-size: 13px; }
 }
-
-/* Móvil pequeño (iPhone SE, etc.) */
 @media (max-width: 360px) {
-  .tabs {
-    gap: 5px;
-    padding: 10px 10px;
-  }
-  .tab {
-    padding: 6px 12px;
-    font-size: 12.5px;
-  }
+  .tabs { gap: 5px; padding: 10px 10px; }
+  .tab { padding: 6px 12px; font-size: 12.5px; }
 }
 
 /* ============ LOADING DOTS ============ */
@@ -917,6 +894,20 @@ body:has(.chat-page) {
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/* ✅ NUEVO: pulso suave para el banner de oferta de foto */
+@keyframes pulseSoft {
+  0%, 100% {
+    box-shadow: 0 0 12px rgba(236, 72, 153, 0.35);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow:
+      0 0 24px rgba(236, 72, 153, 0.7),
+      0 0 36px rgba(168, 85, 247, 0.5);
+    transform: scale(1.015);
+  }
 }
 
 /* ============ SCROLLBAR ============ */
