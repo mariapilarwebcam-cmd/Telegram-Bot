@@ -105,6 +105,27 @@ const NSFW_SCENE_PROMPTS: Record<number, string> = {
   5: 'artistic boudoir photo, tasteful implied nudity with strategic coverage (sheets, shadows, artistic angles), no exposed genitalia, no explicit sexual acts, high-end artistic composition, dramatic cinematic lighting, elegant and tasteful',
 }
 
+// ============================================================
+// ✅ NUEVO: ESCENAS AUTO POR NIVEL
+// El personaje controla el prompt. El usuario NO describe.
+// ============================================================
+const AUTO_SCENES: Record<number, string> = {
+  1: 'relaxed at home in a cozy room, natural soft smile, casual daylight atmosphere, warm and wholesome vibe',
+  2: 'lying on her bed, playful flirty look toward the camera, warm intimate lighting, teasing energy',
+  3: 'seductive pose in a dimly lit room, elegant lingerie, moody atmosphere, confident inviting gaze',
+  4: 'intimate boudoir pose, soft shadows on skin, low warm lighting, private bedroom setting, sensual but tasteful',
+  5: 'artistic intimate composition, cinematic dramatic lighting, elegant and tasteful, high-end boudoir editorial',
+}
+
+// Variante masculina (cuando el personaje es male)
+const AUTO_SCENES_MALE: Record<number, string> = {
+  1: 'relaxed at home in a cozy room, natural soft smile, casual daylight atmosphere, warm and wholesome vibe',
+  2: 'lying on his bed, playful confident look toward the camera, warm intimate lighting, teasing energy',
+  3: 'seductive pose in a dimly lit room, half-open shirt, moody atmosphere, intense inviting gaze',
+  4: 'intimate boudoir pose, soft shadows on skin, low warm lighting, private bedroom setting, sensual but tasteful',
+  5: 'artistic intimate composition, cinematic dramatic lighting, elegant and tasteful, high-end boudoir editorial',
+}
+
 export async function POST(request: Request) {
   try {
     const tid = request.headers.get('x-telegram-id-validated')
@@ -112,7 +133,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
-    const { character_id, description } = await request.json()
+    const body = await request.json().catch(() => ({}))
+    const character_id = body?.character_id
+
+    // ✅ description ahora es OPCIONAL. El personaje controla el prompt.
+    // Solo se usa si viene explícitamente (compatibilidad).
+    const userHint =
+      typeof body?.description === 'string'
+        ? body.description.trim().slice(0, 200)
+        : ''
 
     const { data: user } = await supabaseAdmin
       .from('users')
@@ -167,6 +196,11 @@ export async function POST(request: Request) {
       }, { status: 402 })
     }
 
+    // ✅ El personaje decide el prompt. Si el usuario proveyó uno, se respeta,
+    // pero el frontend ya no lo envía (control total del personaje).
+    const autoScenes = character.gender === 'male' ? AUTO_SCENES_MALE : AUTO_SCENES
+    const sceneHint = userHint || autoScenes[level.level] || autoScenes[1]
+
     let imagePrompt: string
     let referenceUrl: string | undefined
 
@@ -178,7 +212,6 @@ export async function POST(request: Request) {
       const dna = CHARACTER_DNA[`${character.gender}_${character.archetype}`] || 'anime character'
       const scene = SFW_SCENE_PROMPTS[level.level] || SFW_SCENE_PROMPTS[1]
 
-      // ✅ Reglas de visibilidad
       let faceRule = ''
       if (faceVisibility === 'hidden') {
         faceRule = FACE_HIDDEN_FRAGMENT_ES
@@ -186,7 +219,7 @@ export async function POST(request: Request) {
         faceRule = FACE_PARTIAL_FRAGMENT_ES
       }
 
-      imagePrompt = `[CHARACTER DNA: ${dna}], anime style, cel shading, vibrant colors, detailed anime eyes, ${scene}, ${description}, ${faceRule}, high detail, beautiful cinematic lighting, 2D illustration, best quality, safe for work, no nudity, no explicit content`
+      imagePrompt = `[CHARACTER DNA: ${dna}], anime style, cel shading, vibrant colors, detailed anime eyes, ${scene}, ${sceneHint}, ${faceRule}, high detail, beautiful cinematic lighting, 2D illustration, best quality, safe for work, no nudity, no explicit content`
 
       referenceUrl = undefined
     } else {
@@ -195,7 +228,7 @@ export async function POST(request: Request) {
       const clothing = getClothingLevel(level.level)
       const scene = NSFW_SCENE_PROMPTS[level.level] || NSFW_SCENE_PROMPTS[4]
 
-      imagePrompt = `${facePrompt}, anime style, cel shading, vibrant colors, detailed anime eyes, ${clothing}, ${scene}, ${description}, ${NO_GENITALIA}, beautiful cinematic lighting, 2D illustration, best quality`
+      imagePrompt = `${facePrompt}, anime style, cel shading, vibrant colors, detailed anime eyes, ${clothing}, ${scene}, ${sceneHint}, ${NO_GENITALIA}, beautiful cinematic lighting, 2D illustration, best quality`
 
       referenceUrl = getCharacterImageUrl(character.archetype, character.gender)
     }
@@ -214,7 +247,7 @@ export async function POST(request: Request) {
       telegram_id: tid,
       amount: -imageCost,
       transaction_type: 'image',
-      description: `Selfie nivel ${level.level}: ${description.substring(0, 50)}`,
+      description: `Selfie nivel ${level.level}: ${sceneHint.substring(0, 60)}`,
     })
 
     return NextResponse.json({
