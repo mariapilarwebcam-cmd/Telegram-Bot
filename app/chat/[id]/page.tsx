@@ -48,8 +48,6 @@ export default function ChatPage() {
   const [blockedMessage, setBlockedMessage] = useState('')
 
   const [totalUserMessages, setTotalUserMessages] = useState(0)
-
-  // ✅ Oferta de foto activa (banner). El personaje decide el prompt.
   const [photoOfferActive, setPhotoOfferActive] = useState(false)
 
   const [showPremiumModal, setShowPremiumModal] = useState(false)
@@ -113,8 +111,6 @@ export default function ChatPage() {
       setMessages(deduped)
       setIsPremium(!!premRes.data && premRes.data.length > 0)
       setTotalUserMessages(countRes.count || 0)
-
-      // ✅ NO pre-activamos la oferta: solo cuando el backend confirma hito
       setCharacterLoading(false)
       setHistoryLoaded(true)
     })
@@ -233,8 +229,7 @@ export default function ChatPage() {
           setGems(data.remaining_gems)
           setHookRemaining(data.hook_messages_remaining ?? 0)
           setTotalUserMessages((prev) => prev + 1)
-
-          // ✅ Reset o set según backend. El banner solo vive mientras el backend lo confirma.
+          // ✅ Solo se activa si el backend lo confirma
           setPhotoOfferActive(!!data.photo_offer_available)
         }
       } else {
@@ -297,7 +292,6 @@ export default function ChatPage() {
     }
   }
 
-  // ✅ El personaje controla el prompt. El frontend NO envía descripción.
   const generateImage = async () => {
     if (!user || !character || generatingImage) return
     if (!isPremium) {
@@ -329,7 +323,6 @@ export default function ChatPage() {
           },
         ])
         setGems(data.remaining_gems)
-        // ✅ Al generar la foto, la oferta se consume
         setPhotoOfferActive(false)
       } else if (data.error === 'premium_required') {
         setPremiumModalReason('image')
@@ -344,18 +337,20 @@ export default function ChatPage() {
     }
   }
 
-  // ✅ El botón de cámara y el banner llaman directamente a generateImage
-  const triggerImageGeneration = () => {
-    if (generatingImage) return
+  // ✅ CTA del banner: 3 rutas según estado del usuario
+  const handleBannerTap = () => {
     if (!isPremium) {
+      // No premium → llevar a tienda
       setPremiumModalReason('image')
       setShowPremiumModal(true)
       return
     }
     if ((user?.gems || 0) < currentImageCost) {
-      alert(`Necesitas ${currentImageCost} gemas`)
+      // Sin gemas suficientes → ir a tienda
+      router.push('/shop')
       return
     }
+    // Todo OK → generar imagen directo (el personaje decide el prompt)
     generateImage()
   }
 
@@ -430,6 +425,10 @@ export default function ChatPage() {
   const gradient = getGradient(character.archetype)
   const displayName = getDisplayName(character)
   const characterAvatar = getCharacterImageUrl(character.archetype, character.gender)
+
+  // ✅ Estado del banner
+  const canAfford = gems >= currentImageCost
+  const missingGems = Math.max(0, currentImageCost - gems)
 
   return (
     <div className="chat-page">
@@ -617,45 +616,151 @@ export default function ChatPage() {
       </div>
 
       <div className="chat-input-bar">
-        {/* ✅ Banner de oferta: el personaje quiere mandar una foto */}
-        {photoOfferActive && isPremium && gems >= currentImageCost && (
+        {/* ✅ BANNER AGRESIVO DE OFERTA DE FOTO — 3 ESTADOS */}
+        {photoOfferActive && (
           <div
-            onClick={triggerImageGeneration}
+            onClick={handleBannerTap}
+            className="photo-offer-banner"
             style={{
-              marginBottom: 8,
-              padding: '10px 14px',
-              borderRadius: 14,
-              background: 'linear-gradient(90deg, rgba(168,85,247,0.25), rgba(236,72,153,0.2))',
-              border: '1px solid rgba(236,72,153,0.5)',
-              boxShadow: '0 0 20px rgba(236,72,153,0.4)',
+              position: 'relative',
+              marginBottom: 10,
+              padding: '14px 16px',
+              borderRadius: 16,
+              background: canAfford && isPremium
+                ? 'linear-gradient(135deg, rgba(236,72,153,0.4) 0%, rgba(168,85,247,0.3) 50%, rgba(236,72,153,0.4) 100%)'
+                : 'linear-gradient(135deg, rgba(124,92,255,0.35) 0%, rgba(168,85,247,0.25) 100%)',
+              backgroundSize: '200% 200%',
+              border: canAfford && isPremium
+                ? '2px solid rgba(236,72,153,0.85)'
+                : '2px solid rgba(168,85,247,0.6)',
               display: 'flex',
               alignItems: 'center',
-              gap: 10,
+              gap: 12,
               cursor: 'pointer',
-              animation: 'pulseSoft 2s ease-in-out infinite',
+              overflow: 'hidden',
+              animation: canAfford && isPremium
+                ? 'pulseGlow 1.8s ease-in-out infinite, shimmer 3s linear infinite'
+                : 'pulseSoft 2.4s ease-in-out infinite',
             }}
           >
-            <span style={{ fontSize: 20 }}>📸</span>
-            <div style={{ flex: 1, minWidth: 0 }}>
+            {/* Shimmer overlay (barrido de luz) */}
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                background:
+                  'linear-gradient(110deg, transparent 40%, rgba(255,255,255,0.2) 50%, transparent 60%)',
+                backgroundSize: '200% 100%',
+                animation: 'shimmer 2.5s linear infinite',
+                pointerEvents: 'none',
+              }}
+            />
+
+            {/* Emoji flotante */}
+            <div
+              style={{
+                fontSize: 30,
+                animation: 'float 1.8s ease-in-out infinite',
+                filter: 'drop-shadow(0 0 10px rgba(236,72,153,1))',
+                flexShrink: 0,
+                position: 'relative',
+                zIndex: 1,
+              }}
+            >
+              {isPremium ? '📸' : '🔒'}
+            </div>
+
+            <div style={{ flex: 1, minWidth: 0, position: 'relative', zIndex: 1 }}>
+              {/* Badge superior */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                <span
+                  style={{
+                    fontSize: 9,
+                    fontWeight: 900,
+                    letterSpacing: '0.1em',
+                    background: canAfford && isPremium
+                      ? 'linear-gradient(90deg, #f0abfc, #ec4899)'
+                      : 'linear-gradient(90deg, #a78bfa, #7c5cff)',
+                    color: '#fff',
+                    padding: '2px 8px',
+                    borderRadius: 6,
+                    animation: 'badgePulse 1.2s ease-in-out infinite',
+                    textShadow: '0 0 4px rgba(0,0,0,0.3)',
+                  }}
+                >
+                  {!isPremium
+                    ? (lang === 'es' ? 'DESBLOQUEA' : 'UNLOCK')
+                    : canAfford
+                    ? (lang === 'es' ? 'REGALO · TOCA' : 'GIFT · TAP')
+                    : (lang === 'es' ? 'BLOQUEADO' : 'LOCKED')}
+                </span>
+                <span
+                  style={{
+                    fontSize: 10,
+                    color: '#fbcfe8',
+                    fontWeight: 700,
+                    letterSpacing: '0.05em',
+                  }}
+                >
+                  {!isPremium
+                    ? (lang === 'es' ? 'PREMIUM' : 'PREMIUM')
+                    : canAfford
+                    ? (lang === 'es' ? '→' : '→')
+                    : (lang === 'es' ? 'IR A TIENDA' : 'GO TO SHOP')}
+                </span>
+              </div>
+
+              {/* Texto principal */}
               <p
                 style={{
                   fontSize: 13,
-                  fontWeight: 700,
-                  color: '#f0abfc',
+                  fontWeight: 800,
+                  color: '#fff',
                   margin: 0,
+                  textShadow: '0 1px 4px rgba(0,0,0,0.5)',
+                  lineHeight: 1.25,
                 }}
               >
-                {displayName} quiere mandarte algo...
+                {lang === 'es'
+                  ? `${displayName} quiere mandarte algo especial`
+                  : `${displayName} wants to send you something special`}
               </p>
-              <p style={{ fontSize: 11, color: '#c4b5fd', margin: '2px 0 0 0' }}>
-                📸 {currentImageCost} 💎
+
+              {/* Coste / faltante */}
+              <p
+                style={{
+                  fontSize: 11,
+                  color: canAfford && isPremium ? '#f0abfc' : '#fbbf24',
+                  margin: '3px 0 0 0',
+                  fontWeight: 800,
+                }}
+              >
+                {!isPremium
+                  ? (lang === 'es' ? '💎 Compra gemas para verla' : '💎 Buy gems to see it')
+                  : canAfford
+                  ? `📸 ${currentImageCost} 💎 — ${lang === 'es' ? 'reclamar ahora' : 'claim now'}`
+                  : `⚠️ ${lang === 'es' ? 'Te faltan' : "You're missing"} ${missingGems} 💎`}
               </p>
             </div>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+
+            {/* Flecha pulsante */}
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              style={{
+                animation: 'badgePulse 1.2s ease-in-out infinite',
+                flexShrink: 0,
+                filter: 'drop-shadow(0 0 8px rgba(240,171,252,1))',
+                position: 'relative',
+                zIndex: 1,
+              }}
+            >
               <path
                 d="m9 6 6 6-6 6"
                 stroke="#f0abfc"
-                strokeWidth="2.5"
+                strokeWidth="3"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
@@ -690,12 +795,12 @@ export default function ChatPage() {
           </button>
 
           <button
-            onClick={triggerImageGeneration}
+            onClick={handleBannerTap}
             disabled={generatingImage}
             className="chat-icon-btn"
             title={`${t.imageTooltip} (${currentImageCost}💎)`}
             style={{
-              opacity: isPremium && gems < currentImageCost ? 0.3 : 1,
+              opacity: isPremium && gems < currentImageCost ? 0.4 : 1,
               boxShadow: photoOfferActive
                 ? '0 0 20px rgba(236,72,153,0.9), 0 0 30px rgba(168,85,247,0.6)'
                 : undefined,
