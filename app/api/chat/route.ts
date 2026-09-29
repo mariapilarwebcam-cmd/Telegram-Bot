@@ -249,6 +249,22 @@ export async function POST(request: Request) {
 
     let finalText = responseText
 
+    // ✅ LOW GEMS WARNING: aviso cuando quedan 1-5 gemas (desde mensaje 10)
+    // Crea urgencia creciente antes de agotar la cuenta
+    const isLowGemsWarning =
+      nextUserMsgCount >= 10 &&
+      newGems > 0 &&
+      newGems <= 5 &&
+      !isHookMode &&
+      newHookRemaining === 0
+
+    if (isLowGemsWarning) {
+      const warning = lang === 'es'
+        ? `\n\n_💎 Te quedan solo ${newGems} gemas... no dejes que la historia se corte aquí._`
+        : `\n\n_💎 Only ${newGems} gems left... don't let the story end here._`
+      finalText += warning
+    }
+
     // Hook mode warning
     if (isHookMode || (newHookRemaining > 0 && newGems <= 0)) {
       finalText += lang === 'es'
@@ -256,9 +272,7 @@ export async function POST(request: Request) {
         : `\n\n⚠️ ${newHookRemaining} free messages remaining`
     }
 
-    // ✅ Hito de foto con lógica adaptativa
-    // Solo mostramos si el usuario tiene gemas para pagar la foto
-    // (los hitos tempranos siempre se muestran)
+    // ✅ Hito de foto (siempre visible en tempranos, adaptativo en tardíos)
     const imageCost = getImageCost(newLevel.level)
     const hasEnoughGems = newGems >= imageCost
     const photoOfferAvailable = isPhotoMilestone(nextUserMsgCount, hasEnoughGems)
@@ -277,10 +291,13 @@ export async function POST(request: Request) {
       intensity,
       level: newLevel.level,
       photo_offer_available: photoOfferAvailable,
-      // ✅ NUEVO: subida de nivel
+      // ✅ Subida de nivel
       level_up: levelUp,
       new_level: levelUp ? newLevel.level : null,
       new_level_badge: levelUp ? newLevel.badgeKey : null,
+      // ✅ Low gems warning
+      low_gems_warning: isLowGemsWarning,
+      low_gems_count: isLowGemsWarning ? newGems : 0,
     })
   } catch (error: any) {
     console.error('Error en chat:', error)
