@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { tgFetch } from '@/lib/telegram-fetch'
 import { GEM_COSTS, getDisplayName, getCharacterImageUrl } from '@/lib/constants'
-import { getLevelFromMessages, getImageCost, getAudioCost } from '@/lib/levels'
+import { getLevelFromMessages, getImageCost, getAudioCost, getNextPhotoMilestone } from '@/lib/levels'
 import { getTranslations } from '@/lib/i18n'
 import { useUser } from '@/lib/UserContext'
 
@@ -49,6 +49,9 @@ export default function ChatPage() {
 
   const [totalUserMessages, setTotalUserMessages] = useState(0)
 
+  // ✅ NUEVO: indica si hay una oferta de foto activa (para resaltar el botón)
+  const [photoOfferActive, setPhotoOfferActive] = useState(false)
+
   const [showPremiumModal, setShowPremiumModal] = useState(false)
   const [premiumModalReason, setPremiumModalReason] = useState<'audio' | 'image'>('audio')
 
@@ -70,7 +73,6 @@ export default function ChatPage() {
   const menuRef = useRef<HTMLDivElement>(null)
   const sendingRef = useRef(false)
 
-  // ── Carga inicial ──
   useEffect(() => {
     if (userLoading) return
     if (!user?.telegram_id) return
@@ -79,7 +81,6 @@ export default function ChatPage() {
 
     Promise.all([
       supabase.from('user_characters').select('*').eq('id', characterId).maybeSingle(),
-      // ✅ FIX: doble sort — created_at ASC, id ASC como desempate
       supabase
         .from('conversation_history')
         .select('*')
@@ -100,32 +101,33 @@ export default function ChatPage() {
         setCharacter(charRes.data)
         setNewName(getDisplayName(charRes.data))
       }
-
-      // ✅ FIX extra: re-ordenar en JS como red de seguridad por si Supabase
-      // no aplica el tie-breaker correctamente en versiones antiguas
       const raw = histRes.data || []
       const sorted = [...raw].sort((a: any, b: any) => {
         const cmp = String(a.created_at).localeCompare(String(b.created_at))
         if (cmp !== 0) return cmp
         return (a.id || 0) - (b.id || 0)
       })
-
-      // Deduplicar consecutivos idénticos
       const deduped = sorted.filter((msg: any, idx: number, arr: any[]) => {
         if (idx === 0) return true
         const prev = arr[idx - 1]
         return !(prev.role === msg.role && prev.content === msg.content)
       })
-
       setMessages(deduped)
       setIsPremium(!!premRes.data && premRes.data.length > 0)
       setTotalUserMessages(countRes.count || 0)
+
+      // ✅ Si el conteo exacto coincide con el siguiente hito, marcar oferta
+      const count = countRes.count || 0
+      const nextMilestone = getNextPhotoMilestone(count)
+      if (nextMilestone !== null && nextMilestone === count + 1) {
+        setPhotoOfferActive(true)
+      }
+
       setCharacterLoading(false)
       setHistoryLoaded(true)
     })
   }, [characterId, user?.telegram_id, userLoading])
 
-  // ── Scroll al final cuando cambian los mensajes ──
   useEffect(() => {
     const t = setTimeout(() => {
       endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
@@ -133,7 +135,6 @@ export default function ChatPage() {
     return () => clearTimeout(t)
   }, [messages])
 
-  // ── Scroll al final al volver del background ──
   useEffect(() => {
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
@@ -150,7 +151,6 @@ export default function ChatPage() {
     }
   }, [])
 
-  // ── Cerrar menú al tocar fuera ──
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
@@ -161,7 +161,6 @@ export default function ChatPage() {
     return () => document.removeEventListener('mousedown', handler)
   }, [menuOpen])
 
-  // ── Auto-start ──
   useEffect(() => {
     if (!historyLoaded || !user || !character) return
     if (messages.length > 0 || autoStartAttempted || loading) return
@@ -242,6 +241,11 @@ export default function ChatPage() {
           setGems(data.remaining_gems)
           setHookRemaining(data.hook_messages_remaining ?? 0)
           setTotalUserMessages((prev) => prev + 1)
+
+          // ✅ Si el backend detectó milestone, marcar oferta activa
+          if (data.photo_offer_available) {
+            setPhotoOfferActive(true)
+          }
         }
       } else {
         const errMsg = data.detail
@@ -338,6 +342,8 @@ export default function ChatPage() {
         ])
         setGems(data.remaining_gems)
         setImageDescription('')
+        // ✅ Al generar la foto, la oferta se consume
+        setPhotoOfferActive(false)
       } else if (data.error === 'premium_required') {
         setPremiumModalReason('image')
         setShowPremiumModal(true)
@@ -622,6 +628,52 @@ export default function ChatPage() {
       </div>
 
       <div className="chat-input-bar">
+        {/* ✅ NUEVO: banner de oferta de foto */}
+        {photoOfferActive && isPremium && gems >= currentImageCost && (
+          <div
+            onClick={tryOpenImageModal}
+            style={{
+              marginBottom: 8,
+              padding: '10px 14px',
+              borderRadius: 14,
+              background: 'linear-gradient(90deg, rgba(168,85,247,0.25), rgba(236,72,153,0.2))',
+              border: '1px solid rgba(236,72,153,0.5)',
+              boxShadow: '0 0 20px rgba(236,72,153,0.4)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              cursor: 'pointer',
+              animation: 'pulseSoft 2s ease-in-out infinite',
+            }}
+          >
+            <span style={{ fontSize: 20 }}>📸</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p
+                style={{
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: '#f0abfc',
+                  margin: 0,
+                }}
+              >
+                {displayName} quiere mandarte algo...
+              </p>
+              <p style={{ fontSize: 11, color: '#c4b5fd', margin: '2px 0 0 0' }}>
+                📸 {currentImageCost} 💎
+              </p>
+            </div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path
+                d="m9 6 6 6-6 6"
+                stroke="#f0abfc"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </div>
+        )}
+
         <div className="chat-input-row">
           <button
             onClick={playAudio}
@@ -654,6 +706,11 @@ export default function ChatPage() {
             title={`${t.imageTooltip} (${currentImageCost}💎)`}
             style={{
               opacity: isPremium && gems < currentImageCost ? 0.3 : 1,
+              // ✅ Resaltado cuando hay oferta activa
+              boxShadow: photoOfferActive
+                ? '0 0 20px rgba(236,72,153,0.9), 0 0 30px rgba(168,85,247,0.6)'
+                : undefined,
+              borderColor: photoOfferActive ? '#ec4899' : undefined,
             }}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
@@ -696,6 +753,7 @@ export default function ChatPage() {
         </div>
       </div>
 
+      {/* ... modales premium, rename, blocked, showImageModal (todos iguales) ... */}
       {showPremiumModal && (
         <div className="modal-backdrop">
           <div className="modal-box">
@@ -721,10 +779,7 @@ export default function ChatPage() {
               {premiumModalReason === 'audio' ? t.premiumAudio : t.premiumImage}
             </p>
             <div className="modal-btn-row">
-              <button
-                onClick={() => setShowPremiumModal(false)}
-                className="modal-btn secondary"
-              >
+              <button onClick={() => setShowPremiumModal(false)} className="modal-btn secondary">
                 {t.close}
               </button>
               <button
