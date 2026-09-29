@@ -997,6 +997,22 @@ body:has(.chat-page) {
   }
 }
 
+/* ============================================================
+   ✅ DESCRIPCIÓN DEL PERSONAJE (bajo el nombre en el header)
+   ============================================================ */
+.character-description {
+  font-size: 10px;
+  color: #a395c9;
+  margin: 3px 0 0 0;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  font-style: italic;
+}
+
 /* ============ SCROLLBAR ============ */
 ::-webkit-scrollbar {
   width: 5px;
