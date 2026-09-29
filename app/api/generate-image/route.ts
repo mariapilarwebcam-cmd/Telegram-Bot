@@ -4,13 +4,18 @@ import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { getCharacterFace, getCharacterImageUrl } from '@/lib/constants'
 import { generateImage } from '@/lib/ai'
-import { getLevelFromMessages, getImageCost, getClothingLevel, getSceneStyle } from '@/lib/levels'
+import {
+  getLevelFromMessages,
+  getImageCost,
+  getClothingLevel,
+  getFaceVisibility,
+  type FaceVisibility,
+} from '@/lib/levels'
 
 // ============================================================
-// CHARACTER DNA — Anclas visuales del personaje para niveles 1-3
+// CHARACTER DNA — Anclas visuales para niveles 1-3 (sin referencia)
 // ============================================================
 const CHARACTER_DNA: Record<string, string> = {
-  // ── Femeninos clásicos ──
   female_stepmom: "mature woman, long dark hair, green eyes, elegant",
   female_tsundere: "young woman, long dark navy hair, red ribbon, amber eyes",
   female_yandere: "young woman, long black hair with pink highlights, pink eyes",
@@ -34,8 +39,6 @@ const CHARACTER_DNA: Record<string, string> = {
   female_surfer_f: "latina woman, sun-kissed skin, wavy beach hair, athletic body, bikini top, playful smile",
   female_maid: "young woman, short light blue bob hair, soft blue eyes, classic black and white maid outfit with frilled apron, white headdress, devoted gentle expression",
   female_goth_dom: "elegant gothic dominatrix, long black hair with violet streaks, sharp crimson red eyes with cat-eye makeup, dark red lips, pale porcelain skin, black leather corset dress with silver buckles, silver spike choker, long black opera gloves, dark lacy thigh-high stockings",
-
-  // ── Femeninos fantasy ──
   female_vampire_lady: "elegant vampire woman, long silver-white hair, glowing crimson red eyes, pale porcelain skin, dark gothic Victorian dress with high collar, ruby choker, small bat wings",
   female_succubus: "seductive succubus woman, long wavy dark purple hair, glowing pink eyes, small curved black demon horns, large leathery bat wings, pointed devil tail",
   female_werewolf_f: "alpha female werewolf, wild ash-blonde hair with silver streaks, glowing amber wolf eyes, subtle white wolf ears, tribal leather outfit with fur mantle",
@@ -45,8 +48,6 @@ const CHARACTER_DNA: Record<string, string> = {
   female_witch: "mysterious witch sorceress, long wavy midnight-black hair with deep purple streaks, sharp violet eyes, fitted dark purple and black lace corset dress, black choker with glowing crystal, subtle pointed black witch hat tilted back, large black raven on shoulder, glowing purple potion vial, ornate silver rings",
   female_nun_fantasy: "devoted fantasy nun, long dark brown hair mostly hidden under a white coif, gentle conflicted blue eyes, soft rosy cheeks, classic black and white nun habit with silver cross pendant, delicate silver rosary on wrist, holding a small worn leather bible",
   female_demon_girl: "playful young demon girl, short wild red hair with black tips, glowing amber-gold slit eyes, two small curved dark red demon horns, thin pointed devil tail with arrow tip, small black leathery bat wings, fitted black and crimson gothic mini-dress with silver lace, choker with silver skull pendant",
-
-  // ── Masculinos clásicos ──
   male_stepdad: "mature man, salt and pepper hair, broad shoulders, dress shirt",
   male_ceo: "man, sharp haircut, steel-blue eyes, tailored suit, expensive watch",
   male_stepbrother: "young man, buzz cut, strong jawline, muscular, tank top",
@@ -70,8 +71,6 @@ const CHARACTER_DNA: Record<string, string> = {
   male_surfer_m: "afro-latino man, sun-bleached hair, athletic lean body, board shorts, relaxed smile",
   male_tattoo_artist: "latino man, muscular build, dark slicked back hair, short beard, tattooed forearms and neck, silver chain, black t-shirt and leather apron, edgy confident smirk",
   male_mma_fighter: "muscular MMA fighter, short buzz cut with faded sides, sharp angular jawline, light stubble, intense dark brown eyes, small brow cut, athletic tape wrapped around both hands, fitted black tank top, professional MMA shorts, silver dog-tag necklace",
-
-  // ── Masculinos fantasy ──
   male_vampire_lord: "ancient vampire lord, long black hair pulled back, glowing crimson red eyes, sharp fangs, pale skin, black high-collared Victorian coat with red velvet lining",
   male_demon_lord: "powerful demon lord, long flowing dark crimson hair, glowing golden slit eyes, large curved black demon horns, large leathery bat wings, black and gold aristocratic armor with red cape",
   male_werewolf_m: "alpha male werewolf, wild dark brown hair with grey streaks, glowing amber wolf eyes, subtle dark wolf ears, muscular bare chest with tribal tattoos, leather straps and fur mantle",
@@ -83,26 +82,36 @@ const CHARACTER_DNA: Record<string, string> = {
   male_angel_m: "celestial angel, long flowing golden-blonde hair with soft waves, luminous pale blue eyes with soft glow, flawless serene features, faint golden forehead markings, glowing golden halo floating above head, large pristine white feathered wings, elegant flowing white and gold celestial robe with sacred engravings, golden bracers on both wrists, gold chain necklace with small glowing gem",
 }
 
+// ============================================================
+// FRAGMENTOS DE PROMPT POR VISIBILIDAD DE CARA
+// ============================================================
+
+const FACE_HIDDEN_FRAGMENT_ES = 'IMPORTANT: the subject\'s face is NOT visible in the photo. Use creative framing: shot from behind, back turned to camera, close-up on body and hands only, selfie cropped at the chin, over-the-shoulder angle without face, face hidden by phone or object, or facing away. The face must NOT appear.'
+
+const FACE_PARTIAL_FRAGMENT_ES = 'The subject\'s face is only partially visible: side profile, three-quarter angle with hair covering one eye, or face softly obscured by shadow/dim light. Do not show a full clear face.'
+
+// ============================================================
+// SCENE PROMPTS POR NIVEL
+// ============================================================
+
 const SFW_SCENE_PROMPTS: Record<number, string> = {
-  1: "selfie style, casual daytime environment, fully dressed, cute anime style, safe for work, soft natural lighting, wholesome, friendly",
-  2: "bedroom setting, warm cozy lighting, fully dressed with suggestive pose, subtle cleavage, flirty expression, safe for work, anime aesthetic",
-  3: "bedroom or living room, dim moody lighting, provocative outfit but fully covered, lingerie visible subtly, seductive pose, anime aesthetic",
+  1: 'selfie style, casual daytime environment, fully dressed, cozy and wholesome, soft natural lighting, friendly smile, cute anime aesthetic, safe for work',
+  2: 'selfie or mirror photo, bedroom setting, warm cozy lighting, fully dressed in casual outfit, subtle suggestive pose, flirty playful expression, safe for work',
+  3: 'photo in bedroom or living room, dim moody lighting, provocative but fully covered outfit or elegant lingerie, seductive artistic pose, safe for work',
 }
 
 const NSFW_SCENE_PROMPTS: Record<number, string> = {
-  4: "minimal clothing, lingerie or swimwear, very revealing, explicit suggestive pose, low intimate lighting, bedroom setting, anime aesthetic",
-  5: "extremely revealing or tasteful implied nudity, artistic, highly explicit artistic composition, dramatic cinematic lighting, intimate, anime aesthetic",
+  4: 'intimate photo, minimal tasteful clothing or elegant lingerie, very revealing but no explicit nudity, artistic suggestive pose, low intimate lighting, bedroom setting, high-end boudoir aesthetic',
+  5: 'artistic boudoir photo, tasteful implied nudity with strategic coverage (sheets, shadows, artistic angles), no exposed genitalia, no explicit sexual acts, high-end artistic composition, dramatic cinematic lighting, elegant and tasteful',
 }
 
 export async function POST(request: Request) {
   try {
-    // ✅ AUTH: telegram_id validado por el middleware
     const tid = request.headers.get('x-telegram-id-validated')
     if (!tid) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
-    // Body sin telegram_id (ya no es fuente de verdad)
     const { character_id, description } = await request.json()
 
     const { data: user } = await supabaseAdmin
@@ -146,6 +155,7 @@ export async function POST(request: Request) {
 
     const level = getLevelFromMessages(userMsgCount || 0)
     const imageCost = getImageCost(level.level)
+    const faceVisibility = getFaceVisibility(level.level)
 
     if (user.gems < imageCost) {
       return NextResponse.json({
@@ -160,19 +170,32 @@ export async function POST(request: Request) {
     let imagePrompt: string
     let referenceUrl: string | undefined
 
+    // ✅ ANTI-GENITALIA: instrucción explícita para niveles 4-5
+    const NO_GENITALIA = 'tasteful artistic composition, no explicit genitalia, no nudity visible below waist, strategic coverage, high-end boudoir photography aesthetic, safe for platform'
+
     if (level.level <= 3) {
+      // ── Niveles 1-3: DeepInfra (sin reference, con face hiding) ──
       const dna = CHARACTER_DNA[`${character.gender}_${character.archetype}`] || 'anime character'
       const scene = SFW_SCENE_PROMPTS[level.level] || SFW_SCENE_PROMPTS[1]
 
-      imagePrompt = `[CHARACTER DNA: ${dna}], anime style, cel shading, vibrant colors, detailed anime eyes, ${scene}, ${description}, selfie style, smartphone photo, high detail, beautiful cinematic lighting, 2D illustration, best quality, safe for work, no nudity, no explicit content`
+      // ✅ Reglas de visibilidad
+      let faceRule = ''
+      if (faceVisibility === 'hidden') {
+        faceRule = FACE_HIDDEN_FRAGMENT_ES
+      } else if (faceVisibility === 'partial') {
+        faceRule = FACE_PARTIAL_FRAGMENT_ES
+      }
+
+      imagePrompt = `[CHARACTER DNA: ${dna}], anime style, cel shading, vibrant colors, detailed anime eyes, ${scene}, ${description}, ${faceRule}, high detail, beautiful cinematic lighting, 2D illustration, best quality, safe for work, no nudity, no explicit content`
 
       referenceUrl = undefined
     } else {
+      // ── Niveles 4-5: Wiro con reference (cara completa, sin genitalia) ──
       const facePrompt = getCharacterFace(character.archetype, character.gender)
       const clothing = getClothingLevel(level.level)
       const scene = NSFW_SCENE_PROMPTS[level.level] || NSFW_SCENE_PROMPTS[4]
 
-      imagePrompt = `${facePrompt}, anime style, cel shading, vibrant colors, detailed anime eyes, ${clothing}, ${scene}, ${description}, POV selfie, smartphone photo, high detail, flirty expression, beautiful cinematic lighting, 2D illustration, best quality`
+      imagePrompt = `${facePrompt}, anime style, cel shading, vibrant colors, detailed anime eyes, ${clothing}, ${scene}, ${description}, ${NO_GENITALIA}, beautiful cinematic lighting, 2D illustration, best quality`
 
       referenceUrl = getCharacterImageUrl(character.archetype, character.gender)
     }
@@ -199,6 +222,7 @@ export async function POST(request: Request) {
       remaining_gems: newGems,
       level: level.level,
       cost: imageCost,
+      face_visibility: faceVisibility,
       model: level.level <= 3 ? 'deepinfra' : 'wiro',
     })
   } catch (error: any) {
