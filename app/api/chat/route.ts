@@ -11,6 +11,36 @@ import {
 import { getLevelFromMessages, isPhotoMilestone } from '@/lib/levels'
 import { generateAIResponse, getIntensity, buildSystemPrompt } from '@/lib/ai'
 
+// ============================================================
+// ✅ MENSAJES CINEMÁTICOS DE INVITACIÓN A LA FOTO
+// Se eligen al azar para no cansar al usuario
+// ============================================================
+const PHOTO_INVITES_ES: Array<(name: string) => string> = [
+  (name) =>
+    `📸 *${name} se muerde el labio y te mira fijamente...*\n_"Espera... quiero mandarte algo. Solo para ti."_`,
+  (name) =>
+    `📸 *${name} sonríe de lado y saca el teléfono...*\n_"No te muevas... esto te va a encantar."_`,
+  (name) =>
+    `📸 *${name} baja la voz y se acerca...*\n_"Ven... quiero mostrarte algo que nadie más ha visto."_`,
+  (name) =>
+    `📸 *${name} te mira con ojos brillantes...*\n_"Confía en mí. Tengo algo preparado para ti."_`,
+  (name) =>
+    `📸 *${name} se recoge el pelo y te dedica una mirada...*\n_"¿Quieres ver lo que estaba pensando? Solo tienes que pedirlo."_`,
+]
+
+const PHOTO_INVITES_EN: Array<(name: string) => string> = [
+  (name) =>
+    `📸 *${name} bites their lip and stares at you...*\n_"Wait... I want to send you something. Just for you."_`,
+  (name) =>
+    `📸 *${name} smirks and pulls out their phone...*\n_"Don't move... you're going to love this."_`,
+  (name) =>
+    `📸 *${name} lowers their voice and leans in...*\n_"Come here... I want to show you something no one else has seen."_`,
+  (name) =>
+    `📸 *${name} looks at you with gleaming eyes...*\n_"Trust me. I have something prepared for you."_`,
+  (name) =>
+    `📸 *${name} tucks their hair back and gives you a look...*\n_"Want to see what I was thinking about? Just ask."_`,
+]
+
 export async function POST(request: Request) {
   try {
     const tid = request.headers.get('x-telegram-id-validated')
@@ -212,19 +242,19 @@ export async function POST(request: Request) {
 
     let finalText = responseText
 
-    // ✅ NUEVO: hook mode warning
+    // ✅ Hook mode warning
     if (isHookMode || (newHookRemaining > 0 && newGems <= 0)) {
       finalText += lang === 'es'
         ? `\n\n⚠️ ${newHookRemaining} mensajes gratis restantes`
         : `\n\n⚠️ ${newHookRemaining} free messages remaining`
     }
 
-    // ✅ NUEVO: oferta de foto al llegar a un hito
+    // ✅ Mensaje cinemático de invitación cuando se alcanza un hito
     const photoOfferAvailable = isPhotoMilestone(nextUserMsgCount)
     if (photoOfferAvailable) {
-      finalText += lang === 'es'
-        ? `\n\n📸 *${character.character_name} quiere mandarte una foto especial...*`
-        : `\n\n📸 *${character.character_name} wants to send you a special photo...*`
+      const invites = lang === 'es' ? PHOTO_INVITES_ES : PHOTO_INVITES_EN
+      const invite = invites[Math.floor(Math.random() * invites.length)]
+      finalText += `\n\n${invite(character.character_name)}`
     }
 
     return NextResponse.json({
@@ -234,7 +264,6 @@ export async function POST(request: Request) {
       is_hook_mode: isHookMode,
       intensity,
       level: level.level,
-      // ✅ NUEVO: flag para el frontend
       photo_offer_available: photoOfferAvailable,
     })
   } catch (error: any) {
