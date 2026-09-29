@@ -535,9 +535,6 @@ export default function ChatPage() {
               </span>
             )}
           </div>
-          {characterDescription && (
-            <p className="character-description">{characterDescription}</p>
-          )}
         </div>
 
         <div className="menu-wrap" ref={menuRef}>
@@ -596,8 +593,23 @@ export default function ChatPage() {
       </header>
 
       <div className="chat-messages">
+        {/* ✅ Descripción del personaje como card al inicio del chat */}
+        {characterDescription && (
+          <div className="character-intro">
+            <div className="character-intro-header">
+              <span className="character-intro-icon">✨</span>
+              <span className="character-intro-badge">
+                {lang === 'es'
+                  ? (character.gender === 'male' ? 'SOBRE ÉL' : 'SOBRE ELLA')
+                  : (character.gender === 'male' ? 'ABOUT HIM' : 'ABOUT HER')}
+              </span>
+            </div>
+            <p className="character-intro-text">{characterDescription}</p>
+          </div>
+        )}
+
         {loading && messages.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '64px 24px' }}>
+          <div style={{ textAlign: 'center', padding: '32px 24px' }}>
             <div
               className="avatar-xl"
               style={{
