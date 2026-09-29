@@ -172,7 +172,6 @@ async def send_age_warning(message: Message, language: str):
 # ==================== REFERRAL APPLICATION ====================
 
 async def apply_pending_referral(telegram_id: int, ref_code: str) -> bool:
-    """Aplica el referral pendiente (crea registro en tabla referrals)."""
     if not ref_code:
         return False
 
@@ -186,22 +185,18 @@ async def apply_pending_referral(telegram_id: int, ref_code: str) -> bool:
             return False
 
         if str(referrer['telegram_id']) == str(telegram_id):
-            # Self-referral: ignorar
             return False
 
-        # ¿Ya existe un referral para este usuario?
         existing = supabase.table('referrals').select('id').eq(
             'referred_id', str(telegram_id)
         ).execute()
 
         if existing.data and len(existing.data) > 0:
-            # Ya hay uno, no duplicar
             supabase.table('users').update({
                 'pending_referral_code': None
             }).eq('telegram_id', str(telegram_id)).execute()
             return False
 
-        # Crear referral
         supabase.table('referrals').insert({
             'referrer_id': str(referrer['telegram_id']),
             'referred_id': str(telegram_id),
@@ -209,7 +204,6 @@ async def apply_pending_referral(telegram_id: int, ref_code: str) -> bool:
             'referred_message_count': 0,
         }).execute()
 
-        # Actualizar user
         supabase.table('users').update({
             'referred_by': str(referrer['telegram_id']),
             'pending_referral_code': None,
@@ -278,7 +272,6 @@ async def cmd_start(message: Message, command: CommandObject = None):
     first_name = message.from_user.first_name or ""
     language = detect_language(message.from_user.language_code)
 
-    # Parsear referral code del deep link (?start=CODE)
     ref_code: Optional[str] = None
     if command and command.args:
         arg = command.args.strip()
@@ -288,7 +281,6 @@ async def cmd_start(message: Message, command: CommandObject = None):
     user = await get_user(telegram_id)
 
     if not user:
-        # Crear usuario con pending_referral_code (se aplicará tras verificar edad)
         user = await create_user_immediately(
             telegram_id, username, first_name, language,
             pending_referral_code=ref_code
@@ -296,11 +288,9 @@ async def cmd_start(message: Message, command: CommandObject = None):
         if not user:
             await message.answer("❌ Error al crear tu cuenta. Intenta de nuevo con /start")
             return
-        # Usuario nuevo: verificar edad
         await send_age_warning(message, language)
         return
 
-    # Usuario existe: si trae un ref code nuevo y no está verificado, actualizarlo
     if ref_code and not user.get('age_verified'):
         try:
             supabase.table('users').update({
@@ -310,12 +300,12 @@ async def cmd_start(message: Message, command: CommandObject = None):
         except Exception as e:
             logger.error(f"Error updating pending_referral: {e}")
 
-    # Si no ha verificado la edad → mostrar advertencia
+    # ✅ Si NO ha verificado la edad → aviso (solo la primera vez)
     if not user.get('age_verified'):
         await send_age_warning(message, user.get('language', language) or language)
         return
 
-    # Ya verificado → mostrar Mini App directo
+    # ✅ Ya verificado → saludo de vuelta
     lang = user.get('language', language) or language
     await send_mini_app_message(message, lang, is_new_user=False)
 
@@ -331,7 +321,7 @@ async def on_age_confirm(callback: CallbackQuery):
 
     lang = user.get('language', 'es') or 'es'
 
-    # Marcar como verificado
+    # ✅ Update + verificación explícita (Supabase no lanza si falla silencioso)
     try:
         supabase.table('users').update({
             'age_verified': True,
@@ -342,6 +332,13 @@ async def on_age_confirm(callback: CallbackQuery):
         await callback.answer("⚠️ Error. Intenta de nuevo", show_alert=True)
         return
 
+    # ✅ Verificar que se guardó realmente
+    verify = await get_user(telegram_id)
+    if not verify or not verify.get('age_verified'):
+        logger.error(f"age_verified no se guardó para {telegram_id}")
+        await callback.answer("⚠️ Error guardando. Intenta de nuevo", show_alert=True)
+        return
+
     # Aplicar referral pendiente (si hay)
     pending_ref = user.get('pending_referral_code')
     if pending_ref:
@@ -349,7 +346,8 @@ async def on_age_confirm(callback: CallbackQuery):
 
     # Borrar el mensaje de advertencia
     try:
-        await callback.message.delete()
+        if callback.message:
+            await callback.message.delete()
     except Exception:
         pass
 
@@ -365,7 +363,8 @@ async def on_age_decline(callback: CallbackQuery):
     lang = user.get('language', 'es') if user else 'es'
 
     try:
-        await callback.message.delete()
+        if callback.message:
+            await callback.message.delete()
     except Exception:
         pass
 
@@ -512,7 +511,6 @@ async def cmd_invite(message: Message):
     bot_info = await message.bot.get_me()
 
     ref_param = user.get('username') or user['referral_code']
-    # ✅ Cambio: usamos ?start= (deep link al bot) en lugar de ?startapp=
     link = f"https://t.me/{bot_info.username}?start={ref_param}"
 
     if lang == 'es':
