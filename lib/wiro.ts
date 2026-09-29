@@ -3,6 +3,11 @@
 const WIRO_API_KEY = process.env.WIRO_API_KEY!
 const WIRO_BASE = 'https://api.wiro.ai/v1'
 
+// ✅ Timeout reducido para caber en el límite de 60s de Vercel
+// (Wiro 40s + fallback DeepInfra 15s = 55s < 60s)
+const WIRO_TIMEOUT_MS = 40000
+const WIRO_POLL_INTERVAL_MS = 2000
+
 export interface WiroTaskDetail {
   id: string
   status: 'running' | 'completed' | 'failed'
@@ -56,11 +61,11 @@ export async function getTaskDetail(taskid: string): Promise<WiroTaskDetail> {
   return (await res.json()) as WiroTaskDetail
 }
 
-// Espera activa hasta que la tarea termine (máx 50s)
+// Espera activa hasta que la tarea termine (máx 40s)
 export async function waitForTask(
   taskid: string,
-  maxWaitMs = 50000,
-  intervalMs = 2500
+  maxWaitMs = WIRO_TIMEOUT_MS,
+  intervalMs = WIRO_POLL_INTERVAL_MS
 ): Promise<string> {
   const start = Date.now()
   while (Date.now() - start < maxWaitMs) {
@@ -84,5 +89,5 @@ export async function runSeedreamSync(
   options?: { resolution?: string; aspectRatio?: string; maxImages?: number }
 ): Promise<string> {
   const { taskid } = await runSeedream(prompt, referenceImageUrl, options)
-  return waitForTask(taskid, 50000, 2500)
+  return waitForTask(taskid, WIRO_TIMEOUT_MS, WIRO_POLL_INTERVAL_MS)
 }
