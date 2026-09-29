@@ -8,7 +8,7 @@ import {
   GEMS_PER_REFERRAL,
   getLevelPersonality,
 } from '@/lib/constants'
-import { getLevelFromMessages } from '@/lib/levels'
+import { getLevelFromMessages, isPhotoMilestone } from '@/lib/levels'
 import { generateAIResponse, getIntensity, buildSystemPrompt } from '@/lib/ai'
 
 export async function POST(request: Request) {
@@ -94,10 +94,10 @@ export async function POST(request: Request) {
       }
     }
 
-    // ✅ FIX: doble sort para contexto determinista
+    // Historial con ordenamiento estable (created_at + id)
     const { data: history } = await supabaseAdmin
       .from('conversation_history')
-      .select('role, content')
+      .select('id, role, content, created_at')
       .eq('telegram_id', tid)
       .eq('character_id', character_id)
       .order('created_at', { ascending: false })
@@ -111,9 +111,10 @@ export async function POST(request: Request) {
       .eq('character_id', character_id)
       .eq('role', 'user')
 
-    const level = getLevelFromMessages(userMsgCount || 0)
+    const currentUserMsgCount = userMsgCount || 0
+    const nextUserMsgCount = currentUserMsgCount + 1
+    const level = getLevelFromMessages(currentUserMsgCount)
 
-    // ✅ Re-ordenar en JS como red de seguridad
     const rawHistory = history || []
     const sortedHistory = [...rawHistory].sort((a: any, b: any) => {
       const cmp = String(a.created_at || '').localeCompare(String(b.created_at || ''))
@@ -133,7 +134,7 @@ export async function POST(request: Request) {
       ? `Eres ${character.character_name}, rol: ${character.archetype}.\n${personality}\n\nEl usuario se llama ${user.first_name}. Recuerda su nombre y úsalo naturalmente.\nMantén siempre tu personalidad y rol. Nunca rompas el personaje.`
       : `You are ${character.character_name}, role: ${character.archetype}.\n${personality}\n\nThe user's name is ${user.first_name}. Remember their name and use it naturally.\nAlways maintain your personality and role. Never break character.`
 
-    const intensity = getIntensity(userMsgCount || 0, isHookMode)
+    const intensity = getIntensity(currentUserMsgCount, isHookMode)
     const systemPrompt = buildSystemPrompt(lang, intensity, characterPrompt)
 
     let responseText: string
@@ -210,10 +211,20 @@ export async function POST(request: Request) {
     }
 
     let finalText = responseText
+
+    // ✅ NUEVO: hook mode warning
     if (isHookMode || (newHookRemaining > 0 && newGems <= 0)) {
       finalText += lang === 'es'
         ? `\n\n⚠️ ${newHookRemaining} mensajes gratis restantes`
         : `\n\n⚠️ ${newHookRemaining} free messages remaining`
+    }
+
+    // ✅ NUEVO: oferta de foto al llegar a un hito
+    const photoOfferAvailable = isPhotoMilestone(nextUserMsgCount)
+    if (photoOfferAvailable) {
+      finalText += lang === 'es'
+        ? `\n\n📸 *${character.character_name} quiere mandarte una foto especial...*`
+        : `\n\n📸 *${character.character_name} wants to send you a special photo...*`
     }
 
     return NextResponse.json({
@@ -223,6 +234,8 @@ export async function POST(request: Request) {
       is_hook_mode: isHookMode,
       intensity,
       level: level.level,
+      // ✅ NUEVO: flag para el frontend
+      photo_offer_available: photoOfferAvailable,
     })
   } catch (error: any) {
     console.error('Error en chat:', error)
