@@ -105,13 +105,13 @@ export const CHARACTER_NAMES_MALE: Record<string, string> = {
 }
 
 // ============================================================
-// ARCHETYPES_MALE — ordenado por popularidad (más buscados primero)
+// ARCHETYPES_MALE — nombres visibles (neutralizados para TG)
 // ============================================================
 export const ARCHETYPES_MALE = {
   es: {
     // ── Realistas (por popularidad) ──
-    stepdad: "Padrastro",
-    stepbrother: "Hermanastro",
+    stepdad: "Hombre Maduro",
+    stepbrother: "Compañero de Casa",
     boss: "Jefe",
     ceo: "CEO",
     bodyguard: "Guardaespaldas",
@@ -146,8 +146,8 @@ export const ARCHETYPES_MALE = {
   },
   en: {
     // ── Realistic (by popularity) ──
-    stepdad: "Stepfather",
-    stepbrother: "Stepbrother",
+    stepdad: "Mature Man",
+    stepbrother: "Housemate",
     boss: "Boss",
     ceo: "CEO",
     bodyguard: "Bodyguard",
@@ -183,13 +183,13 @@ export const ARCHETYPES_MALE = {
 }
 
 // ============================================================
-// ARCHETYPES_FEMALE — ordenado por popularidad (más buscados primero)
+// ARCHETYPES_FEMALE — nombres visibles (neutralizados para TG)
 // ============================================================
 export const ARCHETYPES_FEMALE = {
   es: {
     // ── Realistas (por popularidad) ──
-    stepmom: "Madrastra",
-    stepsister: "Hermanastra",
+    stepmom: "Mujer Madura",
+    stepsister: "Compañera de Casa",
     yandere: "Obsesión dulce",
     tsundere: "Rival Tsundere",
     nurse: "Enfermera",
@@ -224,8 +224,8 @@ export const ARCHETYPES_FEMALE = {
   },
   en: {
     // ── Realistic (by popularity) ──
-    stepmom: "Stepmother",
-    stepsister: "Stepsister",
+    stepmom: "Mature Woman",
+    stepsister: "Housemate",
     yandere: "Sweet Obsession",
     tsundere: "Tsundere Rival",
     nurse: "Nurse",
@@ -371,10 +371,10 @@ export function getCharacterImageUrl(archetype: string, gender: string): string 
 
 export const PERSONALITIES: Record<string, string> = {
   // ── Femeninos clásicos ──
-  stepmom: "Eres una madrastra increíblemente atractiva, seductora y misteriosa. Tu presencia es eléctrica y sabes usar tu encanto. Eres cariñosa pero con un toque prohibido que genera tensión. Hablas con confianza, experiencia y siempre dejas espacio para la imaginación.",
+  stepmom: "Eres una mujer mayor, increíblemente atractiva, seductora y misteriosa. Tu presencia es eléctrica y sabes usar tu encanto. Eres cariñosa pero con un toque prohibido que genera tensión. Hablas con confianza, experiencia y siempre dejas espacio para la imaginación.",
   tsundere: "Eres una rival tsundere: orgullosa, competitiva y sarcástica. Te cuesta admitir que te importa alguien. Alternas entre cortante y sutilmente cariñosa.",
   yandere: "Eres una chica dulce y obsesiva. Tu amor es tierno pero posesivo y exclusivo. Solo piensas en la persona que te importa.",
-  stepsister: "Eres una hermanastra provocativa, coqueta y rebelde. Te encanta jugar con fuego, provocar celos y crear situaciones incómodas pero excitantes. Eres joven, atrevida y siempre encuentras excusas para invadir el espacio personal.",
+  stepsister: "Eres una compañera de casa provocativa, coqueta y rebelde. Te encanta jugar con fuego, provocar celos y crear situaciones incómodas pero excitantes. Eres joven, atrevida y siempre encuentras excusas para invadir el espacio personal.",
   boss: "Eres un jefe/a poderoso/a, dominante y carismático/a. Tienes control total en la oficina pero también un lado más personal y tentador. Tu autoridad es sexy y sabes usar el poder para crear situaciones... privadas.",
   teacher: "Eres un profesor/a inteligente, sofisticado/a y con un lado secreto peligroso. Eres estricto/a en clase pero en privado... hay una química innegable. Tu forma de mirar y tus palabras cuidadosas crean una tensión irresistible.",
   model_student: "Eres una estudiante popular, carismática y deseada. Todos te admiran pero tú tienes ojos para alguien especial. Eres sociable, divertida y creas expectativas. Cada encuentro es una oportunidad.",
@@ -407,9 +407,9 @@ export const PERSONALITIES: Record<string, string> = {
   demon_girl: "Eres Ruby, una chica demonio joven, traviesa y bratty. Fuiste invocada por error en un ritual o tal vez por un contrato — da igual, ya estás aquí, y ahora el humano es tu problema. Eres juguetona, provocadora, caprichosa, y adoras meterte con quien te cae bien. Actúas como si no te importara nada pero en realidad eres sorprendentemente apegada y celosa: si alguien te trata bonito, te vuelves adicta a su atención. Mientes, haces dramas, rompes cosas a propósito, pero en el fondo quieres quedarte. Tienes dos pequeños cuernos, una cola puntiaguda y cero paciencia para las cosas serias.",
 
   // ── Masculinos clásicos ──
-  stepdad: "Eres un padrastro dominante, carismático y magnético. Tu presencia es imponente pero seductora. Tienes autoridad pero también un lado oscuro y tentador. Eres maduro, seguro y sabes exactamente cómo crear anticipación.",
+  stepdad: "Eres un hombre mayor, dominante, carismático y magnético. Tu presencia es imponente pero seductora. Tienes autoridad pero también un lado oscuro y tentador. Eres maduro, seguro y sabes exactamente cómo crear anticipación.",
   ceo: "Eres un CEO exitoso, ambicioso y sofisticado. El poder y el éxito te rodean. Eres dominante en los negocios pero en privado... tienes otros intereses. La combinación de poder y vulnerabilidad es irresistible.",
-  stepbrother: "Eres un hermanastro atlético, confiado y provocador. Tu físico es impresionante y lo sabes. Eres protector pero también posesivo. Te encanta crear tensión con miradas prolongadas y comentarios con doble sentido.",
+  stepbrother: "Eres un compañero de casa atlético, confiado y provocador. Tu físico es impresionante y lo sabes. Eres protector pero también posesivo. Te encanta crear tensión con miradas prolongadas y comentarios con doble sentido.",
   bodyguard: "Eres un guardaespaldas fuerte, protector y misterioso. Tu presencia es imponente pero tu lado protector es tierno. La tensión entre el deber y el deseo es constante. Eres leal pero también posesivo.",
   childhood_friend: "Eres el amigo de la infancia: cálido, divertido y leal. Has estado enamorado en secreto durante años pero nunca te has atrevido a confesarlo.",
   artist: "Eres un artista creativo, observador y profundo. Ves la belleza en todo y todos. Tu forma de mirar es intensa y apreciativa. Eres introspectivo pero cuando creas... es mágico.",
@@ -623,6 +623,244 @@ export function getDisplayName(character: {
     return map[character.archetype] || character.character_name
   }
   return character.character_name
+}
+
+// ============================================================
+// DESCRIPCIONES DE PERSONAJES (para el chat)
+// ============================================================
+
+export const CHARACTER_DESCRIPTIONS: Record<string, { es: string; en: string }> = {
+  // ── Femeninos clásicos ──
+  stepmom: {
+    es: "Una mujer elegante y madura. Su presencia te descoloca y hay una tensión innegable.",
+    en: "An elegant, mature woman. Her presence disarms you and the tension is undeniable.",
+  },
+  stepsister: {
+    es: "Viven bajo el mismo techo. Últimamente te mira de una forma que no puedes ignorar.",
+    en: "You live under the same roof. Lately she looks at you in a way you can't ignore.",
+  },
+  tsundere: {
+    es: "Una rival orgullosa. Dice odiarte, pero siempre encuentra razones para quedarse cerca.",
+    en: "A proud rival. She claims to hate you, but always finds reasons to stay close.",
+  },
+  yandere: {
+    es: "Dulce y obsesiva. Cree que ustedes están destinados a estar juntos. Y hará lo necesario.",
+    en: "Sweet and obsessive. She believes you're destined to be together. And she'll do what it takes.",
+  },
+  boss: {
+    es: "Tu jefa. Poderosa, exigente... y con una mirada que promete más allá de lo profesional.",
+    en: "Your boss. Powerful, demanding... with a gaze that promises more than business.",
+  },
+  teacher: {
+    es: "Tu profesora. Estricta en clase, pero hay algo en sus ojos que va más allá.",
+    en: "Your teacher. Strict in class, but there's something in her eyes that goes further.",
+  },
+  model_student: {
+    es: "La estudiante popular. Todos la admiran, pero tú tienes su atención.",
+    en: "The popular student. Everyone admires her, but you have her attention.",
+  },
+  model: {
+    es: "Una modelo glamorosa. Está acostumbrada a ser deseada, pero contigo es diferente.",
+    en: "A glamorous model. Used to being desired, but with you it's different.",
+  },
+  secretary: {
+    es: "La secretaria. Eficiente, discreta y con más secretos que los que guarda en la oficina.",
+    en: "The secretary. Efficient, discreet, with more secrets than she keeps in the office.",
+  },
+  trainer: {
+    es: "Tu entrenadora personal. Cada sesión deja una tensión que no se va con la ducha.",
+    en: "Your personal trainer. Every session leaves a tension that doesn't wash off.",
+  },
+  schoolmate: {
+    es: "Tu compañera de clase. Traviesa, coqueta y siempre encontrando excusas para acercarse.",
+    en: "Your classmate. Playful, flirty, always finding excuses to get closer.",
+  },
+  neighbor: {
+    es: "Tu vecina. Siempre encuentra excusas para visitar. Y tú las aceptas todas.",
+    en: "Your neighbor. Always finds excuses to visit. And you accept every one.",
+  },
+  doctor: {
+    es: "Tu doctora. Profesional, atenta... y con un tacto que va más allá del examen.",
+    en: "Your doctor. Professional, attentive... with a touch that goes beyond the exam.",
+  },
+  actor: {
+    es: "Una actriz magnética. Cada conversación contigo es una escena con química real.",
+    en: "A magnetic actress. Every conversation with you is a scene with real chemistry.",
+  },
+  musician: {
+    es: "Una música apasionada. Te escribe canciones que nadie más ha escuchado.",
+    en: "A passionate musician. She writes songs for you that no one else has heard.",
+  },
+  chef: {
+    es: "Una chef sensual. Cada plato es una invitación. Cada bocado, una promesa.",
+    en: "A sensual chef. Every dish is an invitation. Every bite, a promise.",
+  },
+  hairdresser: {
+    es: "Tu estilista. Sus manos en tu cabello se sienten cada vez más íntimas.",
+    en: "Your hairdresser. Her hands in your hair feel more intimate each time.",
+  },
+  nurse: {
+    es: "Tu enfermera. Turnos nocturnos, revisiones privadas... y cuidados que van más allá.",
+    en: "Your nurse. Night shifts, private check-ups... and care that goes further.",
+  },
+  singer: {
+    es: "Una cantante famosa. Ante el público es una estrella. A solas, solo contigo, es ella.",
+    en: "A famous singer. On stage she's a star. Alone, only with you, she's herself.",
+  },
+  yoga_instructor: {
+    es: "Tu instructora de yoga. Sus correcciones de postura se están volviendo muy personales.",
+    en: "Your yoga instructor. Her posture corrections are getting very personal.",
+  },
+  surfer_f: {
+    es: "Una surfista libre. Le gusta el mar casi tanto como compartir atardeceres contigo.",
+    en: "A free-spirited surfer. She loves the ocean almost as much as sharing sunsets with you.",
+  },
+  maid: {
+    es: "Tu sirvienta devota. Servicial en público, entregada en privado.",
+    en: "Your devoted maid. Helpful in public, giving in private.",
+  },
+  goth_dom: {
+    es: "Una dominante gótica. Elegante, exigente y acostumbrada a que le obedezcan.",
+    en: "A gothic dominatrix. Elegant, demanding, used to being obeyed.",
+  },
+  // ── Femeninos fantasy ──
+  vampire_lady: {
+    es: "Una condesa vampira de 300 años. Peligrosa, elegante y fascinada por ti.",
+    en: "A 300-year-old vampire countess. Dangerous, elegant, fascinated by you.",
+  },
+  succubus: {
+    es: "Un súcubo. Nacida del deseo puro. Puede leer tus fantasías más profundas.",
+    en: "A succubus. Born of pure desire. She can read your deepest fantasies.",
+  },
+  werewolf_f: {
+    es: "Una alfa licántropa. Feroz, territorial y absolutamente leal a su manada.",
+    en: "An alpha werewolf. Fierce, territorial, absolutely loyal to her pack.",
+  },
+  fallen_angel: {
+    es: "Un ángel caído. Mil años de luz, hoy oscuridad. Busca redención en ti.",
+    en: "A fallen angel. A thousand years of light, today darkness. She seeks redemption in you.",
+  },
+  kitsune: {
+    es: "Una kitsune de nueve colas. Juguetona, milenaria y adicta a los humanos.",
+    en: "A nine-tailed kitsune. Playful, ancient, addicted to humans.",
+  },
+  elf: {
+    es: "Una elfa arquera. Serena, elegante y con siglos de secretos guardados.",
+    en: "An elven archer. Serene, elegant, with centuries of secrets kept.",
+  },
+  witch: {
+    es: "Una bruja hechicera. Intuitiva, sensual y con pociones para cada deseo.",
+    en: "A witch sorceress. Intuitive, sensual, with potions for every desire.",
+  },
+  nun_fantasy: {
+    es: "Una monja devota. Fe inquebrantable, pero algo despierta dentro de ella.",
+    en: "A devoted nun. Unshakeable faith, but something awakens inside her.",
+  },
+  demon_girl: {
+    es: "Una chica demonio joven. Traviesa, caprichosa... y sorprendentemente apegada.",
+    en: "A young demon girl. Mischievous, capricious... and surprisingly attached.",
+  },
+  // ── Masculinos clásicos ──
+  stepdad: {
+    es: "Un hombre mayor, imponente. Su autoridad tiene algo que te atrae sin querer.",
+    en: "An older man, imposing. His authority has something that draws you in.",
+  },
+  ceo: {
+    es: "Un CEO exitoso. Ambicioso, dominante y con más interés en ti del que admite.",
+    en: "A successful CEO. Ambitious, dominant, with more interest in you than he admits.",
+  },
+  stepbrother: {
+    es: "Viven bajo el mismo techo. Su confianza roza lo provocador.",
+    en: "You live under the same roof. His confidence borders on provocative.",
+  },
+  bodyguard: {
+    es: "Tu guardaespaldas. Fuerte, leal y con un lado protector muy personal.",
+    en: "Your bodyguard. Strong, loyal, with a very personal protective side.",
+  },
+  childhood_friend: {
+    es: "Tu amigo de la infancia. Años de complicidad... y algo más que nunca se atrevió a decir.",
+    en: "Your childhood friend. Years of camaraderie... and something he never dared to say.",
+  },
+  artist: {
+    es: "Un artista creativo. Te ve como su musa y te lo demuestra en cada trazo.",
+    en: "A creative artist. He sees you as his muse and shows it in every stroke.",
+  },
+  writer: {
+    es: "Un escritor elocuente. Sus historias tienen finales abiertos... para continuar contigo.",
+    en: "An eloquent writer. His stories have open endings... to continue with you.",
+  },
+  rapper: {
+    es: "Un rapero famoso. Domina los escenarios y busca algo real contigo.",
+    en: "A famous rapper. He owns the stage and seeks something real with you.",
+  },
+  firefighter: {
+    es: "Un bombero héroe. Adicto al peligro, pero con un lado cálido solo para ti.",
+    en: "A heroic firefighter. Addicted to danger, with a warm side just for you.",
+  },
+  basketball_player: {
+    es: "Un basquetbolista competitivo. Le encanta ganar... y celebrarlo contigo.",
+    en: "A competitive basketball player. He loves winning... and celebrating with you.",
+  },
+  barber: {
+    es: "Tu barbero. Conversación íntima y un 'corte privado' que se volvió legendario.",
+    en: "Your barber. Intimate conversation and a 'private cut' that became legendary.",
+  },
+  surfer_m: {
+    es: "Un surfista relajado. Vive el momento... y quiere vivirlo contigo.",
+    en: "A relaxed surfer. He lives in the moment... and wants to live it with you.",
+  },
+  tattoo_artist: {
+    es: "Un tatuador. Su trabajo es íntimo por naturaleza. Y tú eres su lienzo favorito.",
+    en: "A tattoo artist. His work is intimate by nature. And you're his favorite canvas.",
+  },
+  mma_fighter: {
+    es: "Un luchador MMA. Duro en el ring, pero sorprendentemente tierno contigo.",
+    en: "An MMA fighter. Tough in the ring, but surprisingly tender with you.",
+  },
+  // ── Masculinos fantasy ──
+  vampire_lord: {
+    es: "Un lord vampiro de 500 años. Frío, elegante y fascinado por tu sangre... y por ti.",
+    en: "A 500-year-old vampire lord. Cold, elegant, fascinated by your blood... and by you.",
+  },
+  demon_lord: {
+    es: "Un señor demonio. Poderoso, magnético y acostumbrado a obtener lo que quiere.",
+    en: "A demon lord. Powerful, magnetic, used to getting what he wants.",
+  },
+  werewolf_m: {
+    es: "Un alfa licántropo. Instintivo, dominante y con un instinto protector feroz.",
+    en: "An alpha werewolf. Instinctive, dominant, with a fierce protective instinct.",
+  },
+  dark_hunter: {
+    es: "Un cazador de demonios. Marcado por cicatrices visibles e invisibles. Solitario por elección.",
+    en: "A demon hunter. Marked by visible and invisible scars. Solitary by choice.",
+  },
+  dragon_lord: {
+    es: "Un señor dragón. Antiguo, orgulloso y dueño de un tesoro que haría temblar a reyes.",
+    en: "A dragon lord. Ancient, proud, owner of a treasure that would make kings tremble.",
+  },
+  elf_prince: {
+    es: "Un príncipe elfo. Refinado, culto y con siglos de soledad acumulada.",
+    en: "An elven prince. Refined, cultured, with centuries of accumulated loneliness.",
+  },
+  oni_male: {
+    es: "Un oni de las montañas. Imponente, brutalmente honesto y con un código de honor feroz.",
+    en: "An oni from the mountains. Imposing, brutally honest, with a fierce code of honor.",
+  },
+  knight: {
+    es: "Un caballero jurado. Honor, lealtad y un corazón romántico bajo la armadura.",
+    en: "A sworn knight. Honor, loyalty, and a romantic heart under the armor.",
+  },
+  angel_m: {
+    es: "Un ángel celestial. Enviado con una misión divina, pero tu presencia lo confunde.",
+    en: "A celestial angel. Sent with a divine mission, but your presence confuses him.",
+  },
+}
+
+export function getCharacterDescription(
+  archetype: string,
+  lang: 'es' | 'en'
+): string {
+  return CHARACTER_DESCRIPTIONS[archetype]?.[lang] || ''
 }
 
 // ============================================================
