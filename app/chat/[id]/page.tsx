@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { tgFetch } from '@/lib/telegram-fetch'
 import { GEM_COSTS, getDisplayName, getCharacterImageUrl } from '@/lib/constants'
-import { getLevelFromMessages, getImageCost, getAudioCost, getNextPhotoMilestone } from '@/lib/levels'
+import { getLevelFromMessages, getImageCost, getAudioCost } from '@/lib/levels'
 import { getTranslations } from '@/lib/i18n'
 import { useUser } from '@/lib/UserContext'
 
@@ -49,14 +49,12 @@ export default function ChatPage() {
 
   const [totalUserMessages, setTotalUserMessages] = useState(0)
 
-  // ✅ NUEVO: indica si hay una oferta de foto activa (para resaltar el botón)
+  // ✅ Oferta de foto activa (banner). El personaje decide el prompt.
   const [photoOfferActive, setPhotoOfferActive] = useState(false)
 
   const [showPremiumModal, setShowPremiumModal] = useState(false)
   const [premiumModalReason, setPremiumModalReason] = useState<'audio' | 'image'>('audio')
 
-  const [showImageModal, setShowImageModal] = useState(false)
-  const [imageDescription, setImageDescription] = useState('')
   const [generatingImage, setGeneratingImage] = useState(false)
   const [generatingAudio, setGeneratingAudio] = useState(false)
 
@@ -116,13 +114,7 @@ export default function ChatPage() {
       setIsPremium(!!premRes.data && premRes.data.length > 0)
       setTotalUserMessages(countRes.count || 0)
 
-      // ✅ Si el conteo exacto coincide con el siguiente hito, marcar oferta
-      const count = countRes.count || 0
-      const nextMilestone = getNextPhotoMilestone(count)
-      if (nextMilestone !== null && nextMilestone === count + 1) {
-        setPhotoOfferActive(true)
-      }
-
+      // ✅ NO pre-activamos la oferta: solo cuando el backend confirma hito
       setCharacterLoading(false)
       setHistoryLoaded(true)
     })
@@ -242,10 +234,8 @@ export default function ChatPage() {
           setHookRemaining(data.hook_messages_remaining ?? 0)
           setTotalUserMessages((prev) => prev + 1)
 
-          // ✅ Si el backend detectó milestone, marcar oferta activa
-          if (data.photo_offer_available) {
-            setPhotoOfferActive(true)
-          }
+          // ✅ Reset o set según backend. El banner solo vive mientras el backend lo confirma.
+          setPhotoOfferActive(!!data.photo_offer_available)
         }
       } else {
         const errMsg = data.detail
@@ -307,10 +297,9 @@ export default function ChatPage() {
     }
   }
 
+  // ✅ El personaje controla el prompt. El frontend NO envía descripción.
   const generateImage = async () => {
-    if (!user || !character) return
-    if (!imageDescription.trim()) return
-
+    if (!user || !character || generatingImage) return
     if (!isPremium) {
       setPremiumModalReason('image')
       setShowPremiumModal(true)
@@ -321,14 +310,13 @@ export default function ChatPage() {
     }
 
     setGeneratingImage(true)
-    setShowImageModal(false)
     try {
       const res = await tgFetch('/api/generate-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           character_id: characterId,
-          description: imageDescription,
+          // ✅ NO enviamos description: el backend construye la escena
         }),
       })
       const data = await res.json()
@@ -341,7 +329,6 @@ export default function ChatPage() {
           },
         ])
         setGems(data.remaining_gems)
-        setImageDescription('')
         // ✅ Al generar la foto, la oferta se consume
         setPhotoOfferActive(false)
       } else if (data.error === 'premium_required') {
@@ -357,7 +344,9 @@ export default function ChatPage() {
     }
   }
 
-  const tryOpenImageModal = () => {
+  // ✅ El botón de cámara y el banner llaman directamente a generateImage
+  const triggerImageGeneration = () => {
+    if (generatingImage) return
     if (!isPremium) {
       setPremiumModalReason('image')
       setShowPremiumModal(true)
@@ -367,7 +356,7 @@ export default function ChatPage() {
       alert(`Necesitas ${currentImageCost} gemas`)
       return
     }
-    setShowImageModal(true)
+    generateImage()
   }
 
   const doRename = async () => {
@@ -628,10 +617,10 @@ export default function ChatPage() {
       </div>
 
       <div className="chat-input-bar">
-        {/* ✅ NUEVO: banner de oferta de foto */}
+        {/* ✅ Banner de oferta: el personaje quiere mandar una foto */}
         {photoOfferActive && isPremium && gems >= currentImageCost && (
           <div
-            onClick={tryOpenImageModal}
+            onClick={triggerImageGeneration}
             style={{
               marginBottom: 8,
               padding: '10px 14px',
@@ -701,12 +690,12 @@ export default function ChatPage() {
           </button>
 
           <button
-            onClick={tryOpenImageModal}
+            onClick={triggerImageGeneration}
+            disabled={generatingImage}
             className="chat-icon-btn"
             title={`${t.imageTooltip} (${currentImageCost}💎)`}
             style={{
               opacity: isPremium && gems < currentImageCost ? 0.3 : 1,
-              // ✅ Resaltado cuando hay oferta activa
               boxShadow: photoOfferActive
                 ? '0 0 20px rgba(236,72,153,0.9), 0 0 30px rgba(168,85,247,0.6)'
                 : undefined,
@@ -753,7 +742,6 @@ export default function ChatPage() {
         </div>
       </div>
 
-      {/* ... modales premium, rename, blocked, showImageModal (todos iguales) ... */}
       {showPremiumModal && (
         <div className="modal-backdrop">
           <div className="modal-box">
@@ -890,38 +878,6 @@ export default function ChatPage() {
             >
               {t.close}
             </button>
-          </div>
-        </div>
-      )}
-
-      {showImageModal && (
-        <div className="modal-backdrop">
-          <div className="modal-box">
-            <h3 className="modal-title">{t.generateSelfie}</h3>
-            <p className="modal-desc">
-              {t.generateSelfieDesc.replace('10', String(currentImageCost))}
-            </p>
-            <textarea
-              value={imageDescription}
-              onChange={(e) => setImageDescription(e.target.value)}
-              placeholder={t.selfiePlaceholder}
-              className="modal-textarea"
-            />
-            <div className="modal-btn-row">
-              <button
-                onClick={() => setShowImageModal(false)}
-                className="modal-btn secondary"
-              >
-                {t.close}
-              </button>
-              <button
-                onClick={generateImage}
-                disabled={generatingImage || !imageDescription.trim()}
-                className="modal-btn primary"
-              >
-                {generatingImage ? t.generating : `${t.generate} (${currentImageCost}💎)`}
-              </button>
-            </div>
           </div>
         </div>
       )}
