@@ -89,13 +89,12 @@ export const LEVELS: LevelConfig[] = [
 // ============================================================
 // ✅ HITOS DE FOTO — Sistema adaptativo
 // ────────────────────────────────────────────────────────────
-// Fase temprana: siempre muestra el banner (enganche)
-// Fase tardía: intervalos crecientes 50 / 60 / 70
-// Adaptativo: en hitos tardíos solo se muestra si el usuario
-//             tiene gemas suficientes (evita frustración)
+// 15 = coincide con level-up a Amigos (momentum máximo)
+// 30, 50, 80, 120, 180, 250 = espaciado creciente
+// 250+ = intervalos adaptativos 50 / 60 / 70
 // ============================================================
 
-export const PHOTO_MILESTONES_EARLY: number[] = [10, 20, 35, 55, 80, 120, 180, 250]
+export const PHOTO_MILESTONES_EARLY: number[] = [15, 30, 50, 80, 120, 180, 250]
 
 export const PHOTO_MILESTONE_LATE_START = 250
 
@@ -134,7 +133,6 @@ export function isPhotoMilestoneBase(userMsgCount: number): boolean {
  * Reglas adaptativas:
  * - Hitos tempranos → SIEMPRE (fase de enganche)
  * - Hitos tardíos   → solo si el usuario tiene gemas suficientes
- *                     (evita mostrar banners frustrantes a usuarios broke)
  */
 export function isPhotoMilestone(
   userMsgCount: number,
@@ -142,10 +140,8 @@ export function isPhotoMilestone(
 ): boolean {
   if (!isPhotoMilestoneBase(userMsgCount)) return false
 
-  // Hitos tempranos: siempre
   if (PHOTO_MILESTONES_EARLY.includes(userMsgCount)) return true
 
-  // Hitos tardíos: solo si tiene gemas
   return hasEnoughGems
 }
 
