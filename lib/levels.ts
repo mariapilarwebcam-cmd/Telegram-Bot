@@ -87,38 +87,77 @@ export const LEVELS: LevelConfig[] = [
 ]
 
 // ============================================================
-// ✅ HITOS DE FOTO REDISEÑADOS
-// - Primeros hitos: enganchar temprano (empezando en 10)
-// - Después del 250: cada 20 mensajes (270, 290, 310...)
+// ✅ HITOS DE FOTO — Sistema adaptativo
+// ────────────────────────────────────────────────────────────
+// Fase temprana: siempre muestra el banner (enganche)
+// Fase tardía: intervalos crecientes 50 / 60 / 70
+// Adaptativo: en hitos tardíos solo se muestra si el usuario
+//             tiene gemas suficientes (evita frustración)
 // ============================================================
 
 export const PHOTO_MILESTONES_EARLY: number[] = [10, 20, 35, 55, 80, 120, 180, 250]
-export const PHOTO_MILESTONE_LATE_START = 250
-export const PHOTO_MILESTONE_LATE_INTERVAL = 20
 
-export function isPhotoMilestone(userMsgCount: number): boolean {
+export const PHOTO_MILESTONE_LATE_START = 250
+
+export const PHOTO_MILESTONE_LATE_INTERVAL_TIERS = [
+  { fromMessage: 250, toMessage: 400, interval: 50 },
+  { fromMessage: 400, toMessage: 700, interval: 60 },
+  { fromMessage: 700, toMessage: Infinity, interval: 70 },
+]
+
+function getLateInterval(userMsgCount: number): number {
+  for (const tier of PHOTO_MILESTONE_LATE_INTERVAL_TIERS) {
+    if (userMsgCount >= tier.fromMessage && userMsgCount < tier.toMessage) {
+      return tier.interval
+    }
+  }
+  return 70
+}
+
+/**
+ * ¿Es un hito (independiente de las gemas del usuario)?
+ */
+export function isPhotoMilestoneBase(userMsgCount: number): boolean {
   if (PHOTO_MILESTONES_EARLY.includes(userMsgCount)) return true
 
-  if (
-    userMsgCount > PHOTO_MILESTONE_LATE_START &&
-    (userMsgCount - PHOTO_MILESTONE_LATE_START) % PHOTO_MILESTONE_LATE_INTERVAL === 0
-  ) {
-    return true
+  if (userMsgCount > PHOTO_MILESTONE_LATE_START) {
+    const interval = getLateInterval(userMsgCount)
+    return (userMsgCount - PHOTO_MILESTONE_LATE_START) % interval === 0
   }
 
   return false
 }
 
+/**
+ * ¿Debe mostrarse el banner ahora?
+ *
+ * Reglas adaptativas:
+ * - Hitos tempranos → SIEMPRE (fase de enganche)
+ * - Hitos tardíos   → solo si el usuario tiene gemas suficientes
+ *                     (evita mostrar banners frustrantes a usuarios broke)
+ */
+export function isPhotoMilestone(
+  userMsgCount: number,
+  hasEnoughGems: boolean = true
+): boolean {
+  if (!isPhotoMilestoneBase(userMsgCount)) return false
+
+  // Hitos tempranos: siempre
+  if (PHOTO_MILESTONES_EARLY.includes(userMsgCount)) return true
+
+  // Hitos tardíos: solo si tiene gemas
+  return hasEnoughGems
+}
+
 export function getNextPhotoMilestone(userMsgCount: number): number | null {
-  // 1. Buscar el siguiente hito temprano
   const nextEarly = PHOTO_MILESTONES_EARLY.find((m) => m > userMsgCount)
   if (nextEarly !== undefined) return nextEarly
 
-  // 2. Si ya pasamos el último temprano, calcular el siguiente cada N
   if (userMsgCount >= PHOTO_MILESTONE_LATE_START) {
-    const rem = (userMsgCount - PHOTO_MILESTONE_LATE_START) % PHOTO_MILESTONE_LATE_INTERVAL
-    if (rem === 0) return userMsgCount + PHOTO_MILESTONE_LATE_INTERVAL
-    return userMsgCount + (PHOTO_MILESTONE_LATE_INTERVAL - rem)
+    const interval = getLateInterval(userMsgCount)
+    const rem = (userMsgCount - PHOTO_MILESTONE_LATE_START) % interval
+    if (rem === 0) return userMsgCount + interval
+    return userMsgCount + (interval - rem)
   }
 
   return null
