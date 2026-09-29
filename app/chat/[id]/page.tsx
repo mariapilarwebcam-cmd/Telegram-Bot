@@ -69,6 +69,11 @@ export default function ChatPage() {
   const [totalUserMessages, setTotalUserMessages] = useState(0)
   const [photoOfferActive, setPhotoOfferActive] = useState(false)
 
+  // ✅ Low gems warning
+  const [lowGemsWarning, setLowGemsWarning] = useState(false)
+  const [lowGemsCount, setLowGemsCount] = useState(0)
+
+  // ✅ Subida de nivel
   const [levelUpModal, setLevelUpModal] = useState<{
     level: number
     badgeKey: string
@@ -255,6 +260,11 @@ export default function ChatPage() {
           setTotalUserMessages((prev) => prev + 1)
           setPhotoOfferActive(!!data.photo_offer_available)
 
+          // ✅ Low gems warning
+          setLowGemsWarning(!!data.low_gems_warning)
+          setLowGemsCount(data.low_gems_count || 0)
+
+          // ✅ Subida de nivel
           if (data.level_up && data.new_level && data.new_level_badge) {
             setLevelUpModal({
               level: data.new_level,
@@ -435,6 +445,7 @@ export default function ChatPage() {
       '<img src="$2" alt="$1" style="border-radius:16px;max-width:100%;margin-top:8px;box-shadow:0 8px 24px rgba(168,85,247,0.3);" />'
     )
     html = html.replace(/\*([^*\n]+)\*/g, '<span class="chat-action">*$1*</span>')
+    html = html.replace(/_([^_\n]+)_/g, '<em style="color:#c4b5fd;">$1</em>')
     return html
   }
 
@@ -593,7 +604,7 @@ export default function ChatPage() {
       </header>
 
       <div className="chat-messages">
-        {/* ✅ Descripción del personaje como card al inicio del chat */}
+        {/* ✅ Card de descripción del personaje al inicio del chat */}
         {characterDescription && (
           <div className="character-intro">
             <div className="character-intro-header">
@@ -663,6 +674,7 @@ export default function ChatPage() {
       </div>
 
       <div className="chat-input-bar">
+        {/* ✅ Banner de oferta de foto */}
         {photoOfferActive && (
           <div
             onClick={handleBannerTap}
@@ -808,6 +820,70 @@ export default function ChatPage() {
           </div>
         )}
 
+        {/* ✅ Banner de urgencia: pocas gemas */}
+        {lowGemsWarning && !photoOfferActive && (
+          <div
+            onClick={() => router.push('/shop')}
+            style={{
+              marginBottom: 10,
+              padding: '10px 14px',
+              borderRadius: 14,
+              background:
+                'linear-gradient(90deg, rgba(251, 191, 36, 0.18) 0%, rgba(245, 158, 11, 0.12) 100%)',
+              border: '1.5px solid rgba(251, 191, 36, 0.55)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              cursor: 'pointer',
+              animation: 'pulseSoft 2.8s ease-in-out infinite',
+            }}
+          >
+            <span style={{ fontSize: 20, flexShrink: 0 }}>💎</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p
+                style={{
+                  fontSize: 12,
+                  fontWeight: 800,
+                  color: '#fcd34d',
+                  margin: 0,
+                  textShadow: '0 1px 4px rgba(0,0,0,0.4)',
+                }}
+              >
+                {lang === 'es'
+                  ? `Te quedan ${lowGemsCount} gemas`
+                  : `Only ${lowGemsCount} gems left`}
+              </p>
+              <p
+                style={{
+                  fontSize: 10,
+                  color: '#fde68a',
+                  margin: '2px 0 0 0',
+                  opacity: 0.9,
+                }}
+              >
+                {lang === 'es'
+                  ? '→ Recarga para no cortar la historia'
+                  : '→ Recharge to keep the story going'}
+              </p>
+            </div>
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              style={{ flexShrink: 0 }}
+            >
+              <path
+                d="m9 6 6 6-6 6"
+                stroke="#fcd34d"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </div>
+        )}
+
         <div className="chat-input-row">
           <button
             onClick={playAudio}
@@ -887,6 +963,7 @@ export default function ChatPage() {
         </div>
       </div>
 
+      {/* ✅ Modal de subida de nivel */}
       {levelUpModal && (
         <div className="modal-backdrop">
           <div className="modal-box level-up-modal">
