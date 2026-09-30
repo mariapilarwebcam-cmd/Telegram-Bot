@@ -44,6 +44,41 @@ const PHOTO_INVITES_EN: Array<(name: string) => string> = [
     `📸 *${name} tucks their hair back and gives you a look...*\n_"Want to see what I was thinking about? Just ask."_`,
 ]
 
+// ============================================================
+// ✅ DETECCIÓN DE SOLICITUD DE FOTO
+// Si el usuario pide una foto → activamos el banner automáticamente
+// ============================================================
+const PHOTO_KEYWORDS_ES = [
+  'foto', 'selfie', 'imagen', 'picture', 'fotito',
+  'mándame', 'mandame', 'envíame', 'enviame',
+  'muéstrame', 'muestrame', 'enséñame', 'ensename',
+  'manda una', 'envía una', 'envia una', 'mandame una',
+]
+
+const PHOTO_KEYWORDS_EN = [
+  'photo', 'selfie', 'picture', 'pic',
+  'send me', 'show me', 'give me',
+]
+
+function detectPhotoRequest(message: string, lang: 'es' | 'en'): boolean {
+  const lower = message.toLowerCase()
+  const keywords = lang === 'es' ? PHOTO_KEYWORDS_ES : PHOTO_KEYWORDS_EN
+  return keywords.some((k) => lower.includes(k))
+}
+
+// ============================================================
+// ✅ NIVEL SIGUIENTE (para el indicador de progreso)
+// ============================================================
+function getNextLevelThreshold(currentLevel: number): number | null {
+  switch (currentLevel) {
+    case 1: return 15
+    case 2: return 40
+    case 3: return 90
+    case 4: return 180
+    default: return null
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const tid = request.headers.get('x-telegram-id-validated')
@@ -74,7 +109,6 @@ export async function POST(request: Request) {
     const hookRemaining = user.hook_messages_remaining || 0
 
     if (user.gems <= 0 && hookRemaining <= 0) {
-      // ✅ Sin emoji de gema — el SVG ya está en el header de la Mini App
       const blockedMessage = lang === 'es'
         ? `*${character.character_name} te mira con ojos ardientes y se muerde el labio*\n\n"Mmm... justo cuando se ponía interesante..."\n\n"Recarga gemas o invita a un amigo y te regalo 5 más."`
         : `*${character.character_name} looks at you with burning eyes and bites their lip*\n\n"Mmm... just when it was getting interesting..."\n\n"Recharge gems or invite a friend and I'll gift you 5 more."`
@@ -249,10 +283,9 @@ export async function POST(request: Request) {
     }
 
     // ✅ El texto queda LIMPIO — sin warnings pegados al diálogo
-    // Los warnings ahora viven en el header del frontend (badge rotativo)
     let finalText = responseText
 
-    // Low gems warning flag (para el header)
+    // Low gems warning flag (para el header del frontend)
     const isLowGemsWarning =
       nextUserMsgCount >= 10 &&
       newGems > 0 &&
@@ -260,16 +293,21 @@ export async function POST(request: Request) {
       !isHookMode &&
       newHookRemaining === 0
 
-    // Hito de foto
+    // ✅ Hito de foto OR usuario pidió foto explícitamente
+    const userRequestedPhoto = detectPhotoRequest(message, lang)
     const imageCost = getImageCost(newLevel.level)
     const hasEnoughGems = newGems >= imageCost
-    const photoOfferAvailable = isPhotoMilestone(nextUserMsgCount, hasEnoughGems)
+    const isMilestone = isPhotoMilestone(nextUserMsgCount, hasEnoughGems)
+    const shouldShowPhotoBanner = isMilestone || userRequestedPhoto
 
-    if (photoOfferAvailable) {
+    if (shouldShowPhotoBanner) {
       const invites = lang === 'es' ? PHOTO_INVITES_ES : PHOTO_INVITES_EN
       const invite = invites[Math.floor(Math.random() * invites.length)]
       finalText += `\n\n${invite(character.character_name)}`
     }
+
+    // ✅ Info para el indicador de progreso de nivel
+    const nextLevelAt = getNextLevelThreshold(newLevel.level)
 
     return NextResponse.json({
       response: finalText,
@@ -278,7 +316,7 @@ export async function POST(request: Request) {
       is_hook_mode: isHookMode,
       intensity,
       level: newLevel.level,
-      photo_offer_available: photoOfferAvailable,
+      photo_offer_available: shouldShowPhotoBanner,
       // Subida de nivel
       level_up: levelUp,
       new_level: levelUp ? newLevel.level : null,
@@ -286,6 +324,9 @@ export async function POST(request: Request) {
       // Low gems warning (para el header)
       low_gems_warning: isLowGemsWarning,
       low_gems_count: isLowGemsWarning ? newGems : 0,
+      // ✅ Progreso de nivel
+      total_user_messages: nextUserMsgCount,
+      next_level_at: nextLevelAt,
     })
   } catch (error: any) {
     console.error('Error en chat:', error)
