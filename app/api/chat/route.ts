@@ -147,7 +147,7 @@ export async function POST(request: Request) {
     const currentUserMsgCount = userMsgCount || 0
     const nextUserMsgCount = currentUserMsgCount + 1
 
-    // ✅ Niveles: anterior vs nuevo
+    // Niveles: anterior vs nuevo
     const prevLevel = getLevelFromMessages(currentUserMsgCount)
     const newLevel = getLevelFromMessages(nextUserMsgCount)
     const levelUp = newLevel.level > prevLevel.level
@@ -247,10 +247,11 @@ export async function POST(request: Request) {
       console.error('Referral payout error:', refErr)
     }
 
+    // ✅ El texto queda LIMPIO — sin warnings pegados al diálogo
+    // Los warnings ahora viven en el header del frontend (badge rotativo)
     let finalText = responseText
 
-    // ✅ LOW GEMS WARNING: aviso cuando quedan 1-5 gemas (desde mensaje 10)
-    // Crea urgencia creciente antes de agotar la cuenta
+    // Low gems warning flag (para el header)
     const isLowGemsWarning =
       nextUserMsgCount >= 10 &&
       newGems > 0 &&
@@ -258,21 +259,7 @@ export async function POST(request: Request) {
       !isHookMode &&
       newHookRemaining === 0
 
-    if (isLowGemsWarning) {
-      const warning = lang === 'es'
-        ? `\n\n_💎 Te quedan solo ${newGems} gemas... no dejes que la historia se corte aquí._`
-        : `\n\n_💎 Only ${newGems} gems left... don't let the story end here._`
-      finalText += warning
-    }
-
-    // Hook mode warning
-    if (isHookMode || (newHookRemaining > 0 && newGems <= 0)) {
-      finalText += lang === 'es'
-        ? `\n\n⚠️ ${newHookRemaining} mensajes gratis restantes`
-        : `\n\n⚠️ ${newHookRemaining} free messages remaining`
-    }
-
-    // ✅ Hito de foto (siempre visible en tempranos, adaptativo en tardíos)
+    // Hito de foto
     const imageCost = getImageCost(newLevel.level)
     const hasEnoughGems = newGems >= imageCost
     const photoOfferAvailable = isPhotoMilestone(nextUserMsgCount, hasEnoughGems)
@@ -291,11 +278,11 @@ export async function POST(request: Request) {
       intensity,
       level: newLevel.level,
       photo_offer_available: photoOfferAvailable,
-      // ✅ Subida de nivel
+      // Subida de nivel
       level_up: levelUp,
       new_level: levelUp ? newLevel.level : null,
       new_level_badge: levelUp ? newLevel.badgeKey : null,
-      // ✅ Low gems warning
+      // Low gems warning (para el header)
       low_gems_warning: isLowGemsWarning,
       low_gems_count: isLowGemsWarning ? newGems : 0,
     })
