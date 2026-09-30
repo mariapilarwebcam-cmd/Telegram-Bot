@@ -69,11 +69,9 @@ export default function ChatPage() {
   const [totalUserMessages, setTotalUserMessages] = useState(0)
   const [photoOfferActive, setPhotoOfferActive] = useState(false)
 
-  // ✅ Low gems warning
   const [lowGemsWarning, setLowGemsWarning] = useState(false)
   const [lowGemsCount, setLowGemsCount] = useState(0)
 
-  // ✅ Subida de nivel
   const [levelUpModal, setLevelUpModal] = useState<{
     level: number
     badgeKey: string
@@ -260,11 +258,9 @@ export default function ChatPage() {
           setTotalUserMessages((prev) => prev + 1)
           setPhotoOfferActive(!!data.photo_offer_available)
 
-          // ✅ Low gems warning
           setLowGemsWarning(!!data.low_gems_warning)
           setLowGemsCount(data.low_gems_count || 0)
 
-          // ✅ Subida de nivel
           if (data.level_up && data.new_level && data.new_level_badge) {
             setLevelUpModal({
               level: data.new_level,
@@ -596,6 +592,7 @@ export default function ChatPage() {
             flexShrink: 0,
           }}
         >
+          {/* ✅ SVG unificado del diamante */}
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
             <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" fill="#a78bfa" />
           </svg>
@@ -604,7 +601,6 @@ export default function ChatPage() {
       </header>
 
       <div className="chat-messages">
-        {/* ✅ Card de descripción del personaje al inicio del chat */}
         {characterDescription && (
           <div className="character-intro">
             <div className="character-intro-header">
@@ -674,7 +670,6 @@ export default function ChatPage() {
       </div>
 
       <div className="chat-input-bar">
-        {/* ✅ Banner de oferta de foto */}
         {photoOfferActive && (
           <div
             onClick={handleBannerTap}
@@ -789,10 +784,10 @@ export default function ChatPage() {
                 }}
               >
                 {!isPremium
-                  ? (lang === 'es' ? '💎 Compra gemas para verla' : '💎 Buy gems to see it')
+                  ? (lang === 'es' ? 'Compra gemas para verla' : 'Buy gems to see it')
                   : canAfford
-                  ? `📸 ${currentImageCost} 💎 — ${lang === 'es' ? 'reclamar ahora' : 'claim now'}`
-                  : `⚠️ ${lang === 'es' ? 'Te faltan' : "You're missing"} ${missingGems} 💎`}
+                  ? `📸 ${currentImageCost} — ${lang === 'es' ? 'reclamar ahora' : 'claim now'}`
+                  : `⚠️ ${lang === 'es' ? 'Te faltan' : "You're missing"} ${missingGems}`}
               </p>
             </div>
 
@@ -820,7 +815,6 @@ export default function ChatPage() {
           </div>
         )}
 
-        {/* ✅ Banner de urgencia: pocas gemas */}
         {lowGemsWarning && !photoOfferActive && (
           <div
             onClick={() => router.push('/shop')}
@@ -838,7 +832,12 @@ export default function ChatPage() {
               animation: 'pulseSoft 2.8s ease-in-out infinite',
             }}
           >
-            <span style={{ fontSize: 20, flexShrink: 0 }}>💎</span>
+            {/* ✅ SVG unificado del diamante en amarillo */}
+            <span style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" fill="#fcd34d" />
+              </svg>
+            </span>
             <div style={{ flex: 1, minWidth: 0 }}>
               <p
                 style={{
@@ -963,7 +962,6 @@ export default function ChatPage() {
         </div>
       </div>
 
-      {/* ✅ Modal de subida de nivel */}
       {levelUpModal && (
         <div className="modal-backdrop">
           <div className="modal-box level-up-modal">
