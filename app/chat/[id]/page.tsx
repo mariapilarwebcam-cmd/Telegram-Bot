@@ -37,9 +37,7 @@ function getGradient(key: string) {
   return GRADIENTS[Math.abs(h) % GRADIENTS.length]
 }
 
-// ✅ Rotación de mensajes del header para no ser repetitivo
-// Hook mode usa 🎁 (mensajes gratis, no gemas)
-// Low gems usa SOLO texto — el SVG de la gema se renderiza en el JSX
+// ✅ Rotaciones del header (para variar el texto cada 5s)
 const HOOK_ROTATIONS_ES: Array<(n: number) => string> = [
   (n) => `🎁 ${n} gratis`,
   (n) => `✨ ${n} restantes`,
@@ -103,7 +101,13 @@ export default function ChatPage() {
   const [lowGemsWarning, setLowGemsWarning] = useState(false)
   const [lowGemsCount, setLowGemsCount] = useState(0)
 
-  // ✅ Índice de rotación de mensajes del header
+  // ✅ Progreso de nivel
+  const [levelProgress, setLevelProgress] = useState<{ current: number; next: number | null }>({
+    current: 0,
+    next: 15,
+  })
+
+  // ✅ Índice de rotación del header
   const [rotationIndex, setRotationIndex] = useState(0)
 
   const [levelUpModal, setLevelUpModal] = useState<{
@@ -130,7 +134,7 @@ export default function ChatPage() {
   const menuRef = useRef<HTMLDivElement>(null)
   const sendingRef = useRef(false)
 
-  // ✅ Rotación cada 5 segundos para variar el mensaje
+  // ✅ Rotación cada 5 segundos
   useEffect(() => {
     const interval = setInterval(() => {
       setRotationIndex((prev) => prev + 1)
@@ -179,7 +183,19 @@ export default function ChatPage() {
       })
       setMessages(deduped)
       setIsPremium(!!premRes.data && premRes.data.length > 0)
-      setTotalUserMessages(countRes.count || 0)
+      const count = countRes.count || 0
+      setTotalUserMessages(count)
+
+      // ✅ Calcular progreso inicial
+      const currentLvl = getLevelFromMessages(count)
+      const thresholds: Record<number, number | null> = {
+        1: 15, 2: 40, 3: 90, 4: 180, 5: null,
+      }
+      setLevelProgress({
+        current: count,
+        next: thresholds[currentLvl.level] ?? null,
+      })
+
       setCharacterLoading(false)
       setHistoryLoaded(true)
     })
@@ -302,6 +318,14 @@ export default function ChatPage() {
 
           setLowGemsWarning(!!data.low_gems_warning)
           setLowGemsCount(data.low_gems_count || 0)
+
+          // ✅ Actualizar progreso de nivel
+          if (data.total_user_messages !== undefined) {
+            setLevelProgress({
+              current: data.total_user_messages,
+              next: data.next_level_at ?? null,
+            })
+          }
 
           if (data.level_up && data.new_level && data.new_level_badge) {
             setLevelUpModal({
@@ -511,8 +535,7 @@ export default function ChatPage() {
   const canAfford = gems >= currentImageCost
   const missingGems = Math.max(0, currentImageCost - gems)
 
-  // ✅ Construir el mensaje rotativo del header
-  // Prioridad: hook mode > low gems > nada
+  // ✅ Construir el badge rotativo del header
   let headerBadgeText = ''
   let headerBadgeVariant: 'hook' | 'low-gems' | null = null
 
@@ -525,6 +548,17 @@ export default function ChatPage() {
     headerBadgeText = rotations[rotationIndex % rotations.length](lowGemsCount)
     headerBadgeVariant = 'low-gems'
   }
+
+  // ✅ Barra de progreso de nivel
+  const showLevelProgress =
+    levelProgress.next !== null &&
+    levelProgress.current < levelProgress.next &&
+    levelProgress.current > 0
+
+  const levelProgressPercent =
+    levelProgress.next && levelProgress.next > 0
+      ? Math.min(100, (levelProgress.current / levelProgress.next) * 100)
+      : 0
 
   return (
     <div className="chat-page">
@@ -602,7 +636,7 @@ export default function ChatPage() {
             )}
             {headerBadgeVariant === 'low-gems' && (
               <span className="status-badge status-badge-low">
-                {/* ✅ SVG oficial del diamante (mismo que el header de gems) */}
+                {/* ✅ SVG oficial del diamante */}
                 <svg
                   width="10"
                   height="10"
@@ -616,6 +650,48 @@ export default function ChatPage() {
               </span>
             )}
           </div>
+
+          {/* ✅ Barra de progreso de nivel */}
+          {showLevelProgress && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                marginTop: 4,
+              }}
+            >
+              <div
+                style={{
+                  flex: 1,
+                  height: 3,
+                  background: 'rgba(168, 85, 247, 0.15)',
+                  borderRadius: 2,
+                  overflow: 'hidden',
+                  maxWidth: 70,
+                }}
+              >
+                <div
+                  style={{
+                    height: '100%',
+                    width: `${levelProgressPercent}%`,
+                    background: 'linear-gradient(90deg, #a855f7, #ec4899)',
+                    transition: 'width 0.4s ease',
+                  }}
+                />
+              </div>
+              <span
+                style={{
+                  fontSize: 9,
+                  color: '#8b8b9e',
+                  fontWeight: 600,
+                  letterSpacing: '0.02em',
+                }}
+              >
+                {levelProgress.current}/{levelProgress.next}
+              </span>
+            </div>
+          )}
         </div>
 
         <div className="menu-wrap" ref={menuRef}>
@@ -666,7 +742,6 @@ export default function ChatPage() {
             flexShrink: 0,
           }}
         >
-          {/* ✅ SVG oficial del diamante */}
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
             <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" fill="#a78bfa" />
           </svg>
@@ -855,26 +930,13 @@ export default function ChatPage() {
                   color: canAfford && isPremium ? '#f0abfc' : '#fbbf24',
                   margin: '3px 0 0 0',
                   fontWeight: 800,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 5,
                 }}
               >
                 {!isPremium
                   ? (lang === 'es' ? 'Compra gemas para verla' : 'Buy gems to see it')
                   : canAfford
-                  ? (
-                    <>
-                      <span>📸 {currentImageCost} —</span>
-                      <span>{lang === 'es' ? 'reclamar ahora' : 'claim now'}</span>
-                    </>
-                  )
-                  : (
-                    <>
-                      <span>⚠️ {lang === 'es' ? 'Te faltan' : "You're missing"}</span>
-                      <span>{missingGems}</span>
-                    </>
-                  )}
+                  ? `📸 ${currentImageCost} — ${lang === 'es' ? 'reclamar ahora' : 'claim now'}`
+                  : `⚠️ ${lang === 'es' ? 'Te faltan' : "You're missing"} ${missingGems} gemas`}
               </p>
             </div>
 
