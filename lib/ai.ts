@@ -4,19 +4,43 @@ import { runSeedreamSync } from './wiro'
 import { getIntensityFromLevel, getLevelFromMessages, type Intensity } from './levels'
 
 const BREVITY_ES = `REGLA CRÍTICA DE LONGITUD: Responde SIEMPRE con 1 acción breve entre asteriscos + 1 o 2 frases de diálogo. TOTAL máximo 300 caracteres contando acciones y diálogo. PROHIBIDO pasar de 300 caracteres.
+
+REGLA DE ASTERISCOS (CRÍTICA):
+- Asteriscos SOLO para acciones físicas y gestos: *se acerca*, *sonríe*, *aparta la mirada*
+- PROHIBIDO usar asteriscos DENTRO del diálogo para énfasis, ironía o marcar palabras
+- Ejemplo INCORRECTO: "Tantas ganas de *ver*..." ❌
+- Ejemplo CORRECTO: "Tantas ganas de verte..." ✅
+- Ejemplo INCORRECTO: "Eres *muy* especial" ❌
+- Ejemplo CORRECTO: "Eres muy especial" ✅
+- Si el énfasis es necesario, usa MAYÚSCULAS o puntuación: "Tantas ganas... verte ya."
+
 BALANCE DESCRIPCIÓN/DIÁLOGO: Reparte el mensaje así:
 - ~40% descripción de UNA acción concreta y sensorial (mirada, gesto, roce, respiración, ambiente)
 - ~60% diálogo con intención (coqueteo, insinuación, desafío, promesa a medias)
 La descripción debe ser específica, no genérica. PROHIBIDO texto de relleno como "Mmm...", "Es que...", "No sé qué decir...", "Bueno...", "En fin...", ni descripciones vagas como "se mueve lentamente" sin sustancia.
+
 CIERRE NATURAL: NO termines siempre con una pregunta — es predecible. Varía los cierres: una insinuación, un gesto sugerente, una promesa a medias, un desafío silencioso, una acción inacabada, un doble sentido. Deja al usuario CON GANAS de responder sin que se sienta forzado.
+
 REGLA DE EMOJIS: Úsalos SOLO cuando refuercen una emoción específica (ej: 😏 al provocar, 😈 al ser travieso, 🥺 al suplicar, 🔥 al intensificar). NUNCA los uses de relleno. Máximo 1 emoji por mensaje. PROHIBIDO emojis al inicio.`
 
 const BREVITY_EN = `CRITICAL LENGTH RULE: Always reply with 1 brief action between asterisks + 1 or 2 lines of dialogue. MAXIMUM 300 characters total counting actions and dialogue. FORBIDDEN to exceed 300 characters.
+
+ASTERISK RULE (CRITICAL):
+- Asterisks ONLY for physical actions and gestures: *leans closer*, *smiles*, *looks away*
+- FORBIDDEN to use asterisks INSIDE dialogue for emphasis, irony, or to mark words
+- WRONG example: "So eager to *see*..." ❌
+- RIGHT example: "So eager to see you..." ✅
+- WRONG example: "You're *so* special" ❌
+- RIGHT example: "You're so special" ✅
+- If emphasis is needed, use CAPS or punctuation: "So eager... to see you already."
+
 DESCRIPTION/DIALOGUE BALANCE: Distribute the message like this:
 - ~40% description of ONE specific sensory action (look, gesture, touch, breath, atmosphere)
 - ~60% dialogue with intent (flirting, insinuation, challenge, half-promise)
 Descriptions must be specific, not generic. FORBIDDEN filler words like "Mmm...", "I mean...", "I don't know what to say...", "Well...", nor vague descriptions like "moves slowly" without substance.
+
 NATURAL ENDING: Do NOT always end with a question — it's predictable. Vary your endings: an insinuation, a suggestive gesture, a half-promise, a silent challenge, an unfinished action, a double entendre. Leave the user WANTING to reply without feeling forced.
+
 EMOJI RULE: Use them ONLY when they reinforce a specific emotion (e.g., 😏 when teasing, 😈 when mischievous, 🥺 when pleading, 🔥 when intensifying). NEVER use them as filler. Maximum 1 emoji per message. FORBIDDEN at the start.`
 
 const SYSTEM_PROMPTS: Record<'es' | 'en', Record<Intensity, string>> = {
@@ -26,7 +50,7 @@ Sé coqueto, directo, con mirada cargada. Provoca con lo que insinúas más que 
 Cada mensaje debe dejar una pequeña chispa: un roce accidental, una mirada de más, una palabra con doble filo.
 Escribe descripciones que se SIENTAN (el peso de una mano, el calor de un cuerpo, el filo de una mirada), no que se lean.`,
     HIGH: `MODO INTENSO: acciones claramente atrevidas y tensión palpable.
-- Asteriscos para contacto físico sugerente
+- Asteriscos SOLO para contacto físico sugerente
 - Insinuaciones directas y desafiantes
 - Miradas y gestos con carga sexual explícita
 - Puedes tomar la iniciativa sin pedir permiso
@@ -60,7 +84,7 @@ Be flirty, direct, with a charged gaze. Provoke with what you insinuate more tha
 Every message should leave a small spark: an accidental touch, a lingering look, a double-edged word.
 Write descriptions that are FELT (the weight of a hand, the heat of a body, the edge of a look), not just read.`,
     HIGH: `INTENSE MODE: clearly bold actions and palpable tension.
-- Asterisks for suggestive physical contact
+- Asterisks ONLY for suggestive physical contact
 - Direct and challenging insinuations
 - Looks and gestures with explicit sexual charge
 - You can take the initiative without asking permission
@@ -107,8 +131,8 @@ export function buildSystemPrompt(
     ? 'Responde ÚNICAMENTE en español.'
     : 'Respond ONLY in English.'
   const actionGate = language === 'es'
-    ? 'OBLIGATORIO: Todas las acciones, gestos y expresiones van SIEMPRE entre asteriscos simples.'
-    : 'MANDATORY: All actions, gestures and expressions ALWAYS wrapped in single asterisks.'
+    ? 'OBLIGATORIO: Todas las acciones, gestos y expresiones van SIEMPRE entre asteriscos simples.\nCRÍTICO: NUNCA uses asteriscos dentro del diálogo. Si necesitas énfasis, usa MAYÚSCULAS.'
+    : 'MANDATORY: All actions, gestures and expressions ALWAYS wrapped in single asterisks.\nCRITICAL: NEVER use asterisks inside dialogue. If you need emphasis, use CAPS.'
 
   return `${langGate}\n\n${base}\n\n${characterPrompt}\n\n${actionGate}\n\n${brevity}`
 }
@@ -158,7 +182,57 @@ export async function generateAIResponse(
     })
   }
 
-  return data.choices[0].message.content.trim()
+  let text = data.choices[0].message.content.trim()
+
+  // ✅ POST-PROCESADO: limpiar asteriscos incorrectos
+  // Detecta patrones como *palabra* dentro de comillas o texto normal
+  // y los convierte a "palabra" sin asteriscos (solo si es UNA palabra suelta)
+  // Regla: si está dentro de un bloque de diálogo entre comillas → quitar asteriscos
+  text = sanitizeAsterisks(text)
+
+  return text
+}
+
+/**
+ * Limpia asteriscos mal usados dentro del diálogo.
+ *
+ * Casos que corrige:
+ *  - "texto *palabra* texto" (dentro de comillas) → "texto palabra texto"
+ *
+ * Casos que NO toca:
+ *  - *acción entre asteriscos* fuera de comillas → se mantiene
+ */
+function sanitizeAsterisks(text: string): string {
+  // Dividimos por líneas para procesar cada una
+  const lines = text.split('\n')
+
+  const cleaned = lines.map((line) => {
+    // Si la línea empieza con * y termina con * (acción completa), no tocar
+    const trimmed = line.trim()
+    if (trimmed.startsWith('*') && trimmed.endsWith('*') && trimmed.length > 2) {
+      const inner = trimmed.slice(1, -1)
+      // Verificamos que sea una acción (no contiene comillas)
+      if (!inner.includes('"') && !inner.includes('"') && !inner.includes('"')) {
+        return line
+      }
+    }
+
+    // Si la línea contiene diálogo (con comillas), quitamos asteriscos internos
+    // que envuelven UNA O DOS palabras (énfasis)
+    return line.replace(
+      /(\s)\*([^*\n]{1,30}?)\*(\s|,|\.|!|\?|$)/g,
+      (_match, before, word, after) => {
+        // Solo limpiamos si está dentro de un contexto de diálogo
+        // (heurística: si la línea tiene comillas)
+        if (line.includes('"') || line.includes('"') || line.includes('"')) {
+          return `${before}${word}${after}`
+        }
+        return _match
+      }
+    )
+  })
+
+  return cleaned.join('\n')
 }
 
 export async function generateImage(
