@@ -74,9 +74,10 @@ export async function POST(request: Request) {
     const hookRemaining = user.hook_messages_remaining || 0
 
     if (user.gems <= 0 && hookRemaining <= 0) {
+      // ✅ Sin emoji de gema — el SVG ya está en el header de la Mini App
       const blockedMessage = lang === 'es'
-        ? `*${character.character_name} te mira con ojos ardientes y se muerde el labio*\n\n"Mmm... justo cuando se ponía interesante..."\n\n"Recarga gemas o invita a un amigo y te regalo 5 💎"`
-        : `*${character.character_name} looks at you with burning eyes and bites their lip*\n\n"Mmm... just when it was getting interesting..."\n\n"Recharge gems or invite a friend and I'll gift you 5 💎"`
+        ? `*${character.character_name} te mira con ojos ardientes y se muerde el labio*\n\n"Mmm... justo cuando se ponía interesante..."\n\n"Recarga gemas o invita a un amigo y te regalo 5 más."`
+        : `*${character.character_name} looks at you with burning eyes and bites their lip*\n\n"Mmm... just when it was getting interesting..."\n\n"Recharge gems or invite a friend and I'll gift you 5 more."`
 
       return NextResponse.json({
         blocked: true,
