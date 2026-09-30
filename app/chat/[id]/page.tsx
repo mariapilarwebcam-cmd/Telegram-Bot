@@ -37,6 +37,35 @@ function getGradient(key: string) {
   return GRADIENTS[Math.abs(h) % GRADIENTS.length]
 }
 
+// ✅ Rotación de mensajes del header para no ser repetitivo
+const HOOK_ROTATIONS_ES: Array<(n: number) => string> = [
+  (n) => `🎁 ${n} gratis`,
+  (n) => `✨ ${n} restantes`,
+  (n) => `⏳ ${n} mensajes`,
+  (n) => `🎁 ${n} por disfrutar`,
+]
+
+const HOOK_ROTATIONS_EN: Array<(n: number) => string> = [
+  (n) => `🎁 ${n} free`,
+  (n) => `✨ ${n} left`,
+  (n) => `⏳ ${n} messages`,
+  (n) => `🎁 ${n} to enjoy`,
+]
+
+const LOW_GEMS_ROTATIONS_ES: Array<(n: number) => string> = [
+  (n) => `💎 Quedan ${n}`,
+  (n) => `💎 Solo ${n}`,
+  (n) => `💎 ${n} gemas`,
+  (n) => `💎 Últimas ${n}`,
+]
+
+const LOW_GEMS_ROTATIONS_EN: Array<(n: number) => string> = [
+  (n) => `💎 ${n} left`,
+  (n) => `💎 Only ${n}`,
+  (n) => `💎 ${n} gems`,
+  (n) => `💎 Last ${n}`,
+]
+
 const LEVEL_UP_COPY_ES: Record<number, (name: string) => string> = {
   2: (n) => `✨ ${n} empieza a abrirse contigo. Sus mensajes serán más cercanos.`,
   3: (n) => `🔥 ${n} ya no te ve como un desconocido. Esto se pone interesante...`,
@@ -72,6 +101,9 @@ export default function ChatPage() {
   const [lowGemsWarning, setLowGemsWarning] = useState(false)
   const [lowGemsCount, setLowGemsCount] = useState(0)
 
+  // ✅ Índice de rotación de mensajes del header
+  const [rotationIndex, setRotationIndex] = useState(0)
+
   const [levelUpModal, setLevelUpModal] = useState<{
     level: number
     badgeKey: string
@@ -95,6 +127,14 @@ export default function ChatPage() {
   const endRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const sendingRef = useRef(false)
+
+  // ✅ Rotación cada 5 segundos para variar el mensaje
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setRotationIndex((prev) => prev + 1)
+    }, 5000)
+    return () => clearInterval(interval)
+  }, [])
 
   useEffect(() => {
     if (userLoading) return
@@ -469,6 +509,21 @@ export default function ChatPage() {
   const canAfford = gems >= currentImageCost
   const missingGems = Math.max(0, currentImageCost - gems)
 
+  // ✅ Construir el mensaje rotativo del header
+  // Prioridad: hook mode > low gems > nada
+  let headerBadgeText = ''
+  let headerBadgeVariant: 'hook' | 'low-gems' | null = null
+
+  if (hookRemaining > 0) {
+    const rotations = lang === 'es' ? HOOK_ROTATIONS_ES : HOOK_ROTATIONS_EN
+    headerBadgeText = rotations[rotationIndex % rotations.length](hookRemaining)
+    headerBadgeVariant = 'hook'
+  } else if (lowGemsWarning && lowGemsCount > 0) {
+    const rotations = lang === 'es' ? LOW_GEMS_ROTATIONS_ES : LOW_GEMS_ROTATIONS_EN
+    headerBadgeText = rotations[rotationIndex % rotations.length](lowGemsCount)
+    headerBadgeVariant = 'low-gems'
+  }
+
   return (
     <div className="chat-page">
       <header className="chat-header">
@@ -529,16 +584,23 @@ export default function ChatPage() {
           >
             {displayName}
           </p>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             <span
               className="level-badge"
               style={{ color: currentLevel.color, background: `${currentLevel.color}20` }}
             >
               {t[currentLevel.badgeKey as keyof typeof t]}
             </span>
-            {hookRemaining > 0 && (
-              <span style={{ fontSize: 10, color: '#a78bfa' }}>
-                {hookRemaining} {t.specialMoments}
+
+            {/* ✅ Badge rotativo (hook mode o low gems) */}
+            {headerBadgeVariant === 'hook' && (
+              <span className="status-badge status-badge-hook">
+                {headerBadgeText}
+              </span>
+            )}
+            {headerBadgeVariant === 'low-gems' && (
+              <span className="status-badge status-badge-low">
+                {headerBadgeText}
               </span>
             )}
           </div>
@@ -592,7 +654,6 @@ export default function ChatPage() {
             flexShrink: 0,
           }}
         >
-          {/* ✅ SVG unificado del diamante */}
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
             <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" fill="#a78bfa" />
           </svg>
@@ -808,74 +869,6 @@ export default function ChatPage() {
                 d="m9 6 6 6-6 6"
                 stroke="#f0abfc"
                 strokeWidth="3"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </div>
-        )}
-
-        {lowGemsWarning && !photoOfferActive && (
-          <div
-            onClick={() => router.push('/shop')}
-            style={{
-              marginBottom: 10,
-              padding: '10px 14px',
-              borderRadius: 14,
-              background:
-                'linear-gradient(90deg, rgba(251, 191, 36, 0.18) 0%, rgba(245, 158, 11, 0.12) 100%)',
-              border: '1.5px solid rgba(251, 191, 36, 0.55)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              cursor: 'pointer',
-              animation: 'pulseSoft 2.8s ease-in-out infinite',
-            }}
-          >
-            {/* ✅ SVG unificado del diamante en amarillo */}
-            <span style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" fill="#fcd34d" />
-              </svg>
-            </span>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <p
-                style={{
-                  fontSize: 12,
-                  fontWeight: 800,
-                  color: '#fcd34d',
-                  margin: 0,
-                  textShadow: '0 1px 4px rgba(0,0,0,0.4)',
-                }}
-              >
-                {lang === 'es'
-                  ? `Te quedan ${lowGemsCount} gemas`
-                  : `Only ${lowGemsCount} gems left`}
-              </p>
-              <p
-                style={{
-                  fontSize: 10,
-                  color: '#fde68a',
-                  margin: '2px 0 0 0',
-                  opacity: 0.9,
-                }}
-              >
-                {lang === 'es'
-                  ? '→ Recarga para no cortar la historia'
-                  : '→ Recharge to keep the story going'}
-              </p>
-            </div>
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              style={{ flexShrink: 0 }}
-            >
-              <path
-                d="m9 6 6 6-6 6"
-                stroke="#fcd34d"
-                strokeWidth="2.5"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
