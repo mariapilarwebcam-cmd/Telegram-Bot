@@ -82,9 +82,6 @@ export default function ShopPage() {
     }
   }, [])
 
-  // ═══════════════════════════════════════
-  // COMPRA CON STARS
-  // ═══════════════════════════════════════
   const buyWithStars = async (idx: number) => {
     if (!user) return
     setPurchasing(idx)
@@ -119,9 +116,6 @@ export default function ShopPage() {
     }
   }
 
-  // ═══════════════════════════════════════
-  // COMPRA CON CRYPTO (USDT en TON)
-  // ═══════════════════════════════════════
   const stopPolling = () => {
     if (pollRef.current) {
       clearInterval(pollRef.current)
@@ -283,6 +277,7 @@ export default function ShopPage() {
             border: '1px solid rgba(255, 255, 255, 0.06)',
           }}
         >
+          {/* ✅ SVG unificado del diamante */}
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
             <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" fill="#a78bfa" />
           </svg>
@@ -396,7 +391,11 @@ export default function ShopPage() {
               gap: 6,
             }}
           >
-            💎 Crypto +15%
+            {/* ✅ SVG unificado en lugar de emoji 💎 */}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+              <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" fill="currentColor" />
+            </svg>
+            Crypto +15%
           </button>
         </div>
       </section>
@@ -473,6 +472,7 @@ export default function ShopPage() {
                         flexShrink: 0,
                       }}
                     >
+                      {/* ✅ SVG unificado en lugar de emoji */}
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
                         <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" fill="#fff" />
                       </svg>
@@ -573,10 +573,12 @@ export default function ShopPage() {
                         alignItems: 'center',
                         justifyContent: 'center',
                         flexShrink: 0,
-                        fontSize: 22,
                       }}
                     >
-                      💎
+                      {/* ✅ SVG unificado en lugar de emoji 💎 */}
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                        <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" fill="#fff" />
+                      </svg>
                     </div>
 
                     <div style={{ flex: 1, minWidth: 0 }}>
