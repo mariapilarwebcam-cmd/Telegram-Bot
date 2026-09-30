@@ -1039,6 +1039,61 @@ body:has(.chat-page) {
   font-style: italic;
 }
 
+/* ============================================================
+   ✅ BADGE ROTATIVO DEL HEADER (hook mode + low gems)
+   ============================================================ */
+.status-badge {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  padding: 2px 8px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  transition: all 0.3s ease;
+  animation: badgeFadeIn 0.5s ease-out;
+}
+
+/* Modo hook (mensajes gratis restantes) — morado */
+.status-badge-hook {
+  color: #f0abfc;
+  background: rgba(168, 85, 247, 0.15);
+  border: 1px solid rgba(168, 85, 247, 0.35);
+  text-shadow: 0 0 6px rgba(240, 171, 252, 0.5);
+}
+
+/* Modo low gems (pocas gemas) — amarillo */
+.status-badge-low {
+  color: #fcd34d;
+  background: rgba(251, 191, 36, 0.12);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  text-shadow: 0 0 6px rgba(252, 211, 77, 0.5);
+  animation: badgeFadeIn 0.5s ease-out, softPulse 2.5s ease-in-out infinite;
+}
+
+@keyframes badgeFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes softPulse {
+  0%, 100% {
+    box-shadow: 0 0 4px rgba(251, 191, 36, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 10px rgba(251, 191, 36, 0.6);
+  }
+}
+
 /* ============ SCROLLBAR ============ */
 ::-webkit-scrollbar {
   width: 5px;
