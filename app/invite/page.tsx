@@ -12,13 +12,11 @@ export default function RewardsPage() {
   const [timedOut, setTimedOut] = useState(false)
   const [retrying, setRetrying] = useState(false)
 
-  // Daily claim state
   const [claiming, setClaiming] = useState(false)
   const [claimResult, setClaimResult] = useState<any>(null)
   const [claimError, setClaimError] = useState<string | null>(null)
   const [showClaimModal, setShowClaimModal] = useState(false)
 
-  // Timer que actualiza cada minuto (para el countdown)
   const [now, setNow] = useState(Date.now())
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 60_000)
@@ -33,7 +31,6 @@ export default function RewardsPage() {
     return () => clearTimeout(to)
   }, [user])
 
-  // ── Estado del reclamo diario ──
   const claimState = useMemo(() => {
     if (!user) {
       return { canClaim: false, hoursRemaining: 0, minutesRemaining: 0 }
@@ -54,7 +51,6 @@ export default function RewardsPage() {
     }
   }, [user, now])
 
-  // ── Preview de cuánto ganaría ──
   const previewGems = useMemo(() => {
     if (!user) return 0
     const currentStreak = user.streak_count || 0
@@ -115,7 +111,8 @@ export default function RewardsPage() {
   const handleCopy = async () => {
     if (!user) return
     const refCode = user.username || user.referral_code
-    const link = `https://t.me/TabooRealmBot?startapp=${refCode}`
+    // ✅ Link pasa por el bot (?start=)
+    const link = `https://t.me/TabooRealmBot?start=${refCode}`
     try {
       await navigator.clipboard.writeText(link)
       setCopied(true)
@@ -128,7 +125,8 @@ export default function RewardsPage() {
   const handleShare = () => {
     if (!user) return
     const refCode = user.username || user.referral_code
-    const referralLink = `https://t.me/TabooRealmBot?startapp=${refCode}`
+    // ✅ Link pasa por el bot (?start=)
+    const referralLink = `https://t.me/TabooRealmBot?start=${refCode}`
     const shareText =
       lang === 'es'
         ? '¡Mira esta app! Chatea con personajes IA 🔥'
@@ -152,7 +150,6 @@ export default function RewardsPage() {
       })
   }
 
-  // ── Spinner solo si aún carga Y no ha pasado timeout ──
   if (userLoading && !timedOut && !user) {
     return (
       <div className="spinner-full">
@@ -161,7 +158,6 @@ export default function RewardsPage() {
     )
   }
 
-  // ── Fallback si no hay user tras el timeout ──
   if (!user) {
     const noTelegram = !isTelegram
     return (
@@ -245,23 +241,19 @@ export default function RewardsPage() {
     )
   }
 
-  // ── Datos para render ──
   const refCode = user.username || user.referral_code
-  const referralLink = `https://t.me/TabooRealmBot?startapp=${refCode}`
+  // ✅ Link pasa por el bot
+  const referralLink = `https://t.me/TabooRealmBot?start=${refCode}`
   const earnedGems = (user.total_referrals || 0) * 5
   const currentStreak = user.streak_count || 0
   const longestStreak = user.longest_streak || 0
 
-  // ── Render principal ──
   return (
     <div className="page">
       <header className="page-header">
         <h1 className="page-title">{t.dailyClaimRewardsTitle}</h1>
       </header>
 
-      {/* ═══════════════════════════════════════════════
-          SECCIÓN 1: RECLAMO DIARIO
-      ═══════════════════════════════════════════════ */}
       <section style={{ padding: '20px 16px 0' }}>
         <div
           style={{
@@ -281,7 +273,6 @@ export default function RewardsPage() {
             transition: 'all 0.3s ease',
           }}
         >
-          {/* Título */}
           <div
             style={{
               display: 'flex',
@@ -334,7 +325,6 @@ export default function RewardsPage() {
             </div>
           </div>
 
-          {/* Stats: racha + récord */}
           <div
             style={{
               display: 'flex',
@@ -429,7 +419,6 @@ export default function RewardsPage() {
             </div>
           </div>
 
-          {/* Dots de la racha (7 días) */}
           <div
             style={{
               display: 'flex',
@@ -466,7 +455,6 @@ export default function RewardsPage() {
             })}
           </div>
 
-          {/* Botón o countdown */}
           {claimState.canClaim ? (
             <>
               <p
@@ -477,9 +465,17 @@ export default function RewardsPage() {
                   margin: '0 0 12px 0',
                   textAlign: 'center',
                   textShadow: '0 1px 4px rgba(0,0,0,0.2)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
                 }}
               >
-                ✨ {t.dailyClaimReady} ~{previewGems} 💎
+                {/* ✅ SVG unificado en lugar de emoji 💎 */}
+                <span>✨ {t.dailyClaimReady} ~{previewGems}</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                  <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" fill="#fff" />
+                </svg>
               </p>
               <button
                 onClick={handleClaim}
@@ -540,7 +536,6 @@ export default function RewardsPage() {
             </div>
           )}
 
-          {/* Error inline */}
           {claimError && (
             <p
               style={{
@@ -556,9 +551,6 @@ export default function RewardsPage() {
         </div>
       </section>
 
-      {/* ═══════════════════════════════════════════════
-          SECCIÓN 2: INVITAR AMIGOS
-      ═══════════════════════════════════════════════ */}
       <section style={{ padding: '24px 16px 0' }}>
         <div
           style={{
@@ -705,7 +697,6 @@ export default function RewardsPage() {
         </div>
       </section>
 
-      {/* Verified friends */}
       <section style={{ padding: '24px 16px 0' }}>
         <div
           style={{
@@ -750,7 +741,6 @@ export default function RewardsPage() {
               {user.total_referrals || 0}
             </p>
           </div>
-          {/* ✅ SVG de gema en lugar del emoji 💎 */}
           <div
             style={{
               display: 'flex',
@@ -764,6 +754,7 @@ export default function RewardsPage() {
             }}
           >
             <span>+{earnedGems}</span>
+            {/* ✅ SVG unificado del diamante en verde */}
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
               <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" fill="#22c55e" />
             </svg>
@@ -771,7 +762,6 @@ export default function RewardsPage() {
         </div>
       </section>
 
-      {/* How it works */}
       <section style={{ padding: '24px 16px' }}>
         <div
           style={{
@@ -844,9 +834,6 @@ export default function RewardsPage() {
         </div>
       </section>
 
-      {/* ═══════════════════════════════════════════════
-          MODAL: Celebración del reclamo
-      ═══════════════════════════════════════════════ */}
       {showClaimModal && claimResult && (
         <div className="modal-backdrop">
           <div className="modal-box">
