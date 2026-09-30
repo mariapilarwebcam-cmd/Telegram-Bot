@@ -38,6 +38,8 @@ function getGradient(key: string) {
 }
 
 // ✅ Rotación de mensajes del header para no ser repetitivo
+// Hook mode usa 🎁 (mensajes gratis, no gemas)
+// Low gems usa SOLO texto — el SVG de la gema se renderiza en el JSX
 const HOOK_ROTATIONS_ES: Array<(n: number) => string> = [
   (n) => `🎁 ${n} gratis`,
   (n) => `✨ ${n} restantes`,
@@ -53,17 +55,17 @@ const HOOK_ROTATIONS_EN: Array<(n: number) => string> = [
 ]
 
 const LOW_GEMS_ROTATIONS_ES: Array<(n: number) => string> = [
-  (n) => `💎 Quedan ${n}`,
-  (n) => `💎 Solo ${n}`,
-  (n) => `💎 ${n} gemas`,
-  (n) => `💎 Últimas ${n}`,
+  (n) => `Quedan ${n}`,
+  (n) => `Solo ${n}`,
+  (n) => `${n} gemas`,
+  (n) => `Últimas ${n}`,
 ]
 
 const LOW_GEMS_ROTATIONS_EN: Array<(n: number) => string> = [
-  (n) => `💎 ${n} left`,
-  (n) => `💎 Only ${n}`,
-  (n) => `💎 ${n} gems`,
-  (n) => `💎 Last ${n}`,
+  (n) => `${n} left`,
+  (n) => `Only ${n}`,
+  (n) => `${n} gems`,
+  (n) => `Last ${n}`,
 ]
 
 const LEVEL_UP_COPY_ES: Record<number, (name: string) => string> = {
@@ -600,6 +602,16 @@ export default function ChatPage() {
             )}
             {headerBadgeVariant === 'low-gems' && (
               <span className="status-badge status-badge-low">
+                {/* ✅ SVG oficial del diamante (mismo que el header de gems) */}
+                <svg
+                  width="10"
+                  height="10"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  style={{ flexShrink: 0 }}
+                >
+                  <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" fill="currentColor" />
+                </svg>
                 {headerBadgeText}
               </span>
             )}
@@ -654,6 +666,7 @@ export default function ChatPage() {
             flexShrink: 0,
           }}
         >
+          {/* ✅ SVG oficial del diamante */}
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
             <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" fill="#a78bfa" />
           </svg>
@@ -842,13 +855,26 @@ export default function ChatPage() {
                   color: canAfford && isPremium ? '#f0abfc' : '#fbbf24',
                   margin: '3px 0 0 0',
                   fontWeight: 800,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5,
                 }}
               >
                 {!isPremium
                   ? (lang === 'es' ? 'Compra gemas para verla' : 'Buy gems to see it')
                   : canAfford
-                  ? `📸 ${currentImageCost} — ${lang === 'es' ? 'reclamar ahora' : 'claim now'}`
-                  : `⚠️ ${lang === 'es' ? 'Te faltan' : "You're missing"} ${missingGems}`}
+                  ? (
+                    <>
+                      <span>📸 {currentImageCost} —</span>
+                      <span>{lang === 'es' ? 'reclamar ahora' : 'claim now'}</span>
+                    </>
+                  )
+                  : (
+                    <>
+                      <span>⚠️ {lang === 'es' ? 'Te faltan' : "You're missing"}</span>
+                      <span>{missingGems}</span>
+                    </>
+                  )}
               </p>
             </div>
 
@@ -881,7 +907,7 @@ export default function ChatPage() {
             onClick={playAudio}
             disabled={generatingAudio || (isPremium && gems < currentAudioCost)}
             className="chat-icon-btn"
-            title={`${t.audioTooltip} (${currentAudioCost}💎)`}
+            title={`${t.audioTooltip} (${currentAudioCost} gemas)`}
             style={{
               opacity: isPremium && gems < currentAudioCost ? 0.3 : 1,
             }}
@@ -906,7 +932,7 @@ export default function ChatPage() {
             onClick={handleBannerTap}
             disabled={generatingImage}
             className="chat-icon-btn"
-            title={`${t.imageTooltip} (${currentImageCost}💎)`}
+            title={`${t.imageTooltip} (${currentImageCost} gemas)`}
             style={{
               opacity: isPremium && gems < currentImageCost ? 0.4 : 1,
               boxShadow: photoOfferActive
