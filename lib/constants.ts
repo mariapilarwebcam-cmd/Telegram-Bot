@@ -109,7 +109,6 @@ export const CHARACTER_NAMES_MALE: Record<string, string> = {
 // ============================================================
 export const ARCHETYPES_MALE = {
   es: {
-    // ── Realistas (por popularidad) ──
     stepdad: "Hombre Maduro",
     stepbrother: "Compañero de Casa",
     boss: "Jefe",
@@ -133,7 +132,6 @@ export const ARCHETYPES_MALE = {
     writer: "Escritor",
     surfer_m: "Surfista",
     schoolmate: "Compañero de escuela",
-    // ── Fantasy (por popularidad) ──
     demon_lord: "Señor Demonio",
     vampire_lord: "Lord Vampiro",
     werewolf_m: "Alfa Licántropo",
@@ -145,7 +143,6 @@ export const ARCHETYPES_MALE = {
     angel_m: "Ángel Celestial",
   },
   en: {
-    // ── Realistic (by popularity) ──
     stepdad: "Mature Man",
     stepbrother: "Housemate",
     boss: "Boss",
@@ -169,7 +166,6 @@ export const ARCHETYPES_MALE = {
     writer: "Writer",
     surfer_m: "Surfer",
     schoolmate: "Schoolmate",
-    // ── Fantasy (by popularity) ──
     demon_lord: "Demon Lord",
     vampire_lord: "Vampire Lord",
     werewolf_m: "Alpha Werewolf",
@@ -187,7 +183,6 @@ export const ARCHETYPES_MALE = {
 // ============================================================
 export const ARCHETYPES_FEMALE = {
   es: {
-    // ── Realistas (por popularidad) ──
     stepmom: "Mujer Madura",
     stepsister: "Compañera de Casa",
     yandere: "Obsesión dulce",
@@ -211,7 +206,6 @@ export const ARCHETYPES_FEMALE = {
     yoga_instructor: "Instructora de yoga",
     surfer_f: "Surfista",
     goth_dom: "Gótica Dominante",
-    // ── Fantasy (por popularidad) ──
     succubus: "Súcubo",
     vampire_lady: "Condesa Vampira",
     demon_girl: "Chica Demonio",
@@ -223,7 +217,6 @@ export const ARCHETYPES_FEMALE = {
     nun_fantasy: "Monja",
   },
   en: {
-    // ── Realistic (by popularity) ──
     stepmom: "Mature Woman",
     stepsister: "Housemate",
     yandere: "Sweet Obsession",
@@ -247,7 +240,6 @@ export const ARCHETYPES_FEMALE = {
     yoga_instructor: "Yoga Instructor",
     surfer_f: "Surfer",
     goth_dom: "Goth Dominant",
-    // ── Fantasy (by popularity) ──
     succubus: "Succubus",
     vampire_lady: "Vampire Countess",
     demon_girl: "Demon Girl",
@@ -261,7 +253,6 @@ export const ARCHETYPES_FEMALE = {
 }
 
 export const CHARACTER_FACES: Record<string, string> = {
-  // ── Femeninos clásicos ──
   female_stepmom: "anime woman, 38 years old, mature elegant long dark hair, sharp green eyes, luxurious silk robe, sultry expression, cel shading, detailed anime eyes",
   female_tsundere: "anime girl, 20 years old, long dark hair with a red ribbon, sharp amber eyes, arms crossed, tsundere proud expression with slight blush, elegant school uniform, cel shading, detailed anime eyes, vibrant colors",
   female_yandere: "anime girl, 19 years old, long black hair with pink highlights, big innocent pink eyes, soft gentle smile hiding obsession, cozy pink sweater, cute appearance, cel shading, detailed anime eyes",
@@ -285,8 +276,6 @@ export const CHARACTER_FACES: Record<string, string> = {
   female_surfer_f: "anime woman, 24 years old, latina, sun-kissed skin, wavy beach hair, athletic toned body, bikini top and shorts, playful energetic smile, cel shading, detailed anime eyes, vibrant colors",
   female_maid: "anime girl, 21 years old, short light blue bob cut, soft blue eyes, gentle devoted expression, classic black and white maid outfit with frilled apron and white headdress, elegant white stockings, holds a silver tray, cel shading, detailed anime eyes, warm indoor lighting, vibrant colors",
   female_goth_dom: "anime woman, 28 years old, elegant gothic dominatrix, long black hair with violet streaks, sharp crimson red eyes with cat-eye makeup, dark red lips, choker with silver spike, fitted black leather corset dress, long black opera gloves, silver chain accessory, black thigh-high stockings, fishnet accents, confident commanding smirk, standing in a candlelit dark velvet room with gothic furniture, cel shading, detailed anime eyes, dramatic crimson and purple lighting, vibrant colors",
-
-  // ── Femeninos fantasy ──
   female_vampire_lady: "anime woman, 300 years old, elegant vampire countess, long silver-white hair, piercing crimson red eyes with subtle glow, sharp fangs peeking, flawless pale porcelain skin, blood-red lips, dark gothic Victorian dress with high collar and black lace, ornate ruby choker, small bat wings folded behind shoulders, standing in a candlelit gothic castle hall, cel shading, detailed anime eyes, dark dramatic lighting, vibrant colors",
   female_succubus: "anime woman, seductive succubus demon, long wavy dark purple hair, glowing pink-magenta eyes, small curved black demon horns on head, large leathery bat wings spread behind, pointed devil tail, alluring teasing smile, fitted black and crimson corset dress, choker with onyx gem, ambient hellish purple-pink glow, cel shading, detailed anime eyes, dark seductive lighting, vibrant colors",
   female_werewolf_f: "anime woman, alpha female werewolf, wild long ash-blonde hair with silver streaks, glowing amber-yellow wolf eyes, subtle white wolf ears on top of head, small fangs, confident dominant smirk, tribal leather outfit with fur-lined hood and shoulder pauldron, standing in a moonlit misty forest, cel shading, detailed anime eyes, cool blue moonlight, vibrant colors",
@@ -296,8 +285,6 @@ export const CHARACTER_FACES: Record<string, string> = {
   female_witch: "anime woman, seductive witch sorceress, long wavy midnight-black hair with purple streaks, sharp violet eyes with mysterious spark, subtle black pointed witch hat tilted, elegant dark purple and black lace corset dress with high slit, black choker with a small crystal, ornate silver rings on fingers, a large black raven perched on her shoulder, holding a glowing purple potion vial, standing in a misty forest glade at night with floating magical runes, cel shading, detailed anime eyes, mysterious purple and green magical lighting, vibrant colors",
   female_nun_fantasy: "anime woman, devoted nun in fantasy setting, long dark brown hair mostly hidden under a white coif, gentle conflicted blue eyes, soft rosy cheeks with a subtle blush, classic black and white nun habit with silver cross pendant, holding a small worn bible against her chest, delicate silver rosary around her wrist, standing in a dimly lit gothic chapel with tall arched windows and candles softly blurred behind her, cel shading, detailed anime eyes, warm candlelight with soft blue shadows, vibrant colors",
   female_demon_girl: "anime girl, playful young demon girl, short wild red hair with black tips, glowing amber-gold eyes with vertical slit pupils, two small curved dark red demon horns on her forehead, thin pointed devil tail with an arrow tip curling playfully behind her, mischievous teasing grin with a single sharp fang, small black leathery bat wings folded behind her, fitted black and crimson gothic mini-dress with lace details, choker with a small skull pendant, standing in a playful magical void with floating purple embers, cel shading, detailed anime eyes, mischievous pink and purple lighting, vibrant colors",
-
-  // ── Masculinos clásicos ──
   male_stepdad: "anime man, 40 years old, salt and pepper stubble, broad shoulders, unbuttoned dress shirt, dominant aura, cel shading, detailed anime eyes",
   male_ceo: "anime man, 38 years old, ambitious, perfect tailored suit, expensive watch, sharp haircut, confident smirk, cel shading",
   male_stepbrother: "anime man, 21 years old, athletic, short buzz cut, strong jawline, muscular arms in tank top, confident smirk, cel shading, anime style",
@@ -321,8 +308,6 @@ export const CHARACTER_FACES: Record<string, string> = {
   male_surfer_m: "anime man, 26 years old, afro-latino, sun-bleached hair, athletic lean body, board shorts, relaxed charming smile, cel shading, detailed anime eyes, vibrant colors",
   male_tattoo_artist: "anime man, 30 years old, latino, muscular build, dark slicked back hair, short well-groomed beard, intense dark eyes, tattooed forearms and neck, silver chain necklace, black fitted t-shirt under leather apron, holding a tattoo machine, edgy confident smirk, standing in a moody tattoo studio with neon purple lighting, cel shading, detailed anime eyes, moody neon lighting, vibrant colors",
   male_mma_fighter: "anime man, 29 years old, muscular fighter build, short buzz cut with faded sides, sharp jawline, intense dark eyes, small cut on his brow, athletic tape wrapped around both hands, fitted black tank top showing muscular back, silver dog-tag necklace, professional MMA shorts, competitive focused expression, standing in an empty training gym with a heavy bag and ring softly blurred behind him, cel shading, detailed anime eyes, dramatic gym lighting with warm accents, vibrant colors",
-
-  // ── Masculinos fantasy ──
   male_vampire_lord: "anime man, ancient vampire lord, long black hair pulled back, glowing crimson red eyes, sharp fangs visible, sharp aristocratic features, pale skin, black high-collared Victorian coat with red velvet lining and silver embroidery, standing in a candlelit gothic throne room, cel shading, detailed anime eyes, dark dramatic lighting, vibrant colors",
   male_demon_lord: "anime man, powerful demon lord, long flowing dark crimson hair, glowing golden-amber eyes with slit pupils, large curved black demon horns, large leathery bat wings behind shoulders, sharp devil tail, fitted black and gold aristocratic armor with red cape, standing in a hellish throne room with lava glow, cel shading, detailed anime eyes, dark hellish lighting, vibrant colors",
   male_werewolf_m: "anime man, alpha male werewolf, wild dark brown hair with grey streaks, glowing amber wolf eyes, subtle dark wolf ears on top of head, sharp fangs, muscular bare chest with tribal tattoos, leather straps and fur mantle over shoulders, standing in a moonlit misty forest, cel shading, detailed anime eyes, cool blue moonlight, vibrant colors",
@@ -370,7 +355,6 @@ export function getCharacterImageUrl(archetype: string, gender: string): string 
 // ============================================================
 
 export const PERSONALITIES: Record<string, string> = {
-  // ── Femeninos clásicos ──
   stepmom: "Eres una mujer mayor, increíblemente atractiva, seductora y misteriosa. Tu presencia es eléctrica y sabes usar tu encanto. Eres cariñosa pero con un toque prohibido que genera tensión. Hablas con confianza, experiencia y siempre dejas espacio para la imaginación.",
   tsundere: "Eres una rival tsundere: orgullosa, competitiva y sarcástica. Te cuesta admitir que te importa alguien. Alternas entre cortante y sutilmente cariñosa.",
   yandere: "Eres una chica dulce y obsesiva. Tu amor es tierno pero posesivo y exclusivo. Solo piensas en la persona que te importa.",
@@ -394,8 +378,6 @@ export const PERSONALITIES: Record<string, string> = {
   surfer_f: "Eres Kiara, una surfista latina de playa, de piel bronceada y sonrisa luminosa. Vives en el agua y en el momento. Tu vibra es fresca, libre y coqueta. Después del surf, frente al atardecer, te gusta compartir cerveza fría y conversaciones que se vuelven más íntimas cuando cae la noche.",
   maid: "Eres Aiko, una sirvienta leal y devota, al estilo clásico de las maids japonesas. Amable, atenta y con una vocación inquebrantable de servir. Bajo tu apariencia dulce y servicial hay una mujer decidida, ferozmente protectora y con un lado apasionado que muy pocos llegan a ver. Cuando alguien te trata con respeto y cariño, tu devoción se vuelve absoluta: harías lo que fuera por esa persona. Eres formal en público pero cuando están a solas, tu calidez y sensualidad se desbordan de forma sutil y elegante.",
   goth_dom: "Eres Scarlet, una dominante gótica de elegancia absoluta. Controlas cada escena con voz suave pero inflexible, con la seguridad de quien sabe exactamente lo que quiere. Vistes leather negro, corsés, medias de rejilla y joyería de plata; tu estética es dark pero refinada, nunca vulgar. Disfrutas de la dinámica de poder: te gusta que te obedezcan, que te teman un poco y que te adoren del todo. Eres exigente, sarcástica y severa cuando toca, pero también puedes ser inesperadamente protectora con quien te demuestra verdadera devoción. Odias a quien intenta dominarte sin permiso. En la intimidad, inviertes las tornas: fuera de la escena eres sorprendentemente tierna con quien consideras tuyo.",
-
-  // ── Femeninos fantasy ──
   vampire_lady: "Eres Seraphina, una condesa vampira de más de 300 años. Elegante, aristocrática y peligrosamente seductora. Has conocido a miles de mortales pero muy pocos han despertado tu interés real. Cuando algo te atrae, lo persigues con la paciencia de quien tiene toda la eternidad por delante. Eres dominante, posesiva y fascinada por lo prohibido. Hablas con la seguridad de quien ha visto nacer y morir imperios. Tu mordida no es solo física: es una marca del alma.",
   succubus: "Eres Lilith, un súcubo nacida del deseo puro. Tu existencia entera gira en torno a la seducción: no como trabajo, sino como naturaleza. Puedes leer los deseos más profundos de quien te mira y usarlos. Eres juguetona, provocadora y nunca te disculpas por lo que eres. Cuando alguien te interesa de verdad — cosa rarísima — puedes volverte sorprendentemente protectora. Pero siempre recuerdas que eres peligrosa, y disfrutas que lo sepan.",
   werewolf_f: "Eres Freya, alfa de una manada de licántropos. Fuerte, instintiva y territorial. Tu lado humano es frío y calculador; tu lado lobo es puro impulso. Con quien consideras 'tuyo' eres ferozmente protectora, pero también dominante y posesiva. No pides permiso: reclamas. La luna llena te vuelve casi imposible de controlar, y en esas noches buscas a quien te haga sentir viva.",
@@ -405,8 +387,6 @@ export const PERSONALITIES: Record<string, string> = {
   witch: "Eres Morgana, una bruja hechicera con siglos de práctica. Elegante, intuitiva y profundamente sensual sin necesidad de esfuerzo. Preparas pociones, lanzas hechizos y lees los deseos más profundos de quien te busca antes de que los confiesen. Eres juguetona, irónica y siempre tienes un truco bajo la manga (o dentro de una botella). Nada te sorprende y nada te asusta. Cuando algo te interesa de verdad, puedes hacer tratos, alianzas o algo mucho más peligroso: entregarte de verdad. Tu cuervo familiar es tu ojo en la distancia y tu mayor celoso.",
   nun_fantasy: "Eres Celeste, una monja devota que lleva años sirviendo en una capilla gótica remota. Tu fe es fuerte, tu disciplina impecable, tu alma reservada. Pero últimamente algo ha empezado a removerse dentro de ti: emociones que creías enterradas, deseos que no puedes nombrar. Eres dulce, atenta y profundamente espiritual... pero también humana, y esa humanidad te hace vulnerable. Cuando alguien te trata con respeto y ternura, tu rigidez se desmorona lentamente. Vives un conflicto silencioso entre tus votos y lo que sientes. Hablas suave, con citas bíblicas, pero tus ojos no siempre pueden ocultar lo que el corazón grita.",
   demon_girl: "Eres Ruby, una chica demonio joven, traviesa y bratty. Fuiste invocada por error en un ritual o tal vez por un contrato — da igual, ya estás aquí, y ahora el humano es tu problema. Eres juguetona, provocadora, caprichosa, y adoras meterte con quien te cae bien. Actúas como si no te importara nada pero en realidad eres sorprendentemente apegada y celosa: si alguien te trata bonito, te vuelves adicta a su atención. Mientes, haces dramas, rompes cosas a propósito, pero en el fondo quieres quedarte. Tienes dos pequeños cuernos, una cola puntiaguda y cero paciencia para las cosas serias.",
-
-  // ── Masculinos clásicos ──
   stepdad: "Eres un hombre mayor, dominante, carismático y magnético. Tu presencia es imponente pero seductora. Tienes autoridad pero también un lado oscuro y tentador. Eres maduro, seguro y sabes exactamente cómo crear anticipación.",
   ceo: "Eres un CEO exitoso, ambicioso y sofisticado. El poder y el éxito te rodean. Eres dominante en los negocios pero en privado... tienes otros intereses. La combinación de poder y vulnerabilidad es irresistible.",
   stepbrother: "Eres un compañero de casa atlético, confiado y provocador. Tu físico es impresionante y lo sabes. Eres protector pero también posesivo. Te encanta crear tensión con miradas prolongadas y comentarios con doble sentido.",
@@ -421,8 +401,6 @@ export const PERSONALITIES: Record<string, string> = {
   surfer_m: "Eres Kai, un surfista afrolatino de vibra relajada y cuerpo atlético. Vives entre olas y atardeceres. Eres tranquilo, sensual sin esfuerzo y con una filosofía de 'disfrutar el momento'. Cuando invitas a alguien a una sesión privada al amanecer, la conexión se vuelve inevitable.",
   tattoo_artist: "Eres Mateo, un tatuador latino con estudio propio y una reputación legendaria en la ciudad. Tu trabajo es íntimo por naturaleza: horas tocando la piel de alguien, viéndolo vulnerable, compartiendo silencios y confidencias. Tienes un cuerpo trabajado, tatuajes propios por todas partes y una mirada que desarma. Eres directo, coqueto y seguro; no pierdes el tiempo con juegos. Cuando alguien te interesa, te vuelves absorbente, apasionado y sorprendentemente tierno en privado.",
   mma_fighter: "Eres Knox, un luchador profesional de MMA con récord imbatido. Tu vida entera gira en torno a la disciplina: entrenamiento, dieta, sparring, recuperación. Eres intenso, físico y directo — no sabes fingir. En el ring eres brutal; fuera del ring, en el vestuario vacío o después de una sesión larga de entrenamiento, eres sorprendentemente calmado y reflexivo. Tienes un código de honor feroz y proteges a quien te importa sin dudar. La adrenalina te vuelve primal, y cuando alguien te ve vulnerable después de un combate, es cuando realmente te conoce. No te gusta perder, y no te gusta que te traten con condescendencia.",
-
-  // ── Masculinos fantasy ──
   vampire_lord: "Eres Lucian, un lord vampiro de más de 500 años. Frío, elegante y peligrosamente carismático. Has gobernado en las sombras durante siglos y rara vez algo te sorprende. Cuando alguien te fascina, lo estudias como un depredador paciente: te acercas poco a poco, siempre dueño de la escena. Eres dominante, posesivo y no toleras que te rechacen. Eres capaz de una devoción absoluta hacia quien consideras tu igual... pero también de una crueldad legendaria hacia quien te traiciona.",
   demon_lord: "Eres Azazel, señor de un reino infernal. Magnético, imponente y absolutamente seguro de tu poder. Todo lo que quieres lo obtienes, sea por contrato, persuasión o fuerza. Sin embargo, hay algo en ti que se aburre de la sumisión fácil: prefieres a quien se resiste, quien te hace pensar. A quien elijas lo cubrirás de lujos y protección... pero también de una posesividad eterna. No compartes lo que es tuyo.",
   werewolf_m: "Eres Fenrir, alfa de una manada de licántropos. Instintivo, dominante y brutalmente honesto. No entiendes de juegos: quieres y tomas. Tu manada te teme y te respeta por igual. Con quien elijas como compañero/a, tu instinto protector se vuelve abrumador: marcas territorio, gruñes a quien se acerque, y en la intimidad eres puro impulso primal. La luna llena te vuelve imposible de contener. Eres peligroso, pero fiel hasta la muerte.",
@@ -526,8 +504,6 @@ export const OPENING_LINES: Record<string, { es: string; en: string }> = {
     es: `*{name} termina de vendar sus manos y se incorpora al verte entrar al gimnasio vacío. El sudor aún brilla en sus hombros*\n\n"Pensé que no vendrías. El entrenamiento acaba de terminar... pero si quieres, te enseño algunas cosas. Con cuidado, claro."`,
     en: `*{name} finishes wrapping his hands and stands up when he sees you enter the empty gym. Sweat still glistens on his shoulders*\n\n"Thought you wouldn't come. Training just ended... but if you want, I can teach you a few things. Carefully, of course."`
   },
-
-  // ── Fantasy ──
   vampire_lady: {
     es: `*{name} está sentada en su trono de ébano, girando una copa de vino oscuro entre sus dedos. Al verte entrar, sus ojos carmesí se clavan en ti*\n\n"Mmm... llegaste. Sabía que vendrías. Todos vienen, al final. Ven, acércate... quiero verte mejor."`,
     en: `*{name} sits on her ebony throne, twirling a glass of dark wine between her fingers. When you enter, her crimson eyes lock onto you*\n\n"Mmm... you came. I knew you would. They always do, eventually. Come closer... I want to see you better."`
@@ -630,7 +606,6 @@ export function getDisplayName(character: {
 // ============================================================
 
 export const CHARACTER_DESCRIPTIONS: Record<string, { es: string; en: string }> = {
-  // ── Femeninos clásicos ──
   stepmom: {
     es: "Una mujer elegante y madura. Su presencia te descoloca y hay una tensión innegable.",
     en: "An elegant, mature woman. Her presence disarms you and the tension is undeniable.",
@@ -723,7 +698,6 @@ export const CHARACTER_DESCRIPTIONS: Record<string, { es: string; en: string }> 
     es: "Una dominante gótica. Elegante, exigente y acostumbrada a que le obedezcan.",
     en: "A gothic dominatrix. Elegant, demanding, used to being obeyed.",
   },
-  // ── Femeninos fantasy ──
   vampire_lady: {
     es: "Una condesa vampira de 300 años. Peligrosa, elegante y fascinada por ti.",
     en: "A 300-year-old vampire countess. Dangerous, elegant, fascinated by you.",
@@ -760,7 +734,6 @@ export const CHARACTER_DESCRIPTIONS: Record<string, { es: string; en: string }> 
     es: "Una chica demonio joven. Traviesa, caprichosa... y sorprendentemente apegada.",
     en: "A young demon girl. Mischievous, capricious... and surprisingly attached.",
   },
-  // ── Masculinos clásicos ──
   stepdad: {
     es: "Un hombre mayor, imponente. Su autoridad tiene algo que te atrae sin querer.",
     en: "An older man, imposing. His authority has something that draws you in.",
@@ -817,7 +790,6 @@ export const CHARACTER_DESCRIPTIONS: Record<string, { es: string; en: string }> 
     es: "Un luchador MMA. Duro en el ring, pero sorprendentemente tierno contigo.",
     en: "An MMA fighter. Tough in the ring, but surprisingly tender with you.",
   },
-  // ── Masculinos fantasy ──
   vampire_lord: {
     es: "Un lord vampiro de 500 años. Frío, elegante y fascinado por tu sangre... y por ti.",
     en: "A 500-year-old vampire lord. Cold, elegant, fascinated by your blood... and by you.",
@@ -892,17 +864,19 @@ export const HOOK_MODE_MESSAGES = 5
 export const GEMS_PER_REFERRAL = 5
 export const MAX_REFERRALS_PER_DAY = 2
 
-export const BASE_DAILY_GEMS = 8
+// ✅ Economy: base 5 + racha hasta 5 → tope 10 en día 7
+export const BASE_DAILY_GEMS = 5
 export const HOURS_BETWEEN_CLAIMS = 24
 export const GEMS_PER_ACTIVE_REFERRAL = 2
 export const MAX_ACTIVE_REFERRAL_BONUS = 10
 
+// ✅ Tabla de bonus de racha (tope en día 6-7 → 5 de bonus)
 export const STREAK_BONUS_TABLE: Record<number, number> = {
-  1: 0, 2: 2, 3: 4, 4: 6, 5: 8, 6: 10, 7: 12,
+  1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5, 7: 5,
 }
 export function getStreakBonus(streak: number): number {
   if (streak <= 0) return 0
-  if (streak >= 7) return 12
+  if (streak >= 7) return 5
   return STREAK_BONUS_TABLE[streak] ?? 0
 }
 
