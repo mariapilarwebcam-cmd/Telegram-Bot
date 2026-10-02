@@ -8,6 +8,7 @@ export {
   getIntensityFromLevel,
   getClothingLevel,
   getSceneStyle,
+  getNextLevelThreshold,
   type LevelConfig,
   type Intensity,
 } from './levels'
@@ -248,7 +249,7 @@ export const ARCHETYPES_FEMALE = {
 }
 
 // ============================================================
-// CHARACTER FACES (para generación con IA)
+// CHARACTER FACES
 // ============================================================
 export const CHARACTER_FACES: Record<string, string> = {
   female_stepmom: "anime woman, 38 years old, mature elegant long dark hair, sharp green eyes, luxurious silk robe, sultry expression, cel shading, detailed anime eyes",
@@ -326,7 +327,7 @@ export function getCharacterFace(archetype: string, gender: string): string {
 }
 
 // ============================================================
-// IMAGEN DESDE R2
+// URL de imagen desde Cloudflare R2
 // ============================================================
 const IMAGE_CACHE_VERSION = '8'
 
@@ -685,28 +686,31 @@ export const GEM_COSTS = {
 }
 
 // ============================================================
-// ECONOMÍA — Referidos + Diarias
+// ECONOMÍA — Referidos + Diarias + Hook mode
 // ============================================================
 
-// Modo gancho (cuando se acaba sin gemas)
+// Modo gancho (SOLO se activa UNA VEZ en toda la vida del usuario)
 export const HOOK_MODE_MESSAGES = 5
 
-// Referidos — 10 gemas cuando el referido manda 3 mensajes
+// Referidos
 export const GEMS_PER_REFERRAL = 10
 export const REFERRAL_MIN_MESSAGES = 3
 
-// Comisiones por compra del referido (basadas en usuarios ÚNICOS que compraron)
-export const REFERRAL_PURCHASE_COMMISSION_PCT = 5         // tier base
-export const REFERRAL_TOP_TIER_THRESHOLD = 5              // 5+ únicos → 7%
+// Comisiones por compra (basadas en usuarios ÚNICOS que compraron)
+export const REFERRAL_PURCHASE_COMMISSION_PCT = 5
+export const REFERRAL_TOP_TIER_THRESHOLD = 5
 export const REFERRAL_TOP_TIER_PCT = 7
-export const REFERRAL_ELITE_TIER_THRESHOLD = 20           // 20+ únicos → 10%
+export const REFERRAL_ELITE_TIER_THRESHOLD = 20
 export const REFERRAL_ELITE_TIER_PCT = 10
 
-// Diarias (3 gemas cada 24h, sin acumulación)
+// Diarias
 export const BASE_DAILY_GEMS = 3
 export const HOURS_BETWEEN_CLAIMS = 24
 
-// Legacy (compatibilidad)
+// Umbral de "pocas gemas" → bot más provocativo
+export const LOW_GEMS_THRESHOLD = 5
+
+// Legacy
 export const GEMS_PER_ACTIVE_REFERRAL = 1
 export const MAX_ACTIVE_REFERRAL_BONUS = 5
 export const STREAK_BONUS_TABLE: Record<number, number> = {}
@@ -714,7 +718,6 @@ export function getStreakBonus(_streak: number): number {
   return 0
 }
 
-// Helper para calcular el tier de comisión
 export function getCommissionTier(uniqueBuyers: number): {
   pct: number
   nextTierAt: number | null
@@ -759,7 +762,7 @@ export function getFinalCryptoGems(pkg: {
 
 export const RELATIONSHIP_LEVELS = [
   { min: 0, key: 'levelStranger', color: '#8b8b9e' },
-  { min: 15, key: 'levelFriend', color: '#22c55e' },
+  { min: 14, key: 'levelFriend', color: '#22c55e' },
   { min: 40, key: 'levelClose', color: '#7c5cff' },
   { min: 90, key: 'levelIntimate', color: '#a855f7' },
   { min: 180, key: 'levelSpecial', color: '#ec4899' },
