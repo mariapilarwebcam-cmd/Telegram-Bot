@@ -19,34 +19,23 @@ import { generateAIResponse, getIntensity, buildSystemPrompt } from '@/lib/ai'
 // ✅ MENSAJES CINEMÁTICOS DE INVITACIÓN A LA FOTO
 // ============================================================
 const PHOTO_INVITES_ES: Array<(name: string) => string> = [
-  (name) =>
-    `📸 *${name} se muerde el labio y te mira fijamente...*\n_"Espera... quiero mandarte algo. Solo para ti."_`,
-  (name) =>
-    `📸 *${name} sonríe de lado y saca el teléfono...*\n_"No te muevas... esto te va a encantar."_`,
-  (name) =>
-    `📸 *${name} baja la voz y se acerca...*\n_"Ven... quiero mostrarte algo que nadie más ha visto."_`,
-  (name) =>
-    `📸 *${name} te mira con ojos brillantes...*\n_"Confía en mí. Tengo algo preparado para ti."_`,
-  (name) =>
-    `📸 *${name} se recoge el pelo y te dedica una mirada...*\n_"¿Quieres ver lo que estaba pensando? Solo tienes que pedirlo."_`,
+  (name) => `📸 *${name} se muerde el labio y te mira fijamente...*\n_"Espera... quiero mandarte algo. Solo para ti."_`,
+  (name) => `📸 *${name} sonríe de lado y saca el teléfono...*\n_"No te muevas... esto te va a encantar."_`,
+  (name) => `📸 *${name} baja la voz y se acerca...*\n_"Ven... quiero mostrarte algo que nadie más ha visto."_`,
+  (name) => `📸 *${name} te mira con ojos brillantes...*\n_"Confía en mí. Tengo algo preparado para ti."_`,
+  (name) => `📸 *${name} se recoge el pelo y te dedica una mirada...*\n_"¿Quieres ver lo que estaba pensando? Solo tienes que pedirlo."_`,
 ]
 
 const PHOTO_INVITES_EN: Array<(name: string) => string> = [
-  (name) =>
-    `📸 *${name} bites their lip and stares at you...*\n_"Wait... I want to send you something. Just for you."_`,
-  (name) =>
-    `📸 *${name} smirks and pulls out their phone...*\n_"Don't move... you're going to love this."_`,
-  (name) =>
-    `📸 *${name} lowers their voice and leans in...*\n_"Come here... I want to show you something no one else has seen."_`,
-  (name) =>
-    `📸 *${name} looks at you with gleaming eyes...*\n_"Trust me. I have something prepared for you."_`,
-  (name) =>
-    `📸 *${name} tucks their hair back and gives you a look...*\n_"Want to see what I was thinking about? Just ask."_`,
+  (name) => `📸 *${name} bites their lip and stares at you...*\n_"Wait... I want to send you something. Just for you."_`,
+  (name) => `📸 *${name} smirks and pulls out their phone...*\n_"Don't move... you're going to love this."_`,
+  (name) => `📸 *${name} lowers their voice and leans in...*\n_"Come here... I want to show you something no one else has seen."_`,
+  (name) => `📸 *${name} looks at you with gleaming eyes...*\n_"Trust me. I have something prepared for you."_`,
+  (name) => `📸 *${name} tucks their hair back and gives you a look...*\n_"Want to see what I was thinking about? Just ask."_`,
 ]
 
 // ============================================================
 // ✅ DETECCIÓN DE SOLICITUD DE FOTO
-// Si el usuario pide una foto → activamos el banner automáticamente
 // ============================================================
 const PHOTO_KEYWORDS_ES = [
   'foto', 'selfie', 'imagen', 'picture', 'fotito',
@@ -67,7 +56,7 @@ function detectPhotoRequest(message: string, lang: 'es' | 'en'): boolean {
 }
 
 // ============================================================
-// ✅ NIVEL SIGUIENTE (para el indicador de progreso)
+// ✅ SIGUIENTE NIVEL (para la barra de progreso)
 // ============================================================
 function getNextLevelThreshold(currentLevel: number): number | null {
   switch (currentLevel) {
@@ -162,7 +151,6 @@ export async function POST(request: Request) {
       }
     }
 
-    // Historial con ordenamiento estable
     const { data: history } = await supabaseAdmin
       .from('conversation_history')
       .select('id, role, content, created_at')
@@ -182,7 +170,6 @@ export async function POST(request: Request) {
     const currentUserMsgCount = userMsgCount || 0
     const nextUserMsgCount = currentUserMsgCount + 1
 
-    // Niveles: anterior vs nuevo
     const prevLevel = getLevelFromMessages(currentUserMsgCount)
     const newLevel = getLevelFromMessages(nextUserMsgCount)
     const levelUp = newLevel.level > prevLevel.level
@@ -226,7 +213,7 @@ export async function POST(request: Request) {
       { telegram_id: tid, character_id, role: 'assistant', content: responseText },
     ])
 
-    // Referidos
+    // Referidos: pagar 10 gemas al referidor cuando el referido completa 3 mensajes
     try {
       const { data: referral } = await supabaseAdmin
         .from('referrals')
@@ -282,10 +269,8 @@ export async function POST(request: Request) {
       console.error('Referral payout error:', refErr)
     }
 
-    // ✅ El texto queda LIMPIO — sin warnings pegados al diálogo
     let finalText = responseText
 
-    // Low gems warning flag (para el header del frontend)
     const isLowGemsWarning =
       nextUserMsgCount >= 10 &&
       newGems > 0 &&
@@ -293,7 +278,6 @@ export async function POST(request: Request) {
       !isHookMode &&
       newHookRemaining === 0
 
-    // ✅ Hito de foto OR usuario pidió foto explícitamente
     const userRequestedPhoto = detectPhotoRequest(message, lang)
     const imageCost = getImageCost(newLevel.level)
     const hasEnoughGems = newGems >= imageCost
@@ -306,7 +290,6 @@ export async function POST(request: Request) {
       finalText += `\n\n${invite(character.character_name)}`
     }
 
-    // ✅ Info para el indicador de progreso de nivel
     const nextLevelAt = getNextLevelThreshold(newLevel.level)
 
     return NextResponse.json({
@@ -317,14 +300,11 @@ export async function POST(request: Request) {
       intensity,
       level: newLevel.level,
       photo_offer_available: shouldShowPhotoBanner,
-      // Subida de nivel
       level_up: levelUp,
       new_level: levelUp ? newLevel.level : null,
       new_level_badge: levelUp ? newLevel.badgeKey : null,
-      // Low gems warning (para el header)
       low_gems_warning: isLowGemsWarning,
       low_gems_count: isLowGemsWarning ? newGems : 0,
-      // ✅ Progreso de nivel
       total_user_messages: nextUserMsgCount,
       next_level_at: nextLevelAt,
     })
