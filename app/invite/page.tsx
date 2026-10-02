@@ -4,7 +4,15 @@ import { useState, useEffect, useMemo } from 'react'
 import { useUser } from '@/lib/UserContext'
 import { getTranslations } from '@/lib/i18n'
 import { tgFetch } from '@/lib/telegram-fetch'
-import { BASE_DAILY_GEMS, getStreakBonus } from '@/lib/constants'
+import {
+  BASE_DAILY_GEMS,
+  GEMS_PER_REFERRAL,
+  REFERRAL_PURCHASE_COMMISSION_PCT,
+  REFERRAL_TOP_TIER_THRESHOLD,
+  REFERRAL_TOP_TIER_PCT,
+  REFERRAL_ELITE_TIER_THRESHOLD,
+  REFERRAL_ELITE_TIER_PCT,
+} from '@/lib/constants'
 
 export default function RewardsPage() {
   const { user, loading: userLoading, lang, refresh, isTelegram } = useUser()
@@ -51,19 +59,8 @@ export default function RewardsPage() {
     }
   }, [user, now])
 
-  const previewGems = useMemo(() => {
-    if (!user) return 0
-    const currentStreak = user.streak_count || 0
-    let nextStreak = 1
-    if (user.last_daily_claim) {
-      const hoursSince =
-        (now - new Date(user.last_daily_claim).getTime()) / 3_600_000
-      if (hoursSince >= 24 && hoursSince < 48) {
-        nextStreak = currentStreak + 1
-      }
-    }
-    return BASE_DAILY_GEMS + getStreakBonus(nextStreak)
-  }, [user, now])
+  // ✅ 3 gemas planas — sin racha
+  const previewGems = BASE_DAILY_GEMS
 
   const handleRetry = async () => {
     setRetrying(true)
@@ -244,9 +241,22 @@ export default function RewardsPage() {
   const refCode = user.username || user.referral_code
   // ✅ Link pasa por el bot
   const referralLink = `https://t.me/TabooRealmBot?start=${refCode}`
-  const earnedGems = (user.total_referrals || 0) * 5
-  const currentStreak = user.streak_count || 0
-  const longestStreak = user.longest_streak || 0
+  const earnedGems = (user.total_referrals || 0) * GEMS_PER_REFERRAL
+  const payingCount = user.paying_referrals_count || 0
+
+  // ✅ Calcular tier actual
+  let currentPct = REFERRAL_PURCHASE_COMMISSION_PCT
+  let nextTierAt: number | null = REFERRAL_TOP_TIER_THRESHOLD
+  let nextTierPct: number | null = REFERRAL_TOP_TIER_PCT
+  if (payingCount >= REFERRAL_ELITE_TIER_THRESHOLD) {
+    currentPct = REFERRAL_ELITE_TIER_PCT
+    nextTierAt = null
+    nextTierPct = null
+  } else if (payingCount >= REFERRAL_TOP_TIER_THRESHOLD) {
+    currentPct = REFERRAL_TOP_TIER_PCT
+    nextTierAt = REFERRAL_ELITE_TIER_THRESHOLD
+    nextTierPct = REFERRAL_ELITE_TIER_PCT
+  }
 
   return (
     <div className="page">
@@ -254,6 +264,9 @@ export default function RewardsPage() {
         <h1 className="page-title">{t.dailyClaimRewardsTitle}</h1>
       </header>
 
+      {/* ═══════════════════════════════════════════════
+          SECCIÓN 1: RECLAMO DIARIO
+      ═══════════════════════════════════════════════ */}
       <section style={{ padding: '20px 16px 0' }}>
         <div
           style={{
@@ -320,139 +333,11 @@ export default function RewardsPage() {
                   lineHeight: 1.3,
                 }}
               >
-                {t.dailyClaimSubtitle}
+                {lang === 'es'
+                  ? 'Entra cada día y recibe gemas gratis'
+                  : 'Come back every day for free gems'}
               </p>
             </div>
-          </div>
-
-          <div
-            style={{
-              display: 'flex',
-              gap: 12,
-              marginTop: 20,
-              marginBottom: 12,
-            }}
-          >
-            <div
-              style={{
-                flex: 1,
-                padding: 12,
-                borderRadius: 12,
-                background: claimState.canClaim
-                  ? 'rgba(255,255,255,0.15)'
-                  : 'rgba(168, 85, 247, 0.1)',
-                border: claimState.canClaim
-                  ? '1px solid rgba(255,255,255,0.2)'
-                  : '1px solid rgba(168, 85, 247, 0.2)',
-              }}
-            >
-              <p
-                style={{
-                  fontSize: 10,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.06em',
-                  fontWeight: 700,
-                  color: claimState.canClaim
-                    ? 'rgba(255,255,255,0.8)'
-                    : '#a395c9',
-                  margin: 0,
-                }}
-              >
-                🔥 {t.dailyClaimStreakLabel}
-              </p>
-              <p
-                style={{
-                  fontSize: 22,
-                  fontWeight: 900,
-                  color: '#fff',
-                  margin: '4px 0 0 0',
-                  lineHeight: 1,
-                }}
-              >
-                {currentStreak}{' '}
-                <span style={{ fontSize: 12, fontWeight: 600 }}>
-                  {t.dailyClaimDays}
-                </span>
-              </p>
-            </div>
-            <div
-              style={{
-                flex: 1,
-                padding: 12,
-                borderRadius: 12,
-                background: claimState.canClaim
-                  ? 'rgba(255,255,255,0.15)'
-                  : 'rgba(168, 85, 247, 0.1)',
-                border: claimState.canClaim
-                  ? '1px solid rgba(255,255,255,0.2)'
-                  : '1px solid rgba(168, 85, 247, 0.2)',
-              }}
-            >
-              <p
-                style={{
-                  fontSize: 10,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.06em',
-                  fontWeight: 700,
-                  color: claimState.canClaim
-                    ? 'rgba(255,255,255,0.8)'
-                    : '#a395c9',
-                  margin: 0,
-                }}
-              >
-                🏆 {t.dailyClaimRecord}
-              </p>
-              <p
-                style={{
-                  fontSize: 22,
-                  fontWeight: 900,
-                  color: '#fff',
-                  margin: '4px 0 0 0',
-                  lineHeight: 1,
-                }}
-              >
-                {longestStreak}{' '}
-                <span style={{ fontSize: 12, fontWeight: 600 }}>
-                  {t.dailyClaimDays}
-                </span>
-              </p>
-            </div>
-          </div>
-
-          <div
-            style={{
-              display: 'flex',
-              gap: 5,
-              marginTop: 14,
-              marginBottom: 18,
-            }}
-          >
-            {[1, 2, 3, 4, 5, 6, 7].map((day) => {
-              const filled = day <= Math.min(currentStreak, 7)
-              return (
-                <div
-                  key={day}
-                  style={{
-                    flex: 1,
-                    height: 6,
-                    borderRadius: 3,
-                    background: filled
-                      ? claimState.canClaim
-                        ? '#fff'
-                        : '#a855f7'
-                      : claimState.canClaim
-                      ? 'rgba(255,255,255,0.25)'
-                      : 'rgba(168, 85, 247, 0.15)',
-                    boxShadow: filled
-                      ? claimState.canClaim
-                        ? '0 0 8px rgba(255,255,255,0.6)'
-                        : '0 0 8px rgba(168, 85, 247, 0.6)'
-                      : 'none',
-                    transition: 'all 0.3s ease',
-                  }}
-                />
-              )
-            })}
           </div>
 
           {claimState.canClaim ? (
@@ -462,7 +347,7 @@ export default function RewardsPage() {
                   fontSize: 13,
                   fontWeight: 700,
                   color: '#fff',
-                  margin: '0 0 12px 0',
+                  margin: '20px 0 12px 0',
                   textAlign: 'center',
                   textShadow: '0 1px 4px rgba(0,0,0,0.2)',
                   display: 'flex',
@@ -471,7 +356,6 @@ export default function RewardsPage() {
                   gap: 6,
                 }}
               >
-                {/* ✅ SVG unificado en lugar de emoji 💎 */}
                 <span>✨ {t.dailyClaimReady} ~{previewGems}</span>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
                   <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" fill="#fff" />
@@ -502,6 +386,7 @@ export default function RewardsPage() {
           ) : (
             <div
               style={{
+                marginTop: 20,
                 padding: 14,
                 borderRadius: 14,
                 background: 'rgba(0,0,0,0.25)',
@@ -551,6 +436,9 @@ export default function RewardsPage() {
         </div>
       </section>
 
+      {/* ═══════════════════════════════════════════════
+          SECCIÓN 2: INVITAR AMIGOS
+      ═══════════════════════════════════════════════ */}
       <section style={{ padding: '24px 16px 0' }}>
         <div
           style={{
@@ -577,16 +465,134 @@ export default function RewardsPage() {
               fontSize: 14,
               color: 'rgba(255,255,255,0.85)',
               margin: 0,
-              maxWidth: 260,
+              maxWidth: 280,
               marginLeft: 'auto',
               marginRight: 'auto',
+              lineHeight: 1.45,
             }}
           >
-            {t.inviteSubtitle}
+            {lang === 'es'
+              ? `Gana ${GEMS_PER_REFERRAL} gemas por cada amigo + ${currentPct}% de sus compras`
+              : `Earn ${GEMS_PER_REFERRAL} gems per friend + ${currentPct}% of their purchases`}
           </p>
         </div>
       </section>
 
+      {/* ═══════════════════════════════════════════════
+          TIER DE COMISIÓN
+      ═══════════════════════════════════════════════ */}
+      <section style={{ padding: '16px 16px 0' }}>
+        <div
+          style={{
+            padding: 16,
+            borderRadius: 16,
+            background:
+              'linear-gradient(135deg, rgba(124,92,255,0.15), rgba(168,85,247,0.08))',
+            border: '1px solid rgba(124,92,255,0.3)',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: 8,
+            }}
+          >
+            <p
+              style={{
+                fontSize: 11,
+                textTransform: 'uppercase',
+                letterSpacing: '0.06em',
+                fontWeight: 700,
+                color: '#a78bfa',
+                margin: 0,
+              }}
+            >
+              {lang === 'es' ? 'Tu comisión' : 'Your commission'}
+            </p>
+            <p
+              style={{
+                fontSize: 22,
+                fontWeight: 900,
+                color: '#22c55e',
+                margin: 0,
+              }}
+            >
+              {currentPct}%
+            </p>
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              fontSize: 11,
+              color: '#8b8b9e',
+              marginBottom: 6,
+            }}
+          >
+            <span>
+              {lang === 'es' ? 'Amigos que han comprado' : 'Friends who bought'}
+            </span>
+            <span style={{ color: '#fff', fontWeight: 700 }}>{payingCount}</span>
+          </div>
+
+          {/* Barra de progreso al siguiente tier */}
+          {nextTierAt !== null && nextTierPct !== null && (
+            <>
+              <div
+                style={{
+                  height: 4,
+                  background: 'rgba(168, 85, 247, 0.15)',
+                  borderRadius: 2,
+                  overflow: 'hidden',
+                  marginTop: 8,
+                }}
+              >
+                <div
+                  style={{
+                    height: '100%',
+                    width: `${Math.min(100, (payingCount / nextTierAt) * 100)}%`,
+                    background: 'linear-gradient(90deg, #a855f7, #ec4899)',
+                    transition: 'width 0.4s ease',
+                  }}
+                />
+              </div>
+              <p
+                style={{
+                  fontSize: 10,
+                  color: '#a395c9',
+                  margin: '6px 0 0 0',
+                  textAlign: 'center',
+                }}
+              >
+                {lang === 'es'
+                  ? `${nextTierAt - payingCount} más para subir a ${nextTierPct}%`
+                  : `${nextTierAt - payingCount} more to reach ${nextTierPct}%`}
+              </p>
+            </>
+          )}
+
+          {nextTierAt === null && (
+            <p
+              style={{
+                fontSize: 10,
+                color: '#22c55e',
+                margin: '8px 0 0 0',
+                textAlign: 'center',
+                fontWeight: 700,
+              }}
+            >
+              🏆 {lang === 'es' ? '¡Tier máximo alcanzado!' : 'Max tier reached!'}
+            </p>
+          )}
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════
+          LINK DE REFERIDO
+      ═══════════════════════════════════════════════ */}
       <section style={{ padding: '24px 16px 0' }}>
         <p
           style={{
@@ -697,6 +703,9 @@ export default function RewardsPage() {
         </div>
       </section>
 
+      {/* ═══════════════════════════════════════════════
+          VERIFIED FRIENDS
+      ═══════════════════════════════════════════════ */}
       <section style={{ padding: '24px 16px 0' }}>
         <div
           style={{
@@ -754,7 +763,6 @@ export default function RewardsPage() {
             }}
           >
             <span>+{earnedGems}</span>
-            {/* ✅ SVG unificado del diamante en verde */}
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
               <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" fill="#22c55e" />
             </svg>
@@ -762,6 +770,9 @@ export default function RewardsPage() {
         </div>
       </section>
 
+      {/* ═══════════════════════════════════════════════
+          HOW IT WORKS
+      ═══════════════════════════════════════════════ */}
       <section style={{ padding: '24px 16px' }}>
         <div
           style={{
@@ -792,9 +803,36 @@ export default function RewardsPage() {
             }}
           >
             {[
-              { n: '1', text: t.step1 },
-              { n: '2', text: t.step2 },
-              { n: '3', text: t.step3 },
+              {
+                n: '1',
+                text: lang === 'es'
+                  ? 'Comparte tu enlace con un amigo'
+                  : 'Share your link with a friend',
+              },
+              {
+                n: '2',
+                text: lang === 'es'
+                  ? 'Tu amigo abre el link y chatea 3 mensajes'
+                  : 'Your friend opens the link and sends 3 messages',
+              },
+              {
+                n: '3',
+                text: lang === 'es'
+                  ? `Ganas ${GEMS_PER_REFERRAL} gemas al instante`
+                  : `You earn ${GEMS_PER_REFERRAL} gems instantly`,
+              },
+              {
+                n: '4',
+                text: lang === 'es'
+                  ? `+ ${currentPct}% de CADA compra que haga (para siempre)`
+                  : `+ ${currentPct}% of EVERY purchase they make (forever)`,
+              },
+              {
+                n: '5',
+                text: lang === 'es'
+                  ? `Con 5+ amigos comprando → ${REFERRAL_TOP_TIER_PCT}% · Con 20+ → ${REFERRAL_ELITE_TIER_PCT}%`
+                  : `With 5+ friends buying → ${REFERRAL_TOP_TIER_PCT}% · With 20+ → ${REFERRAL_ELITE_TIER_PCT}%`,
+              },
             ].map((step) => (
               <li
                 key={step.n}
@@ -834,6 +872,9 @@ export default function RewardsPage() {
         </div>
       </section>
 
+      {/* ═══════════════════════════════════════════════
+          MODAL DE RECLAMO
+      ═══════════════════════════════════════════════ */}
       {showClaimModal && claimResult && (
         <div className="modal-backdrop">
           <div className="modal-box">
@@ -861,113 +902,30 @@ export default function RewardsPage() {
               {t.dailyClaimYouGot} {claimResult.claimed} {t.dailyClaimGems}
             </h3>
 
-            {claimResult.streak_lost && (
-              <p
-                style={{
-                  fontSize: 12,
-                  color: '#f59e0b',
-                  textAlign: 'center',
-                  margin: '4px 0 8px 0',
-                  fontWeight: 600,
-                }}
-              >
-                ⚠️ {t.dailyClaimStreakLost}
-              </p>
-            )}
-
             <div
               style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 8,
                 marginTop: 16,
                 marginBottom: 20,
                 padding: 16,
                 borderRadius: 14,
                 background: 'rgba(255,255,255,0.04)',
                 border: '1px solid rgba(255,255,255,0.08)',
+                textAlign: 'center',
               }}
             >
-              <div
+              <p style={{ fontSize: 13, color: '#a395c9', margin: '0 0 4px 0' }}>
+                {lang === 'es' ? 'Nuevo balance' : 'New balance'}
+              </p>
+              <p
                 style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  fontSize: 13,
+                  fontSize: 28,
+                  fontWeight: 900,
+                  color: '#22c55e',
+                  margin: 0,
                 }}
               >
-                <span style={{ color: '#a395c9' }}>{t.dailyClaimBase}</span>
-                <span style={{ color: '#fff', fontWeight: 700 }}>
-                  +{claimResult.base}
-                </span>
-              </div>
-              {claimResult.streak_bonus > 0 && (
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    fontSize: 13,
-                  }}
-                >
-                  <span style={{ color: '#a395c9' }}>
-                    {t.dailyClaimStreakBonus}
-                  </span>
-                  <span style={{ color: '#22c55e', fontWeight: 700 }}>
-                    +{claimResult.streak_bonus}
-                  </span>
-                </div>
-              )}
-              {claimResult.referral_bonus > 0 && (
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    fontSize: 13,
-                  }}
-                >
-                  <span style={{ color: '#a395c9' }}>
-                    {t.dailyClaimReferralBonus}
-                  </span>
-                  <span style={{ color: '#22c55e', fontWeight: 700 }}>
-                    +{claimResult.referral_bonus}
-                  </span>
-                </div>
-              )}
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  fontSize: 14,
-                  paddingTop: 8,
-                  borderTop: '1px solid rgba(255,255,255,0.08)',
-                  marginTop: 4,
-                }}
-              >
-                <span style={{ color: '#fff', fontWeight: 700 }}>
-                  {t.gems}
-                </span>
-                <span
-                  style={{
-                    color: '#22c55e',
-                    fontWeight: 900,
-                    fontSize: 16,
-                  }}
-                >
-                  +{claimResult.claimed}
-                </span>
-              </div>
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  fontSize: 11,
-                  marginTop: 4,
-                }}
-              >
-                <span style={{ color: '#6b5b8e' }}>🔥 {t.dailyClaimStreakLabel}</span>
-                <span style={{ color: '#a78bfa', fontWeight: 600 }}>
-                  {claimResult.streak_count} {t.dailyClaimDays}
-                </span>
-              </div>
+                {claimResult.gems}
+              </p>
             </div>
 
             <button
