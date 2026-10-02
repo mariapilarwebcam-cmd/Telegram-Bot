@@ -22,7 +22,7 @@ export const LEVELS: LevelConfig[] = [
   {
     level: 1,
     minMessages: 0,
-    maxMessages: 14,
+    maxMessages: 13,     // ✅ Cambio: antes era 14
     imageCost: 15,
     audioCost: 5,
     intensity: 'NORMAL',
@@ -34,7 +34,7 @@ export const LEVELS: LevelConfig[] = [
   },
   {
     level: 2,
-    minMessages: 15,
+    minMessages: 14,     // ✅ Cambio: antes era 15
     maxMessages: 39,
     imageCost: 20,
     audioCost: 10,
@@ -86,15 +86,8 @@ export const LEVELS: LevelConfig[] = [
   },
 ]
 
-// ============================================================
-// ✅ HITOS DE FOTO — Sistema adaptativo
-// ────────────────────────────────────────────────────────────
-// 15 = coincide con level-up a Amigos (momentum máximo)
-// 30, 50, 80, 120, 180, 250 = espaciado creciente
-// 250+ = intervalos adaptativos 50 / 60 / 70
-// ============================================================
-
-export const PHOTO_MILESTONES_EARLY: number[] = [15, 30, 50, 80, 120, 180, 250]
+// ✅ Primer hito en 14 (coincide con level up + fin de hook mode)
+export const PHOTO_MILESTONES_EARLY: number[] = [14, 30, 50, 80, 120, 180, 250]
 
 export const PHOTO_MILESTONE_LATE_START = 250
 
@@ -113,9 +106,6 @@ function getLateInterval(userMsgCount: number): number {
   return 70
 }
 
-/**
- * ¿Es un hito (independiente de las gemas del usuario)?
- */
 export function isPhotoMilestoneBase(userMsgCount: number): boolean {
   if (PHOTO_MILESTONES_EARLY.includes(userMsgCount)) return true
 
@@ -127,13 +117,6 @@ export function isPhotoMilestoneBase(userMsgCount: number): boolean {
   return false
 }
 
-/**
- * ¿Debe mostrarse el banner ahora?
- *
- * Reglas adaptativas:
- * - Hitos tempranos → SIEMPRE (fase de enganche)
- * - Hitos tardíos   → solo si el usuario tiene gemas suficientes
- */
 export function isPhotoMilestone(
   userMsgCount: number,
   hasEnoughGems: boolean = true
@@ -189,4 +172,15 @@ export function getSceneStyle(level: number): string {
 
 export function getFaceVisibility(level: number): FaceVisibility {
   return LEVELS.find((l) => l.level === level)?.faceVisibility ?? 'hidden'
+}
+
+// ✅ Helper: siguiente nivel
+export function getNextLevelThreshold(currentLevel: number): number | null {
+  switch (currentLevel) {
+    case 1: return 14
+    case 2: return 40
+    case 3: return 90
+    case 4: return 180
+    default: return null
+  }
 }
