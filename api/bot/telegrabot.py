@@ -92,11 +92,13 @@ async def create_user_immediately(
         'first_name': first_name or 'User',
         'language': language,
         'gems': STARTING_GEMS,
+        'purchased_gems': 0,
         'referral_code': referral_code,
         'referred_by': None,
         'total_referrals': 0,
         'paying_referrals_count': 0,
         'hook_messages_remaining': 0,
+        'hook_used': False,
         'age_verified': False,
         'pending_referral_code': pending_referral_code,
     }
@@ -110,17 +112,27 @@ async def create_user_immediately(
     return result.data[0] if result.data else None
 
 async def add_gems(telegram_id: int, amount: int, transaction_type: str, description: str = ''):
-    user = await get_user(telegram_id)
-    if not user:
+    """✅ OPTIMIZADO: usa RPC atómico en 1 sola query (antes: SELECT + UPDATE).
+    Suma gemas SOLO a 'gems' (no a purchased_gems)."""
+    try:
+        # 1 query atómica: UPDATE gems = gems + amount RETURNING gems
+        supabase.rpc('increment_gems', {
+            'p_telegram_id': str(telegram_id),
+            'p_amount': amount
+        }).execute()
+
+        # Registrar transacción (1 query INSERT)
+        supabase.table('gem_transactions').insert({
+            'telegram_id': str(telegram_id),
+            'amount': amount,
+            'transaction_type': transaction_type,
+            'description': description
+        }).execute()
+
+        return True
+    except Exception as e:
+        logger.error(f"Error en add_gems: {e}")
         return False
-    supabase.table('users').update({'gems': user['gems'] + amount}).eq('telegram_id', str(telegram_id)).execute()
-    supabase.table('gem_transactions').insert({
-        'telegram_id': str(telegram_id),
-        'amount': amount,
-        'transaction_type': transaction_type,
-        'description': description
-    }).execute()
-    return True
 
 # ==================== REFERRAL COMMISSION ====================
 
@@ -131,7 +143,7 @@ async def pay_referral_commission(
     reference: str,
 ):
     """Paga comisión al referidor. Tiers por usuarios ÚNICOS:
-       1-4 → 5%, 5-19 → 7%, 20+ → 10%."""
+       1-4 → 5%, 5-19 → 7%, 20+ → 10%. Comisión va SOLO a 'gems'."""
     try:
         buyer = await get_user(buyer_id)
         if not buyer:
@@ -145,7 +157,6 @@ async def pay_referral_commission(
         if not referrer:
             return
 
-        # Contar usuarios ÚNICOS que han comprado
         existing = supabase.table('referral_commissions')\
             .select('referred_id')\
             .eq('referrer_id', str(referrer_id))\
@@ -158,7 +169,6 @@ async def pay_referral_commission(
 
         total_unique = len(unique_buyers)
 
-        # Determinar % según tier
         if total_unique >= REFERRAL_ELITE_TIER_THRESHOLD:
             pct = REFERRAL_ELITE_TIER_PCT
         elif total_unique >= REFERRAL_TOP_TIER_THRESHOLD:
@@ -170,13 +180,26 @@ async def pay_referral_commission(
         if commission <= 0:
             return
 
-        new_ref_gems = (referrer.get('gems') or 0) + commission
+        # ✅ OPTIMIZADO: 1 sola query atómica para el update de gemas
+        rpc_result = supabase.rpc('increment_gems', {
+            'p_telegram_id': str(referrer_id),
+            'p_amount': commission
+        }).execute()
 
+        new_ref_gems = None
+        if rpc_result.data is not None:
+            new_ref_gems = rpc_result.data if isinstance(rpc_result.data, int) else None
+        # Fallback por si el cliente devuelve estructura distinta
+        if new_ref_gems is None:
+            updated = await get_user(int(referrer_id))
+            new_ref_gems = (updated.get('gems') if updated else 0)
+
+        # Actualizar contador de referidos que compraron
         supabase.table('users').update({
-            'gems': new_ref_gems,
             'paying_referrals_count': total_unique,
         }).eq('telegram_id', str(referrer_id)).execute()
 
+        # Registrar transacción
         supabase.table('gem_transactions').insert({
             'telegram_id': str(referrer_id),
             'amount': commission,
@@ -184,6 +207,7 @@ async def pay_referral_commission(
             'description': f'Comisión {pct}% por compra de referido',
         }).execute()
 
+        # Registrar comisión
         supabase.table('referral_commissions').insert({
             'referrer_id': str(referrer_id),
             'referred_id': str(buyer_id),
@@ -237,8 +261,22 @@ async def record_star_purchase(telegram_id: int, stars: int, gems: int, is_first
         'telegram_charge_id': charge_id,
         'payment_method': 'stars'
     }).execute()
-    supabase.table('users').update({'hook_messages_remaining': 0}).eq('telegram_id', str(telegram_id)).execute()
-    await add_gems(telegram_id, gems, 'purchase', f'Compra con {stars} stars')
+
+    # ✅ Sumar a gems Y purchased_gems + reset hook
+    user = await get_user(telegram_id)
+    if user:
+        supabase.table('users').update({
+            'gems': (user.get('gems') or 0) + gems,
+            'purchased_gems': (user.get('purchased_gems') or 0) + gems,
+            'hook_messages_remaining': 0,
+        }).eq('telegram_id', str(telegram_id)).execute()
+
+        supabase.table('gem_transactions').insert({
+            'telegram_id': str(telegram_id),
+            'amount': gems,
+            'transaction_type': 'purchase',
+            'description': f'Compra con {stars} stars'
+        }).execute()
 
     # ✅ Pagar comisión al referidor
     await pay_referral_commission(telegram_id, gems, 'stars', charge_id)
@@ -289,8 +327,8 @@ async def send_age_warning(message: Message, language: str):
 # ==================== REFERRAL APPLICATION ====================
 
 async def apply_pending_referral(telegram_id: int, ref_code: str) -> bool:
-    """Aplica referral pendiente. NO paga gemas todavía — eso ocurre
-    cuando el referido completa 3 mensajes (se procesa en /api/chat)."""
+    """Aplica referral pendiente. Las 10 gemas se pagan cuando el referido
+    completa 3 mensajes (procesado en /api/chat)."""
     if not ref_code:
         return False
 
@@ -328,7 +366,6 @@ async def apply_pending_referral(telegram_id: int, ref_code: str) -> bool:
             'pending_referral_code': None,
         }).eq('telegram_id', str(telegram_id)).execute()
 
-        # Notificar al referidor (aún sin gemas)
         try:
             bot = Bot(token=TELEGRAM_BOT_TOKEN)
             lang = referrer.get('language', 'es')
