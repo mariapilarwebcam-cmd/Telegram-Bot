@@ -12,9 +12,6 @@ import {
   type FaceVisibility,
 } from '@/lib/levels'
 
-// ============================================================
-// CHARACTER DNA — Anclas visuales para niveles 1-3 (sin referencia)
-// ============================================================
 const CHARACTER_DNA: Record<string, string> = {
   female_stepmom: "mature woman, long dark hair, green eyes, elegant",
   female_tsundere: "young woman, long dark navy hair, red ribbon, amber eyes",
@@ -82,17 +79,9 @@ const CHARACTER_DNA: Record<string, string> = {
   male_angel_m: "celestial angel, long flowing golden-blonde hair with soft waves, luminous pale blue eyes with soft glow, flawless serene features, faint golden forehead markings, glowing golden halo floating above head, large pristine white feathered wings, elegant flowing white and gold celestial robe with sacred engravings, golden bracers on both wrists, gold chain necklace with small glowing gem",
 }
 
-// ============================================================
-// FRAGMENTOS DE PROMPT POR VISIBILIDAD DE CARA
-// ============================================================
-
 const FACE_HIDDEN_FRAGMENT_ES = 'IMPORTANT: the subject\'s face is NOT visible in the photo. Use creative framing: shot from behind, back turned to camera, close-up on body and hands only, selfie cropped at the chin, over-the-shoulder angle without face, face hidden by phone or object, or facing away. The face must NOT appear.'
 
 const FACE_PARTIAL_FRAGMENT_ES = 'The subject\'s face is only partially visible: side profile, three-quarter angle with hair covering one eye, or face softly obscured by shadow/dim light. Do not show a full clear face.'
-
-// ============================================================
-// SCENE PROMPTS POR NIVEL
-// ============================================================
 
 const SFW_SCENE_PROMPTS: Record<number, string> = {
   1: 'selfie style, casual daytime environment, fully dressed, cozy and wholesome, soft natural lighting, friendly smile, cute anime aesthetic, safe for work',
@@ -105,10 +94,6 @@ const NSFW_SCENE_PROMPTS: Record<number, string> = {
   5: 'artistic boudoir photo, tasteful implied nudity with strategic coverage (sheets, shadows, artistic angles), no exposed genitalia, no explicit sexual acts, high-end artistic composition, dramatic cinematic lighting, elegant and tasteful',
 }
 
-// ============================================================
-// ✅ NUEVO: ESCENAS AUTO POR NIVEL
-// El personaje controla el prompt. El usuario NO describe.
-// ============================================================
 const AUTO_SCENES: Record<number, string> = {
   1: 'relaxed at home in a cozy room, natural soft smile, casual daylight atmosphere, warm and wholesome vibe',
   2: 'lying on her bed, playful flirty look toward the camera, warm intimate lighting, teasing energy',
@@ -117,7 +102,6 @@ const AUTO_SCENES: Record<number, string> = {
   5: 'artistic intimate composition, cinematic dramatic lighting, elegant and tasteful, high-end boudoir editorial',
 }
 
-// Variante masculina (cuando el personaje es male)
 const AUTO_SCENES_MALE: Record<number, string> = {
   1: 'relaxed at home in a cozy room, natural soft smile, casual daylight atmosphere, warm and wholesome vibe',
   2: 'lying on his bed, playful confident look toward the camera, warm intimate lighting, teasing energy',
@@ -136,8 +120,6 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => ({}))
     const character_id = body?.character_id
 
-    // ✅ description ahora es OPCIONAL. El personaje controla el prompt.
-    // Solo se usa si viene explícitamente (compatibilidad).
     const userHint =
       typeof body?.description === 'string'
         ? body.description.trim().slice(0, 200)
@@ -145,19 +127,15 @@ export async function POST(request: Request) {
 
     const { data: user } = await supabaseAdmin
       .from('users')
-      .select('gems, language')
+      .select('gems, purchased_gems, language')
       .eq('telegram_id', tid)
       .maybeSingle()
 
     if (!user) return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
 
-    const { data: purchases } = await supabaseAdmin
-      .from('star_purchases')
-      .select('id')
-      .eq('telegram_id', tid)
-      .limit(1)
-
-    if (!purchases || purchases.length === 0) {
+    // ✅ Premium = tiene gemas compradas > 0
+    const purchasedGems = user.purchased_gems || 0
+    if (purchasedGems <= 0) {
       return NextResponse.json({
         error: 'premium_required',
         message: user.language === 'en'
@@ -186,29 +164,26 @@ export async function POST(request: Request) {
     const imageCost = getImageCost(level.level)
     const faceVisibility = getFaceVisibility(level.level)
 
-    if (user.gems < imageCost) {
+    if (purchasedGems < imageCost) {
       return NextResponse.json({
         error: 'insufficient_gems',
         message: user.language === 'en'
-          ? `You need ${imageCost} gems`
-          : `Necesitas ${imageCost} gemas`,
+          ? `You need ${imageCost} purchased gems`
+          : `Necesitas ${imageCost} gemas compradas`,
         required: imageCost,
+        available: purchasedGems,
       }, { status: 402 })
     }
 
-    // ✅ El personaje decide el prompt. Si el usuario proveyó uno, se respeta,
-    // pero el frontend ya no lo envía (control total del personaje).
     const autoScenes = character.gender === 'male' ? AUTO_SCENES_MALE : AUTO_SCENES
     const sceneHint = userHint || autoScenes[level.level] || autoScenes[1]
 
     let imagePrompt: string
     let referenceUrl: string | undefined
 
-    // ✅ ANTI-GENITALIA: instrucción explícita para niveles 4-5
     const NO_GENITALIA = 'tasteful artistic composition, no explicit genitalia, no nudity visible below waist, strategic coverage, high-end boudoir photography aesthetic, safe for platform'
 
     if (level.level <= 3) {
-      // ── Niveles 1-3: DeepInfra (sin reference, con face hiding) ──
       const dna = CHARACTER_DNA[`${character.gender}_${character.archetype}`] || 'anime character'
       const scene = SFW_SCENE_PROMPTS[level.level] || SFW_SCENE_PROMPTS[1]
 
@@ -220,16 +195,13 @@ export async function POST(request: Request) {
       }
 
       imagePrompt = `[CHARACTER DNA: ${dna}], anime style, cel shading, vibrant colors, detailed anime eyes, ${scene}, ${sceneHint}, ${faceRule}, high detail, beautiful cinematic lighting, 2D illustration, best quality, safe for work, no nudity, no explicit content`
-
       referenceUrl = undefined
     } else {
-      // ── Niveles 4-5: Wiro con reference (cara completa, sin genitalia) ──
       const facePrompt = getCharacterFace(character.archetype, character.gender)
       const clothing = getClothingLevel(level.level)
       const scene = NSFW_SCENE_PROMPTS[level.level] || NSFW_SCENE_PROMPTS[4]
 
       imagePrompt = `${facePrompt}, anime style, cel shading, vibrant colors, detailed anime eyes, ${clothing}, ${scene}, ${sceneHint}, ${NO_GENITALIA}, beautiful cinematic lighting, 2D illustration, best quality`
-
       referenceUrl = getCharacterImageUrl(character.archetype, character.gender)
     }
 
@@ -241,18 +213,29 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Error al generar la imagen' }, { status: 500 })
     }
 
-    const newGems = user.gems - imageCost
-    await supabaseAdmin.from('users').update({ gems: newGems }).eq('telegram_id', tid)
+    // ✅ Descontar de gems Y purchased_gems
+    const newGems = (user.gems || 0) - imageCost
+    const newPurchasedGems = purchasedGems - imageCost
+
+    await supabaseAdmin
+      .from('users')
+      .update({
+        gems: newGems,
+        purchased_gems: newPurchasedGems,
+      })
+      .eq('telegram_id', tid)
+
     await supabaseAdmin.from('gem_transactions').insert({
       telegram_id: tid,
       amount: -imageCost,
       transaction_type: 'image',
-      description: `Selfie nivel ${level.level}: ${sceneHint.substring(0, 60)}`,
+      description: `Selfie nivel ${level.level}: ${sceneHint.substring(0, 50)}`,
     })
 
     return NextResponse.json({
       image_url: imageUrl,
       remaining_gems: newGems,
+      remaining_purchased_gems: newPurchasedGems,
       level: level.level,
       cost: imageCost,
       face_visibility: faceVisibility,
