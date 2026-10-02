@@ -22,9 +22,16 @@ SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_KEY')
 MINI_APP_URL = os.getenv('MINI_APP_URL', 'https://tu-dominio.vercel.app')
 
-BASE_DAILY_GEMS = 8
-GEMS_PER_REFERRAL = 5
-STARTING_GEMS = 15
+# ==================== ECONOMÍA ====================
+BASE_DAILY_GEMS = 3
+GEMS_PER_REFERRAL = 10
+STARTING_GEMS = 10
+
+REFERRAL_PURCHASE_COMMISSION_PCT = 5
+REFERRAL_TOP_TIER_THRESHOLD = 5
+REFERRAL_TOP_TIER_PCT = 7
+REFERRAL_ELITE_TIER_THRESHOLD = 20
+REFERRAL_ELITE_TIER_PCT = 10
 
 STAR_PACKAGES = [
     {"stars": 100,  "gems": 300,  "bonus": 5, "first_time": True,  "flat_bonus": 50},
@@ -88,6 +95,7 @@ async def create_user_immediately(
         'referral_code': referral_code,
         'referred_by': None,
         'total_referrals': 0,
+        'paying_referrals_count': 0,
         'hook_messages_remaining': 0,
         'age_verified': False,
         'pending_referral_code': pending_referral_code,
@@ -114,6 +122,112 @@ async def add_gems(telegram_id: int, amount: int, transaction_type: str, descrip
     }).execute()
     return True
 
+# ==================== REFERRAL COMMISSION ====================
+
+async def pay_referral_commission(
+    buyer_id: int,
+    gems_purchased: int,
+    source: str,
+    reference: str,
+):
+    """Paga comisión al referidor. Tiers por usuarios ÚNICOS:
+       1-4 → 5%, 5-19 → 7%, 20+ → 10%."""
+    try:
+        buyer = await get_user(buyer_id)
+        if not buyer:
+            return
+
+        referrer_id = buyer.get('referred_by')
+        if not referrer_id:
+            return
+
+        referrer = await get_user(int(referrer_id))
+        if not referrer:
+            return
+
+        # Contar usuarios ÚNICOS que han comprado
+        existing = supabase.table('referral_commissions')\
+            .select('referred_id')\
+            .eq('referrer_id', str(referrer_id))\
+            .execute()
+
+        unique_buyers = set()
+        for row in (existing.data or []):
+            unique_buyers.add(str(row['referred_id']))
+        unique_buyers.add(str(buyer_id))
+
+        total_unique = len(unique_buyers)
+
+        # Determinar % según tier
+        if total_unique >= REFERRAL_ELITE_TIER_THRESHOLD:
+            pct = REFERRAL_ELITE_TIER_PCT
+        elif total_unique >= REFERRAL_TOP_TIER_THRESHOLD:
+            pct = REFERRAL_TOP_TIER_PCT
+        else:
+            pct = REFERRAL_PURCHASE_COMMISSION_PCT
+
+        commission = int(gems_purchased * pct / 100)
+        if commission <= 0:
+            return
+
+        new_ref_gems = (referrer.get('gems') or 0) + commission
+
+        supabase.table('users').update({
+            'gems': new_ref_gems,
+            'paying_referrals_count': total_unique,
+        }).eq('telegram_id', str(referrer_id)).execute()
+
+        supabase.table('gem_transactions').insert({
+            'telegram_id': str(referrer_id),
+            'amount': commission,
+            'transaction_type': 'referral_commission',
+            'description': f'Comisión {pct}% por compra de referido',
+        }).execute()
+
+        supabase.table('referral_commissions').insert({
+            'referrer_id': str(referrer_id),
+            'referred_id': str(buyer_id),
+            'purchase_gems': gems_purchased,
+            'commission_gems': commission,
+            'commission_pct': pct,
+            'source': source,
+            'reference': reference,
+        }).execute()
+
+        logger.info(f"Commission paid: {commission} gems to {referrer_id} ({pct}%)")
+
+        # Notificar al referidor
+        try:
+            bot = Bot(token=TELEGRAM_BOT_TOKEN)
+            lang = referrer.get('language', 'es')
+            if lang == 'es':
+                text = (
+                    f"🎉 *¡Tu referido compró gemas!*\n\n"
+                    f"💎 Compra: *{gems_purchased}* gemas\n"
+                    f"💰 Comisión ({pct}%): *+{commission}* gemas\n\n"
+                    f"💎 Tus gemas totales: *{new_ref_gems}*"
+                )
+            else:
+                text = (
+                    f"🎉 *Your referral bought gems!*\n\n"
+                    f"💎 Purchase: *{gems_purchased}* gems\n"
+                    f"💰 Commission ({pct}%): *+{commission}* gems\n\n"
+                    f"💎 Your total gems: *{new_ref_gems}*"
+                )
+            await bot.send_message(
+                chat_id=int(referrer_id),
+                text=text,
+                parse_mode="Markdown",
+            )
+            await bot.session.close()
+        except Exception as e:
+            logger.error(f"Error notificando comisión: {e}")
+
+    except Exception as e:
+        logger.error(f"Error pagando comisión: {e}")
+
+# ==================== PURCHASE HELPERS ====================
+
 async def record_star_purchase(telegram_id: int, stars: int, gems: int, is_first_purchase: bool, charge_id: str):
     supabase.table('star_purchases').insert({
         'telegram_id': str(telegram_id),
@@ -125,6 +239,9 @@ async def record_star_purchase(telegram_id: int, stars: int, gems: int, is_first
     }).execute()
     supabase.table('users').update({'hook_messages_remaining': 0}).eq('telegram_id', str(telegram_id)).execute()
     await add_gems(telegram_id, gems, 'purchase', f'Compra con {stars} stars')
+
+    # ✅ Pagar comisión al referidor
+    await pay_referral_commission(telegram_id, gems, 'stars', charge_id)
 
 # ==================== AGE VERIFICATION ====================
 
@@ -172,6 +289,8 @@ async def send_age_warning(message: Message, language: str):
 # ==================== REFERRAL APPLICATION ====================
 
 async def apply_pending_referral(telegram_id: int, ref_code: str) -> bool:
+    """Aplica referral pendiente. NO paga gemas todavía — eso ocurre
+    cuando el referido completa 3 mensajes (se procesa en /api/chat)."""
     if not ref_code:
         return False
 
@@ -209,7 +328,28 @@ async def apply_pending_referral(telegram_id: int, ref_code: str) -> bool:
             'pending_referral_code': None,
         }).eq('telegram_id', str(telegram_id)).execute()
 
-        logger.info(f"Referral applied: {telegram_id} referred by {referrer['telegram_id']}")
+        # Notificar al referidor (aún sin gemas)
+        try:
+            bot = Bot(token=TELEGRAM_BOT_TOKEN)
+            lang = referrer.get('language', 'es')
+            if lang == 'es':
+                text = (
+                    f"🎉 *¡Alguien usó tu código!*\n\n"
+                    f"💎 Recibirás *{GEMS_PER_REFERRAL} gemas* cuando mande 3 mensajes.\n"
+                    f"💰 Y *{REFERRAL_PURCHASE_COMMISSION_PCT}%* de todo lo que compre."
+                )
+            else:
+                text = (
+                    f"🎉 *Someone used your code!*\n\n"
+                    f"💎 You'll receive *{GEMS_PER_REFERRAL} gems* once they send 3 messages.\n"
+                    f"💰 Plus *{REFERRAL_PURCHASE_COMMISSION_PCT}%* of everything they buy."
+                )
+            await bot.send_message(int(referrer['telegram_id']), text, parse_mode="Markdown")
+            await bot.session.close()
+        except Exception as e:
+            logger.error(f"Error notificando referido: {e}")
+
+        logger.info(f"Referral applied (pending): {telegram_id} referred by {referrer['telegram_id']}")
         return True
 
     except Exception as e:
@@ -233,7 +373,7 @@ async def send_mini_app_message(message: Message, lang: str, is_new_user: bool =
                 "🎭 *¡Bienvenido a Taboo Realm!*\n\n"
                 "Aquí podrás chatear con personajes únicos de IA.\n\n"
                 f"💎 Te regalamos *{STARTING_GEMS} gemas* para empezar.\n"
-                "🎁 Invita amigos y gana *5 gemas* por cada uno.\n\n"
+                "🎁 Invita amigos y gana *10 gemas* + *5% de sus compras*.\n\n"
                 "👇 Toca el botón para comenzar:"
             )
         else:
@@ -250,7 +390,7 @@ async def send_mini_app_message(message: Message, lang: str, is_new_user: bool =
                 "🎭 *Welcome to Taboo Realm!*\n\n"
                 "Here you can chat with unique AI characters.\n\n"
                 f"💎 We gift you *{STARTING_GEMS} gems* to start.\n"
-                "🎁 Invite friends and earn *5 gems* per friend.\n\n"
+                "🎁 Invite friends and earn *10 gems* + *5% of their purchases*.\n\n"
                 "👇 Tap the button to begin:"
             )
         else:
@@ -300,12 +440,10 @@ async def cmd_start(message: Message, command: CommandObject = None):
         except Exception as e:
             logger.error(f"Error updating pending_referral: {e}")
 
-    # ✅ Si NO ha verificado la edad → aviso (solo la primera vez)
     if not user.get('age_verified'):
         await send_age_warning(message, user.get('language', language) or language)
         return
 
-    # ✅ Ya verificado → saludo de vuelta
     lang = user.get('language', language) or language
     await send_mini_app_message(message, lang, is_new_user=False)
 
@@ -321,7 +459,6 @@ async def on_age_confirm(callback: CallbackQuery):
 
     lang = user.get('language', 'es') or 'es'
 
-    # ✅ Update + verificación explícita (Supabase no lanza si falla silencioso)
     try:
         supabase.table('users').update({
             'age_verified': True,
@@ -332,19 +469,16 @@ async def on_age_confirm(callback: CallbackQuery):
         await callback.answer("⚠️ Error. Intenta de nuevo", show_alert=True)
         return
 
-    # ✅ Verificar que se guardó realmente
     verify = await get_user(telegram_id)
     if not verify or not verify.get('age_verified'):
         logger.error(f"age_verified no se guardó para {telegram_id}")
         await callback.answer("⚠️ Error guardando. Intenta de nuevo", show_alert=True)
         return
 
-    # Aplicar referral pendiente (si hay)
     pending_ref = user.get('pending_referral_code')
     if pending_ref:
         await apply_pending_referral(telegram_id, pending_ref)
 
-    # Borrar el mensaje de advertencia
     try:
         if callback.message:
             await callback.message.delete()
@@ -352,8 +486,6 @@ async def on_age_confirm(callback: CallbackQuery):
         pass
 
     await callback.answer("✅")
-
-    # Mostrar bienvenida + botón Mini App
     await send_mini_app_message(callback.message, lang, is_new_user=True)
 
 
@@ -513,14 +645,34 @@ async def cmd_invite(message: Message):
     ref_param = user.get('username') or user['referral_code']
     link = f"https://t.me/{bot_info.username}?start={ref_param}"
 
-    if lang == 'es':
-        text = (f"🎁 *Sistema de Referidos*\n\n"
-                f"🔗 Tu enlace:\n`{link}`\n\n"
-                f"💡 Comparte tu enlace. Cuando tu amigo mande 3 mensajes, ganarás *5 gemas*.")
+    paying_count = user.get('paying_referrals_count') or 0
+    if paying_count >= REFERRAL_ELITE_TIER_THRESHOLD:
+        current_pct = REFERRAL_ELITE_TIER_PCT
+    elif paying_count >= REFERRAL_TOP_TIER_THRESHOLD:
+        current_pct = REFERRAL_TOP_TIER_PCT
     else:
-        text = (f"🎁 *Referral System*\n\n"
-                f"🔗 Your link:\n`{link}`\n\n"
-                f"💡 Share your link. When your friend sends 3 messages, you'll earn *5 gems*.")
+        current_pct = REFERRAL_PURCHASE_COMMISSION_PCT
+
+    if lang == 'es':
+        text = (
+            f"🎁 *Sistema de Referidos*\n\n"
+            f"🔗 Tu enlace:\n`{link}`\n\n"
+            f"💎 *{GEMS_PER_REFERRAL} gemas* cuando tu amigo mande 3 mensajes.\n"
+            f"💰 *{current_pct}%* de todas sus compras (permanente).\n\n"
+            f"📊 Amigos que han comprado: *{paying_count}*\n"
+            f"• 5+ → 7% de comisión\n"
+            f"• 20+ → 10% de comisión"
+        )
+    else:
+        text = (
+            f"🎁 *Referral System*\n\n"
+            f"🔗 Your link:\n`{link}`\n\n"
+            f"💎 *{GEMS_PER_REFERRAL} gems* when your friend sends 3 messages.\n"
+            f"💰 *{current_pct}%* of all their purchases (permanent).\n\n"
+            f"📊 Friends who bought: *{paying_count}*\n"
+            f"• 5+ → 7% commission\n"
+            f"• 20+ → 10% commission"
+        )
     await message.answer(text, parse_mode="Markdown")
 
 
@@ -533,19 +685,23 @@ async def cmd_help(message: Message):
 
     lang = user.get('language', 'es')
     if lang == 'es':
-        text = ("📚 *Comandos*\n\n"
-                "/start - Iniciar\n"
-                "/balance - Ver gemas\n"
-                "/shop - Tienda\n"
-                "/invite - Invitar amigos\n"
-                "/help - Ayuda\n\n"
-                "💡 Usa el botón '🎭 Abrir Mini App' para la experiencia completa.")
+        text = (
+            "📚 *Comandos*\n\n"
+            "/start - Iniciar\n"
+            "/balance - Ver gemas\n"
+            "/shop - Tienda\n"
+            "/invite - Invitar amigos\n"
+            "/help - Ayuda\n\n"
+            "💡 Usa el botón '🎭 Abrir Mini App' para la experiencia completa."
+        )
     else:
-        text = ("📚 *Commands*\n\n"
-                "/start - Start\n"
-                "/balance - View gems\n"
-                "/shop - Store\n"
-                "/invite - Invite friends\n"
-                "/help - Help\n\n"
-                "💡 Use the '🎭 Open Mini App' button for the full experience.")
+        text = (
+            "📚 *Commands*\n\n"
+            "/start - Start\n"
+            "/balance - View gems\n"
+            "/shop - Store\n"
+            "/invite - Invite friends\n"
+            "/help - Help\n\n"
+            "💡 Use the '🎭 Open Mini App' button for the full experience."
+        )
     await message.answer(text, parse_mode="Markdown")
