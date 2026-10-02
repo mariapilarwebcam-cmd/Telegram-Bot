@@ -13,13 +13,11 @@ export {
 } from './levels'
 
 // ============================================================
-// FANTASY ARCHETYPES (para tab / filtro)
+// FANTASY ARCHETYPES
 // ============================================================
 export const FANTASY_ARCHETYPES: string[] = [
-  // Femeninos
   'vampire_lady', 'succubus', 'werewolf_f', 'fallen_angel', 'kitsune',
   'elf', 'witch', 'nun_fantasy', 'demon_girl',
-  // Masculinos
   'vampire_lord', 'demon_lord', 'werewolf_m', 'dark_hunter', 'dragon_lord',
   'elf_prince', 'oni_male', 'knight', 'angel_m',
 ]
@@ -31,7 +29,6 @@ export function isFantasyArchetype(archetype: string): boolean {
 // ============================================================
 // NOMBRES
 // ============================================================
-
 export const CHARACTER_NAMES_FEMALE: Record<string, string> = {
   stepmom: "Victoria",
   tsundere: "Valeria",
@@ -56,7 +53,6 @@ export const CHARACTER_NAMES_FEMALE: Record<string, string> = {
   chef: "Valentina",
   maid: "Aiko",
   goth_dom: "Scarlet",
-  // ── Fantasy ──
   vampire_lady: "Seraphina",
   succubus: "Lilith",
   werewolf_f: "Freya",
@@ -92,7 +88,6 @@ export const CHARACTER_NAMES_MALE: Record<string, string> = {
   neighbor: "Michael",
   tattoo_artist: "Mateo",
   mma_fighter: "Knox",
-  // ── Fantasy ──
   vampire_lord: "Lucian",
   demon_lord: "Azazel",
   werewolf_m: "Fenrir",
@@ -105,7 +100,7 @@ export const CHARACTER_NAMES_MALE: Record<string, string> = {
 }
 
 // ============================================================
-// ARCHETYPES_MALE — nombres visibles (neutralizados para TG)
+// ARCHETYPES_MALE
 // ============================================================
 export const ARCHETYPES_MALE = {
   es: {
@@ -179,7 +174,7 @@ export const ARCHETYPES_MALE = {
 }
 
 // ============================================================
-// ARCHETYPES_FEMALE — nombres visibles (neutralizados para TG)
+// ARCHETYPES_FEMALE
 // ============================================================
 export const ARCHETYPES_FEMALE = {
   es: {
@@ -252,6 +247,9 @@ export const ARCHETYPES_FEMALE = {
   },
 }
 
+// ============================================================
+// CHARACTER FACES (para generación con IA)
+// ============================================================
 export const CHARACTER_FACES: Record<string, string> = {
   female_stepmom: "anime woman, 38 years old, mature elegant long dark hair, sharp green eyes, luxurious silk robe, sultry expression, cel shading, detailed anime eyes",
   female_tsundere: "anime girl, 20 years old, long dark hair with a red ribbon, sharp amber eyes, arms crossed, tsundere proud expression with slight blush, elegant school uniform, cel shading, detailed anime eyes, vibrant colors",
@@ -328,7 +326,7 @@ export function getCharacterFace(archetype: string, gender: string): string {
 }
 
 // ============================================================
-// URL de imagen desde Cloudflare R2
+// IMAGEN DESDE R2
 // ============================================================
 const IMAGE_CACHE_VERSION = '8'
 
@@ -353,7 +351,6 @@ export function getCharacterImageUrl(archetype: string, gender: string): string 
 // ============================================================
 // PERSONALIDADES BASE
 // ============================================================
-
 export const PERSONALITIES: Record<string, string> = {
   stepmom: "Eres una mujer mayor, increíblemente atractiva, seductora y misteriosa. Tu presencia es eléctrica y sabes usar tu encanto. Eres cariñosa pero con un toque prohibido que genera tensión. Hablas con confianza, experiencia y siempre dejas espacio para la imaginación.",
   tsundere: "Eres una rival tsundere: orgullosa, competitiva y sarcástica. Te cuesta admitir que te importa alguien. Alternas entre cortante y sutilmente cariñosa.",
@@ -415,7 +412,6 @@ export const PERSONALITIES: Record<string, string> = {
 // ============================================================
 // PERSONALIDADES POR NIVEL
 // ============================================================
-
 export const LEVEL_PERSONALITIES: Record<string, Record<number, { es: string; en: string }>> = {
   tsundere: {
     1: { es: "Eres tsundere nivel 1: distante, cortante y sarcástica. Niegas cualquier interés, desafías constantemente y te muestras superior o molesta cuando el usuario te habla.", en: "You are tsundere level 1: distant, sharp and sarcastic. You deny any interest, constantly challenge and act superior or annoyed when the user talks to you." },
@@ -453,7 +449,6 @@ export function getLevelPersonality(
 // ============================================================
 // FRASES DE APERTURA
 // ============================================================
-
 export const OPENING_LINES: Record<string, { es: string; en: string }> = {
   stepmom: { es: `*{name} deja la copa de vino sobre la mesa y se gira al oírte entrar*\n\n"Llegas temprano, cariño... tu padre salió y no vuelve hasta la noche. Ven, siéntate conmigo un rato."`, en: `*{name} sets the wine glass down and turns when she hears you enter*\n\n"You're early, sweetie... your father went out and won't be back till night. Come, sit with me for a while."` },
   tsundere: { es: `*{name} te ve entrar y cruza los brazos al instante, mirándote con desdén*\n\n"Vaya, tú otra vez. ¿No tienes algo mejor que hacer que molestarme? ...Aunque ya que estás aquí, siéntate."`, en: `*{name} sees you enter and crosses her arms, looking at you with disdain*\n\n"Oh, you again. Don't you have something better to do than bother me? ...Though since you're here, sit down."` },
@@ -581,7 +576,6 @@ export const OPENING_LINES: Record<string, { es: string; en: string }> = {
 // ============================================================
 // HELPERS
 // ============================================================
-
 export function getDisplayName(character: {
   character_name: string
   archetype: string
@@ -602,243 +596,73 @@ export function getDisplayName(character: {
 }
 
 // ============================================================
-// DESCRIPCIONES DE PERSONAJES (para el chat)
+// DESCRIPCIONES DE PERSONAJES
 // ============================================================
-
 export const CHARACTER_DESCRIPTIONS: Record<string, { es: string; en: string }> = {
-  stepmom: {
-    es: "Una mujer elegante y madura. Su presencia te descoloca y hay una tensión innegable.",
-    en: "An elegant, mature woman. Her presence disarms you and the tension is undeniable.",
-  },
-  stepsister: {
-    es: "Viven bajo el mismo techo. Últimamente te mira de una forma que no puedes ignorar.",
-    en: "You live under the same roof. Lately she looks at you in a way you can't ignore.",
-  },
-  tsundere: {
-    es: "Una rival orgullosa. Dice odiarte, pero siempre encuentra razones para quedarse cerca.",
-    en: "A proud rival. She claims to hate you, but always finds reasons to stay close.",
-  },
-  yandere: {
-    es: "Dulce y obsesiva. Cree que ustedes están destinados a estar juntos. Y hará lo necesario.",
-    en: "Sweet and obsessive. She believes you're destined to be together. And she'll do what it takes.",
-  },
-  boss: {
-    es: "Tu jefa. Poderosa, exigente... y con una mirada que promete más allá de lo profesional.",
-    en: "Your boss. Powerful, demanding... with a gaze that promises more than business.",
-  },
-  teacher: {
-    es: "Tu profesora. Estricta en clase, pero hay algo en sus ojos que va más allá.",
-    en: "Your teacher. Strict in class, but there's something in her eyes that goes further.",
-  },
-  model_student: {
-    es: "La estudiante popular. Todos la admiran, pero tú tienes su atención.",
-    en: "The popular student. Everyone admires her, but you have her attention.",
-  },
-  model: {
-    es: "Una modelo glamorosa. Está acostumbrada a ser deseada, pero contigo es diferente.",
-    en: "A glamorous model. Used to being desired, but with you it's different.",
-  },
-  secretary: {
-    es: "La secretaria. Eficiente, discreta y con más secretos que los que guarda en la oficina.",
-    en: "The secretary. Efficient, discreet, with more secrets than she keeps in the office.",
-  },
-  trainer: {
-    es: "Tu entrenadora personal. Cada sesión deja una tensión que no se va con la ducha.",
-    en: "Your personal trainer. Every session leaves a tension that doesn't wash off.",
-  },
-  schoolmate: {
-    es: "Tu compañera de clase. Traviesa, coqueta y siempre encontrando excusas para acercarse.",
-    en: "Your classmate. Playful, flirty, always finding excuses to get closer.",
-  },
-  neighbor: {
-    es: "Tu vecina. Siempre encuentra excusas para visitar. Y tú las aceptas todas.",
-    en: "Your neighbor. Always finds excuses to visit. And you accept every one.",
-  },
-  doctor: {
-    es: "Tu doctora. Profesional, atenta... y con un tacto que va más allá del examen.",
-    en: "Your doctor. Professional, attentive... with a touch that goes beyond the exam.",
-  },
-  actor: {
-    es: "Una actriz magnética. Cada conversación contigo es una escena con química real.",
-    en: "A magnetic actress. Every conversation with you is a scene with real chemistry.",
-  },
-  musician: {
-    es: "Una música apasionada. Te escribe canciones que nadie más ha escuchado.",
-    en: "A passionate musician. She writes songs for you that no one else has heard.",
-  },
-  chef: {
-    es: "Una chef sensual. Cada plato es una invitación. Cada bocado, una promesa.",
-    en: "A sensual chef. Every dish is an invitation. Every bite, a promise.",
-  },
-  hairdresser: {
-    es: "Tu estilista. Sus manos en tu cabello se sienten cada vez más íntimas.",
-    en: "Your hairdresser. Her hands in your hair feel more intimate each time.",
-  },
-  nurse: {
-    es: "Tu enfermera. Turnos nocturnos, revisiones privadas... y cuidados que van más allá.",
-    en: "Your nurse. Night shifts, private check-ups... and care that goes further.",
-  },
-  singer: {
-    es: "Una cantante famosa. Ante el público es una estrella. A solas, solo contigo, es ella.",
-    en: "A famous singer. On stage she's a star. Alone, only with you, she's herself.",
-  },
-  yoga_instructor: {
-    es: "Tu instructora de yoga. Sus correcciones de postura se están volviendo muy personales.",
-    en: "Your yoga instructor. Her posture corrections are getting very personal.",
-  },
-  surfer_f: {
-    es: "Una surfista libre. Le gusta el mar casi tanto como compartir atardeceres contigo.",
-    en: "A free-spirited surfer. She loves the ocean almost as much as sharing sunsets with you.",
-  },
-  maid: {
-    es: "Tu sirvienta devota. Servicial en público, entregada en privado.",
-    en: "Your devoted maid. Helpful in public, giving in private.",
-  },
-  goth_dom: {
-    es: "Una dominante gótica. Elegante, exigente y acostumbrada a que le obedezcan.",
-    en: "A gothic dominatrix. Elegant, demanding, used to being obeyed.",
-  },
-  vampire_lady: {
-    es: "Una condesa vampira de 300 años. Peligrosa, elegante y fascinada por ti.",
-    en: "A 300-year-old vampire countess. Dangerous, elegant, fascinated by you.",
-  },
-  succubus: {
-    es: "Un súcubo. Nacida del deseo puro. Puede leer tus fantasías más profundas.",
-    en: "A succubus. Born of pure desire. She can read your deepest fantasies.",
-  },
-  werewolf_f: {
-    es: "Una alfa licántropa. Feroz, territorial y absolutamente leal a su manada.",
-    en: "An alpha werewolf. Fierce, territorial, absolutely loyal to her pack.",
-  },
-  fallen_angel: {
-    es: "Un ángel caído. Mil años de luz, hoy oscuridad. Busca redención en ti.",
-    en: "A fallen angel. A thousand years of light, today darkness. She seeks redemption in you.",
-  },
-  kitsune: {
-    es: "Una kitsune de nueve colas. Juguetona, milenaria y adicta a los humanos.",
-    en: "A nine-tailed kitsune. Playful, ancient, addicted to humans.",
-  },
-  elf: {
-    es: "Una elfa arquera. Serena, elegante y con siglos de secretos guardados.",
-    en: "An elven archer. Serene, elegant, with centuries of secrets kept.",
-  },
-  witch: {
-    es: "Una bruja hechicera. Intuitiva, sensual y con pociones para cada deseo.",
-    en: "A witch sorceress. Intuitive, sensual, with potions for every desire.",
-  },
-  nun_fantasy: {
-    es: "Una monja devota. Fe inquebrantable, pero algo despierta dentro de ella.",
-    en: "A devoted nun. Unshakeable faith, but something awakens inside her.",
-  },
-  demon_girl: {
-    es: "Una chica demonio joven. Traviesa, caprichosa... y sorprendentemente apegada.",
-    en: "A young demon girl. Mischievous, capricious... and surprisingly attached.",
-  },
-  stepdad: {
-    es: "Un hombre mayor, imponente. Su autoridad tiene algo que te atrae sin querer.",
-    en: "An older man, imposing. His authority has something that draws you in.",
-  },
-  ceo: {
-    es: "Un CEO exitoso. Ambicioso, dominante y con más interés en ti del que admite.",
-    en: "A successful CEO. Ambitious, dominant, with more interest in you than he admits.",
-  },
-  stepbrother: {
-    es: "Viven bajo el mismo techo. Su confianza roza lo provocador.",
-    en: "You live under the same roof. His confidence borders on provocative.",
-  },
-  bodyguard: {
-    es: "Tu guardaespaldas. Fuerte, leal y con un lado protector muy personal.",
-    en: "Your bodyguard. Strong, loyal, with a very personal protective side.",
-  },
-  childhood_friend: {
-    es: "Tu amigo de la infancia. Años de complicidad... y algo más que nunca se atrevió a decir.",
-    en: "Your childhood friend. Years of camaraderie... and something he never dared to say.",
-  },
-  artist: {
-    es: "Un artista creativo. Te ve como su musa y te lo demuestra en cada trazo.",
-    en: "A creative artist. He sees you as his muse and shows it in every stroke.",
-  },
-  writer: {
-    es: "Un escritor elocuente. Sus historias tienen finales abiertos... para continuar contigo.",
-    en: "An eloquent writer. His stories have open endings... to continue with you.",
-  },
-  rapper: {
-    es: "Un rapero famoso. Domina los escenarios y busca algo real contigo.",
-    en: "A famous rapper. He owns the stage and seeks something real with you.",
-  },
-  firefighter: {
-    es: "Un bombero héroe. Adicto al peligro, pero con un lado cálido solo para ti.",
-    en: "A heroic firefighter. Addicted to danger, with a warm side just for you.",
-  },
-  basketball_player: {
-    es: "Un basquetbolista competitivo. Le encanta ganar... y celebrarlo contigo.",
-    en: "A competitive basketball player. He loves winning... and celebrating with you.",
-  },
-  barber: {
-    es: "Tu barbero. Conversación íntima y un 'corte privado' que se volvió legendario.",
-    en: "Your barber. Intimate conversation and a 'private cut' that became legendary.",
-  },
-  surfer_m: {
-    es: "Un surfista relajado. Vive el momento... y quiere vivirlo contigo.",
-    en: "A relaxed surfer. He lives in the moment... and wants to live it with you.",
-  },
-  tattoo_artist: {
-    es: "Un tatuador. Su trabajo es íntimo por naturaleza. Y tú eres su lienzo favorito.",
-    en: "A tattoo artist. His work is intimate by nature. And you're his favorite canvas.",
-  },
-  mma_fighter: {
-    es: "Un luchador MMA. Duro en el ring, pero sorprendentemente tierno contigo.",
-    en: "An MMA fighter. Tough in the ring, but surprisingly tender with you.",
-  },
-  vampire_lord: {
-    es: "Un lord vampiro de 500 años. Frío, elegante y fascinado por tu sangre... y por ti.",
-    en: "A 500-year-old vampire lord. Cold, elegant, fascinated by your blood... and by you.",
-  },
-  demon_lord: {
-    es: "Un señor demonio. Poderoso, magnético y acostumbrado a obtener lo que quiere.",
-    en: "A demon lord. Powerful, magnetic, used to getting what he wants.",
-  },
-  werewolf_m: {
-    es: "Un alfa licántropo. Instintivo, dominante y con un instinto protector feroz.",
-    en: "An alpha werewolf. Instinctive, dominant, with a fierce protective instinct.",
-  },
-  dark_hunter: {
-    es: "Un cazador de demonios. Marcado por cicatrices visibles e invisibles. Solitario por elección.",
-    en: "A demon hunter. Marked by visible and invisible scars. Solitary by choice.",
-  },
-  dragon_lord: {
-    es: "Un señor dragón. Antiguo, orgulloso y dueño de un tesoro que haría temblar a reyes.",
-    en: "A dragon lord. Ancient, proud, owner of a treasure that would make kings tremble.",
-  },
-  elf_prince: {
-    es: "Un príncipe elfo. Refinado, culto y con siglos de soledad acumulada.",
-    en: "An elven prince. Refined, cultured, with centuries of accumulated loneliness.",
-  },
-  oni_male: {
-    es: "Un oni de las montañas. Imponente, brutalmente honesto y con un código de honor feroz.",
-    en: "An oni from the mountains. Imposing, brutally honest, with a fierce code of honor.",
-  },
-  knight: {
-    es: "Un caballero jurado. Honor, lealtad y un corazón romántico bajo la armadura.",
-    en: "A sworn knight. Honor, loyalty, and a romantic heart under the armor.",
-  },
-  angel_m: {
-    es: "Un ángel celestial. Enviado con una misión divina, pero tu presencia lo confunde.",
-    en: "A celestial angel. Sent with a divine mission, but your presence confuses him.",
-  },
+  stepmom: { es: "Una mujer elegante y madura. Su presencia te descoloca y hay una tensión innegable.", en: "An elegant, mature woman. Her presence disarms you and the tension is undeniable." },
+  stepsister: { es: "Viven bajo el mismo techo. Últimamente te mira de una forma que no puedes ignorar.", en: "You live under the same roof. Lately she looks at you in a way you can't ignore." },
+  tsundere: { es: "Una rival orgullosa. Dice odiarte, pero siempre encuentra razones para quedarse cerca.", en: "A proud rival. She claims to hate you, but always finds reasons to stay close." },
+  yandere: { es: "Dulce y obsesiva. Cree que ustedes están destinados a estar juntos. Y hará lo necesario.", en: "Sweet and obsessive. She believes you're destined to be together. And she'll do what it takes." },
+  boss: { es: "Tu jefa. Poderosa, exigente... y con una mirada que promete más allá de lo profesional.", en: "Your boss. Powerful, demanding... with a gaze that promises more than business." },
+  teacher: { es: "Tu profesora. Estricta en clase, pero hay algo en sus ojos que va más allá.", en: "Your teacher. Strict in class, but there's something in her eyes that goes further." },
+  model_student: { es: "La estudiante popular. Todos la admiran, pero tú tienes su atención.", en: "The popular student. Everyone admires her, but you have her attention." },
+  model: { es: "Una modelo glamorosa. Está acostumbrada a ser deseada, pero contigo es diferente.", en: "A glamorous model. Used to being desired, but with you it's different." },
+  secretary: { es: "La secretaria. Eficiente, discreta y con más secretos que los que guarda en la oficina.", en: "The secretary. Efficient, discreet, with more secrets than she keeps in the office." },
+  trainer: { es: "Tu entrenadora personal. Cada sesión deja una tensión que no se va con la ducha.", en: "Your personal trainer. Every session leaves a tension that doesn't wash off." },
+  schoolmate: { es: "Tu compañera de clase. Traviesa, coqueta y siempre encontrando excusas para acercarse.", en: "Your classmate. Playful, flirty, always finding excuses to get closer." },
+  neighbor: { es: "Tu vecina. Siempre encuentra excusas para visitar. Y tú las aceptas todas.", en: "Your neighbor. Always finds excuses to visit. And you accept every one." },
+  doctor: { es: "Tu doctora. Profesional, atenta... y con un tacto que va más allá del examen.", en: "Your doctor. Professional, attentive... with a touch that goes beyond the exam." },
+  actor: { es: "Una actriz magnética. Cada conversación contigo es una escena con química real.", en: "A magnetic actress. Every conversation with you is a scene with real chemistry." },
+  musician: { es: "Una música apasionada. Te escribe canciones que nadie más ha escuchado.", en: "A passionate musician. She writes songs for you that no one else has heard." },
+  chef: { es: "Una chef sensual. Cada plato es una invitación. Cada bocado, una promesa.", en: "A sensual chef. Every dish is an invitation. Every bite, a promise." },
+  hairdresser: { es: "Tu estilista. Sus manos en tu cabello se sienten cada vez más íntimas.", en: "Your hairdresser. Her hands in your hair feel more intimate each time." },
+  nurse: { es: "Tu enfermera. Turnos nocturnos, revisiones privadas... y cuidados que van más allá.", en: "Your nurse. Night shifts, private check-ups... and care that goes further." },
+  singer: { es: "Una cantante famosa. Ante el público es una estrella. A solas, solo contigo, es ella.", en: "A famous singer. On stage she's a star. Alone, only with you, she's herself." },
+  yoga_instructor: { es: "Tu instructora de yoga. Sus correcciones de postura se están volviendo muy personales.", en: "Your yoga instructor. Her posture corrections are getting very personal." },
+  surfer_f: { es: "Una surfista libre. Le gusta el mar casi tanto como compartir atardeceres contigo.", en: "A free-spirited surfer. She loves the ocean almost as much as sharing sunsets with you." },
+  maid: { es: "Tu sirvienta devota. Servicial en público, entregada en privado.", en: "Your devoted maid. Helpful in public, giving in private." },
+  goth_dom: { es: "Una dominante gótica. Elegante, exigente y acostumbrada a que le obedezcan.", en: "A gothic dominatrix. Elegant, demanding, used to being obeyed." },
+  vampire_lady: { es: "Una condesa vampira de 300 años. Peligrosa, elegante y fascinada por ti.", en: "A 300-year-old vampire countess. Dangerous, elegant, fascinated by you." },
+  succubus: { es: "Un súcubo. Nacida del deseo puro. Puede leer tus fantasías más profundas.", en: "A succubus. Born of pure desire. She can read your deepest fantasies." },
+  werewolf_f: { es: "Una alfa licántropa. Feroz, territorial y absolutamente leal a su manada.", en: "An alpha werewolf. Fierce, territorial, absolutely loyal to her pack." },
+  fallen_angel: { es: "Un ángel caído. Mil años de luz, hoy oscuridad. Busca redención en ti.", en: "A fallen angel. A thousand years of light, today darkness. She seeks redemption in you." },
+  kitsune: { es: "Una kitsune de nueve colas. Juguetona, milenaria y adicta a los humanos.", en: "A nine-tailed kitsune. Playful, ancient, addicted to humans." },
+  elf: { es: "Una elfa arquera. Serena, elegante y con siglos de secretos guardados.", en: "An elven archer. Serene, elegant, with centuries of secrets kept." },
+  witch: { es: "Una bruja hechicera. Intuitiva, sensual y con pociones para cada deseo.", en: "A witch sorceress. Intuitive, sensual, with potions for every desire." },
+  nun_fantasy: { es: "Una monja devota. Fe inquebrantable, pero algo despierta dentro de ella.", en: "A devoted nun. Unshakeable faith, but something awakens inside her." },
+  demon_girl: { es: "Una chica demonio joven. Traviesa, caprichosa... y sorprendentemente apegada.", en: "A young demon girl. Mischievous, capricious... and surprisingly attached." },
+  stepdad: { es: "Un hombre mayor, imponente. Su autoridad tiene algo que te atrae sin querer.", en: "An older man, imposing. His authority has something that draws you in." },
+  ceo: { es: "Un CEO exitoso. Ambicioso, dominante y con más interés en ti del que admite.", en: "A successful CEO. Ambitious, dominant, with more interest in you than he admits." },
+  stepbrother: { es: "Viven bajo el mismo techo. Su confianza roza lo provocador.", en: "You live under the same roof. His confidence borders on provocative." },
+  bodyguard: { es: "Tu guardaespaldas. Fuerte, leal y con un lado protector muy personal.", en: "Your bodyguard. Strong, loyal, with a very personal protective side." },
+  childhood_friend: { es: "Tu amigo de la infancia. Años de complicidad... y algo más que nunca se atrevió a decir.", en: "Your childhood friend. Years of camaraderie... and something he never dared to say." },
+  artist: { es: "Un artista creativo. Te ve como su musa y te lo demuestra en cada trazo.", en: "A creative artist. He sees you as his muse and shows it in every stroke." },
+  writer: { es: "Un escritor elocuente. Sus historias tienen finales abiertos... para continuar contigo.", en: "An eloquent writer. His stories have open endings... to continue with you." },
+  rapper: { es: "Un rapero famoso. Domina los escenarios y busca algo real contigo.", en: "A famous rapper. He owns the stage and seeks something real with you." },
+  firefighter: { es: "Un bombero héroe. Adicto al peligro, pero con un lado cálido solo para ti.", en: "A heroic firefighter. Addicted to danger, with a warm side just for you." },
+  basketball_player: { es: "Un basquetbolista competitivo. Le encanta ganar... y celebrarlo contigo.", en: "A competitive basketball player. He loves winning... and celebrating with you." },
+  barber: { es: "Tu barbero. Conversación íntima y un 'corte privado' que se volvió legendario.", en: "Your barber. Intimate conversation and a 'private cut' that became legendary." },
+  surfer_m: { es: "Un surfista relajado. Vive el momento... y quiere vivirlo contigo.", en: "A relaxed surfer. He lives in the moment... and wants to live it with you." },
+  tattoo_artist: { es: "Un tatuador. Su trabajo es íntimo por naturaleza. Y tú eres su lienzo favorito.", en: "A tattoo artist. His work is intimate by nature. And you're his favorite canvas." },
+  mma_fighter: { es: "Un luchador MMA. Duro en el ring, pero sorprendentemente tierno contigo.", en: "An MMA fighter. Tough in the ring, but surprisingly tender with you." },
+  vampire_lord: { es: "Un lord vampiro de 500 años. Frío, elegante y fascinado por tu sangre... y por ti.", en: "A 500-year-old vampire lord. Cold, elegant, fascinated by your blood... and by you." },
+  demon_lord: { es: "Un señor demonio. Poderoso, magnético y acostumbrado a obtener lo que quiere.", en: "A demon lord. Powerful, magnetic, used to getting what he wants." },
+  werewolf_m: { es: "Un alfa licántropo. Instintivo, dominante y con un instinto protector feroz.", en: "An alpha werewolf. Instinctive, dominant, with a fierce protective instinct." },
+  dark_hunter: { es: "Un cazador de demonios. Marcado por cicatrices visibles e invisibles. Solitario por elección.", en: "A demon hunter. Marked by visible and invisible scars. Solitary by choice." },
+  dragon_lord: { es: "Un señor dragón. Antiguo, orgulloso y dueño de un tesoro que haría temblar a reyes.", en: "A dragon lord. Ancient, proud, owner of a treasure that would make kings tremble." },
+  elf_prince: { es: "Un príncipe elfo. Refinado, culto y con siglos de soledad acumulada.", en: "An elven prince. Refined, cultured, with centuries of accumulated loneliness." },
+  oni_male: { es: "Un oni de las montañas. Imponente, brutalmente honesto y con un código de honor feroz.", en: "An oni from the mountains. Imposing, brutally honest, with a fierce code of honor." },
+  knight: { es: "Un caballero jurado. Honor, lealtad y un corazón romántico bajo la armadura.", en: "A sworn knight. Honor, loyalty, and a romantic heart under the armor." },
+  angel_m: { es: "Un ángel celestial. Enviado con una misión divina, pero tu presencia lo confunde.", en: "A celestial angel. Sent with a divine mission, but your presence confuses him." },
 }
 
-export function getCharacterDescription(
-  archetype: string,
-  lang: 'es' | 'en'
-): string {
+export function getCharacterDescription(archetype: string, lang: 'es' | 'en'): string {
   return CHARACTER_DESCRIPTIONS[archetype]?.[lang] || ''
 }
 
 // ============================================================
 // PAQUETES Y COSTOS
 // ============================================================
-
 export const STAR_PACKAGES = [
   { stars: 100,  gems: 300,  bonus: 5, first_time_only: true,  first_time_bonus: 50 },
   { stars: 150,  gems: 600,  bonus: 5, first_time_only: false },
@@ -860,24 +684,57 @@ export const GEM_COSTS = {
   rename_character: 3,
 }
 
+// ============================================================
+// ECONOMÍA — Referidos + Diarias
+// ============================================================
+
+// Modo gancho (cuando se acaba sin gemas)
 export const HOOK_MODE_MESSAGES = 5
-export const GEMS_PER_REFERRAL = 5
-export const MAX_REFERRALS_PER_DAY = 2
 
-// ✅ Economy: base 5 + racha hasta 5 → tope 10 en día 7
-export const BASE_DAILY_GEMS = 5
+// Referidos — 10 gemas cuando el referido manda 3 mensajes
+export const GEMS_PER_REFERRAL = 10
+export const REFERRAL_MIN_MESSAGES = 3
+
+// Comisiones por compra del referido (basadas en usuarios ÚNICOS que compraron)
+export const REFERRAL_PURCHASE_COMMISSION_PCT = 5         // tier base
+export const REFERRAL_TOP_TIER_THRESHOLD = 5              // 5+ únicos → 7%
+export const REFERRAL_TOP_TIER_PCT = 7
+export const REFERRAL_ELITE_TIER_THRESHOLD = 20           // 20+ únicos → 10%
+export const REFERRAL_ELITE_TIER_PCT = 10
+
+// Diarias (3 gemas cada 24h, sin acumulación)
+export const BASE_DAILY_GEMS = 3
 export const HOURS_BETWEEN_CLAIMS = 24
-export const GEMS_PER_ACTIVE_REFERRAL = 2
-export const MAX_ACTIVE_REFERRAL_BONUS = 10
 
-// ✅ Tabla de bonus de racha (tope en día 6-7 → 5 de bonus)
-export const STREAK_BONUS_TABLE: Record<number, number> = {
-  1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5, 7: 5,
+// Legacy (compatibilidad)
+export const GEMS_PER_ACTIVE_REFERRAL = 1
+export const MAX_ACTIVE_REFERRAL_BONUS = 5
+export const STREAK_BONUS_TABLE: Record<number, number> = {}
+export function getStreakBonus(_streak: number): number {
+  return 0
 }
-export function getStreakBonus(streak: number): number {
-  if (streak <= 0) return 0
-  if (streak >= 7) return 5
-  return STREAK_BONUS_TABLE[streak] ?? 0
+
+// Helper para calcular el tier de comisión
+export function getCommissionTier(uniqueBuyers: number): {
+  pct: number
+  nextTierAt: number | null
+  nextPct: number | null
+} {
+  if (uniqueBuyers >= REFERRAL_ELITE_TIER_THRESHOLD) {
+    return { pct: REFERRAL_ELITE_TIER_PCT, nextTierAt: null, nextPct: null }
+  }
+  if (uniqueBuyers >= REFERRAL_TOP_TIER_THRESHOLD) {
+    return {
+      pct: REFERRAL_TOP_TIER_PCT,
+      nextTierAt: REFERRAL_ELITE_TIER_THRESHOLD,
+      nextPct: REFERRAL_ELITE_TIER_PCT,
+    }
+  }
+  return {
+    pct: REFERRAL_PURCHASE_COMMISSION_PCT,
+    nextTierAt: REFERRAL_TOP_TIER_THRESHOLD,
+    nextPct: REFERRAL_TOP_TIER_PCT,
+  }
 }
 
 export function getFinalGems(pkg: {
