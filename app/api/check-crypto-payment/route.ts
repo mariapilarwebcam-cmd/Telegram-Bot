@@ -18,13 +18,6 @@ const RECIPIENT_WALLET =
 
 const USDT_MASTER = 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs'
 
-// ============================================================
-// ✅ PAGAR COMISIÓN AL REFERIDOR
-// Tiers basados en usuarios ÚNICOS que han comprado:
-//   1-4  → 5%
-//   5-19 → 7%
-//   20+  → 10%
-// ============================================================
 async function payReferralCommission(
   buyerTid: string,
   gemsPurchased: number,
@@ -50,7 +43,6 @@ async function payReferralCommission(
 
     if (!referrer) return
 
-    // Contar usuarios ÚNICOS que han comprado
     const { data: existingCommissions } = await supabaseAdmin
       .from('referral_commissions')
       .select('referred_id')
@@ -60,12 +52,10 @@ async function payReferralCommission(
     for (const row of existingCommissions || []) {
       uniqueBuyers.add(String(row.referred_id))
     }
-    // Añadir al comprador actual (si es su primera compra, sube el tier)
     uniqueBuyers.add(buyerTid)
 
     const totalUnique = uniqueBuyers.size
 
-    // Determinar % según tier
     let pct = REFERRAL_PURCHASE_COMMISSION_PCT
     if (totalUnique >= REFERRAL_ELITE_TIER_THRESHOLD) {
       pct = REFERRAL_ELITE_TIER_PCT
@@ -78,6 +68,7 @@ async function payReferralCommission(
 
     const newGems = (referrer.gems || 0) + commission
 
+    // ✅ Comisión → SOLO gems (no purchased_gems)
     await supabaseAdmin
       .from('users')
       .update({
@@ -160,13 +151,14 @@ export async function POST(request: Request) {
     if (existing) {
       const { data: user } = await supabaseAdmin
         .from('users')
-        .select('gems')
+        .select('gems, purchased_gems')
         .eq('telegram_id', telegramId)
         .maybeSingle()
       return NextResponse.json({
         status: 'paid',
         already: true,
         remaining_gems: user?.gems || 0,
+        remaining_purchased_gems: user?.purchased_gems || 0,
       })
     }
 
@@ -213,10 +205,6 @@ export async function POST(request: Request) {
     const receivedUnits = parseInt(matchedAction.amount || '0')
 
     if (receivedUnits < expectedUnits - 1000) {
-      console.warn('[check-crypto-payment] Monto insuficiente:', {
-        expected: expectedUnits,
-        received: receivedUnits,
-      })
       return NextResponse.json({ status: 'pending', reason: 'amount_mismatch' })
     }
 
@@ -227,7 +215,6 @@ export async function POST(request: Request) {
         .eq('telegram_id', telegramId)
         .limit(1)
       if (priorPurchases && priorPurchases.length > 0) {
-        console.warn('[check-crypto-payment] Paquete first_time ya usado:', telegramId)
         return NextResponse.json({ status: 'pending', reason: 'first_time_used' })
       }
     }
@@ -236,7 +223,7 @@ export async function POST(request: Request) {
 
     const { data: user } = await supabaseAdmin
       .from('users')
-      .select('gems')
+      .select('gems, purchased_gems')
       .eq('telegram_id', telegramId)
       .maybeSingle()
 
@@ -244,11 +231,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
     }
 
+    // ✅ Sumar a gems Y purchased_gems
     const newGems = (user.gems || 0) + gemsToAdd
+    const newPurchasedGems = (user.purchased_gems || 0) + gemsToAdd
 
     await supabaseAdmin
       .from('users')
-      .update({ gems: newGems, hook_messages_remaining: 0 })
+      .update({
+        gems: newGems,
+        purchased_gems: newPurchasedGems,
+        hook_messages_remaining: 0,
+      })
       .eq('telegram_id', telegramId)
 
     await supabaseAdmin.from('gem_transactions').insert({
@@ -267,13 +260,13 @@ export async function POST(request: Request) {
       payment_method: 'crypto',
     })
 
-    // ✅ Pagar comisión al referidor
     await payReferralCommission(telegramId, gemsToAdd, 'crypto', reference)
 
     return NextResponse.json({
       status: 'paid',
       gems_added: gemsToAdd,
       remaining_gems: newGems,
+      remaining_purchased_gems: newPurchasedGems,
     })
   } catch (e: any) {
     console.error('[check-crypto-payment] Error:', e)
