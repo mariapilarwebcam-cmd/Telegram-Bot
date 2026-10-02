@@ -6,18 +6,17 @@ import {
   GEM_COSTS,
   HOOK_MODE_MESSAGES,
   GEMS_PER_REFERRAL,
+  LOW_GEMS_THRESHOLD,
   getLevelPersonality,
 } from '@/lib/constants'
 import {
   getLevelFromMessages,
   getImageCost,
   isPhotoMilestone,
+  getNextLevelThreshold,
 } from '@/lib/levels'
 import { generateAIResponse, getIntensity, buildSystemPrompt } from '@/lib/ai'
 
-// ============================================================
-// ✅ MENSAJES CINEMÁTICOS DE INVITACIÓN A LA FOTO
-// ============================================================
 const PHOTO_INVITES_ES: Array<(name: string) => string> = [
   (name) => `📸 *${name} se muerde el labio y te mira fijamente...*\n_"Espera... quiero mandarte algo. Solo para ti."_`,
   (name) => `📸 *${name} sonríe de lado y saca el teléfono...*\n_"No te muevas... esto te va a encantar."_`,
@@ -34,9 +33,6 @@ const PHOTO_INVITES_EN: Array<(name: string) => string> = [
   (name) => `📸 *${name} tucks their hair back and gives you a look...*\n_"Want to see what I was thinking about? Just ask."_`,
 ]
 
-// ============================================================
-// ✅ DETECCIÓN DE SOLICITUD DE FOTO
-// ============================================================
 const PHOTO_KEYWORDS_ES = [
   'foto', 'selfie', 'imagen', 'picture', 'fotito',
   'mándame', 'mandame', 'envíame', 'enviame',
@@ -55,18 +51,10 @@ function detectPhotoRequest(message: string, lang: 'es' | 'en'): boolean {
   return keywords.some((k) => lower.includes(k))
 }
 
-// ============================================================
-// ✅ SIGUIENTE NIVEL (para la barra de progreso)
-// ============================================================
-function getNextLevelThreshold(currentLevel: number): number | null {
-  switch (currentLevel) {
-    case 1: return 15
-    case 2: return 40
-    case 3: return 90
-    case 4: return 180
-    default: return null
-  }
-}
+// ✅ Instrucción inyectada al prompt cuando quedan pocas gemas
+const PROVOCATIVE_HINT_ES = `\n\n⚠️ CONTEXTO CRÍTICO: Al usuario le quedan MUY pocas gemas. Este podría ser tu último mensaje con él. Habla de forma MÁS provocativa, insinuante, urgente y sensual. Hazle sentir que sería una tragedia detenerse justo ahora. Cierra con un gancho que le haga querer continuar. NO menciones gemas, precios o compras — eso lo hace el sistema. Solo intensifica tu rol.`
+
+const PROVOCATIVE_HINT_EN = `\n\n⚠️ CRITICAL CONTEXT: The user has VERY few gems left. This might be your last message with them. Speak more provocatively, suggestively, urgently and sensually. Make them feel it would be a tragedy to stop right now. End with a hook that makes them want to continue. Do NOT mention gems, prices or purchases — the system handles that. Just intensify your role.`
 
 export async function POST(request: Request) {
   try {
@@ -79,7 +67,7 @@ export async function POST(request: Request) {
 
     const { data: user } = await supabaseAdmin
       .from('users')
-      .select('gems, language, first_name, hook_messages_remaining')
+      .select('gems, purchased_gems, language, first_name, hook_messages_remaining, hook_used')
       .eq('telegram_id', tid)
       .maybeSingle()
 
@@ -96,11 +84,14 @@ export async function POST(request: Request) {
 
     const lang = (user.language || 'es') as 'es' | 'en'
     const hookRemaining = user.hook_messages_remaining || 0
+    const hookUsed = user.hook_used || false
+    const totalGems = user.gems || 0
 
-    if (user.gems <= 0 && hookRemaining <= 0) {
+    // ✅ Sin gemas Y sin hook Y sin hook sin usar → bloqueo total
+    if (totalGems <= 0 && hookRemaining <= 0 && hookUsed) {
       const blockedMessage = lang === 'es'
-        ? `*${character.character_name} te mira con ojos ardientes y se muerde el labio*\n\n"Mmm... justo cuando se ponía interesante..."\n\n"Recarga gemas o invita a un amigo y te regalo 5 más."`
-        : `*${character.character_name} looks at you with burning eyes and bites their lip*\n\n"Mmm... just when it was getting interesting..."\n\n"Recharge gems or invite a friend and I'll gift you 5 more."`
+        ? `*${character.character_name} te mira con ojos ardientes y se muerde el labio*\n\n"Mmm... justo cuando se ponía interesante..."\n\n"Consigue gemas para seguir. Estoy esperando."`
+        : `*${character.character_name} looks at you with burning eyes and bites their lip*\n\n"Mmm... just when it was getting interesting..."\n\n"Get gems to continue. I'm waiting."`
 
       return NextResponse.json({
         blocked: true,
@@ -110,19 +101,27 @@ export async function POST(request: Request) {
       })
     }
 
-    const isHookMode = user.gems <= 0 && hookRemaining > 0
+    const isHookMode = totalGems <= 0 && hookRemaining > 0
     let newHookRemaining = hookRemaining
-    let newGems = user.gems
+    let newGems = totalGems
+    let newHookUsed = hookUsed
 
     if (!isHookMode) {
-      newGems = user.gems - GEM_COSTS.message
-      if (newGems <= 0 && newHookRemaining <= 0) {
+      newGems = totalGems - GEM_COSTS.message
+
+      // ✅ Activar hook SOLO si nunca se ha usado
+      if (newGems <= 0 && newHookRemaining <= 0 && !hookUsed) {
         newHookRemaining = HOOK_MODE_MESSAGES
+        newHookUsed = true
       }
 
       const { error: updateError } = await supabaseAdmin
         .from('users')
-        .update({ gems: newGems, hook_messages_remaining: newHookRemaining })
+        .update({
+          gems: newGems,
+          hook_messages_remaining: newHookRemaining,
+          hook_used: newHookUsed,
+        })
         .eq('telegram_id', tid)
 
       if (updateError) {
@@ -141,14 +140,10 @@ export async function POST(request: Request) {
       })
     } else {
       newHookRemaining = Math.max(0, hookRemaining - 1)
-      const { error: updateError } = await supabaseAdmin
+      await supabaseAdmin
         .from('users')
         .update({ hook_messages_remaining: newHookRemaining })
         .eq('telegram_id', tid)
-
-      if (updateError) {
-        console.error('[chat] ❌ Update hook mode FAILED:', updateError)
-      }
     }
 
     const { data: history } = await supabaseAdmin
@@ -189,9 +184,15 @@ export async function POST(request: Request) {
 
     const personality = getLevelPersonality(character.archetype, newLevel.level, lang)
 
+    // ✅ Inyectar hint provocativo si quedan pocas gemas
+    const lowGems = newGems > 0 && newGems <= LOW_GEMS_THRESHOLD && !isHookMode
+    const provocativeHint = lowGems
+      ? (lang === 'es' ? PROVOCATIVE_HINT_ES : PROVOCATIVE_HINT_EN)
+      : ''
+
     const characterPrompt = lang === 'es'
-      ? `Eres ${character.character_name}, rol: ${character.archetype}.\n${personality}\n\nEl usuario se llama ${user.first_name}. Recuerda su nombre y úsalo naturalmente.\nMantén siempre tu personalidad y rol. Nunca rompas el personaje.`
-      : `You are ${character.character_name}, role: ${character.archetype}.\n${personality}\n\nThe user's name is ${user.first_name}. Remember their name and use it naturally.\nAlways maintain your personality and role. Never break character.`
+      ? `Eres ${character.character_name}, rol: ${character.archetype}.\n${personality}\n\nEl usuario se llama ${user.first_name}. Recuerda su nombre y úsalo naturalmente.\nMantén siempre tu personalidad y rol. Nunca rompas el personaje.${provocativeHint}`
+      : `You are ${character.character_name}, role: ${character.archetype}.\n${personality}\n\nThe user's name is ${user.first_name}. Remember their name and use it naturally.\nAlways maintain your personality and role. Never break character.${provocativeHint}`
 
     const intensity = getIntensity(currentUserMsgCount, isHookMode)
     const systemPrompt = buildSystemPrompt(lang, intensity, characterPrompt)
@@ -202,7 +203,11 @@ export async function POST(request: Request) {
     } catch (aiError) {
       await supabaseAdmin
         .from('users')
-        .update({ gems: user.gems, hook_messages_remaining: hookRemaining })
+        .update({
+          gems: user.gems,
+          hook_messages_remaining: hookRemaining,
+          hook_used: hookUsed,
+        })
         .eq('telegram_id', tid)
       console.error('AI error:', aiError)
       return NextResponse.json({ error: 'Error al generar respuesta' }, { status: 500 })
@@ -213,7 +218,7 @@ export async function POST(request: Request) {
       { telegram_id: tid, character_id, role: 'assistant', content: responseText },
     ])
 
-    // Referidos: pagar 10 gemas al referidor cuando el referido completa 3 mensajes
+    // Referidos
     try {
       const { data: referral } = await supabaseAdmin
         .from('referrals')
@@ -243,6 +248,7 @@ export async function POST(request: Request) {
             .maybeSingle()
 
           if (refUser) {
+            // Comisión de referido → SOLO gems (no purchased_gems)
             await supabaseAdmin
               .from('users')
               .update({
@@ -274,14 +280,14 @@ export async function POST(request: Request) {
     const isLowGemsWarning =
       nextUserMsgCount >= 10 &&
       newGems > 0 &&
-      newGems <= 5 &&
+      newGems <= LOW_GEMS_THRESHOLD &&
       !isHookMode &&
       newHookRemaining === 0
 
     const userRequestedPhoto = detectPhotoRequest(message, lang)
     const imageCost = getImageCost(newLevel.level)
-    const hasEnoughGems = newGems >= imageCost
-    const isMilestone = isPhotoMilestone(nextUserMsgCount, hasEnoughGems)
+    const hasEnoughPurchased = (user.purchased_gems || 0) >= imageCost
+    const isMilestone = isPhotoMilestone(nextUserMsgCount, hasEnoughPurchased)
     const shouldShowPhotoBanner = isMilestone || userRequestedPhoto
 
     if (shouldShowPhotoBanner) {
