@@ -7,30 +7,24 @@ import { getLevelFromMessages, getAudioCost } from '@/lib/levels'
 
 export async function POST(request: Request) {
   try {
-    // ✅ AUTH: telegram_id validado por el middleware
     const tid = request.headers.get('x-telegram-id-validated')
     if (!tid) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
-    // Body sin telegram_id (ya no es fuente de verdad)
     const { character_id, text } = await request.json()
 
     const { data: user } = await supabaseAdmin
       .from('users')
-      .select('gems, language')
+      .select('gems, purchased_gems, language')
       .eq('telegram_id', tid)
       .maybeSingle()
 
     if (!user) return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
 
-    const { data: purchases } = await supabaseAdmin
-      .from('star_purchases')
-      .select('id')
-      .eq('telegram_id', tid)
-      .limit(1)
-
-    if (!purchases || purchases.length === 0) {
+    // ✅ Premium = tiene gemas compradas
+    const purchasedGems = user.purchased_gems || 0
+    if (purchasedGems <= 0) {
       return NextResponse.json({
         error: 'premium_required',
         message: user.language === 'en'
@@ -58,13 +52,14 @@ export async function POST(request: Request) {
     const level = getLevelFromMessages(userMsgCount || 0)
     const audioCost = getAudioCost(level.level)
 
-    if (user.gems < audioCost) {
+    if (purchasedGems < audioCost) {
       return NextResponse.json({
         error: 'insufficient_gems',
         message: user.language === 'en'
-          ? `You need ${audioCost} gems`
-          : `Necesitas ${audioCost} gemas`,
+          ? `You need ${audioCost} purchased gems`
+          : `Necesitas ${audioCost} gemas compradas`,
         required: audioCost,
+        available: purchasedGems,
       }, { status: 402 })
     }
 
@@ -82,8 +77,17 @@ export async function POST(request: Request) {
     const audioData = await generateAudio(cleanText, gender, lang)
     if (!audioData) return NextResponse.json({ error: 'Sin audio' }, { status: 500 })
 
-    const newGems = user.gems - audioCost
-    await supabaseAdmin.from('users').update({ gems: newGems }).eq('telegram_id', tid)
+    const newGems = (user.gems || 0) - audioCost
+    const newPurchasedGems = purchasedGems - audioCost
+
+    await supabaseAdmin
+      .from('users')
+      .update({
+        gems: newGems,
+        purchased_gems: newPurchasedGems,
+      })
+      .eq('telegram_id', tid)
+
     await supabaseAdmin.from('gem_transactions').insert({
       telegram_id: tid,
       amount: -audioCost,
@@ -94,6 +98,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       audio: audioData,
       remaining_gems: newGems,
+      remaining_purchased_gems: newPurchasedGems,
       level: level.level,
       cost: audioCost,
     })
