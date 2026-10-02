@@ -10,14 +10,16 @@ interface UserData {
   first_name: string
   username: string | null
   gems: number
+  purchased_gems?: number
   language: string
   hook_messages_remaining: number
+  hook_used?: boolean
   referral_code: string
   total_referrals: number
+  paying_referrals_count?: number
   streak_count: number
   longest_streak: number
   last_daily_claim: string | null
-  paying_referrals_count?: number
 }
 
 interface UserContextType {
@@ -48,7 +50,7 @@ function getTelegramWebApp(): any {
 }
 
 const USER_SELECT =
-  'telegram_id, first_name, username, gems, language, hook_messages_remaining, referral_code, total_referrals, streak_count, longest_streak, last_daily_claim, paying_referrals_count'
+  'telegram_id, first_name, username, gems, purchased_gems, language, hook_messages_remaining, hook_used, referral_code, total_referrals, paying_referrals_count, streak_count, longest_streak, last_daily_claim'
 
 export function UserProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserData | null>(memUserCache)
