@@ -17,6 +17,10 @@ import {
 } from '@/lib/levels'
 import { generateAIResponse, getIntensity, buildSystemPrompt } from '@/lib/ai'
 
+// ✅ Timeout Vercel — 60s (máximo del plan Hobby).
+// Cuando pases a Pro, súbelo a 300 (5 min).
+export const maxDuration = 60
+
 const PHOTO_INVITES_ES: Array<(name: string) => string> = [
   (name) => `📸 *${name} se muerde el labio y te mira fijamente...*\n_"Espera... quiero mandarte algo. Solo para ti."_`,
   (name) => `📸 *${name} sonríe de lado y saca el teléfono...*\n_"No te muevas... esto te va a encantar."_`,
@@ -51,7 +55,6 @@ function detectPhotoRequest(message: string, lang: 'es' | 'en'): boolean {
   return keywords.some((k) => lower.includes(k))
 }
 
-// ✅ Instrucción inyectada al prompt cuando quedan pocas gemas
 const PROVOCATIVE_HINT_ES = `\n\n⚠️ CONTEXTO CRÍTICO: Al usuario le quedan MUY pocas gemas. Este podría ser tu último mensaje con él. Habla de forma MÁS provocativa, insinuante, urgente y sensual. Hazle sentir que sería una tragedia detenerse justo ahora. Cierra con un gancho que le haga querer continuar. NO menciones gemas, precios o compras — eso lo hace el sistema. Solo intensifica tu rol.`
 
 const PROVOCATIVE_HINT_EN = `\n\n⚠️ CRITICAL CONTEXT: The user has VERY few gems left. This might be your last message with them. Speak more provocatively, suggestively, urgently and sensually. Make them feel it would be a tragedy to stop right now. End with a hook that makes them want to continue. Do NOT mention gems, prices or purchases — the system handles that. Just intensify your role.`
@@ -87,7 +90,6 @@ export async function POST(request: Request) {
     const hookUsed = user.hook_used || false
     const totalGems = user.gems || 0
 
-    // ✅ Sin gemas Y sin hook Y sin hook sin usar → bloqueo total
     if (totalGems <= 0 && hookRemaining <= 0 && hookUsed) {
       const blockedMessage = lang === 'es'
         ? `*${character.character_name} te mira con ojos ardientes y se muerde el labio*\n\n"Mmm... justo cuando se ponía interesante..."\n\n"Consigue gemas para seguir. Estoy esperando."`
@@ -109,7 +111,6 @@ export async function POST(request: Request) {
     if (!isHookMode) {
       newGems = totalGems - GEM_COSTS.message
 
-      // ✅ Activar hook SOLO si nunca se ha usado
       if (newGems <= 0 && newHookRemaining <= 0 && !hookUsed) {
         newHookRemaining = HOOK_MODE_MESSAGES
         newHookUsed = true
@@ -184,7 +185,6 @@ export async function POST(request: Request) {
 
     const personality = getLevelPersonality(character.archetype, newLevel.level, lang)
 
-    // ✅ Inyectar hint provocativo si quedan pocas gemas
     const lowGems = newGems > 0 && newGems <= LOW_GEMS_THRESHOLD && !isHookMode
     const provocativeHint = lowGems
       ? (lang === 'es' ? PROVOCATIVE_HINT_ES : PROVOCATIVE_HINT_EN)
@@ -248,7 +248,6 @@ export async function POST(request: Request) {
             .maybeSingle()
 
           if (refUser) {
-            // Comisión de referido → SOLO gems (no purchased_gems)
             await supabaseAdmin
               .from('users')
               .update({
