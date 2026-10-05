@@ -3,6 +3,9 @@
 import { NextResponse } from 'next/server'
 import { getTaskDetail } from '@/lib/wiro'
 
+// ✅ Timeout Vercel — 10s es suficiente (solo consulta estado en Wiro)
+export const maxDuration = 10
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const taskid = searchParams.get('taskid')
