@@ -12,6 +12,9 @@ import {
   type FaceVisibility,
 } from '@/lib/levels'
 
+// ✅ Timeout Vercel — 60s (Wiro puede tardar 40s + fallback 15s)
+export const maxDuration = 60
+
 const CHARACTER_DNA: Record<string, string> = {
   female_stepmom: "mature woman, long dark hair, green eyes, elegant",
   female_tsundere: "young woman, long dark navy hair, red ribbon, amber eyes",
@@ -133,7 +136,6 @@ export async function POST(request: Request) {
 
     if (!user) return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
 
-    // ✅ Premium = tiene gemas compradas > 0
     const purchasedGems = user.purchased_gems || 0
     if (purchasedGems <= 0) {
       return NextResponse.json({
@@ -213,7 +215,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Error al generar la imagen' }, { status: 500 })
     }
 
-    // ✅ Descontar de gems Y purchased_gems
     const newGems = (user.gems || 0) - imageCost
     const newPurchasedGems = purchasedGems - imageCost
 
