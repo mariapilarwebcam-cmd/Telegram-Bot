@@ -3,7 +3,13 @@
     "api/bot/webhook.py": {
       "maxDuration": 60
     },
+    "app/api/chat/route.ts": {
+      "maxDuration": 60
+    },
     "app/api/generate-image/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/generate-audio/route.ts": {
       "maxDuration": 60
     },
     "app/api/image-status/route.ts": {
