@@ -5,6 +5,9 @@ import { supabaseAdmin } from '@/lib/supabase-admin'
 import { generateAudio } from '@/lib/ai'
 import { getLevelFromMessages, getAudioCost } from '@/lib/levels'
 
+// ✅ Timeout Vercel — 60s
+export const maxDuration = 60
+
 export async function POST(request: Request) {
   try {
     const tid = request.headers.get('x-telegram-id-validated')
@@ -22,7 +25,6 @@ export async function POST(request: Request) {
 
     if (!user) return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
 
-    // ✅ Premium = tiene gemas compradas
     const purchasedGems = user.purchased_gems || 0
     if (purchasedGems <= 0) {
       return NextResponse.json({
