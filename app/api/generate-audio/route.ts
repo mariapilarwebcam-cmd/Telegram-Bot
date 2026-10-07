@@ -2,10 +2,10 @@
 
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
+import { ensureUser } from '@/lib/user-helpers'
 import { generateAudio } from '@/lib/ai'
 import { getLevelFromMessages, getAudioCost } from '@/lib/levels'
 
-// ✅ Timeout Vercel — 60s
 export const maxDuration = 60
 
 export async function POST(request: Request) {
@@ -17,13 +17,14 @@ export async function POST(request: Request) {
 
     const { character_id, text } = await request.json()
 
-    const { data: user } = await supabaseAdmin
-      .from('users')
-      .select('gems, purchased_gems, language')
-      .eq('telegram_id', tid)
-      .maybeSingle()
-
-    if (!user) return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
+    // ✅ FIX: crea el usuario si no existe
+    const user = await ensureUser(tid)
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Error cargando tu cuenta' },
+        { status: 500 }
+      )
+    }
 
     const purchasedGems = user.purchased_gems || 0
     if (purchasedGems <= 0) {
@@ -79,16 +80,26 @@ export async function POST(request: Request) {
     const audioData = await generateAudio(cleanText, gender, lang)
     if (!audioData) return NextResponse.json({ error: 'Sin audio' }, { status: 500 })
 
-    const newGems = (user.gems || 0) - audioCost
-    const newPurchasedGems = purchasedGems - audioCost
+    // ✅ RPC ATÓMICA: descuenta de gems Y purchased_gems
+    const { data: rpcData, error: rpcErr } = await supabaseAdmin.rpc(
+      'decrement_gems_and_purchased',
+      {
+        p_telegram_id: tid,
+        p_amount: audioCost,
+      }
+    )
 
-    await supabaseAdmin
-      .from('users')
-      .update({
-        gems: newGems,
-        purchased_gems: newPurchasedGems,
-      })
-      .eq('telegram_id', tid)
+    if (rpcErr) {
+      console.error('[generate-audio] RPC failed:', rpcErr)
+      return NextResponse.json(
+        { error: 'Error actualizando gemas. Contacta soporte.' },
+        { status: 500 }
+      )
+    }
+
+    const rpcRow = Array.isArray(rpcData) ? rpcData[0] : rpcData
+    const newGems = rpcRow?.new_gems ?? (user.gems || 0) - audioCost
+    const newPurchasedGems = rpcRow?.new_purchased ?? purchasedGems - audioCost
 
     await supabaseAdmin.from('gem_transactions').insert({
       telegram_id: tid,
