@@ -22,10 +22,15 @@ SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_KEY')
 MINI_APP_URL = os.getenv('MINI_APP_URL', 'https://tu-dominio.vercel.app')
 
+if not TELEGRAM_BOT_TOKEN:
+    raise RuntimeError("❌ Falta TELEGRAM_BOT_TOKEN")
+if not SUPABASE_URL or not SUPABASE_KEY:
+    raise RuntimeError("❌ Falta SUPABASE_URL o SUPABASE_KEY")
+
 # ==================== ECONOMÍA ====================
 BASE_DAILY_GEMS = 3
 GEMS_PER_REFERRAL = 10
-STARTING_GEMS = 10
+STARTING_GEMS = 10  # ✅ Igual que en TS (init-user)
 
 REFERRAL_PURCHASE_COMMISSION_PCT = 5
 REFERRAL_TOP_TIER_THRESHOLD = 5
@@ -41,10 +46,12 @@ STAR_PACKAGES = [
     {"stars": 1000, "gems": 5000, "bonus": 5, "first_time": False, "flat_bonus": 0},
 ]
 
+
 def calc_final_gems(pkg: dict) -> int:
     percent = int(pkg['gems'] * pkg['bonus'] / 100) if pkg.get('bonus', 0) > 0 else 0
     flat = pkg.get('flat_bonus', 0)
     return pkg['gems'] + percent + flat
+
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
@@ -53,23 +60,28 @@ logger = logging.getLogger(__name__)
 
 router = Router()
 
+
 # ==================== HELPERS ====================
 
 def generate_referral_code() -> str:
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+
 
 def detect_language(language_code: Optional[str]) -> str:
     if not language_code:
         return 'en'
     return 'es' if language_code.lower().startswith('es') else 'en'
 
+
 async def get_user(telegram_id: int):
     result = supabase.table('users').select('*').eq('telegram_id', str(telegram_id)).execute()
     return result.data[0] if result.data else None
 
+
 async def get_user_by_referral_code(referral_code: str):
     result = supabase.table('users').select('*').eq('referral_code', referral_code).execute()
     return result.data[0] if result.data else None
+
 
 async def get_user_by_username(username: str):
     clean = username.replace('@', '').strip()
@@ -78,6 +90,7 @@ async def get_user_by_username(username: str):
     result = supabase.table('users').select('*').ilike('username', clean).execute()
     return result.data[0] if result.data else None
 
+
 async def create_user_immediately(
     telegram_id: int,
     username: str,
@@ -85,6 +98,7 @@ async def create_user_immediately(
     language: str,
     pending_referral_code: Optional[str] = None,
 ):
+    """Crea el usuario. Maneja duplicados correctamente (fix race con Mini App)."""
     referral_code = generate_referral_code()
     user_data = {
         'telegram_id': str(telegram_id),
@@ -105,34 +119,42 @@ async def create_user_immediately(
 
     try:
         result = supabase.table('users').insert(user_data).execute()
+        if result.data:
+            return result.data[0]
+        return None
     except Exception as e:
-        logger.error(f"Error insertando usuario: {e}")
+        err_str = str(e)
+        logger.error(f"Error insertando usuario: {err_str}")
+
+        # ✅ FIX: si ya existe (creado por la Mini App u otro proceso),
+        # simplemente lo devolvemos en lugar de fallar.
+        # PostgREST devuelve 409 o 23505 para unique violation.
+        if '23505' in err_str or 'duplicate' in err_str.lower() or '409' in err_str:
+            logger.info(f"Usuario {telegram_id} ya existe, recuperando...")
+            existing = await get_user(telegram_id)
+            return existing
         return None
 
-    return result.data[0] if result.data else None
 
 async def add_gems(telegram_id: int, amount: int, transaction_type: str, description: str = ''):
-    """✅ OPTIMIZADO: usa RPC atómico en 1 sola query (antes: SELECT + UPDATE).
-    Suma gemas SOLO a 'gems' (no a purchased_gems)."""
+    """Suma gemas SOLO a 'gems' (no a purchased_gems)."""
     try:
-        # 1 query atómica: UPDATE gems = gems + amount RETURNING gems
         supabase.rpc('increment_gems', {
             'p_telegram_id': str(telegram_id),
             'p_amount': amount
         }).execute()
 
-        # Registrar transacción (1 query INSERT)
         supabase.table('gem_transactions').insert({
             'telegram_id': str(telegram_id),
             'amount': amount,
             'transaction_type': transaction_type,
             'description': description
         }).execute()
-
         return True
     except Exception as e:
         logger.error(f"Error en add_gems: {e}")
         return False
+
 
 # ==================== REFERRAL COMMISSION ====================
 
@@ -142,8 +164,7 @@ async def pay_referral_commission(
     source: str,
     reference: str,
 ):
-    """Paga comisión al referidor. Tiers por usuarios ÚNICOS:
-       1-4 → 5%, 5-19 → 7%, 20+ → 10%. Comisión va SOLO a 'gems'."""
+    """Paga comisión al referidor. Tiers: 1-4→5%, 5-19→7%, 20+→10%."""
     try:
         buyer = await get_user(buyer_id)
         if not buyer:
@@ -180,7 +201,6 @@ async def pay_referral_commission(
         if commission <= 0:
             return
 
-        # ✅ OPTIMIZADO: 1 sola query atómica para el update de gemas
         rpc_result = supabase.rpc('increment_gems', {
             'p_telegram_id': str(referrer_id),
             'p_amount': commission
@@ -189,17 +209,14 @@ async def pay_referral_commission(
         new_ref_gems = None
         if rpc_result.data is not None:
             new_ref_gems = rpc_result.data if isinstance(rpc_result.data, int) else None
-        # Fallback por si el cliente devuelve estructura distinta
         if new_ref_gems is None:
             updated = await get_user(int(referrer_id))
             new_ref_gems = (updated.get('gems') if updated else 0)
 
-        # Actualizar contador de referidos que compraron
         supabase.table('users').update({
             'paying_referrals_count': total_unique,
         }).eq('telegram_id', str(referrer_id)).execute()
 
-        # Registrar transacción
         supabase.table('gem_transactions').insert({
             'telegram_id': str(referrer_id),
             'amount': commission,
@@ -207,7 +224,6 @@ async def pay_referral_commission(
             'description': f'Comisión {pct}% por compra de referido',
         }).execute()
 
-        # Registrar comisión
         supabase.table('referral_commissions').insert({
             'referrer_id': str(referrer_id),
             'referred_id': str(buyer_id),
@@ -220,7 +236,6 @@ async def pay_referral_commission(
 
         logger.info(f"Commission paid: {commission} gems to {referrer_id} ({pct}%)")
 
-        # Notificar al referidor
         try:
             bot = Bot(token=TELEGRAM_BOT_TOKEN)
             lang = referrer.get('language', 'es')
@@ -250,36 +265,47 @@ async def pay_referral_commission(
     except Exception as e:
         logger.error(f"Error pagando comisión: {e}")
 
+
 # ==================== PURCHASE HELPERS ====================
 
 async def record_star_purchase(telegram_id: int, stars: int, gems: int, is_first_purchase: bool, charge_id: str):
-    supabase.table('star_purchases').insert({
+    """Acredita la compra. Suma a gems Y purchased_gems atómicamente."""
+    try:
+        supabase.table('star_purchases').insert({
+            'telegram_id': str(telegram_id),
+            'stars_amount': stars,
+            'gems_amount': gems,
+            'is_first_purchase': is_first_purchase,
+            'telegram_charge_id': charge_id,
+            'payment_method': 'stars'
+        }).execute()
+    except Exception as e:
+        err_str = str(e)
+        # ✅ Anti doble-acreditación: si el charge_id ya existe, salir.
+        if '23505' in err_str or 'duplicate' in err_str.lower() or '409' in err_str:
+            logger.warning(f"⚠️ Charge {charge_id} ya procesado, ignorando")
+            return
+        logger.error(f"Error insertando star_purchase: {err_str}")
+        return
+
+    # ✅ Atómico: sumar a gems + purchased_gems + reset hook
+    try:
+        supabase.rpc('increment_gems_and_purchased', {
+            'p_telegram_id': str(telegram_id),
+            'p_amount': gems
+        }).execute()
+    except Exception as e:
+        logger.error(f"Error incrementando gemas post-compra: {e}")
+
+    supabase.table('gem_transactions').insert({
         'telegram_id': str(telegram_id),
-        'stars_amount': stars,
-        'gems_amount': gems,
-        'is_first_purchase': is_first_purchase,
-        'telegram_charge_id': charge_id,
-        'payment_method': 'stars'
+        'amount': gems,
+        'transaction_type': 'purchase',
+        'description': f'Compra con {stars} stars'
     }).execute()
 
-    # ✅ Sumar a gems Y purchased_gems + reset hook
-    user = await get_user(telegram_id)
-    if user:
-        supabase.table('users').update({
-            'gems': (user.get('gems') or 0) + gems,
-            'purchased_gems': (user.get('purchased_gems') or 0) + gems,
-            'hook_messages_remaining': 0,
-        }).eq('telegram_id', str(telegram_id)).execute()
-
-        supabase.table('gem_transactions').insert({
-            'telegram_id': str(telegram_id),
-            'amount': gems,
-            'transaction_type': 'purchase',
-            'description': f'Compra con {stars} stars'
-        }).execute()
-
-    # ✅ Pagar comisión al referidor
     await pay_referral_commission(telegram_id, gems, 'stars', charge_id)
+
 
 # ==================== AGE VERIFICATION ====================
 
@@ -306,6 +332,7 @@ def get_age_warning_text(language: str) -> str:
         "*Do you confirm you are of legal age?*"
     )
 
+
 def get_age_keyboard(language: str) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     if language == 'es':
@@ -317,6 +344,7 @@ def get_age_keyboard(language: str) -> InlineKeyboardMarkup:
     builder.adjust(1)
     return builder.as_markup()
 
+
 async def send_age_warning(message: Message, language: str):
     await message.answer(
         get_age_warning_text(language),
@@ -324,11 +352,10 @@ async def send_age_warning(message: Message, language: str):
         reply_markup=get_age_keyboard(language),
     )
 
+
 # ==================== REFERRAL APPLICATION ====================
 
 async def apply_pending_referral(telegram_id: int, ref_code: str) -> bool:
-    """Aplica referral pendiente. Las 10 gemas se pagan cuando el referido
-    completa 3 mensajes (procesado en /api/chat)."""
     if not ref_code:
         return False
 
@@ -354,12 +381,19 @@ async def apply_pending_referral(telegram_id: int, ref_code: str) -> bool:
             }).eq('telegram_id', str(telegram_id)).execute()
             return False
 
-        supabase.table('referrals').insert({
-            'referrer_id': str(referrer['telegram_id']),
-            'referred_id': str(telegram_id),
-            'reward_paid': False,
-            'referred_message_count': 0,
-        }).execute()
+        try:
+            supabase.table('referrals').insert({
+                'referrer_id': str(referrer['telegram_id']),
+                'referred_id': str(telegram_id),
+                'reward_paid': False,
+                'referred_message_count': 0,
+            }).execute()
+        except Exception as e:
+            err_str = str(e)
+            if '23505' in err_str or 'duplicate' in err_str.lower() or '409' in err_str:
+                logger.info(f"Referral ya existente para {telegram_id}")
+                return False
+            raise
 
         supabase.table('users').update({
             'referred_by': str(referrer['telegram_id']),
@@ -393,6 +427,7 @@ async def apply_pending_referral(telegram_id: int, ref_code: str) -> bool:
         logger.error(f"Error applying referral: {e}")
         return False
 
+
 # ==================== KEYBOARD / MESSAGE ====================
 
 def get_main_keyboard(language: str) -> ReplyKeyboardMarkup:
@@ -403,6 +438,7 @@ def get_main_keyboard(language: str) -> ReplyKeyboardMarkup:
         builder.row(KeyboardButton(text="🎭 Open Mini App", web_app=WebAppInfo(url=MINI_APP_URL)))
     return builder.as_markup(resize_keyboard=True, one_time_keyboard=False, is_persistent=True)
 
+
 async def send_mini_app_message(message: Message, lang: str, is_new_user: bool = False):
     if lang == 'es':
         if is_new_user:
@@ -410,7 +446,7 @@ async def send_mini_app_message(message: Message, lang: str, is_new_user: bool =
                 "🎭 *¡Bienvenido a Taboo Realm!*\n\n"
                 "Aquí podrás chatear con personajes únicos de IA.\n\n"
                 f"💎 Te regalamos *{STARTING_GEMS} gemas* para empezar.\n"
-                "🎁 Invita amigos y gana *10 gemas* + *5% de sus compras*.\n\n"
+                f"🎁 Invita amigos y gana *{GEMS_PER_REFERRAL} gemas* + *5% de sus compras*.\n\n"
                 "👇 Toca el botón para comenzar:"
             )
         else:
@@ -427,7 +463,7 @@ async def send_mini_app_message(message: Message, lang: str, is_new_user: bool =
                 "🎭 *Welcome to Taboo Realm!*\n\n"
                 "Here you can chat with unique AI characters.\n\n"
                 f"💎 We gift you *{STARTING_GEMS} gems* to start.\n"
-                "🎁 Invite friends and earn *10 gems* + *5% of their purchases*.\n\n"
+                f"🎁 Invite friends and earn *{GEMS_PER_REFERRAL} gems* + *5% of their purchases*.\n\n"
                 "👇 Tap the button to begin:"
             )
         else:
@@ -439,6 +475,7 @@ async def send_mini_app_message(message: Message, lang: str, is_new_user: bool =
                 "👇 Tap the button to continue:"
             )
     await message.answer(text, reply_markup=get_main_keyboard(lang), parse_mode="Markdown")
+
 
 # ==================== HANDLERS ====================
 
@@ -462,12 +499,29 @@ async def cmd_start(message: Message, command: CommandObject = None):
             telegram_id, username, first_name, language,
             pending_referral_code=ref_code
         )
+        # ✅ FIX: Aunque create_user falle, si get_user devuelve algo
+        # (porque alguien más lo creó), seguimos.
         if not user:
-            await message.answer("❌ Error al crear tu cuenta. Intenta de nuevo con /start")
+            user = await get_user(telegram_id)
+
+        if not user:
+            logger.error(f"❌ No se pudo crear ni recuperar usuario {telegram_id}")
+            await message.answer(
+                "❌ Error al crear tu cuenta. Intenta de nuevo con /start\n"
+                "Si el problema persiste, contacta soporte."
+            )
             return
-        await send_age_warning(message, language)
+
+        # ✅ FIX: SIEMPRE enviar age warning si no está verificado
+        # (aunque ya existiera el usuario)
+        if not user.get('age_verified'):
+            await send_age_warning(message, language)
+            return
+
+        await send_mini_app_message(message, language, is_new_user=True)
         return
 
+    # Usuario existente
     if ref_code and not user.get('age_verified'):
         try:
             supabase.table('users').update({
@@ -477,6 +531,9 @@ async def cmd_start(message: Message, command: CommandObject = None):
         except Exception as e:
             logger.error(f"Error updating pending_referral: {e}")
 
+    # ✅ FIX CLAVE: Si no está verificado, enviamos warning.
+    # Si el callback falló antes (por lo que sea), el usuario puede
+    # volver a pulsar /start y recibir la verificación de nuevo.
     if not user.get('age_verified'):
         await send_age_warning(message, user.get('language', language) or language)
         return
@@ -491,8 +548,16 @@ async def on_age_confirm(callback: CallbackQuery):
     user = await get_user(telegram_id)
 
     if not user:
-        await callback.answer("⚠️ Usa /start primero", show_alert=True)
-        return
+        # ✅ FIX: Auto-crear si por algún motivo no existe
+        user = await create_user_immediately(
+            telegram_id,
+            callback.from_user.username or "",
+            callback.from_user.first_name or "",
+            detect_language(callback.from_user.language_code),
+        )
+        if not user:
+            await callback.answer("⚠️ Usa /start primero", show_alert=True)
+            return
 
     lang = user.get('language', 'es') or 'es'
 
