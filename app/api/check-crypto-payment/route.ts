@@ -66,15 +66,15 @@ async function payReferralCommission(
     const commission = Math.floor((gemsPurchased * pct) / 100)
     if (commission <= 0) return
 
-    const newGems = (referrer.gems || 0) + commission
+    // ✅ RPC ATÓMICA: suma comisión (solo a gems)
+    await supabaseAdmin.rpc('increment_gems', {
+      p_telegram_id: referrerId,
+      p_amount: commission,
+    })
 
-    // ✅ Comisión → SOLO gems (no purchased_gems)
     await supabaseAdmin
       .from('users')
-      .update({
-        gems: newGems,
-        paying_referrals_count: totalUnique,
-      })
+      .update({ paying_referrals_count: totalUnique })
       .eq('telegram_id', referrerId)
 
     await supabaseAdmin.from('gem_transactions').insert({
@@ -141,6 +141,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Package index inválido' }, { status: 400 })
     }
 
+    // ✅ Chequeo de idempotencia
     const { data: existing } = await supabaseAdmin
       .from('star_purchases')
       .select('id')
@@ -176,7 +177,6 @@ export async function POST(request: Request) {
     const data = await res.json()
     const events = data.events || []
 
-    let matchedEvent: any = null
     let matchedAction: any = null
 
     for (const ev of events) {
@@ -187,7 +187,6 @@ export async function POST(request: Request) {
 
         if (jt.comment === reference) {
           if (jt.jetton?.address === USDT_MASTER) {
-            matchedEvent = ev
             matchedAction = jt
             break
           }
@@ -231,33 +230,58 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
     }
 
-    // ✅ Sumar a gems Y purchased_gems
-    const newGems = (user.gems || 0) + gemsToAdd
-    const newPurchasedGems = (user.purchased_gems || 0) + gemsToAdd
-
-    await supabaseAdmin
-      .from('users')
-      .update({
-        gems: newGems,
-        purchased_gems: newPurchasedGems,
-        hook_messages_remaining: 0,
+    // ✅ Insertar star_purchase (con UNIQUE constraint anti doble)
+    try {
+      await supabaseAdmin.from('star_purchases').insert({
+        telegram_id: telegramId,
+        stars_amount: 0,
+        gems_amount: gemsToAdd,
+        is_first_purchase: pkg.first_time_only || false,
+        telegram_charge_id: reference,
+        payment_method: 'crypto',
       })
-      .eq('telegram_id', telegramId)
+    } catch (e: any) {
+      const errStr = String(e?.message || '')
+      if (errStr.includes('23505') || errStr.includes('duplicate')) {
+        console.log('[check-crypto-payment] Charge ya procesado, ignorando')
+        const { data: u } = await supabaseAdmin
+          .from('users')
+          .select('gems, purchased_gems')
+          .eq('telegram_id', telegramId)
+          .maybeSingle()
+        return NextResponse.json({
+          status: 'paid',
+          already: true,
+          remaining_gems: u?.gems || 0,
+          remaining_purchased_gems: u?.purchased_gems || 0,
+        })
+      }
+      throw e
+    }
+
+    // ✅ RPC ATÓMICA: suma a gems Y purchased_gems + reset hook
+    const { data: rpcData, error: rpcErr } = await supabaseAdmin.rpc(
+      'increment_gems_and_purchased',
+      {
+        p_telegram_id: telegramId,
+        p_amount: gemsToAdd,
+      }
+    )
+
+    if (rpcErr) {
+      console.error('[check-crypto-payment] RPC failed:', rpcErr)
+      return NextResponse.json({ error: 'Error acreditando gemas' }, { status: 500 })
+    }
+
+    const rpcRow = Array.isArray(rpcData) ? rpcData[0] : rpcData
+    const newGems = rpcRow?.new_gems ?? (user.gems || 0) + gemsToAdd
+    const newPurchasedGems = rpcRow?.new_purchased ?? (user.purchased_gems || 0) + gemsToAdd
 
     await supabaseAdmin.from('gem_transactions').insert({
       telegram_id: telegramId,
       amount: gemsToAdd,
       transaction_type: 'crypto_purchase',
       description: `Compra crypto ${pkg.usdt} USDT (${reference})`,
-    })
-
-    await supabaseAdmin.from('star_purchases').insert({
-      telegram_id: telegramId,
-      stars_amount: 0,
-      gems_amount: gemsToAdd,
-      is_first_purchase: pkg.first_time_only || false,
-      telegram_charge_id: reference,
-      payment_method: 'crypto',
     })
 
     await payReferralCommission(telegramId, gemsToAdd, 'crypto', reference)
