@@ -2,7 +2,6 @@
 
 import { NextResponse, NextRequest } from 'next/server'
 import { Ratelimit } from '@upstash/ratelimit'
-// ✅ Import Edge-compatible (usa solo fetch, no Node APIs)
 import { Redis } from '@upstash/redis/cloudflare'
 
 import {
@@ -10,7 +9,6 @@ import {
   extractInitData,
 } from '@/lib/validate-telegram'
 
-// ── Upstash Redis client ─────────────────────────────────────
 let redis: Redis | null = null
 let ratelimiters: {
   chat: Ratelimit
@@ -25,11 +23,7 @@ try {
   const upstashToken = process.env.UPSTASH_REDIS_REST_TOKEN?.trim()
 
   if (upstashUrl && upstashToken) {
-    // ✅ Constructor explícito — lee las env vars en runtime (no en build)
-    redis = new Redis({
-      url: upstashUrl,
-      token: upstashToken,
-    })
+    redis = new Redis({ url: upstashUrl, token: upstashToken })
 
     ratelimiters = {
       chat: new Ratelimit({
@@ -67,29 +61,26 @@ try {
     console.log('[middleware] ✅ Upstash Redis inicializado correctamente')
   } else {
     console.warn(
-      '[middleware] ⚠️ Upstash no configurado — rate limiting deshabilitado. ' +
-      `URL: ${upstashUrl ? 'OK' : 'MISSING'}, TOKEN: ${upstashToken ? 'OK' : 'MISSING'}`
+      '[middleware] ⚠️ Upstash no configurado — rate limiting deshabilitado.'
     )
   }
 } catch (e: any) {
   console.error('[middleware] ❌ Error inicializando Upstash:', e?.message)
 }
 
-// ── Endpoints públicos ───────────────────────────────────────
+// ✅ Endpoints públicos (sin auth de Telegram).
+// El webhook Python ya valida su propio secret_token.
 const PUBLIC_ENDPOINTS = [
   '/api/health',
-  '/api/webhook',
-  '/api/bot',
-  '/api/bot/',
+  '/api/bot',       // ← webhook Python
+  '/api/webhook',   // ← legacy TS (borra este archivo si ya no lo usas)
 ]
 
-// ── Dev bypass ───────────────────────────────────────────────
 const DEV_BYPASS =
   process.env.AUTH_BYPASS_DEV === 'true' &&
   process.env.NODE_ENV === 'development'
 const DEV_TELEGRAM_ID = process.env.DEV_TELEGRAM_ID || '123456789'
 
-// ── Helpers ──────────────────────────────────────────────────
 function getClientIp(req: NextRequest): string {
   return (
     req.headers.get('x-real-ip') ||
@@ -109,7 +100,6 @@ function pickLimiter(pathname: string): Ratelimit | null {
   return null
 }
 
-// ── Middleware principal ─────────────────────────────────────
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
 
@@ -117,7 +107,8 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next()
   }
 
-  if (PUBLIC_ENDPOINTS.some((p) => pathname.startsWith(p))) {
+  // ✅ FIX: incluir subpaths como /api/bot/webhook
+  if (PUBLIC_ENDPOINTS.some((p) => pathname === p || pathname.startsWith(p + '/'))) {
     return NextResponse.next()
   }
 
