@@ -50,7 +50,6 @@ export default function HomePage() {
   const [activeChar, setActiveChar] = useState<any>(null)
   const [search, setSearch] = useState('')
   const [tab, setTab] = useState<'all' | 'male' | 'female' | 'fantasy'>('all')
-  // ✅ NUEVO: bloquea taps mientras se está abriendo
   const [creating, setCreating] = useState<string | null>(null)
 
   useEffect(() => {
@@ -108,13 +107,12 @@ export default function HomePage() {
         c.role.toLowerCase().includes(search.toLowerCase())
     )
 
-  // ✅ NUEVO: pick() abre el personaje directamente
   const pick = async (c: Char) => {
     if (!user) {
       alert('Usuario no cargado. Cierra y vuelve a abrir la Mini App.')
       return
     }
-    if (creating !== null) return  // evita doble tap
+    if (creating !== null) return
 
     const key = `${c.gender}_${c.archetype}`
     setCreating(key)
@@ -470,7 +468,7 @@ export default function HomePage() {
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
                 <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" fill="#22c55e" />
               </svg>
-              <span style={{ fontSize: 12, fontWeight: 700, color: '#22c55e' }}>+5</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: '#22c55e' }}>+10</span>
             </div>
           </button>
         </section>
