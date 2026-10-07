@@ -2,38 +2,35 @@
 
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
+import { ensureUser } from '@/lib/user-helpers'
 import { GEM_COSTS } from '@/lib/constants'
 
 export async function POST(request: Request) {
   try {
-    // ✅ AUTH: telegram_id validado por el middleware
     const tid = request.headers.get('x-telegram-id-validated')
     if (!tid) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
-    // Body sin telegram_id (ya no es fuente de verdad)
     const { character_id, new_name } = await request.json()
     const cid = Number(character_id)
     const name = String(new_name || '').trim()
 
-    // Validaciones básicas
     if (!cid) return NextResponse.json({ error: 'character_id requerido' }, { status: 400 })
     if (!name) return NextResponse.json({ error: 'Nombre vacío' }, { status: 400 })
     if (name.length > 30) return NextResponse.json({ error: 'Nombre demasiado largo (máx 30)' }, { status: 400 })
 
-    // Verificar usuario
-    const { data: user } = await supabaseAdmin
-      .from('users')
-      .select('gems, language')
-      .eq('telegram_id', tid)
-      .maybeSingle()
-
-    if (!user) return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
+    // ✅ FIX: crea el usuario si no existe
+    const user = await ensureUser(tid)
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Error cargando tu cuenta' },
+        { status: 500 }
+      )
+    }
 
     const lang = (user.language || 'es') as 'es' | 'en'
 
-    // Verificar personaje (debe pertenecer al usuario)
     const { data: character } = await supabaseAdmin
       .from('user_characters')
       .select('id, character_name')
@@ -52,7 +49,6 @@ export async function POST(request: Request) {
       })
     }
 
-    // Verificar gemas
     if ((user.gems || 0) < GEM_COSTS.rename_character) {
       return NextResponse.json({
         error: 'insufficient_gems',
@@ -63,15 +59,23 @@ export async function POST(request: Request) {
       }, { status: 402 })
     }
 
-    const newGems = (user.gems || 0) - GEM_COSTS.rename_character
+    // ✅ RPC ATÓMICA: descuenta gemas
+    const { data: newGems, error: rpcErr } = await supabaseAdmin.rpc(
+      'increment_gems',
+      {
+        p_telegram_id: tid,
+        p_amount: -GEM_COSTS.rename_character,
+      }
+    )
 
-    // Actualizar user
-    await supabaseAdmin
-      .from('users')
-      .update({ gems: newGems })
-      .eq('telegram_id', tid)
+    if (rpcErr) {
+      console.error('[rename-character] RPC failed:', rpcErr)
+      return NextResponse.json(
+        { error: 'Error actualizando gemas' },
+        { status: 500 }
+      )
+    }
 
-    // Registrar transacción
     await supabaseAdmin.from('gem_transactions').insert({
       telegram_id: tid,
       amount: -GEM_COSTS.rename_character,
@@ -79,7 +83,6 @@ export async function POST(request: Request) {
       description: `Renombrar personaje a "${name}"`,
     })
 
-    // Actualizar nombre del personaje
     await supabaseAdmin
       .from('user_characters')
       .update({ character_name: name })
@@ -89,7 +92,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       character_name: name,
-      remaining_gems: newGems,
+      remaining_gems: typeof newGems === 'number' ? newGems : (user.gems || 0) - GEM_COSTS.rename_character,
     })
   } catch (e: any) {
     console.error('Error en rename-character:', e)
