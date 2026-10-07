@@ -2,31 +2,27 @@
 
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
+import { ensureUser } from '@/lib/user-helpers'
 import { OPENING_LINES, GEM_COSTS } from '@/lib/constants'
 
 export async function POST(request: Request) {
   try {
-    // ✅ AUTH: telegram_id validado por el middleware
     const tid = request.headers.get('x-telegram-id-validated')
     if (!tid) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
-    // Body sin telegram_id (ya no es fuente de verdad)
     const { character_id } = await request.json()
 
-    // Verificar usuario
-    const { data: user } = await supabaseAdmin
-      .from('users')
-      .select('gems, language, first_name')
-      .eq('telegram_id', tid)
-      .maybeSingle()
-
+    // ✅ FIX: crea el usuario si no existe
+    const user = await ensureUser(tid)
     if (!user) {
-      return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
+      return NextResponse.json(
+        { error: 'Error cargando tu cuenta' },
+        { status: 500 }
+      )
     }
 
-    // Verificar personaje
     const { data: character } = await supabaseAdmin
       .from('user_characters')
       .select('*')
@@ -49,7 +45,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ already_started: true })
     }
 
-    // ¿Tiene gemas suficientes?
     const gems = user.gems || 0
     if (gems < GEM_COSTS.message) {
       return NextResponse.json({
@@ -59,12 +54,22 @@ export async function POST(request: Request) {
       })
     }
 
-    // Cobrar 1 gema
-    const newGems = gems - GEM_COSTS.message
-    await supabaseAdmin
-      .from('users')
-      .update({ gems: newGems })
-      .eq('telegram_id', tid)
+    // ✅ RPC ATÓMICA: descuenta 1 gema sin race condition
+    const { data: newGems, error: rpcErr } = await supabaseAdmin.rpc(
+      'increment_gems',
+      {
+        p_telegram_id: tid,
+        p_amount: -GEM_COSTS.message,
+      }
+    )
+
+    if (rpcErr) {
+      console.error('[start-chat] RPC failed:', rpcErr)
+      return NextResponse.json(
+        { error: 'Error actualizando gemas' },
+        { status: 500 }
+      )
+    }
 
     await supabaseAdmin.from('gem_transactions').insert({
       telegram_id: tid,
@@ -73,7 +78,6 @@ export async function POST(request: Request) {
       description: 'Mensaje de apertura',
     })
 
-    // Obtener frase de apertura del arquetipo
     const lang = (user.language === 'en' ? 'en' : 'es') as 'es' | 'en'
     const openingTemplate = OPENING_LINES[character.archetype]
     const fallback = lang === 'es'
@@ -82,7 +86,6 @@ export async function POST(request: Request) {
     const template = openingTemplate ? openingTemplate[lang] : fallback
     const openingMessage = template.replace(/{name}/g, character.character_name)
 
-    // Guardar en historial
     await supabaseAdmin.from('conversation_history').insert({
       telegram_id: tid,
       character_id,
@@ -92,7 +95,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       response: openingMessage,
-      remaining_gems: newGems,
+      remaining_gems: typeof newGems === 'number' ? newGems : (gems - GEM_COSTS.message),
     })
   } catch (e: any) {
     console.error('Error en start-chat:', e)
