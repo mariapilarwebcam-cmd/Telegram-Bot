@@ -20,6 +20,7 @@ interface UserData {
   streak_count: number
   longest_streak: number
   last_daily_claim: string | null
+  age_verified?: boolean
 }
 
 interface UserContextType {
@@ -50,7 +51,10 @@ function getTelegramWebApp(): any {
 }
 
 const USER_SELECT =
-  'telegram_id, first_name, username, gems, purchased_gems, language, hook_messages_remaining, hook_used, referral_code, total_referrals, paying_referrals_count, streak_count, longest_streak, last_daily_claim'
+  'telegram_id, first_name, username, gems, purchased_gems, language, ' +
+  'hook_messages_remaining, hook_used, referral_code, total_referrals, ' +
+  'paying_referrals_count, age_verified, streak_count, longest_streak, ' +
+  'last_daily_claim'
 
 export function UserProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserData | null>(memUserCache)
@@ -121,7 +125,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
         setTelegramId(u.id)
         setLang(getLanguage(u.language_code))
 
-        await loadUser(u.id, {
+        // ✅ FIX: intentar cargar el usuario hasta 3 veces
+        // con backoff. Si falla, al menos intenta con init-user.
+        await loadUserWithRetry(u.id, {
           first_name: u.first_name || '',
           username: u.username || null,
           language: getLanguage(u.language_code),
@@ -137,9 +143,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
               tgFetch('/api/referral', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  referral_code: startParam,
-                }),
+                body: JSON.stringify({ referral_code: startParam }),
               }).catch((err) => console.warn('[UserContext] referral err:', err))
               referralProcessed.current = true
             }
@@ -172,15 +176,32 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }
   }, [telegramId])
 
+  const loadUserWithRetry = async (
+    id: number,
+    telegramData?: { first_name: string; username: string | null; language: Language }
+  ): Promise<boolean> => {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const ok = await loadUser(id, telegramData)
+      if (ok) return true
+      // Backoff: 500ms, 1500ms
+      await new Promise((r) => setTimeout(r, 500 + attempt * 1000))
+    }
+    console.error('[UserContext] loadUser falló después de 3 intentos')
+    return false
+  }
+
   const loadUser = async (
     id: number,
     telegramData?: { first_name: string; username: string | null; language: Language }
   ): Promise<boolean> => {
     const tid = id.toString()
     try {
+      // 1. Intento con Supabase anon (rápido, pero puede fallar por RLS)
       const result: any = await Promise.race([
         supabase.from('users').select(USER_SELECT).eq('telegram_id', tid).maybeSingle(),
-        new Promise((resolve) => setTimeout(() => resolve({ data: null, error: 'timeout' }), 6000)),
+        new Promise((resolve) =>
+          setTimeout(() => resolve({ data: null, error: 'timeout' }), 6000)
+        ),
       ])
 
       if (result?.data) {
@@ -190,28 +211,33 @@ export function UserProvider({ children }: { children: ReactNode }) {
         return true
       }
 
-      if (telegramData) {
-        try {
-          const { tgFetch } = await import('@/lib/telegram-fetch')
-          const res = await tgFetch('/api/init-user', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              first_name: telegramData.first_name,
-              username: telegramData.username,
-              language: telegramData.language,
-            }),
-          })
-          const initData = await res.json()
-          if (initData?.user) {
-            const u = initData.user as UserData
-            memUserCache = u
-            setUser(u)
-            return true
-          }
-        } catch (e) {
-          console.error('[UserContext] init-user error:', e)
+      // 2. Fallback a /api/init-user (usa service_role, crea si no existe)
+      try {
+        const { tgFetch } = await import('@/lib/telegram-fetch')
+        const res = await tgFetch('/api/init-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            first_name: telegramData?.first_name || '',
+            username: telegramData?.username || null,
+            language: telegramData?.language || 'es',
+          }),
+        })
+
+        if (!res.ok) {
+          console.warn('[UserContext] init-user HTTP', res.status)
+          return false
         }
+
+        const initData = await res.json()
+        if (initData?.user) {
+          const u = initData.user as UserData
+          memUserCache = u
+          setUser(u)
+          return true
+        }
+      } catch (e) {
+        console.error('[UserContext] init-user error:', e)
       }
 
       return false
