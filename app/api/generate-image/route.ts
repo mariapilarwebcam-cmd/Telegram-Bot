@@ -2,6 +2,7 @@
 
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
+import { ensureUser } from '@/lib/user-helpers'
 import { getCharacterFace, getCharacterImageUrl } from '@/lib/constants'
 import { generateImage } from '@/lib/ai'
 import {
@@ -12,7 +13,6 @@ import {
   type FaceVisibility,
 } from '@/lib/levels'
 
-// ✅ Timeout Vercel — 60s (Wiro puede tardar 40s + fallback 15s)
 export const maxDuration = 60
 
 const CHARACTER_DNA: Record<string, string> = {
@@ -128,13 +128,14 @@ export async function POST(request: Request) {
         ? body.description.trim().slice(0, 200)
         : ''
 
-    const { data: user } = await supabaseAdmin
-      .from('users')
-      .select('gems, purchased_gems, language')
-      .eq('telegram_id', tid)
-      .maybeSingle()
-
-    if (!user) return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
+    // ✅ FIX: crea el usuario si no existe
+    const user = await ensureUser(tid)
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Error cargando tu cuenta' },
+        { status: 500 }
+      )
+    }
 
     const purchasedGems = user.purchased_gems || 0
     if (purchasedGems <= 0) {
@@ -215,16 +216,27 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Error al generar la imagen' }, { status: 500 })
     }
 
-    const newGems = (user.gems || 0) - imageCost
-    const newPurchasedGems = purchasedGems - imageCost
+    // ✅ RPC ATÓMICA: descuenta de gems Y purchased_gems
+    const { data: rpcData, error: rpcErr } = await supabaseAdmin.rpc(
+      'decrement_gems_and_purchased',
+      {
+        p_telegram_id: tid,
+        p_amount: imageCost,
+      }
+    )
 
-    await supabaseAdmin
-      .from('users')
-      .update({
-        gems: newGems,
-        purchased_gems: newPurchasedGems,
-      })
-      .eq('telegram_id', tid)
+    if (rpcErr) {
+      console.error('[generate-image] RPC failed:', rpcErr)
+      // La imagen ya se generó — devolvemos igual pero con advertencia
+      return NextResponse.json(
+        { error: 'Error actualizando gemas. Contacta soporte.' },
+        { status: 500 }
+      )
+    }
+
+    const rpcRow = Array.isArray(rpcData) ? rpcData[0] : rpcData
+    const newGems = rpcRow?.new_gems ?? (user.gems || 0) - imageCost
+    const newPurchasedGems = rpcRow?.new_purchased ?? purchasedGems - imageCost
 
     await supabaseAdmin.from('gem_transactions').insert({
       telegram_id: tid,
