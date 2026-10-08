@@ -138,8 +138,7 @@ export function buildSystemPrompt(
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ✅ FALLBACK CHAIN DE MODELOS
-// Si el primario falla, prueba el siguiente automáticamente.
+// ✅ CADENA DE MODELOS CON FALLBACK
 // ═══════════════════════════════════════════════════════════════
 const MODEL_CHAIN = [
   'deepseek/deepseek-v4-flash',        // #1 en roleplay, más barato
@@ -147,12 +146,19 @@ const MODEL_CHAIN = [
   'deepseek/deepseek-chat-v3-0324',    // fallback #2 (el anterior, conocido)
 ]
 
-interface OpenRouterError {
-  error?: {
-    message?: string
-    code?: number
-    metadata?: any
-  }
+// ✅ Subimos max_tokens: modelos con razonamiento necesitan espacio
+// Si content sigue siendo null, es porque el modelo razona demasiado.
+const MAX_TOKENS = 300
+
+interface ModelResult {
+  ok: boolean
+  text?: string
+  model?: string
+  error?: any
+  status?: number
+  // Info extra para diagnóstico
+  finishReason?: string | null
+  hadReasoning?: boolean
 }
 
 async function tryGenerateWithModel(
@@ -160,7 +166,7 @@ async function tryGenerateWithModel(
   messages: Array<{ role: string; content: string }>,
   systemPrompt: string,
   temperature: number
-): Promise<{ ok: true; text: string; model: string } | { ok: false; error: any; status?: number }> {
+): Promise<ModelResult> {
   try {
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
@@ -174,14 +180,14 @@ async function tryGenerateWithModel(
         model,
         messages: [{ role: 'system', content: systemPrompt }, ...messages],
         temperature,
-        max_tokens: 120,
+        max_tokens: MAX_TOKENS,
         provider: {
           sort: 'throughput',
         },
       }),
     })
 
-    // Leer SIEMPRE el body, incluso si es error, para loguearlo bien
+    // Leer SIEMPRE el body completo
     const raw = await response.text()
     let data: any = null
     try {
@@ -191,28 +197,58 @@ async function tryGenerateWithModel(
     }
 
     if (!response.ok) {
-      console.error(`[ai] ❌ ${model} HTTP ${response.status}:`, JSON.stringify(data).slice(0, 500))
+      console.error(`[ai] ❌ ${model} HTTP ${response.status}:`,
+        JSON.stringify(data).slice(0, 500))
       return { ok: false, error: data, status: response.status }
     }
 
-    // Validar estructura
-    const text = data?.choices?.[0]?.message?.content
-    if (!text || typeof text !== 'string' || !text.trim()) {
-      console.error(`[ai] ❌ ${model} respuesta vacía:`, JSON.stringify(data).slice(0, 500))
-      return { ok: false, error: { message: 'Respuesta vacía del modelo', raw: data } }
+    // ✅ ACCESO SEGURO — sin asumir que content existe
+    const choice = data?.choices?.[0]
+    const message = choice?.message
+    const finishReason = choice?.finish_reason
+
+    // Algunos modelos con razonamiento devuelven el texto en otros campos
+    const contentField = message?.content
+    const reasoningField = message?.reasoning_content || message?.reasoning
+
+    const text =
+      (typeof contentField === 'string' && contentField) ||
+      (typeof reasoningField === 'string' && reasoningField) ||
+      ''
+
+    const hadReasoning = !!reasoningField
+
+    // Si no hay texto visible, loguear TODO para diagnóstico
+    if (!text || !text.trim()) {
+      console.error(`[ai] ❌ ${model} respuesta vacía. finish_reason=${finishReason}`)
+      console.error(`[ai] 📋 raw response:`, JSON.stringify(data).slice(0, 1500))
+      return {
+        ok: false,
+        error: {
+          message: `Respuesta vacía (finish_reason=${finishReason})`,
+          finishReason,
+          raw: data,
+        },
+        finishReason,
+      }
     }
 
-    // Log de uso (opcional)
-    if (data.usage) {
-      console.log(`[ai] ✅ ${model}`, {
-        prompt: data.usage.prompt_tokens,
-        completion: data.usage.completion_tokens,
-        total: data.usage.total_tokens,
-        cached: data.usage.prompt_tokens_details?.cached_tokens || 0,
-      })
-    }
+    // Log de éxito + uso
+    console.log(`[ai] ✅ ${model}`, {
+      finish_reason: finishReason,
+      had_reasoning: hadReasoning,
+      prompt: data.usage?.prompt_tokens,
+      completion: data.usage?.completion_tokens,
+      cached: data.usage?.prompt_tokens_details?.cached_tokens || 0,
+    })
 
-    return { ok: true, text: text.trim(), model }
+    return {
+      ok: true,
+      text: text.trim(),
+      model,
+      finishReason,
+      hadReasoning,
+    }
   } catch (e: any) {
     console.error(`[ai] ❌ ${model} excepción:`, e?.message)
     return { ok: false, error: { message: e?.message || String(e) } }
@@ -235,7 +271,7 @@ export async function generateAIResponse(
   for (const model of MODEL_CHAIN) {
     const result = await tryGenerateWithModel(model, messages, systemPrompt, temperature)
 
-    if (result.ok) {
+    if (result.ok && result.text) {
       let text = result.text
       text = sanitizeAsterisks(text)
       return text
@@ -243,17 +279,13 @@ export async function generateAIResponse(
 
     errors.push({ model, status: result.status, error: result.error })
 
-    // Si es un error 400 por prompt blocked, no reintentar con otro modelo
-    // (es el contenido, no el modelo). Pero por seguridad, probamos igual.
-    // Si es 402 (sin crédito) o 429 (rate limit), probamos otro.
-
     console.warn(`[ai] ⚠️ Falló ${model}, probando siguiente...`)
   }
 
   // Todos los modelos fallaron
-  console.error('[ai] 🚨 TODOS LOS MODELOS FALLARON:', JSON.stringify(errors).slice(0, 2000))
+  console.error('[ai] 🚨 TODOS LOS MODELOS FALLARON:',
+    JSON.stringify(errors).slice(0, 2000))
 
-  // Devolver el último error para que el caller pueda reportarlo
   const last = errors[errors.length - 1]
   const errorMessage = last?.error?.error?.message
     || last?.error?.message
