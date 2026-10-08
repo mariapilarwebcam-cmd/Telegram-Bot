@@ -70,10 +70,11 @@ try {
 
 // ✅ Endpoints públicos (sin auth de Telegram).
 // El webhook Python ya valida su propio secret_token.
+// /api/health y /api/debug se protegen con ADMIN_API_SECRET dentro del handler.
 const PUBLIC_ENDPOINTS = [
   '/api/health',
+  '/api/debug',
   '/api/bot',       // ← webhook Python
-  '/api/webhook',   // ← legacy TS (borra este archivo si ya no lo usas)
 ]
 
 const DEV_BYPASS =
@@ -107,7 +108,7 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next()
   }
 
-  // ✅ FIX: incluir subpaths como /api/bot/webhook
+  // ✅ Públicos: incluye subpaths como /api/bot/webhook
   if (PUBLIC_ENDPOINTS.some((p) => pathname === p || pathname.startsWith(p + '/'))) {
     return NextResponse.next()
   }
