@@ -5,17 +5,31 @@ import { supabaseAdmin } from '@/lib/supabase-admin'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET() {
+/**
+ * ✅ Protegido: solo accesible con header `x-admin-secret`.
+ * Configura ADMIN_API_SECRET en Vercel.
+ * En desarrollo (sin secreto configurado), se permite el acceso.
+ */
+function isAuthorized(request: Request): boolean {
+  const secret = process.env.ADMIN_API_SECRET
+  if (!secret) {
+    // Sin secreto configurado → solo dev permite
+    return process.env.NODE_ENV !== 'production'
+  }
+  return request.headers.get('x-admin-secret') === secret
+}
+
+export async function GET(request: Request) {
+  if (!isAuthorized(request)) {
+    return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  }
+
   const result: any = {
     timestamp: new Date().toISOString(),
     env: {
-      NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL
-        ? `✅ ${process.env.NEXT_PUBLIC_SUPABASE_URL.substring(0, 30)}...`
-        : '❌ MISSING',
-      SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY
-        ? `✅ len=${process.env.SUPABASE_SERVICE_ROLE_KEY.length} start=${process.env.SUPABASE_SERVICE_ROLE_KEY.substring(0, 12)}...`
-        : '❌ MISSING',
-      NEXT_PUBLIC_R2_PUBLIC_URL: process.env.NEXT_PUBLIC_R2_PUBLIC_URL || '❌ MISSING',
+      NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL ? '✅' : '❌',
+      SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY ? '✅' : '❌',
+      NEXT_PUBLIC_R2_PUBLIC_URL: process.env.NEXT_PUBLIC_R2_PUBLIC_URL ? '✅' : '❌',
     },
   }
 
@@ -31,7 +45,6 @@ export async function GET() {
         status: 'error',
         message: error.message,
         code: error.code,
-        hint: error.hint,
       }
     } else {
       result.select_test = { status: 'ok', rowCount: data?.length ?? 0 }
@@ -57,7 +70,6 @@ export async function GET() {
         status: 'error',
         message: insertError.message,
         code: insertError.code,
-        hint: insertError.hint,
       }
     } else {
       result.write_test = { status: 'ok', insertedId: inserted?.id }
