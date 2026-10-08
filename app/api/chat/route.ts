@@ -215,7 +215,7 @@ export async function POST(request: Request) {
     let responseText: string
     try {
       responseText = await generateAIResponse(messages, systemPrompt, intensity)
-    } catch (aiError) {
+    } catch (aiError: any) {
       // Rollback manual: devolver la gema
       await supabaseAdmin.rpc('increment_gems', {
         p_telegram_id: tid,
@@ -229,8 +229,17 @@ export async function POST(request: Request) {
         })
         .eq('telegram_id', tid)
 
-      console.error('AI error:', aiError)
-      return NextResponse.json({ error: 'Error al generar respuesta' }, { status: 500 })
+      const errorDetail = aiError?.message || String(aiError)
+      console.error('[chat] ❌ AI error:', errorDetail)
+
+      const includeDetail = process.env.NODE_ENV !== 'production'
+      return NextResponse.json(
+        {
+          error: 'Error al generar respuesta',
+          ...(includeDetail ? { detail: errorDetail } : {}),
+        },
+        { status: 500 }
+      )
     }
 
     await supabaseAdmin.from('conversation_history').insert([
@@ -327,7 +336,7 @@ export async function POST(request: Request) {
       response: finalText,
       remaining_gems: newGems,
       hook_messages_remaining: newHookRemaining,
-      is_hook_mode: isHookModeAfter,  // ✅ Ahora refleja el estado real
+      is_hook_mode: isHookModeAfter,
       intensity,
       level: newLevel.level,
       photo_offer_available: shouldShowPhotoBanner,
