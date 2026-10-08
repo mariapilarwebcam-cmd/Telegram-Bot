@@ -157,7 +157,8 @@ export async function generateAIResponse(
       'X-Title': 'Taboo Realm',
     },
     body: JSON.stringify({
-      model: 'deepseek/deepseek-chat-v3-0324',
+      // ✅ CAMBIO: V4 Flash 0423 — #1 en roleplay, output 3x más barato
+      model: 'deepseek/deepseek-v4-flash',
       messages: [{ role: 'system', content: systemPrompt }, ...messages],
       temperature,
       max_tokens: 120,
@@ -184,10 +185,6 @@ export async function generateAIResponse(
 
   let text = data.choices[0].message.content.trim()
 
-  // ✅ POST-PROCESADO: limpiar asteriscos incorrectos
-  // Detecta patrones como *palabra* dentro de comillas o texto normal
-  // y los convierte a "palabra" sin asteriscos (solo si es UNA palabra suelta)
-  // Regla: si está dentro de un bloque de diálogo entre comillas → quitar asteriscos
   text = sanitizeAsterisks(text)
 
   return text
@@ -195,35 +192,22 @@ export async function generateAIResponse(
 
 /**
  * Limpia asteriscos mal usados dentro del diálogo.
- *
- * Casos que corrige:
- *  - "texto *palabra* texto" (dentro de comillas) → "texto palabra texto"
- *
- * Casos que NO toca:
- *  - *acción entre asteriscos* fuera de comillas → se mantiene
  */
 function sanitizeAsterisks(text: string): string {
-  // Dividimos por líneas para procesar cada una
   const lines = text.split('\n')
 
   const cleaned = lines.map((line) => {
-    // Si la línea empieza con * y termina con * (acción completa), no tocar
     const trimmed = line.trim()
     if (trimmed.startsWith('*') && trimmed.endsWith('*') && trimmed.length > 2) {
       const inner = trimmed.slice(1, -1)
-      // Verificamos que sea una acción (no contiene comillas)
       if (!inner.includes('"') && !inner.includes('"') && !inner.includes('"')) {
         return line
       }
     }
 
-    // Si la línea contiene diálogo (con comillas), quitamos asteriscos internos
-    // que envuelven UNA O DOS palabras (énfasis)
     return line.replace(
       /(\s)\*([^*\n]{1,30}?)\*(\s|,|\.|!|\?|$)/g,
       (_match, before, word, after) => {
-        // Solo limpiamos si está dentro de un contexto de diálogo
-        // (heurística: si la línea tiene comillas)
         if (line.includes('"') || line.includes('"') || line.includes('"')) {
           return `${before}${word}${after}`
         }
