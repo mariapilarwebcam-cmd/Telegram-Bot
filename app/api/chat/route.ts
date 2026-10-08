@@ -210,7 +210,9 @@ export async function POST(request: Request) {
       : `You are ${character.character_name}, role: ${character.archetype}.\n${personality}\n\nThe user's name is ${user.first_name}. Remember their name and use it naturally.\nAlways maintain your personality and role. Never break character.${provocativeHint}`
 
     const intensity = getIntensity(currentUserMsgCount, isHookModeAfter)
-    const systemPrompt = buildSystemPrompt(lang, intensity, characterPrompt)
+
+    // ✅ FIX: pasa newLevel.level como 3er argumento para escalar la longitud del mensaje
+    const systemPrompt = buildSystemPrompt(lang, intensity, newLevel.level, characterPrompt)
 
     let responseText: string
     try {
