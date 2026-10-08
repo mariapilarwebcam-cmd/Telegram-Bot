@@ -137,6 +137,88 @@ export function buildSystemPrompt(
   return `${langGate}\n\n${base}\n\n${characterPrompt}\n\n${actionGate}\n\n${brevity}`
 }
 
+// ═══════════════════════════════════════════════════════════════
+// ✅ FALLBACK CHAIN DE MODELOS
+// Si el primario falla, prueba el siguiente automáticamente.
+// ═══════════════════════════════════════════════════════════════
+const MODEL_CHAIN = [
+  'deepseek/deepseek-v4-flash',        // #1 en roleplay, más barato
+  'deepseek/deepseek-v4-flash-0731',   // fallback #1
+  'deepseek/deepseek-chat-v3-0324',    // fallback #2 (el anterior, conocido)
+]
+
+interface OpenRouterError {
+  error?: {
+    message?: string
+    code?: number
+    metadata?: any
+  }
+}
+
+async function tryGenerateWithModel(
+  model: string,
+  messages: Array<{ role: string; content: string }>,
+  systemPrompt: string,
+  temperature: number
+): Promise<{ ok: true; text: string; model: string } | { ok: false; error: any; status?: number }> {
+  try {
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'https://vercel.app',
+        'X-Title': 'Taboo Realm',
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'system', content: systemPrompt }, ...messages],
+        temperature,
+        max_tokens: 120,
+        provider: {
+          sort: 'throughput',
+        },
+      }),
+    })
+
+    // Leer SIEMPRE el body, incluso si es error, para loguearlo bien
+    const raw = await response.text()
+    let data: any = null
+    try {
+      data = JSON.parse(raw)
+    } catch {
+      data = { raw }
+    }
+
+    if (!response.ok) {
+      console.error(`[ai] ❌ ${model} HTTP ${response.status}:`, JSON.stringify(data).slice(0, 500))
+      return { ok: false, error: data, status: response.status }
+    }
+
+    // Validar estructura
+    const text = data?.choices?.[0]?.message?.content
+    if (!text || typeof text !== 'string' || !text.trim()) {
+      console.error(`[ai] ❌ ${model} respuesta vacía:`, JSON.stringify(data).slice(0, 500))
+      return { ok: false, error: { message: 'Respuesta vacía del modelo', raw: data } }
+    }
+
+    // Log de uso (opcional)
+    if (data.usage) {
+      console.log(`[ai] ✅ ${model}`, {
+        prompt: data.usage.prompt_tokens,
+        completion: data.usage.completion_tokens,
+        total: data.usage.total_tokens,
+        cached: data.usage.prompt_tokens_details?.cached_tokens || 0,
+      })
+    }
+
+    return { ok: true, text: text.trim(), model }
+  } catch (e: any) {
+    console.error(`[ai] ❌ ${model} excepción:`, e?.message)
+    return { ok: false, error: { message: e?.message || String(e) } }
+  }
+}
+
 export async function generateAIResponse(
   messages: Array<{ role: string; content: string }>,
   systemPrompt: string,
@@ -148,46 +230,36 @@ export async function generateAIResponse(
     intensity === 'VERY_HIGH' ? 0.93 :
     intensity === 'MAXIMUM' ? 0.96 : 0.98
 
-  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'https://vercel.app',
-      'X-Title': 'Taboo Realm',
-    },
-    body: JSON.stringify({
-      // ✅ CAMBIO: V4 Flash 0423 — #1 en roleplay, output 3x más barato
-      model: 'deepseek/deepseek-v4-flash',
-      messages: [{ role: 'system', content: systemPrompt }, ...messages],
-      temperature,
-      max_tokens: 120,
-      provider: {
-        sort: 'throughput',
-      },
-    }),
-  })
+  const errors: Array<{ model: string; status?: number; error: any }> = []
 
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}))
-    throw new Error(err.error?.message || 'Error en OpenRouter')
-  }
-  const data = await response.json()
+  for (const model of MODEL_CHAIN) {
+    const result = await tryGenerateWithModel(model, messages, systemPrompt, temperature)
 
-  if (data.usage) {
-    console.log('[ai] tokens:', {
-      prompt: data.usage.prompt_tokens,
-      completion: data.usage.completion_tokens,
-      total: data.usage.total_tokens,
-      cached: data.usage.prompt_tokens_details?.cached_tokens || 0,
-    })
+    if (result.ok) {
+      let text = result.text
+      text = sanitizeAsterisks(text)
+      return text
+    }
+
+    errors.push({ model, status: result.status, error: result.error })
+
+    // Si es un error 400 por prompt blocked, no reintentar con otro modelo
+    // (es el contenido, no el modelo). Pero por seguridad, probamos igual.
+    // Si es 402 (sin crédito) o 429 (rate limit), probamos otro.
+
+    console.warn(`[ai] ⚠️ Falló ${model}, probando siguiente...`)
   }
 
-  let text = data.choices[0].message.content.trim()
+  // Todos los modelos fallaron
+  console.error('[ai] 🚨 TODOS LOS MODELOS FALLARON:', JSON.stringify(errors).slice(0, 2000))
 
-  text = sanitizeAsterisks(text)
+  // Devolver el último error para que el caller pueda reportarlo
+  const last = errors[errors.length - 1]
+  const errorMessage = last?.error?.error?.message
+    || last?.error?.message
+    || 'Todos los modelos fallaron'
 
-  return text
+  throw new Error(errorMessage)
 }
 
 /**
