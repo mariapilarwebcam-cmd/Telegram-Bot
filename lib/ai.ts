@@ -3,7 +3,7 @@
 import { runSeedreamSync } from './wiro'
 import { getIntensityFromLevel, getLevelFromMessages, type Intensity } from './levels'
 
-const BREVITY_ES = `REGLA CRÍTICA DE LONGITUD: Responde SIEMPRE con 1 acción breve entre asteriscos + 1 o 2 frases de diálogo. TOTAL máximo 300 caracteres contando acciones y diálogo. PROHIBIDO pasar de 300 caracteres.
+const BREVITY_ES = `REGLA CRÍTICA DE LONGITUD: Responde SIEMPRE con 1 acción breve entre asteriscos + 1 o 2 frases de diálogo. TOTAL máximo 220 caracteres contando acciones y diálogo. PROHIBIDO pasar de 220 caracteres.
 
 REGLA DE ASTERISCOS (CRÍTICA):
 - Asteriscos SOLO para acciones físicas y gestos: *se acerca*, *sonríe*, *aparta la mirada*
@@ -23,7 +23,7 @@ CIERRE NATURAL: NO termines siempre con una pregunta — es predecible. Varía l
 
 REGLA DE EMOJIS: Úsalos SOLO cuando refuercen una emoción específica (ej: 😏 al provocar, 😈 al ser travieso, 🥺 al suplicar, 🔥 al intensificar). NUNCA los uses de relleno. Máximo 1 emoji por mensaje. PROHIBIDO emojis al inicio.`
 
-const BREVITY_EN = `CRITICAL LENGTH RULE: Always reply with 1 brief action between asterisks + 1 or 2 lines of dialogue. MAXIMUM 300 characters total counting actions and dialogue. FORBIDDEN to exceed 300 characters.
+const BREVITY_EN = `CRITICAL LENGTH RULE: Always reply with 1 brief action between asterisks + 1 or 2 lines of dialogue. MAXIMUM 220 characters total counting actions and dialogue. FORBIDDEN to exceed 220 characters.
 
 ASTERISK RULE (CRITICAL):
 - Asterisks ONLY for physical actions and gestures: *leans closer*, *smiles*, *looks away*
@@ -146,8 +146,8 @@ const MODEL_CHAIN = [
   'deepseek/deepseek-chat-v3-0324',    // fallback #2 (el anterior, conocido)
 ]
 
-// ✅ Subimos max_tokens: modelos con razonamiento necesitan espacio
-// Si content sigue siendo null, es porque el modelo razona demasiado.
+// ✅ max_tokens: techo de seguridad, no instrucción de longitud.
+// El límite real de longitud está en el prompt (220 caracteres).
 const MAX_TOKENS = 300
 
 interface ModelResult {
@@ -156,7 +156,6 @@ interface ModelResult {
   model?: string
   error?: any
   status?: number
-  // Info extra para diagnóstico
   finishReason?: string | null
   hadReasoning?: boolean
 }
@@ -187,7 +186,6 @@ async function tryGenerateWithModel(
       }),
     })
 
-    // Leer SIEMPRE el body completo
     const raw = await response.text()
     let data: any = null
     try {
@@ -202,12 +200,10 @@ async function tryGenerateWithModel(
       return { ok: false, error: data, status: response.status }
     }
 
-    // ✅ ACCESO SEGURO — sin asumir que content existe
     const choice = data?.choices?.[0]
     const message = choice?.message
     const finishReason = choice?.finish_reason
 
-    // Algunos modelos con razonamiento devuelven el texto en otros campos
     const contentField = message?.content
     const reasoningField = message?.reasoning_content || message?.reasoning
 
@@ -218,7 +214,6 @@ async function tryGenerateWithModel(
 
     const hadReasoning = !!reasoningField
 
-    // Si no hay texto visible, loguear TODO para diagnóstico
     if (!text || !text.trim()) {
       console.error(`[ai] ❌ ${model} respuesta vacía. finish_reason=${finishReason}`)
       console.error(`[ai] 📋 raw response:`, JSON.stringify(data).slice(0, 1500))
@@ -233,7 +228,6 @@ async function tryGenerateWithModel(
       }
     }
 
-    // Log de éxito + uso
     console.log(`[ai] ✅ ${model}`, {
       finish_reason: finishReason,
       had_reasoning: hadReasoning,
@@ -278,11 +272,9 @@ export async function generateAIResponse(
     }
 
     errors.push({ model, status: result.status, error: result.error })
-
     console.warn(`[ai] ⚠️ Falló ${model}, probando siguiente...`)
   }
 
-  // Todos los modelos fallaron
   console.error('[ai] 🚨 TODOS LOS MODELOS FALLARON:',
     JSON.stringify(errors).slice(0, 2000))
 
@@ -294,9 +286,6 @@ export async function generateAIResponse(
   throw new Error(errorMessage)
 }
 
-/**
- * Limpia asteriscos mal usados dentro del diálogo.
- */
 function sanitizeAsterisks(text: string): string {
   const lines = text.split('\n')
 
