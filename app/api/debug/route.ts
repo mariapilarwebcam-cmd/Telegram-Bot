@@ -2,7 +2,24 @@
 
 import { NextResponse } from 'next/server'
 
-export async function GET() {
+/**
+ * ✅ Protegido: solo accesible con header `x-admin-secret`.
+ * Configura ADMIN_API_SECRET en Vercel.
+ * En desarrollo (sin secreto configurado), se permite el acceso.
+ */
+function isAuthorized(request: Request): boolean {
+  const secret = process.env.ADMIN_API_SECRET
+  if (!secret) {
+    return process.env.NODE_ENV !== 'production'
+  }
+  return request.headers.get('x-admin-secret') === secret
+}
+
+export async function GET(request: Request) {
+  if (!isAuthorized(request)) {
+    return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  }
+
   const env = {
     NEXT_PUBLIC_SUPABASE_URL: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
@@ -13,6 +30,8 @@ export async function GET() {
     OPENROUTER_API_KEY: !!process.env.OPENROUTER_API_KEY,
     DEEPINFRA_TOKEN: !!process.env.DEEPINFRA_TOKEN,
     WIRO_API_KEY: !!process.env.WIRO_API_KEY,
+    TELEGRAM_WEBHOOK_SECRET: !!process.env.TELEGRAM_WEBHOOK_SECRET,
+    ADMIN_API_SECRET: !!process.env.ADMIN_API_SECRET,
     NEXT_PUBLIC_R2_PUBLIC_URL: process.env.NEXT_PUBLIC_R2_PUBLIC_URL || '❌ MISSING',
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL || '❌ MISSING',
     MINI_APP_URL: process.env.MINI_APP_URL || '❌ MISSING',
@@ -28,6 +47,7 @@ export async function GET() {
     'TELEGRAM_BOT_TOKEN',
     'OPENROUTER_API_KEY',
     'DEEPINFRA_TOKEN',
+    'TELEGRAM_WEBHOOK_SECRET',
   ]
 
   const missing: string[] = []
