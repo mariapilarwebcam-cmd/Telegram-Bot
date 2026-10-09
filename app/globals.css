@@ -221,6 +221,11 @@ body:has(.chat-page) {
   width: 100%;
 }
 
+/* ✅ Textarea auto-expandible
+   - Empieza en 1 línea
+   - Crece hasta 5 líneas (~120px)
+   - Luego hace scroll interno
+   - Enter envía, Shift+Enter hace salto de línea */
 .chat-input {
   flex: 1 1 0%;
   min-width: 0;
@@ -232,7 +237,17 @@ body:has(.chat-page) {
   color: var(--text);
   outline: none;
   font-family: inherit;
-  transition: all 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+
+  /* ✅ Propiedades para auto-resize */
+  resize: none;
+  overflow-y: hidden;
+  line-height: 1.4;
+  max-height: 120px;
+  min-height: 40px;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+
   -webkit-appearance: none;
 }
 
@@ -244,6 +259,15 @@ body:has(.chat-page) {
 
 .chat-input::placeholder {
   color: #6b5b8e;
+}
+
+/* Scrollbar interna cuando el textarea llega a su altura máxima */
+.chat-input::-webkit-scrollbar {
+  width: 4px;
+}
+.chat-input::-webkit-scrollbar-thumb {
+  background: rgba(168, 85, 247, 0.4);
+  border-radius: 2px;
 }
 
 /* ============ BOTONES DE ÍCONO (audio, cámara, enviar) ============ */
@@ -304,6 +328,7 @@ body:has(.chat-page) {
   .chat-input {
     padding: 8px 12px;
     font-size: 14px;
+    max-height: 100px;
   }
 }
 
@@ -900,7 +925,6 @@ body:has(.chat-page) {
    ✅ BANNER DE OFERTA DE FOTO — ANIMACIONES
    ============================================================ */
 
-/* Pulso suave (banner sin gemas suficientes / no premium) */
 @keyframes pulseSoft {
   0%, 100% {
     box-shadow: 0 0 12px rgba(168, 85, 247, 0.4);
@@ -914,7 +938,6 @@ body:has(.chat-page) {
   }
 }
 
-/* Pulso GLOW fuerte (banner con gemas suficientes — MAX conversión) */
 @keyframes pulseGlow {
   0%, 100% {
     box-shadow:
@@ -933,7 +956,6 @@ body:has(.chat-page) {
   }
 }
 
-/* Barrido de luz (shimmer) que cruza el banner */
 @keyframes shimmer {
   0% {
     background-position: -200% center;
@@ -943,13 +965,11 @@ body:has(.chat-page) {
   }
 }
 
-/* Emoji flotando arriba y abajo */
 @keyframes float {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-4px); }
 }
 
-/* Badge y flecha pulsando */
 @keyframes badgePulse {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.15); }
@@ -1057,7 +1077,6 @@ body:has(.chat-page) {
   animation: badgeFadeIn 0.5s ease-out;
 }
 
-/* Modo hook (mensajes gratis restantes) — morado */
 .status-badge-hook {
   color: #f0abfc;
   background: rgba(168, 85, 247, 0.15);
@@ -1065,7 +1084,6 @@ body:has(.chat-page) {
   text-shadow: 0 0 6px rgba(240, 171, 252, 0.5);
 }
 
-/* Modo low gems (pocas gemas) — amarillo */
 .status-badge-low {
   color: #fcd34d;
   background: rgba(251, 191, 36, 0.12);
