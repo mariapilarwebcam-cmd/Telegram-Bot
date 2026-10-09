@@ -41,6 +41,47 @@ def _to_arg(value: Any) -> Dict[str, Any]:
     return {"type": "text", "value": str(value)}
 
 
+def _parse_cell(cell: Any) -> Any:
+    """
+    ✅ FIX: Convierte una celda del formato Turso al valor Python nativo.
+    Turso devuelve:
+      {"type": "integer", "value": "0"}
+      {"type": "text",    "value": "hola"}
+      {"type": "real",    "value": "3.14"}
+      {"type": "null"}
+    Y queremos:
+      0
+      "hola"
+      3.14
+      None
+    """
+    if cell is None:
+        return None
+    if not isinstance(cell, dict):
+        return cell
+
+    t = cell.get("type")
+    v = cell.get("value")
+
+    if t == "null":
+        return None
+    if t == "integer":
+        try:
+            return int(v) if v is not None else 0
+        except (ValueError, TypeError):
+            return 0
+    if t == "real":
+        try:
+            return float(v) if v is not None else 0.0
+        except (ValueError, TypeError):
+            return 0.0
+    if t == "text":
+        return v if v is not None else ""
+    if t == "blob":
+        return v  # base64 string
+    return v
+
+
 def _pipeline(sql: str, args: Optional[List[Any]] = None) -> Dict[str, Any]:
     """Ejecuta UNA query vía pipeline HTTP y devuelve el `result` crudo."""
     stmt = {
@@ -84,11 +125,20 @@ def _pipeline(sql: str, args: Optional[List[Any]] = None) -> Dict[str, Any]:
 
 
 def turso_query(sql: str, args: Optional[List[Any]] = None) -> List[Dict[str, Any]]:
-    """SELECT → lista de dicts."""
+    """SELECT → lista de dicts con valores Python nativos."""
     result = _pipeline(sql, args)
     cols = [c["name"] for c in (result.get("cols") or [])]
-    rows = result.get("rows") or []
-    return [dict(zip(cols, row)) for row in rows]
+    raw_rows = result.get("rows") or []
+
+    parsed_rows: List[Dict[str, Any]] = []
+    for raw in raw_rows:
+        row: Dict[str, Any] = {}
+        for i, col in enumerate(cols):
+            cell = raw[i] if i < len(raw) else None
+            row[col] = _parse_cell(cell)
+        parsed_rows.append(row)
+
+    return parsed_rows
 
 
 def turso_query_one(sql: str, args: Optional[List[Any]] = None) -> Optional[Dict[str, Any]]:
