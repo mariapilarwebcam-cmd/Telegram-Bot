@@ -86,89 +86,88 @@ const CHARACTER_DNA: Record<string, string> = {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ✅ ARCHETYPE_IMAGE_HINTS
+// ✅ ARCHETYPE_IMAGE_HINTS — 64 claves ÚNICAS (gender_archetype)
 // Toques visuales específicos por arquetipo (niveles 4-5)
 // ═══════════════════════════════════════════════════════════════
 const ARCHETYPE_IMAGE_HINTS: Record<string, string> = {
-  // ─── FEMENINOS ───
-  stepmom: 'luxurious silk robe, mature elegance, wine glass, sophisticated boudoir',
-  tsundere: 'proud expression with blush, red ribbon still in hair, school uniform displaced',
-  yandere: 'obsessive loving gaze, pink aesthetic, plushies around, intense devotion',
-  stepsister: 'casual home setting, playful rebellious energy, messy sheets',
-  boss: 'powerful executive aura, silk blouse open, office after hours, commanding',
-  teacher: 'glasses slightly lowered, intellectual seductive, books in background',
-  model_student: 'popular vibe, trendy outfit, natural confidence, playful tease',
-  model: 'high fashion glamour, editorial pose, perfect skin, designer lingerie',
-  secretary: 'pencil skirt displaced, glasses on chain, office intimacy after hours',
-  trainer: 'athletic toned body, sporty bra, sweat glow, confident smirk',
-  schoolmate: 'casual uniform, playful energy, natural charm, blushing',
-  neighbor: 'cozy apartment warmth, casual intimacy, morning light, natural',
-  doctor: 'white coat slipping, clinical privacy, professional allure',
-  actor: 'dramatic hollywood glamour, backstage intimacy, cinematic aura',
-  musician: 'bohemian sensuality, artistic vulnerability, leather and lace',
-  chef: 'apron still on, sensual culinary aesthetic, warm kitchen glow',
-  hairdresser: 'salon intimacy, warm brown skin glowing, closeness',
-  nurse: 'nurse scrubs, late night hospital, tender seduction',
-  singer: 'stage glamour, sequins and spotlight, superstar aura',
-  yoga_instructor: 'serene athletic body, warm studio light, flexible pose',
-  surfer_f: 'sun-kissed skin, beach intimacy, ocean sounds, natural beauty',
-  maid: 'classic maid outfit, devoted expression, elegant service aesthetic',
-  goth_dom: 'gothic dominance, leather corset, crimson lights, commanding',
-  vampire_lady: 'gothic castle chamber, crimson candles, aristocratic dominance',
-  succubus: 'demonic seduction, purple hellfire glow, leathery wings extended',
-  werewolf_f: 'moonlit wilderness, primal instincts, tribal leather outfit',
-  fallen_angel: 'broken cathedral, torn wings, tragic melancholy, moonlit',
-  kitsune: 'shrine at night, magical flames, fox tails curled, playful mystery',
-  elf: 'enchanted forest, moonlight through leaves, ethereal beauty',
-  witch: 'candlelit coven, magical runes floating, mystical seduction',
-  nun_fantasy: 'dim chapel, candlelight, sacred and forbidden conflict',
-  demon_girl: 'hellish flame, playful teasing, chaotic energy, red glow',
-  // ─── MASCULINOS ───
-  stepdad: 'mature authority, whiskey glass, dark study, dominant presence',
-  stepbrother: 'athletic casual, home setting, playful dominance',
-  boss: 'executive power, dark office after hours, commanding presence',
-  ceo: 'luxury penthouse, tailored suit removed, city skyline behind',
-  bodyguard: 'protective intensity, black suit open, muscular frame',
-  teacher: 'classroom after hours, intellectual allure, formal but unbuttoned',
-  doctor: 'clinical privacy, white coat opened, professional control',
-  firefighter: 'post-shift intimacy, heroic aura, warm skin, exhausted strength',
-  trainer: 'gym after hours, athletic body, intensity and discipline',
-  mma_fighter: 'fighter intensity, taped hands, sweat and determination',
-  childhood_friend: 'familiar intimacy, casual warmth, home setting',
-  neighbor: 'apartment intimacy, relaxed charm, natural closeness',
-  basketball_player: 'athletic dominance, locker room privacy, competitive',
-  barber: 'shop after close, leather apron, intimate grooming',
-  musician: 'studio after recording, artistic vulnerability, guitar nearby',
-  rapper: 'studio privacy, gold chains glint, dominant presence',
-  chef: 'kitchen intimacy after service, apron discarded, warm authority',
-  actor: 'dressing room intimacy, dramatic gaze, cinematic mood',
-  tattoo_artist: 'tattoo studio privacy, neon lighting, tattoos visible',
-  artist: 'studio with canvas, bohemian sensuality, painter hands',
-  writer: 'library intimacy, intellectual seduction, glasses on',
-  surfer_m: 'beach at sunset, athletic body glistening, primal sensuality',
-  schoolmate: 'dorm room intimacy, youthful energy, playful tension',
-  vampire_lord: 'gothic castle chamber, crimson candles, aristocratic dominance',
-  demon_lord: 'hellish throne, black and gold armor removed, demonic power',
-  werewolf_m: 'moonlit wilderness, tribal muscles, primal dominance',
-  dark_hunter: 'rainy gothic alley, trench coat removed, scarred intensity',
-  dragon_lord: 'volcanic cavern, treasure hoard behind, ancient power',
-  elf_prince: 'elven palace chamber, ethereal elegance, aristocratic allure',
-  oni_male: 'mountain shrine, red lanterns, primal demonic strength',
-  knight: 'castle chamber, armor removed, honor and heat',
-  angel_m: 'celestial clouds, divine golden light, sacred intimacy',
+  // ─── FEMENINOS (32) ───
+  female_stepmom: 'luxurious silk robe, mature elegance, wine glass, sophisticated boudoir',
+  female_tsundere: 'proud expression with blush, red ribbon still in hair, school uniform displaced',
+  female_yandere: 'obsessive loving gaze, pink aesthetic, plushies around, intense devotion',
+  female_stepsister: 'casual home setting, playful rebellious energy, messy sheets',
+  female_boss: 'powerful executive aura, silk blouse open, office after hours, commanding',
+  female_teacher: 'glasses slightly lowered, intellectual seductive, books in background',
+  female_model_student: 'popular vibe, trendy outfit, natural confidence, playful tease',
+  female_model: 'high fashion glamour, editorial pose, perfect skin, designer lingerie',
+  female_secretary: 'pencil skirt displaced, glasses on chain, office intimacy after hours',
+  female_trainer: 'athletic toned body, sporty bra, sweat glow, confident smirk',
+  female_schoolmate: 'casual uniform, playful energy, natural charm, blushing',
+  female_neighbor: 'cozy apartment warmth, casual intimacy, morning light, natural',
+  female_doctor: 'white coat slipping, clinical privacy, professional allure',
+  female_actor: 'dramatic hollywood glamour, backstage intimacy, cinematic aura',
+  female_musician: 'bohemian sensuality, artistic vulnerability, leather and lace',
+  female_chef: 'apron still on, sensual culinary aesthetic, warm kitchen glow',
+  female_hairdresser: 'salon intimacy, warm brown skin glowing, closeness',
+  female_nurse: 'nurse scrubs, late night hospital, tender seduction',
+  female_singer: 'stage glamour, sequins and spotlight, superstar aura',
+  female_yoga_instructor: 'serene athletic body, warm studio light, flexible pose',
+  female_surfer_f: 'sun-kissed skin, beach intimacy, ocean sounds, natural beauty',
+  female_maid: 'classic maid outfit, devoted expression, elegant service aesthetic',
+  female_goth_dom: 'gothic dominance, leather corset, crimson lights, commanding',
+  female_vampire_lady: 'gothic castle chamber, crimson candles, aristocratic dominance',
+  female_succubus: 'demonic seduction, purple hellfire glow, leathery wings extended',
+  female_werewolf_f: 'moonlit wilderness, primal instincts, tribal leather outfit',
+  female_fallen_angel: 'broken cathedral, torn wings, tragic melancholy, moonlit',
+  female_kitsune: 'shrine at night, magical flames, fox tails curled, playful mystery',
+  female_elf: 'enchanted forest, moonlight through leaves, ethereal beauty',
+  female_witch: 'candlelit coven, magical runes floating, mystical seduction',
+  female_nun_fantasy: 'dim chapel, candlelight, sacred and forbidden conflict',
+  female_demon_girl: 'hellish flame, playful teasing, chaotic energy, red glow',
+  // ─── MASCULINOS (32) ───
+  male_stepdad: 'mature authority, whiskey glass, dark study, dominant presence',
+  male_stepbrother: 'athletic casual, home setting, playful dominance',
+  male_boss: 'executive power, dark office after hours, commanding presence',
+  male_ceo: 'luxury penthouse, tailored suit removed, city skyline behind',
+  male_bodyguard: 'protective intensity, black suit open, muscular frame',
+  male_teacher: 'classroom after hours, intellectual allure, formal but unbuttoned',
+  male_doctor: 'clinical privacy, white coat opened, professional control',
+  male_firefighter: 'post-shift intimacy, heroic aura, warm skin, exhausted strength',
+  male_trainer: 'gym after hours, athletic body, intensity and discipline',
+  male_mma_fighter: 'fighter intensity, taped hands, sweat and determination',
+  male_childhood_friend: 'familiar intimacy, casual warmth, home setting',
+  male_neighbor: 'apartment intimacy, relaxed charm, natural closeness',
+  male_basketball_player: 'athletic dominance, locker room privacy, competitive',
+  male_barber: 'shop after close, leather apron, intimate grooming',
+  male_musician: 'studio after recording, artistic vulnerability, guitar nearby',
+  male_rapper: 'studio privacy, gold chains glint, dominant presence',
+  male_chef: 'kitchen intimacy after service, apron discarded, warm authority',
+  male_actor: 'dressing room intimacy, dramatic gaze, cinematic mood',
+  male_tattoo_artist: 'tattoo studio privacy, neon lighting, tattoos visible',
+  male_artist: 'studio with canvas, bohemian sensuality, painter hands',
+  male_writer: 'library intimacy, intellectual seduction, glasses on',
+  male_surfer_m: 'beach at sunset, athletic body glistening, primal sensuality',
+  male_schoolmate: 'dorm room intimacy, youthful energy, playful tension',
+  male_vampire_lord: 'gothic castle chamber, crimson candles, aristocratic dominance',
+  male_demon_lord: 'hellish throne, black and gold armor removed, demonic power',
+  male_werewolf_m: 'moonlit wilderness, tribal muscles, primal dominance',
+  male_dark_hunter: 'rainy gothic alley, trench coat removed, scarred intensity',
+  male_dragon_lord: 'volcanic cavern, treasure hoard behind, ancient power',
+  male_elf_prince: 'elven palace chamber, ethereal elegance, aristocratic allure',
+  male_oni_male: 'mountain shrine, red lanterns, primal demonic strength',
+  male_knight: 'castle chamber, armor removed, honor and heat',
+  male_angel_m: 'celestial clouds, divine golden light, sacred intimacy',
 }
 
 // ═══════════════════════════════════════════════════════════════
-// Face rules (para niveles 1-2 y parciales 3)
+// Face rules
 // ═══════════════════════════════════════════════════════════════
 const FACE_HIDDEN_FRAGMENT = 'The subject\'s face is NOT visible in the photo. Use creative framing: selfie cropped at chin level, shot from behind, close-up on body and hands only, over-the-shoulder angle without face, face hidden by phone position, hair, turned away, or by an object. The face must NOT appear or must be completely obscured.'
 
 const FACE_PARTIAL_FRAGMENT = 'The subject\'s face is only partially visible: side profile in soft shadow, three-quarter angle with hair covering one eye, face softly obscured by dim light or shadow, or turned to the side. Do not show a full clear frontal face.'
 
 // ═══════════════════════════════════════════════════════════════
-// ✅ SFW SCENE PROMPTS (niveles 1-3) → DeepInfra / FLUX
-// Selfie-style, cara oculta/parcial, muy específicos
-// ✅ Nivel 3: más coqueto, sugerente, elegante — pero SFW
+// SFW SCENE PROMPTS (niveles 1-3) → DeepInfra / FLUX
+// Nivel 3: más coqueto y sugerente, pero SFW
 // ═══════════════════════════════════════════════════════════════
 const SFW_SCENE_PROMPTS: Record<number, string> = {
   1: `selfie photo taken by the character with the phone in hand, close to the body,
@@ -225,7 +224,7 @@ const SFW_SCENE_PROMPTS: Record<number, string> = {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ✅ NSFW SCENE PROMPTS (niveles 4-5) → Wiro v4-5-uncensored
+// NSFW SCENE PROMPTS (niveles 4-5) → Wiro v4-5-uncensored
 // ═══════════════════════════════════════════════════════════════
 const NSFW_SCENE_PROMPTS: Record<number, string> = {
   4: 'intimate photo, minimal tasteful clothing or elegant lingerie, very revealing but no explicit nudity, artistic suggestive pose, low intimate lighting, bedroom setting, high-end boudoir aesthetic, heat and tension palpable, flushed skin, breathless expression, sensual atmosphere',
@@ -233,7 +232,7 @@ const NSFW_SCENE_PROMPTS: Record<number, string> = {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// AUTO SCENES (fallback cuando no hay userHint)
+// AUTO SCENES (fallback)
 // ═══════════════════════════════════════════════════════════════
 const AUTO_SCENES_FEMALE: Record<number, string> = {
   1: 'relaxed at home in a cozy room, natural soft smile, casual daylight atmosphere, warm and wholesome vibe',
@@ -252,7 +251,7 @@ const AUTO_SCENES_MALE: Record<number, string> = {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ✅ extractMoodFromMessages — contexto de la conversación
+// extractMoodFromMessages — contexto conversacional
 // ═══════════════════════════════════════════════════════════════
 function extractMoodFromMessages(messages: string[]): string {
   if (!messages || messages.length === 0) return ''
@@ -384,7 +383,6 @@ export async function POST(request: Request) {
         faceRule = FACE_PARTIAL_FRAGMENT
       }
 
-      // ✅ Ensamblado específico para SFW
       const layers = [
         `[CHARACTER: ${dna}]`,
         'highly detailed anime illustration, cel shading, soft cinematic lighting',
@@ -405,7 +403,11 @@ export async function POST(request: Request) {
       const facePrompt = getCharacterFace(character.archetype, character.gender)
       const clothing = getClothingLevel(level.level)
       const scene = NSFW_SCENE_PROMPTS[level.level] || NSFW_SCENE_PROMPTS[4]
-      const archetypeHint = ARCHETYPE_IMAGE_HINTS[character.archetype] || ''
+
+      // ✅ Clave gender_archetype (64 únicas)
+      const archetypeHint =
+        ARCHETYPE_IMAGE_HINTS[`${character.gender}_${character.archetype}`] || ''
+
       const moodHint = extractMoodFromMessages(recent_messages)
 
       const layers = [
@@ -432,7 +434,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Error al generar la imagen' }, { status: 500 })
     }
 
-    // ✅ RPC ATÓMICA: descuenta de gems Y purchased_gems
+    // ✅ RPC ATÓMICA
     const { data: rpcData, error: rpcErr } = await supabaseAdmin.rpc(
       'decrement_gems_and_purchased',
       {
