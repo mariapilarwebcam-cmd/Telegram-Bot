@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState, useRef } from 'react'
-import { supabase } from '@/lib/supabase'
 import { tgFetch } from '@/lib/telegram-fetch'
 import {
   STAR_PACKAGES,
@@ -27,15 +26,18 @@ export default function ShopPage() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const { pay } = useTonPay()
-
   const t = getTranslations(lang)
 
+  // ═══════════════════════════════════════════════════════════════
+  // ✅ MIGRADO: ahora usa /api/is-premium (Turso)
+  // ═══════════════════════════════════════════════════════════════
   useEffect(() => {
     if (!user?.telegram_id) {
       if (!userLoading) setChecking(false)
       return
     }
 
+    // Cache en memoria
     if (purchaseCache[user.telegram_id] !== undefined) {
       setHasPurchased(purchaseCache[user.telegram_id])
       setChecking(false)
@@ -43,33 +45,29 @@ export default function ShopPage() {
     }
 
     let cancelled = false
-    const timeout = setTimeout(() => {
-      if (!cancelled) setChecking(false)
-    }, 3000)
 
-    Promise.race([
-      supabase
-        .from('star_purchases')
-        .select('id')
-        .eq('telegram_id', user.telegram_id)
-        .limit(1),
-      new Promise((resolve) => setTimeout(() => resolve({ data: null }), 3000)),
-    ])
-      .then((result: any) => {
+    tgFetch('/api/is-premium')
+      .then(async (res) => {
         if (cancelled) return
-        const has = !!(result?.data && result.data.length > 0)
+        if (!res.ok) {
+          setChecking(false)
+          return
+        }
+        const data = await res.json()
+        const has = !!data.has_purchased
         purchaseCache[user.telegram_id] = has
         setHasPurchased(has)
         setChecking(false)
       })
-      .catch(() => {
-        if (!cancelled) setChecking(false)
+      .catch((e) => {
+        if (!cancelled) {
+          console.warn('[shop] is-premium error:', e)
+          setChecking(false)
+        }
       })
-      .finally(() => clearTimeout(timeout))
 
     return () => {
       cancelled = true
-      clearTimeout(timeout)
     }
   }, [user?.telegram_id, userLoading])
 
@@ -89,9 +87,7 @@ export default function ShopPage() {
       const res = await tgFetch('/api/create-invoice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          package_id: idx,
-        }),
+        body: JSON.stringify({ package_id: idx }),
       })
       const data = await res.json()
       if (res.ok && data.invoice_link) {
@@ -182,9 +178,7 @@ export default function ShopPage() {
       const res = await tgFetch('/api/create-crypto-invoice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          package_id: idx,
-        }),
+        body: JSON.stringify({ package_id: idx }),
       })
       const data = await res.json()
       if (!res.ok || !data.payment_data) {
@@ -205,9 +199,7 @@ export default function ShopPage() {
             commentToRecipient: payment_data.reference,
             commentToSender: `Taboo Realm — ${payment_data.amount} USDT`,
           },
-          {
-            chain: 'mainnet',
-          }
+          { chain: 'mainnet' }
         )
         return {
           message: transfer.message,
@@ -217,7 +209,6 @@ export default function ShopPage() {
       })
 
       console.log('[shop] crypto payment sent:', result)
-
       startPolling(payment_data.reference)
     } catch (e: any) {
       console.error('[shop] crypto error:', e)
@@ -277,7 +268,6 @@ export default function ShopPage() {
             border: '1px solid rgba(255, 255, 255, 0.06)',
           }}
         >
-          {/* ✅ SVG unificado del diamante */}
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
             <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" fill="#a78bfa" />
           </svg>
@@ -316,14 +306,7 @@ export default function ShopPage() {
           <h2 style={{ fontSize: 24, fontWeight: 900, color: '#fff', margin: '0 0 4px 0' }}>
             {t.premiumTitle}
           </h2>
-          <p
-            style={{
-              fontSize: 14,
-              color: 'rgba(255,255,255,0.8)',
-              margin: 0,
-              maxWidth: '75%',
-            }}
-          >
+          <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)', margin: 0, maxWidth: '75%' }}>
             {t.premiumDesc}
           </p>
         </div>
@@ -342,18 +325,13 @@ export default function ShopPage() {
                   ? 'linear-gradient(135deg, #a855f7 0%, #ec4899 100%)'
                   : 'rgba(168, 85, 247, 0.08)',
               color: paymentMethod === 'stars' ? '#fff' : '#a395c9',
-              border:
-                paymentMethod === 'stars'
-                  ? 'none'
-                  : '1px solid rgba(168, 85, 247, 0.2)',
+              border: paymentMethod === 'stars' ? 'none' : '1px solid rgba(168, 85, 247, 0.2)',
               fontSize: 14,
               fontWeight: 700,
               cursor: 'pointer',
               fontFamily: 'inherit',
               boxShadow:
-                paymentMethod === 'stars'
-                  ? '0 4px 16px rgba(236, 72, 153, 0.5)'
-                  : 'none',
+                paymentMethod === 'stars' ? '0 4px 16px rgba(236, 72, 153, 0.5)' : 'none',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -373,25 +351,19 @@ export default function ShopPage() {
                   ? 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)'
                   : 'rgba(34, 197, 94, 0.08)',
               color: paymentMethod === 'crypto' ? '#fff' : '#a395c9',
-              border:
-                paymentMethod === 'crypto'
-                  ? 'none'
-                  : '1px solid rgba(34, 197, 94, 0.3)',
+              border: paymentMethod === 'crypto' ? 'none' : '1px solid rgba(34, 197, 94, 0.3)',
               fontSize: 14,
               fontWeight: 700,
               cursor: 'pointer',
               fontFamily: 'inherit',
               boxShadow:
-                paymentMethod === 'crypto'
-                  ? '0 4px 16px rgba(34, 197, 94, 0.5)'
-                  : 'none',
+                paymentMethod === 'crypto' ? '0 4px 16px rgba(34, 197, 94, 0.5)' : 'none',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               gap: 6,
             }}
           >
-            {/* ✅ SVG unificado en lugar de emoji 💎 */}
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
               <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" fill="currentColor" />
             </svg>
@@ -422,9 +394,7 @@ export default function ShopPage() {
       )}
 
       <section style={{ padding: '24px 16px 0' }}>
-        <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>
-          {t.packages}
-        </h2>
+        <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>{t.packages}</h2>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {paymentMethod === 'stars'
@@ -472,28 +442,18 @@ export default function ShopPage() {
                         flexShrink: 0,
                       }}
                     >
-                      {/* ✅ SVG unificado en lugar de emoji */}
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
                         <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" fill="#fff" />
                       </svg>
                     </div>
 
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 8,
-                          flexWrap: 'wrap',
-                        }}
-                      >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         <p style={{ fontWeight: 700, fontSize: 16, margin: 0 }}>
                           {pkg.gems} {t.gems}
                         </p>
                         {finalGems > pkg.gems && (
-                          <span
-                            style={{ fontSize: 13, color: '#22c55e', fontWeight: 700 }}
-                          >
+                          <span style={{ fontSize: 13, color: '#22c55e', fontWeight: 700 }}>
                             + {finalGems - pkg.gems} {t.bonusGems}
                           </span>
                         )}
@@ -516,9 +476,7 @@ export default function ShopPage() {
                     </div>
 
                     <div style={{ flexShrink: 0, textAlign: 'right' }}>
-                      <p style={{ fontWeight: 700, fontSize: 14, margin: 0 }}>
-                        {pkg.stars}
-                      </p>
+                      <p style={{ fontWeight: 700, fontSize: 14, margin: 0 }}>{pkg.stars}</p>
                       <p
                         style={{
                           fontSize: 10,
@@ -575,28 +533,18 @@ export default function ShopPage() {
                         flexShrink: 0,
                       }}
                     >
-                      {/* ✅ SVG unificado en lugar de emoji 💎 */}
                       <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
                         <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" fill="#fff" />
                       </svg>
                     </div>
 
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 8,
-                          flexWrap: 'wrap',
-                        }}
-                      >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         <p style={{ fontWeight: 700, fontSize: 16, margin: 0 }}>
                           {pkg.gems} {t.gems}
                         </p>
                         {finalGems > pkg.gems && (
-                          <span
-                            style={{ fontSize: 13, color: '#22c55e', fontWeight: 700 }}
-                          >
+                          <span style={{ fontSize: 13, color: '#22c55e', fontWeight: 700 }}>
                             + {finalGems - pkg.gems} {t.bonusGems}
                           </span>
                         )}
@@ -619,9 +567,7 @@ export default function ShopPage() {
                     </div>
 
                     <div style={{ flexShrink: 0, textAlign: 'right' }}>
-                      <p style={{ fontWeight: 700, fontSize: 14, margin: 0 }}>
-                        {pkg.usdt}
-                      </p>
+                      <p style={{ fontWeight: 700, fontSize: 14, margin: 0 }}>{pkg.usdt}</p>
                       <p
                         style={{
                           fontSize: 10,
