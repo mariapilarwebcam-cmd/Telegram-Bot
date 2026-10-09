@@ -1,8 +1,13 @@
 // app/api/generate-image/route.ts
 
 import { NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase-admin'
-import { ensureUser } from '@/lib/user-helpers'
+import {
+  ensureUser,
+  getCharacter,
+  countUserMessages,
+  decrementGemsAndPurchased,
+  insertGemTransaction,
+} from '@/lib/db-queries'
 import { getCharacterFace, getCharacterImageUrl } from '@/lib/constants'
 import { generateImage } from '@/lib/ai'
 import {
@@ -86,11 +91,9 @@ const CHARACTER_DNA: Record<string, string> = {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ✅ ARCHETYPE_IMAGE_HINTS — 64 claves ÚNICAS (gender_archetype)
-// Toques visuales específicos por arquetipo (niveles 4-5)
+// ARCHETYPE_IMAGE_HINTS — 64 claves únicas (gender_archetype)
 // ═══════════════════════════════════════════════════════════════
 const ARCHETYPE_IMAGE_HINTS: Record<string, string> = {
-  // ─── FEMENINOS (32) ───
   female_stepmom: 'luxurious silk robe, mature elegance, wine glass, sophisticated boudoir',
   female_tsundere: 'proud expression with blush, red ribbon still in hair, school uniform displaced',
   female_yandere: 'obsessive loving gaze, pink aesthetic, plushies around, intense devotion',
@@ -123,7 +126,6 @@ const ARCHETYPE_IMAGE_HINTS: Record<string, string> = {
   female_witch: 'candlelit coven, magical runes floating, mystical seduction',
   female_nun_fantasy: 'dim chapel, candlelight, sacred and forbidden conflict',
   female_demon_girl: 'hellish flame, playful teasing, chaotic energy, red glow',
-  // ─── MASCULINOS (32) ───
   male_stepdad: 'mature authority, whiskey glass, dark study, dominant presence',
   male_stepbrother: 'athletic casual, home setting, playful dominance',
   male_boss: 'executive power, dark office after hours, commanding presence',
@@ -158,16 +160,14 @@ const ARCHETYPE_IMAGE_HINTS: Record<string, string> = {
   male_angel_m: 'celestial clouds, divine golden light, sacred intimacy',
 }
 
-// ═══════════════════════════════════════════════════════════════
-// Face rules
-// ═══════════════════════════════════════════════════════════════
-const FACE_HIDDEN_FRAGMENT = 'The subject\'s face is NOT visible in the photo. Use creative framing: selfie cropped at chin level, shot from behind, close-up on body and hands only, over-the-shoulder angle without face, face hidden by phone position, hair, turned away, or by an object. The face must NOT appear or must be completely obscured.'
+const FACE_HIDDEN_FRAGMENT =
+  "The subject's face is NOT visible in the photo. Use creative framing: selfie cropped at chin level, shot from behind, close-up on body and hands only, over-the-shoulder angle without face, face hidden by phone position, hair, turned away, or by an object. The face must NOT appear or must be completely obscured."
 
-const FACE_PARTIAL_FRAGMENT = 'The subject\'s face is only partially visible: side profile in soft shadow, three-quarter angle with hair covering one eye, face softly obscured by dim light or shadow, or turned to the side. Do not show a full clear frontal face.'
+const FACE_PARTIAL_FRAGMENT =
+  "The subject's face is only partially visible: side profile in soft shadow, three-quarter angle with hair covering one eye, face softly obscured by dim light or shadow, or turned to the side. Do not show a full clear frontal face."
 
 // ═══════════════════════════════════════════════════════════════
 // SFW SCENE PROMPTS (niveles 1-3) → DeepInfra / FLUX
-// Nivel 3: más coqueto y sugerente, pero SFW
 // ═══════════════════════════════════════════════════════════════
 const SFW_SCENE_PROMPTS: Record<number, string> = {
   1: `selfie photo taken by the character with the phone in hand, close to the body,
@@ -231,9 +231,6 @@ const NSFW_SCENE_PROMPTS: Record<number, string> = {
   5: 'artistic boudoir photo, tasteful implied nudity with strategic coverage (sheets, shadows, artistic angles), no exposed genitalia, no explicit sexual acts, high-end artistic composition, dramatic cinematic lighting, peak intimacy moment, tangled sheets, marked skin, glowing skin, post-intimacy atmosphere, sensual silence, everything suggested nothing shown',
 }
 
-// ═══════════════════════════════════════════════════════════════
-// AUTO SCENES (fallback)
-// ═══════════════════════════════════════════════════════════════
 const AUTO_SCENES_FEMALE: Record<number, string> = {
   1: 'relaxed at home in a cozy room, natural soft smile, casual daylight atmosphere, warm and wholesome vibe',
   2: 'lying on her bed, playful flirty look toward the camera, warm intimate lighting, teasing energy',
@@ -261,23 +258,18 @@ function extractMoodFromMessages(messages: string[]): string {
   if (/\b(jadeo|jadea|respira|suspiro|temblor|tiembla|calor|fuego|húmedo|mojado|acelerado|entrecortad)\b/.test(text)) {
     return 'breathless passionate mood, disheveled, intense breathing'
   }
-
   if (/\b(hazme|tuyo|tuya|obedec|pide|por favor|tómame|tomame|entrégate|entregate|soy tu)\b/.test(text)) {
     return 'submission and surrender mood, devoted gaze, yielding posture'
   }
-
   if (/\b(domin|manda|control|orden|obedece|rodillas|sumiso|sumisa|mía|mio)\b/.test(text)) {
     return 'dominant commanding mood, intense stare, powerful posture'
   }
-
   if (/\b(beso|lento|despacio|cerca|roza|toca|acaricia|susurr|muerde|labio)\b/.test(text)) {
     return 'sensual slow burn mood, intimate closeness, tender tension'
   }
-
   if (/\b(provoc|broma|jugueto|desaf|atrev|coqueto|pícara|picara|tentaci)\b/.test(text)) {
     return 'playful teasing mood, challenging gaze, mischievous energy'
   }
-
   if (/\b(amor|quiero|corazón|corazon|tierno|dulce|abrazo)\b/.test(text)) {
     return 'romantic tender mood, warm affectionate gaze'
   }
@@ -303,7 +295,6 @@ export async function POST(request: Request) {
         ? body.description.trim().slice(0, 200)
         : ''
 
-    // ✅ Recibir últimos mensajes
     const recent_messages: string[] = Array.isArray(body?.recent_messages)
       ? body.recent_messages
           .filter((m: any) => typeof m === 'string' && m.trim().length > 0)
@@ -320,45 +311,45 @@ export async function POST(request: Request) {
 
     const purchasedGems = user.purchased_gems || 0
     if (purchasedGems <= 0) {
-      return NextResponse.json({
-        error: 'premium_required',
-        message: user.language === 'en'
-          ? 'Image generation is a Premium feature. Buy gems with Stars to unlock it.'
-          : 'La generación de imágenes es Premium. Compra gemas con Stars para desbloquearla.',
-      }, { status: 403 })
+      return NextResponse.json(
+        {
+          error: 'premium_required',
+          message:
+            user.language === 'en'
+              ? 'Image generation is a Premium feature. Buy gems with Stars to unlock it.'
+              : 'La generación de imágenes es Premium. Compra gemas con Stars para desbloquearla.',
+        },
+        { status: 403 }
+      )
     }
 
-    const { data: character } = await supabaseAdmin
-      .from('user_characters')
-      .select('archetype, character_name, gender')
-      .eq('id', character_id)
-      .eq('telegram_id', tid)
-      .maybeSingle()
-
+    const character = await getCharacter(character_id, tid)
     if (!character) {
-      return NextResponse.json({ error: 'Personaje no encontrado' }, { status: 404 })
+      return NextResponse.json(
+        { error: 'Personaje no encontrado' },
+        { status: 404 }
+      )
     }
 
-    const { count: userMsgCount } = await supabaseAdmin
-      .from('conversation_history')
-      .select('*', { count: 'exact', head: true })
-      .eq('telegram_id', tid)
-      .eq('character_id', character_id)
-      .eq('role', 'user')
+    const userMsgCount = await countUserMessages(tid, character_id)
 
     const level = getLevelFromMessages(userMsgCount || 0)
     const imageCost = getImageCost(level.level)
     const faceVisibility = getFaceVisibility(level.level)
 
     if (purchasedGems < imageCost) {
-      return NextResponse.json({
-        error: 'insufficient_gems',
-        message: user.language === 'en'
-          ? `You need ${imageCost} purchased gems`
-          : `Necesitas ${imageCost} gemas compradas`,
-        required: imageCost,
-        available: purchasedGems,
-      }, { status: 402 })
+      return NextResponse.json(
+        {
+          error: 'insufficient_gems',
+          message:
+            user.language === 'en'
+              ? `You need ${imageCost} purchased gems`
+              : `Necesitas ${imageCost} gemas compradas`,
+          required: imageCost,
+          available: purchasedGems,
+        },
+        { status: 402 }
+      )
     }
 
     const autoScenes = character.gender === 'male' ? AUTO_SCENES_MALE : AUTO_SCENES_FEMALE
@@ -367,12 +358,11 @@ export async function POST(request: Request) {
     let imagePrompt: string
     let referenceUrl: string | undefined
 
-    const NO_GENITALIA = 'tasteful artistic composition, no explicit genitalia, no nudity visible below waist, strategic coverage, high-end boudoir photography aesthetic, safe for platform'
+    const NO_GENITALIA =
+      'tasteful artistic composition, no explicit genitalia, no nudity visible below waist, strategic coverage, high-end boudoir photography aesthetic, safe for platform'
 
     if (level.level <= 3) {
-      // ══════════════════════════════════════════════════════
-      // NIVELES 1-3 → DeepInfra / FLUX (SFW, sin watermark)
-      // ══════════════════════════════════════════════════════
+      // NIVELES 1-3 → DeepInfra / FLUX (SFW)
       const dna = CHARACTER_DNA[`${character.gender}_${character.archetype}`] || 'anime character'
       const scene = SFW_SCENE_PROMPTS[level.level] || SFW_SCENE_PROMPTS[1]
 
@@ -396,18 +386,12 @@ export async function POST(request: Request) {
       imagePrompt = layers.join(', ')
       referenceUrl = undefined
     } else {
-      // ══════════════════════════════════════════════════════
-      // NIVELES 4-5 → Wiro v4-5-uncensored (NSFW sugerente)
-      // Sistema de 3 capas: DNA + escena + archetype hint + mood
-      // ══════════════════════════════════════════════════════
+      // NIVELES 4-5 → Wiro v4-5-uncensored
       const facePrompt = getCharacterFace(character.archetype, character.gender)
       const clothing = getClothingLevel(level.level)
       const scene = NSFW_SCENE_PROMPTS[level.level] || NSFW_SCENE_PROMPTS[4]
-
-      // ✅ Clave gender_archetype (64 únicas)
       const archetypeHint =
         ARCHETYPE_IMAGE_HINTS[`${character.gender}_${character.archetype}`] || ''
-
       const moodHint = extractMoodFromMessages(recent_messages)
 
       const layers = [
@@ -434,28 +418,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Error al generar la imagen' }, { status: 500 })
     }
 
-    // ✅ RPC ATÓMICA
-    const { data: rpcData, error: rpcErr } = await supabaseAdmin.rpc(
-      'decrement_gems_and_purchased',
-      {
-        p_telegram_id: tid,
-        p_amount: imageCost,
-      }
-    )
+    // RPC atómica: descuenta de gems Y purchased_gems
+    const rpcData = await decrementGemsAndPurchased(tid, imageCost)
+    const newGems = rpcData.new_gems
+    const newPurchasedGems = rpcData.new_purchased
 
-    if (rpcErr) {
-      console.error('[generate-image] RPC failed:', rpcErr)
-      return NextResponse.json(
-        { error: 'Error actualizando gemas. Contacta soporte.' },
-        { status: 500 }
-      )
-    }
-
-    const rpcRow = Array.isArray(rpcData) ? rpcData[0] : rpcData
-    const newGems = rpcRow?.new_gems ?? (user.gems || 0) - imageCost
-    const newPurchasedGems = rpcRow?.new_purchased ?? purchasedGems - imageCost
-
-    await supabaseAdmin.from('gem_transactions').insert({
+    await insertGemTransaction({
       telegram_id: tid,
       amount: -imageCost,
       transaction_type: 'image',
