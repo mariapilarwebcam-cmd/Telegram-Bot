@@ -1,7 +1,6 @@
 "use client"
 
 import { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react'
-import { supabase } from '@/lib/supabase'
 import { getLanguage, Language } from '@/lib/i18n'
 import { setInitDataRaw } from '@/lib/telegram-fetch'
 
@@ -50,12 +49,6 @@ function getTelegramWebApp(): any {
   return (window as any).Telegram?.WebApp || null
 }
 
-const USER_SELECT =
-  'telegram_id, first_name, username, gems, purchased_gems, language, ' +
-  'hook_messages_remaining, hook_used, referral_code, total_referrals, ' +
-  'paying_referrals_count, age_verified, streak_count, longest_streak, ' +
-  'last_daily_claim'
-
 export function UserProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserData | null>(memUserCache)
   const [loading, setLoading] = useState(!memUserCache)
@@ -65,6 +58,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const referralProcessed = useRef(false)
   const initStarted = useRef(false)
 
+  // Fallback de seguridad: si algo cuelga, no dejar la UI bloqueada
   useEffect(() => {
     const t = setTimeout(() => setLoading(false), 8000)
     return () => clearTimeout(t)
@@ -125,14 +119,14 @@ export function UserProvider({ children }: { children: ReactNode }) {
         setTelegramId(u.id)
         setLang(getLanguage(u.language_code))
 
-        // ✅ FIX: intentar cargar el usuario hasta 3 veces
-        // con backoff. Si falla, al menos intenta con init-user.
+        // ✅ Cargar usuario con reintentos (ahora vía /api/me → Turso)
         await loadUserWithRetry(u.id, {
           first_name: u.first_name || '',
           username: u.username || null,
           language: getLanguage(u.language_code),
         })
 
+        // Procesar referral si venimos de un link ?start=xxx
         const startParam = initDataUnsafe?.start_param
         if (startParam && !referralProcessed.current) {
           const processedKey = `taboo_ref_${u.id}_${startParam}`
@@ -158,6 +152,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     init()
   }, [])
 
+  // Refrescar al volver a la app
   useEffect(() => {
     if (!telegramId) return
 
@@ -190,30 +185,38 @@ export function UserProvider({ children }: { children: ReactNode }) {
     return false
   }
 
+  /**
+   * ✅ MIGRADO: ahora carga vía /api/me (Turso).
+   * El cliente NO lee la DB directamente (Turso no permite acceso anon).
+   * Si /api/me falla, cae a /api/init-user como fallback.
+   */
   const loadUser = async (
     id: number,
     telegramData?: { first_name: string; username: string | null; language: Language }
   ): Promise<boolean> => {
-    const tid = id.toString()
     try {
-      // 1. Intento con Supabase anon (rápido, pero puede fallar por RLS)
-      const result: any = await Promise.race([
-        supabase.from('users').select(USER_SELECT).eq('telegram_id', tid).maybeSingle(),
-        new Promise((resolve) =>
-          setTimeout(() => resolve({ data: null, error: 'timeout' }), 6000)
-        ),
-      ])
+      const { tgFetch } = await import('@/lib/telegram-fetch')
 
-      if (result?.data) {
-        const u = result.data as UserData
-        memUserCache = u
-        setUser(u)
-        return true
+      // ── Intento 1: /api/me (rápido, solo lee)
+      try {
+        const res = await tgFetch('/api/me')
+        if (res.ok) {
+          const data = await res.json()
+          if (data?.user) {
+            const u = data.user as UserData
+            memUserCache = u
+            setUser(u)
+            return true
+          }
+        } else {
+          console.warn('[UserContext] /api/me HTTP', res.status)
+        }
+      } catch (e) {
+        console.warn('[UserContext] /api/me error:', e)
       }
 
-      // 2. Fallback a /api/init-user (usa service_role, crea si no existe)
+      // ── Fallback: /api/init-user (crea si no existe)
       try {
-        const { tgFetch } = await import('@/lib/telegram-fetch')
         const res = await tgFetch('/api/init-user', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
