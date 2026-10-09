@@ -1,8 +1,13 @@
 // app/api/generate-audio/route.ts
 
 import { NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase-admin'
-import { ensureUser } from '@/lib/user-helpers'
+import {
+  ensureUser,
+  getCharacter,
+  countUserMessages,
+  decrementGemsAndPurchased,
+  insertGemTransaction,
+} from '@/lib/db-queries'
 import { generateAudio } from '@/lib/ai'
 import { getLevelFromMessages, getAudioCost } from '@/lib/levels'
 
@@ -15,9 +20,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
-    const { character_id, text } = await request.json()
+    const body = await request.json().catch(() => ({}))
+    const { character_id, text } = body
 
-    // ✅ FIX: crea el usuario si no existe
     const user = await ensureUser(tid)
     if (!user) {
       return NextResponse.json(
@@ -28,42 +33,43 @@ export async function POST(request: Request) {
 
     const purchasedGems = user.purchased_gems || 0
     if (purchasedGems <= 0) {
-      return NextResponse.json({
-        error: 'premium_required',
-        message: user.language === 'en'
-          ? 'Voice audio is a Premium feature. Buy gems with Stars to unlock it.'
-          : 'El audio de voz es Premium. Compra gemas con Stars para desbloquearlo.',
-      }, { status: 403 })
+      return NextResponse.json(
+        {
+          error: 'premium_required',
+          message:
+            user.language === 'en'
+              ? 'Voice audio is a Premium feature. Buy gems with Stars to unlock it.'
+              : 'El audio de voz es Premium. Compra gemas con Stars para desbloquearlo.',
+        },
+        { status: 403 }
+      )
     }
 
-    const { data: character } = await supabaseAdmin
-      .from('user_characters')
-      .select('gender')
-      .eq('id', character_id)
-      .eq('telegram_id', tid)
-      .maybeSingle()
+    const character = await getCharacter(character_id, tid)
+    if (!character) {
+      return NextResponse.json(
+        { error: 'Personaje no encontrado' },
+        { status: 404 }
+      )
+    }
 
-    if (!character) return NextResponse.json({ error: 'Personaje no encontrado' }, { status: 404 })
-
-    const { count: userMsgCount } = await supabaseAdmin
-      .from('conversation_history')
-      .select('*', { count: 'exact', head: true })
-      .eq('telegram_id', tid)
-      .eq('character_id', character_id)
-      .eq('role', 'user')
-
+    const userMsgCount = await countUserMessages(tid, character_id)
     const level = getLevelFromMessages(userMsgCount || 0)
     const audioCost = getAudioCost(level.level)
 
     if (purchasedGems < audioCost) {
-      return NextResponse.json({
-        error: 'insufficient_gems',
-        message: user.language === 'en'
-          ? `You need ${audioCost} purchased gems`
-          : `Necesitas ${audioCost} gemas compradas`,
-        required: audioCost,
-        available: purchasedGems,
-      }, { status: 402 })
+      return NextResponse.json(
+        {
+          error: 'insufficient_gems',
+          message:
+            user.language === 'en'
+              ? `You need ${audioCost} purchased gems`
+              : `Necesitas ${audioCost} gemas compradas`,
+          required: audioCost,
+          available: purchasedGems,
+        },
+        { status: 402 }
+      )
     }
 
     const cleanText = (text || '')
@@ -72,36 +78,24 @@ export async function POST(request: Request) {
       .replace(/!\[[^\]]*\]\([^)]+\)/g, '')
       .trim()
 
-    if (!cleanText) return NextResponse.json({ error: 'No hay diálogo' }, { status: 400 })
+    if (!cleanText) {
+      return NextResponse.json({ error: 'No hay diálogo' }, { status: 400 })
+    }
 
     const gender = character.gender === 'male' ? 'male' : 'female'
     const lang = (user.language === 'en' ? 'en' : 'es') as 'es' | 'en'
 
     const audioData = await generateAudio(cleanText, gender, lang)
-    if (!audioData) return NextResponse.json({ error: 'Sin audio' }, { status: 500 })
-
-    // ✅ RPC ATÓMICA: descuenta de gems Y purchased_gems
-    const { data: rpcData, error: rpcErr } = await supabaseAdmin.rpc(
-      'decrement_gems_and_purchased',
-      {
-        p_telegram_id: tid,
-        p_amount: audioCost,
-      }
-    )
-
-    if (rpcErr) {
-      console.error('[generate-audio] RPC failed:', rpcErr)
-      return NextResponse.json(
-        { error: 'Error actualizando gemas. Contacta soporte.' },
-        { status: 500 }
-      )
+    if (!audioData) {
+      return NextResponse.json({ error: 'Sin audio' }, { status: 500 })
     }
 
-    const rpcRow = Array.isArray(rpcData) ? rpcData[0] : rpcData
-    const newGems = rpcRow?.new_gems ?? (user.gems || 0) - audioCost
-    const newPurchasedGems = rpcRow?.new_purchased ?? purchasedGems - audioCost
+    // RPC atómica: descuenta de gems Y purchased_gems
+    const rpcData = await decrementGemsAndPurchased(tid, audioCost)
+    const newGems = rpcData.new_gems
+    const newPurchasedGems = rpcData.new_purchased
 
-    await supabaseAdmin.from('gem_transactions').insert({
+    await insertGemTransaction({
       telegram_id: tid,
       amount: -audioCost,
       transaction_type: 'audio',
