@@ -37,7 +37,6 @@ function getGradient(key: string) {
   return GRADIENTS[Math.abs(h) % GRADIENTS.length]
 }
 
-// ✅ Rotaciones del header (para variar el texto cada 5s)
 const HOOK_ROTATIONS_ES: Array<(n: number) => string> = [
   (n) => `🎁 ${n} gratis`,
   (n) => `✨ ${n} restantes`,
@@ -80,6 +79,9 @@ const LEVEL_UP_COPY_EN: Record<number, (name: string) => string> = {
   5: (n) => `😈 Something forbidden. No one has gotten this far with ${n}.`,
 }
 
+// ✅ Máximo de altura del textarea (px). Aprox 5 líneas.
+const TEXTAREA_MAX_HEIGHT = 120
+
 export default function ChatPage() {
   const { id } = useParams()
   const router = useRouter()
@@ -101,13 +103,11 @@ export default function ChatPage() {
   const [lowGemsWarning, setLowGemsWarning] = useState(false)
   const [lowGemsCount, setLowGemsCount] = useState(0)
 
-  // ✅ Progreso de nivel
   const [levelProgress, setLevelProgress] = useState<{ current: number; next: number | null }>({
     current: 0,
     next: 15,
   })
 
-  // ✅ Índice de rotación del header
   const [rotationIndex, setRotationIndex] = useState(0)
 
   const [levelUpModal, setLevelUpModal] = useState<{
@@ -134,7 +134,10 @@ export default function ChatPage() {
   const menuRef = useRef<HTMLDivElement>(null)
   const sendingRef = useRef(false)
 
-  // ✅ Rotación cada 5 segundos
+  // ✅ REF del textarea para auto-resize
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // ✅ Rotación de badges del header cada 5s
   useEffect(() => {
     const interval = setInterval(() => {
       setRotationIndex((prev) => prev + 1)
@@ -142,6 +145,44 @@ export default function ChatPage() {
     return () => clearInterval(interval)
   }, [])
 
+  // ═══════════════════════════════════════════════════════
+  // ✅ FIX 1: Scroll al último mensaje cuando se abre el teclado
+  // ═══════════════════════════════════════════════════════
+  useEffect(() => {
+    const vv = window.visualViewport
+    if (!vv) return
+
+    const handleViewportResize = () => {
+      // El viewport cambia cuando el teclado se abre/cierra
+      // Esperamos un poco a que la animación del teclado termine
+      setTimeout(() => {
+        endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+      }, 150)
+    }
+
+    vv.addEventListener('resize', handleViewportResize)
+    return () => vv.removeEventListener('resize', handleViewportResize)
+  }, [])
+
+  // ═══════════════════════════════════════════════════════
+  // ✅ FIX 2: Auto-resize del textarea
+  // ═══════════════════════════════════════════════════════
+  useEffect(() => {
+    const el = textareaRef.current
+    if (!el) return
+
+    // Reset height para recalcular
+    el.style.height = 'auto'
+
+    // Aplicar nueva altura limitada al máximo
+    const newHeight = Math.min(el.scrollHeight, TEXTAREA_MAX_HEIGHT)
+    el.style.height = `${newHeight}px`
+
+    // Habilitar scroll interno si excede el máximo
+    el.style.overflowY = el.scrollHeight > TEXTAREA_MAX_HEIGHT ? 'auto' : 'hidden'
+  }, [input])
+
+  // Carga inicial: personaje + historial + premium + contador
   useEffect(() => {
     if (userLoading) return
     if (!user?.telegram_id) return
@@ -186,7 +227,6 @@ export default function ChatPage() {
       const count = countRes.count || 0
       setTotalUserMessages(count)
 
-      // ✅ Calcular progreso inicial
       const currentLvl = getLevelFromMessages(count)
       const thresholds: Record<number, number | null> = {
         1: 15, 2: 40, 3: 90, 4: 180, 5: null,
@@ -278,6 +318,16 @@ export default function ChatPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [historyLoaded, user, character, messages.length])
 
+  // ═══════════════════════════════════════════════════════
+  // ✅ FIX 1b: Scroll al final cuando el usuario enfoca el input
+  // ═══════════════════════════════════════════════════════
+  const handleInputFocus = () => {
+    // Esperamos a que el teclado se abra
+    setTimeout(() => {
+      endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+    }, 300)
+  }
+
   const send = async () => {
     if (!input.trim() || !user || loading || sendingRef.current) return
     sendingRef.current = true
@@ -319,7 +369,6 @@ export default function ChatPage() {
           setLowGemsWarning(!!data.low_gems_warning)
           setLowGemsCount(data.low_gems_count || 0)
 
-          // ✅ Actualizar progreso de nivel
           if (data.total_user_messages !== undefined) {
             setLevelProgress({
               current: data.total_user_messages,
@@ -535,7 +584,6 @@ export default function ChatPage() {
   const canAfford = gems >= currentImageCost
   const missingGems = Math.max(0, currentImageCost - gems)
 
-  // ✅ Construir el badge rotativo del header
   let headerBadgeText = ''
   let headerBadgeVariant: 'hook' | 'low-gems' | null = null
 
@@ -549,7 +597,6 @@ export default function ChatPage() {
     headerBadgeVariant = 'low-gems'
   }
 
-  // ✅ Barra de progreso de nivel
   const showLevelProgress =
     levelProgress.next !== null &&
     levelProgress.current < levelProgress.next &&
@@ -628,7 +675,6 @@ export default function ChatPage() {
               {t[currentLevel.badgeKey as keyof typeof t]}
             </span>
 
-            {/* ✅ Badge rotativo (hook mode o low gems) */}
             {headerBadgeVariant === 'hook' && (
               <span className="status-badge status-badge-hook">
                 {headerBadgeText}
@@ -636,7 +682,6 @@ export default function ChatPage() {
             )}
             {headerBadgeVariant === 'low-gems' && (
               <span className="status-badge status-badge-low">
-                {/* ✅ SVG oficial del diamante */}
                 <svg
                   width="10"
                   height="10"
@@ -651,7 +696,6 @@ export default function ChatPage() {
             )}
           </div>
 
-          {/* ✅ Barra de progreso de nivel */}
           {showLevelProgress && (
             <div
               style={{
@@ -1015,13 +1059,22 @@ export default function ChatPage() {
             </svg>
           </button>
 
-          <input
+          {/* ✅ TEXTAREA AUTO-EXPANDIBLE en lugar de input */}
+          <textarea
+            ref={textareaRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && send()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                send()
+              }
+            }}
+            onFocus={handleInputFocus}
             placeholder={t.writeMessage}
             disabled={loading}
             className="chat-input"
+            rows={1}
           />
 
           <button
