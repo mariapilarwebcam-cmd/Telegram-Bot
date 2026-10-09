@@ -1,6 +1,7 @@
 // app/api/check-crypto-payment/route.ts
 
 import { NextResponse } from 'next/server'
+import { queryOne } from '@/lib/turso'
 import {
   getUser,
   getPurchaseByChargeId,
@@ -29,7 +30,7 @@ const RECIPIENT_WALLET =
 const USDT_MASTER = 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs'
 
 // ═══════════════════════════════════════════════════════════════
-// Comisión al referidor (migrado a Turso)
+// Comisión al referidor (Turso)
 // ═══════════════════════════════════════════════════════════════
 async function payReferralCommission(
   buyerTid: string,
@@ -143,7 +144,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Package index inválido' }, { status: 400 })
     }
 
-    // ─── Idempotencia ───
+    // ─── Idempotencia por reference ───
     const existing = await getPurchaseByChargeId(reference)
     if (existing) {
       const u = await getUser(telegramId)
@@ -200,14 +201,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ status: 'pending', reason: 'amount_mismatch' })
     }
 
-    // ─── first_time_only ───
+    // ─── first_time_only: verificar que no tenga compras previas ───
     if (pkg.first_time_only) {
-      const prior = await getPurchaseByChargeId(reference)
-      // Nota: `getPurchaseByChargeId` busca por charge_id, no sirve aquí.
-      // Usamos un query directo vía db-queries (ya validamos con existing arriba,
-      // así que si llega aquí es porque no hay compras previas de ESTE reference).
-      // Para chequear compras previas reales, usar queryOne:
-      const { queryOne } = await import('@/lib/turso')
       const prev = await queryOne<{ id: number }>(
         `SELECT id FROM star_purchases WHERE telegram_id = ? LIMIT 1`,
         [telegramId]
