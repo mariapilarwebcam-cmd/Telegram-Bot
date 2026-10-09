@@ -1,7 +1,17 @@
 // app/api/check-crypto-payment/route.ts
 
 import { NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase-admin'
+import {
+  getUser,
+  getPurchaseByChargeId,
+  insertStarPurchase,
+  incrementGemsAndPurchased,
+  insertGemTransaction,
+  getUniqueBuyers,
+  insertReferralCommission,
+  incrementPayingReferrals,
+  incrementGems,
+} from '@/lib/db-queries'
 import {
   CRYPTO_PACKAGES,
   getFinalCryptoGems,
@@ -18,6 +28,9 @@ const RECIPIENT_WALLET =
 
 const USDT_MASTER = 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs'
 
+// ═══════════════════════════════════════════════════════════════
+// Comisión al referidor (migrado a Turso)
+// ═══════════════════════════════════════════════════════════════
 async function payReferralCommission(
   buyerTid: string,
   gemsPurchased: number,
@@ -25,33 +38,16 @@ async function payReferralCommission(
   reference: string
 ): Promise<void> {
   try {
-    const { data: buyer } = await supabaseAdmin
-      .from('users')
-      .select('referred_by')
-      .eq('telegram_id', buyerTid)
-      .maybeSingle()
-
+    const buyer = await getUser(buyerTid)
     if (!buyer?.referred_by) return
 
     const referrerId = String(buyer.referred_by)
 
-    const { data: referrer } = await supabaseAdmin
-      .from('users')
-      .select('gems, language, paying_referrals_count')
-      .eq('telegram_id', referrerId)
-      .maybeSingle()
-
+    const referrer = await getUser(referrerId)
     if (!referrer) return
 
-    const { data: existingCommissions } = await supabaseAdmin
-      .from('referral_commissions')
-      .select('referred_id')
-      .eq('referrer_id', referrerId)
-
-    const uniqueBuyers = new Set<string>()
-    for (const row of existingCommissions || []) {
-      uniqueBuyers.add(String(row.referred_id))
-    }
+    // Contar compradores únicos del referidor
+    const uniqueBuyers = await getUniqueBuyers(referrerId)
     uniqueBuyers.add(buyerTid)
 
     const totalUnique = uniqueBuyers.size
@@ -66,25 +62,22 @@ async function payReferralCommission(
     const commission = Math.floor((gemsPurchased * pct) / 100)
     if (commission <= 0) return
 
-    // ✅ RPC ATÓMICA: suma comisión (solo a gems)
-    await supabaseAdmin.rpc('increment_gems', {
-      p_telegram_id: referrerId,
-      p_amount: commission,
-    })
+    // Pagar comisión (solo a gems, no a purchased_gems)
+    await incrementGems(referrerId, commission)
 
-    await supabaseAdmin
-      .from('users')
-      .update({ paying_referrals_count: totalUnique })
-      .eq('telegram_id', referrerId)
+    // Actualizar contador de referidos que compraron
+    await incrementPayingReferrals(referrerId, totalUnique)
 
-    await supabaseAdmin.from('gem_transactions').insert({
+    // Registrar transacción
+    await insertGemTransaction({
       telegram_id: referrerId,
       amount: commission,
       transaction_type: 'referral_commission',
       description: `Comisión ${pct}% por compra de referido`,
     })
 
-    await supabaseAdmin.from('referral_commissions').insert({
+    // Registrar comisión
+    await insertReferralCommission({
       referrer_id: referrerId,
       referred_id: buyerTid,
       purchase_gems: gemsPurchased,
@@ -105,6 +98,9 @@ async function payReferralCommission(
   }
 }
 
+// ═══════════════════════════════════════════════════════════════
+// POST /api/check-crypto-payment
+// ═══════════════════════════════════════════════════════════════
 export async function POST(request: Request) {
   try {
     const tidFromAuth = request.headers.get('x-telegram-id-validated')
@@ -112,21 +108,27 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
-    const { reference } = await request.json()
-    if (!reference || typeof reference !== 'string') {
+    const body = await request.json().catch(() => ({}))
+    const reference = typeof body.reference === 'string' ? body.reference : ''
+
+    if (!reference) {
       return NextResponse.json({ error: 'Reference requerido' }, { status: 400 })
     }
 
+    // Formato: TABOO_<telegram_id>_<package_index>_<timestamp>
     const parts = reference.split('_')
     if (parts.length < 4 || parts[0] !== 'TABOO') {
       return NextResponse.json({ error: 'Reference inválido' }, { status: 400 })
     }
 
     const telegramId = parts[1]
-    const packageIndex = parseInt(parts[2])
+    const packageIndex = parseInt(parts[2], 10)
 
     if (telegramId !== tidFromAuth) {
-      console.warn('[check-crypto-payment] Reference no coincide:', { telegramId, tidFromAuth })
+      console.warn('[check-crypto-payment] Reference no coincide:', {
+        telegramId,
+        tidFromAuth,
+      })
       return NextResponse.json(
         { error: 'Reference no coincide con la sesión' },
         { status: 403 }
@@ -141,28 +143,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Package index inválido' }, { status: 400 })
     }
 
-    // ✅ Chequeo de idempotencia
-    const { data: existing } = await supabaseAdmin
-      .from('star_purchases')
-      .select('id')
-      .eq('telegram_id', telegramId)
-      .eq('telegram_charge_id', reference)
-      .maybeSingle()
-
+    // ─── Idempotencia ───
+    const existing = await getPurchaseByChargeId(reference)
     if (existing) {
-      const { data: user } = await supabaseAdmin
-        .from('users')
-        .select('gems, purchased_gems')
-        .eq('telegram_id', telegramId)
-        .maybeSingle()
+      const u = await getUser(telegramId)
       return NextResponse.json({
         status: 'paid',
         already: true,
-        remaining_gems: user?.gems || 0,
-        remaining_purchased_gems: user?.purchased_gems || 0,
+        remaining_gems: u?.gems || 0,
+        remaining_purchased_gems: u?.purchased_gems || 0,
       })
     }
 
+    // ─── Consultar TonAPI ───
     const url = `https://tonapi.io/v2/accounts/${RECIPIENT_WALLET}/events?limit=20`
     const headers: Record<string, string> = { Accept: 'application/json' }
     if (TONAPI_KEY) headers['Authorization'] = `Bearer ${TONAPI_KEY}`
@@ -201,89 +194,72 @@ export async function POST(request: Request) {
 
     const pkg = CRYPTO_PACKAGES[packageIndex]
     const expectedUnits = Math.round(pkg.usdt * 1_000_000)
-    const receivedUnits = parseInt(matchedAction.amount || '0')
+    const receivedUnits = parseInt(matchedAction.amount || '0', 10)
 
     if (receivedUnits < expectedUnits - 1000) {
       return NextResponse.json({ status: 'pending', reason: 'amount_mismatch' })
     }
 
+    // ─── first_time_only ───
     if (pkg.first_time_only) {
-      const { data: priorPurchases } = await supabaseAdmin
-        .from('star_purchases')
-        .select('id')
-        .eq('telegram_id', telegramId)
-        .limit(1)
-      if (priorPurchases && priorPurchases.length > 0) {
+      const prior = await getPurchaseByChargeId(reference)
+      // Nota: `getPurchaseByChargeId` busca por charge_id, no sirve aquí.
+      // Usamos un query directo vía db-queries (ya validamos con existing arriba,
+      // así que si llega aquí es porque no hay compras previas de ESTE reference).
+      // Para chequear compras previas reales, usar queryOne:
+      const { queryOne } = await import('@/lib/turso')
+      const prev = await queryOne<{ id: number }>(
+        `SELECT id FROM star_purchases WHERE telegram_id = ? LIMIT 1`,
+        [telegramId]
+      )
+      if (prev) {
         return NextResponse.json({ status: 'pending', reason: 'first_time_used' })
       }
     }
 
     const gemsToAdd = getFinalCryptoGems(pkg)
 
-    const { data: user } = await supabaseAdmin
-      .from('users')
-      .select('gems, purchased_gems')
-      .eq('telegram_id', telegramId)
-      .maybeSingle()
-
+    const user = await getUser(telegramId)
     if (!user) {
       return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
     }
 
-    // ✅ Insertar star_purchase (con UNIQUE constraint anti doble)
-    try {
-      await supabaseAdmin.from('star_purchases').insert({
-        telegram_id: telegramId,
-        stars_amount: 0,
-        gems_amount: gemsToAdd,
-        is_first_purchase: pkg.first_time_only || false,
-        telegram_charge_id: reference,
-        payment_method: 'crypto',
+    // ─── Insertar purchase (con UNIQUE constraint anti-doble) ───
+    const inserted = await insertStarPurchase({
+      telegram_id: telegramId,
+      stars_amount: 0,
+      gems_amount: gemsToAdd,
+      is_first_purchase: pkg.first_time_only || false,
+      telegram_charge_id: reference,
+      payment_method: 'crypto',
+    })
+
+    if (!inserted) {
+      // Race: ya se procesó en otra request concurrente
+      console.log('[check-crypto-payment] Charge ya procesado, ignorando')
+      const u = await getUser(telegramId)
+      return NextResponse.json({
+        status: 'paid',
+        already: true,
+        remaining_gems: u?.gems || 0,
+        remaining_purchased_gems: u?.purchased_gems || 0,
       })
-    } catch (e: any) {
-      const errStr = String(e?.message || '')
-      if (errStr.includes('23505') || errStr.includes('duplicate')) {
-        console.log('[check-crypto-payment] Charge ya procesado, ignorando')
-        const { data: u } = await supabaseAdmin
-          .from('users')
-          .select('gems, purchased_gems')
-          .eq('telegram_id', telegramId)
-          .maybeSingle()
-        return NextResponse.json({
-          status: 'paid',
-          already: true,
-          remaining_gems: u?.gems || 0,
-          remaining_purchased_gems: u?.purchased_gems || 0,
-        })
-      }
-      throw e
     }
 
-    // ✅ RPC ATÓMICA: suma a gems Y purchased_gems + reset hook
-    const { data: rpcData, error: rpcErr } = await supabaseAdmin.rpc(
-      'increment_gems_and_purchased',
-      {
-        p_telegram_id: telegramId,
-        p_amount: gemsToAdd,
-      }
-    )
+    // ─── Acreditar gemas (atómico: gems + purchased_gems + reset hook) ───
+    const rpc = await incrementGemsAndPurchased(telegramId, gemsToAdd)
+    const newGems = rpc.new_gems
+    const newPurchasedGems = rpc.new_purchased
 
-    if (rpcErr) {
-      console.error('[check-crypto-payment] RPC failed:', rpcErr)
-      return NextResponse.json({ error: 'Error acreditando gemas' }, { status: 500 })
-    }
-
-    const rpcRow = Array.isArray(rpcData) ? rpcData[0] : rpcData
-    const newGems = rpcRow?.new_gems ?? (user.gems || 0) + gemsToAdd
-    const newPurchasedGems = rpcRow?.new_purchased ?? (user.purchased_gems || 0) + gemsToAdd
-
-    await supabaseAdmin.from('gem_transactions').insert({
+    // ─── Registrar transacción ───
+    await insertGemTransaction({
       telegram_id: telegramId,
       amount: gemsToAdd,
       transaction_type: 'crypto_purchase',
       description: `Compra crypto ${pkg.usdt} USDT (${reference})`,
     })
 
+    // ─── Pagar comisión al referidor ───
     await payReferralCommission(telegramId, gemsToAdd, 'crypto', reference)
 
     return NextResponse.json({
@@ -294,6 +270,9 @@ export async function POST(request: Request) {
     })
   } catch (e: any) {
     console.error('[check-crypto-payment] Error:', e)
-    return NextResponse.json({ error: e.message }, { status: 500 })
+    return NextResponse.json(
+      { error: e?.message || 'Error interno' },
+      { status: 500 }
+    )
   }
 }
