@@ -1,8 +1,22 @@
 // app/api/chat/route.ts
 
 import { NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase-admin'
-import { ensureUser } from '@/lib/user-helpers'
+import {
+  ensureUser,
+  getCharacter,
+  incrementGems,
+  setHookRemaining,
+  setHookUsed,
+  insertGemTransaction,
+  getRecentMessages,
+  countUserMessages,
+  insertMessages,
+  getReferralByReferred,
+  updateReferralCount,
+  markReferralPaid,
+  incrementTotalReferrals,
+  incrementPayingReferrals,
+} from '@/lib/db-queries'
 import {
   GEM_COSTS,
   HOOK_MODE_MESSAGES,
@@ -68,7 +82,7 @@ export async function POST(request: Request) {
 
     const { character_id, message } = await request.json()
 
-    // ✅ FIX: crea el usuario si no existe
+    // ─── Usuario (crea si no existe) ───
     const user = await ensureUser(tid)
     if (!user) {
       console.error(`[chat] No se pudo asegurar usuario ${tid}`)
@@ -78,22 +92,18 @@ export async function POST(request: Request) {
       )
     }
 
-    const { data: character } = await supabaseAdmin
-      .from('user_characters')
-      .select('*')
-      .eq('id', character_id)
-      .eq('telegram_id', tid)
-      .maybeSingle()
-
+    // ─── Personaje ───
+    const character = await getCharacter(character_id, tid)
     if (!character) {
       return NextResponse.json({ error: 'Personaje no encontrado' }, { status: 404 })
     }
 
     const lang = (user.language || 'es') as 'es' | 'en'
     const hookRemaining = user.hook_messages_remaining || 0
-    const hookUsed = user.hook_used || false
+    const hookUsed = !!user.hook_used
     const totalGems = user.gems || 0
 
+    // ─── Bloqueado sin gemas ni hook ───
     if (totalGems <= 0 && hookRemaining <= 0 && hookUsed) {
       const blockedMessage = lang === 'es'
         ? `*${character.character_name} te mira con ojos ardientes y se muerde el labio*\n\n"Mmm... justo cuando se ponía interesante..."\n\n"Consigue gemas para seguir. Estoy esperando."`
@@ -109,7 +119,7 @@ export async function POST(request: Request) {
 
     const isHookMode = totalGems <= 0 && hookRemaining > 0
 
-    // ✅ FIX: calcular hook state ANTES del update, pero reportar el estado DESPUÉS
+    // ─── Cobrar gema o consumir hook ───
     let newHookRemaining = hookRemaining
     let newGems = totalGems
     let newHookUsed = hookUsed
@@ -122,30 +132,16 @@ export async function POST(request: Request) {
         newHookUsed = true
       }
 
-      // ✅ RPC ATÓMICA: descuenta 1 gema sin race condition
-      const { error: rpcErr } = await supabaseAdmin.rpc('increment_gems', {
-        p_telegram_id: tid,
-        p_amount: -GEM_COSTS.message,
-      })
+      // RPC atómica
+      await incrementGems(tid, -GEM_COSTS.message)
 
-      if (rpcErr) {
-        console.error('[chat] ❌ RPC increment_gems FAILED:', rpcErr)
-        return NextResponse.json(
-          { error: 'Error actualizando gemas', detail: rpcErr.message },
-          { status: 500 }
-        )
+      // Actualizar hook state
+      await setHookRemaining(tid, newHookRemaining)
+      if (newHookUsed !== hookUsed) {
+        await setHookUsed(tid, newHookUsed)
       }
 
-      // Actualizar hook state (no atómico pero no es crítico)
-      await supabaseAdmin
-        .from('users')
-        .update({
-          hook_messages_remaining: newHookRemaining,
-          hook_used: newHookUsed,
-        })
-        .eq('telegram_id', tid)
-
-      await supabaseAdmin.from('gem_transactions').insert({
+      await insertGemTransaction({
         telegram_id: tid,
         amount: -GEM_COSTS.message,
         transaction_type: 'message',
@@ -153,30 +149,14 @@ export async function POST(request: Request) {
       })
     } else {
       newHookRemaining = Math.max(0, hookRemaining - 1)
-      await supabaseAdmin
-        .from('users')
-        .update({ hook_messages_remaining: newHookRemaining })
-        .eq('telegram_id', tid)
+      await setHookRemaining(tid, newHookRemaining)
     }
 
-    // ✅ Determinar is_hook_mode DESPUÉS de las actualizaciones
     const isHookModeAfter = newGems <= 0 && newHookRemaining > 0
 
-    const { data: history } = await supabaseAdmin
-      .from('conversation_history')
-      .select('id, role, content, created_at')
-      .eq('telegram_id', tid)
-      .eq('character_id', character_id)
-      .order('created_at', { ascending: false })
-      .order('id', { ascending: false })
-      .limit(8)
-
-    const { count: userMsgCount } = await supabaseAdmin
-      .from('conversation_history')
-      .select('*', { count: 'exact', head: true })
-      .eq('telegram_id', tid)
-      .eq('character_id', character_id)
-      .eq('role', 'user')
+    // ─── Historial ───
+    const rawHistory = await getRecentMessages(tid, character_id, 8)
+    const userMsgCount = await countUserMessages(tid, character_id)
 
     const currentUserMsgCount = userMsgCount || 0
     const nextUserMsgCount = currentUserMsgCount + 1
@@ -185,19 +165,20 @@ export async function POST(request: Request) {
     const newLevel = getLevelFromMessages(nextUserMsgCount)
     const levelUp = newLevel.level > prevLevel.level
 
-    const rawHistory = history || []
+    // Ordenar historial cronológicamente (Turso los devuelve DESC)
     const sortedHistory = [...rawHistory].sort((a: any, b: any) => {
       const cmp = String(a.created_at || '').localeCompare(String(b.created_at || ''))
       if (cmp !== 0) return cmp
       return (a.id || 0) - (b.id || 0)
     })
 
-    const messages = sortedHistory.reverse().map((m: any) => ({
+    const messages = sortedHistory.map((m: any) => ({
       role: m.role,
       content: m.content,
     }))
     messages.push({ role: 'user', content: message })
 
+    // ─── System prompt ───
     const personality = getLevelPersonality(character.archetype, newLevel.level, lang)
 
     const lowGems = newGems > 0 && newGems <= LOW_GEMS_THRESHOLD && !isHookModeAfter
@@ -210,26 +191,17 @@ export async function POST(request: Request) {
       : `You are ${character.character_name}, role: ${character.archetype}.\n${personality}\n\nThe user's name is ${user.first_name}. Remember their name and use it naturally.\nAlways maintain your personality and role. Never break character.${provocativeHint}`
 
     const intensity = getIntensity(currentUserMsgCount, isHookModeAfter)
-
-    // ✅ FIX: pasa newLevel.level como 3er argumento para escalar la longitud del mensaje
     const systemPrompt = buildSystemPrompt(lang, intensity, newLevel.level, characterPrompt)
 
+    // ─── Generar respuesta IA ───
     let responseText: string
     try {
       responseText = await generateAIResponse(messages, systemPrompt, intensity)
     } catch (aiError: any) {
-      // Rollback manual: devolver la gema
-      await supabaseAdmin.rpc('increment_gems', {
-        p_telegram_id: tid,
-        p_amount: GEM_COSTS.message,
-      })
-      await supabaseAdmin
-        .from('users')
-        .update({
-          hook_messages_remaining: hookRemaining,
-          hook_used: hookUsed,
-        })
-        .eq('telegram_id', tid)
+      // Rollback: devolver la gema y restaurar hook
+      await incrementGems(tid, GEM_COSTS.message)
+      await setHookRemaining(tid, hookRemaining)
+      await setHookUsed(tid, hookUsed)
 
       const errorDetail = aiError?.message || String(aiError)
       console.error('[chat] ❌ AI error:', errorDetail)
@@ -244,73 +216,41 @@ export async function POST(request: Request) {
       )
     }
 
-    await supabaseAdmin.from('conversation_history').insert([
+    // ─── Guardar mensajes (atómico) ───
+    await insertMessages([
       { telegram_id: tid, character_id, role: 'user', content: message },
       { telegram_id: tid, character_id, role: 'assistant', content: responseText },
     ])
 
-    // ── Referidos ──
+    // ─── Referidos ───
     try {
-      const { data: referral } = await supabaseAdmin
-        .from('referrals')
-        .select('id, referrer_id, reward_paid')
-        .eq('referred_id', tid)
-        .maybeSingle()
+      const referral = await getReferralByReferred(tid)
 
       if (referral && !referral.reward_paid) {
-        const { count } = await supabaseAdmin
-          .from('conversation_history')
-          .select('*', { count: 'exact', head: true })
-          .eq('telegram_id', tid)
-          .eq('role', 'user')
+        const totalMsg = await countAllUserMessagesSafe(tid)
 
-        const totalMsg = count || 0
-
-        await supabaseAdmin
-          .from('referrals')
-          .update({ referred_message_count: totalMsg })
-          .eq('id', referral.id)
+        await updateReferralCount(referral.id, totalMsg)
 
         if (totalMsg >= REFERRAL_MIN_MESSAGES) {
-          // ✅ RPC atómica
-          await supabaseAdmin.rpc('increment_gems', {
-            p_telegram_id: String(referral.referrer_id),
-            p_amount: GEMS_PER_REFERRAL,
-          })
+          // Pagar al referidor
+          await incrementGems(String(referral.referrer_id), GEMS_PER_REFERRAL)
+          await incrementTotalReferrals(String(referral.referrer_id))
 
-          // Total referrals (contador, no crítico si hay race)
-          const { data: refUser } = await supabaseAdmin
-            .from('users')
-            .select('total_referrals')
-            .eq('telegram_id', String(referral.referrer_id))
-            .maybeSingle()
-
-          if (refUser) {
-            await supabaseAdmin
-              .from('users')
-              .update({
-                total_referrals: (refUser.total_referrals || 0) + 1,
-              })
-              .eq('telegram_id', String(referral.referrer_id))
-          }
-
-          await supabaseAdmin.from('gem_transactions').insert({
+          await insertGemTransaction({
             telegram_id: String(referral.referrer_id),
             amount: GEMS_PER_REFERRAL,
             transaction_type: 'referral',
             description: 'Referido verificado (3+ mensajes)',
           })
 
-          await supabaseAdmin
-            .from('referrals')
-            .update({ reward_paid: true, reward_paid_at: new Date().toISOString() })
-            .eq('id', referral.id)
+          await markReferralPaid(referral.id)
         }
       }
     } catch (refErr) {
       console.error('Referral payout error:', refErr)
     }
 
+    // ─── Extras: banner de foto ───
     let finalText = responseText
 
     const isLowGemsWarning =
@@ -354,4 +294,10 @@ export async function POST(request: Request) {
     console.error('Error en chat:', error)
     return NextResponse.json({ error: 'Error interno' }, { status: 500 })
   }
+}
+
+// Helper local para no importar dos veces
+async function countAllUserMessagesSafe(tid: string): Promise<number> {
+  const { countAllUserMessages } = await import('@/lib/db-queries')
+  return countAllUserMessages(tid)
 }
