@@ -1,17 +1,7 @@
 // app/api/init-user/route.ts
 
 import { NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase-admin'
-import { ensureUser } from '@/lib/user-helpers'
-
-function generateReferralCode(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-  let code = ''
-  for (let i = 0; i < 8; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length))
-  }
-  return code
-}
+import { ensureUser } from '@/lib/db-queries'
 
 export async function POST(request: Request) {
   try {
@@ -20,14 +10,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
-    const { first_name, username, language } = await request.json()
+    const body = await request.json().catch(() => ({}))
+    const first_name = typeof body.first_name === 'string' ? body.first_name : ''
+    const username = typeof body.username === 'string' ? body.username : null
+    const language = body.language === 'en' ? 'en' : 'es'
 
-    // ✅ Usa ensureUser — crea si no existe, con TODOS los campos
-    const user = await ensureUser(tid, {
-      first_name,
-      username,
-      language: language === 'en' ? 'en' : 'es',
-    })
+    // ensureUser crea si no existe; si existe, lo devuelve tal cual
+    const user = await ensureUser(tid, { first_name, username, language })
 
     if (!user) {
       return NextResponse.json(
@@ -36,13 +25,12 @@ export async function POST(request: Request) {
       )
     }
 
-    const wasExisting = user.referral_code != null  // siempre true tras crear
-    return NextResponse.json({
-      user,
-      created: !wasExisting ? true : false,
-    })
+    return NextResponse.json({ user, created: false })
   } catch (e: any) {
-    console.error('Error en init-user:', e)
-    return NextResponse.json({ error: 'Error interno' }, { status: 500 })
+    console.error('[init-user] error:', e)
+    return NextResponse.json(
+      { error: 'Error interno', detail: e?.message || String(e) },
+      { status: 500 }
+    )
   }
 }
