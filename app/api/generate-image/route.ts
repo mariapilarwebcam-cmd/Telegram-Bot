@@ -15,6 +15,10 @@ import {
 
 export const maxDuration = 60
 
+// ═══════════════════════════════════════════════════════════════
+// CHARACTER DNA — identidad visual mínima por arquetipo
+// (ya existía, se mantiene igual)
+// ═══════════════════════════════════════════════════════════════
 const CHARACTER_DNA: Record<string, string> = {
   female_stepmom: "mature woman, long dark hair, green eyes, elegant",
   female_tsundere: "young woman, long dark navy hair, red ribbon, amber eyes",
@@ -32,60 +36,140 @@ const CHARACTER_DNA: Record<string, string> = {
   female_actor: "woman, hollywood waves, red lips, elegant dress",
   female_musician: "young woman, dark curls, smudged eyeliner, leather jacket",
   female_chef: "woman, messy hair tied back, warm smile, apron",
-  female_hairdresser: "black woman, natural curly hair styled up, warm brown eyes, stylish salon outfit, confident smile",
-  female_nurse: "black woman, neat braids, kind brown eyes, nurse scrubs, caring expression",
-  female_singer: "black woman, glamorous long hair, bold makeup, sequined stage outfit, seductive smile",
-  female_yoga_instructor: "black woman, athletic slim body, natural hair in top knot, sports bra, calm pose",
-  female_surfer_f: "latina woman, sun-kissed skin, wavy beach hair, athletic body, bikini top, playful smile",
-  female_maid: "young woman, short light blue bob hair, soft blue eyes, classic black and white maid outfit with frilled apron, white headdress, devoted gentle expression",
-  female_goth_dom: "elegant gothic dominatrix, long black hair with violet streaks, sharp crimson red eyes with cat-eye makeup, dark red lips, pale porcelain skin, black leather corset dress with silver buckles, silver spike choker, long black opera gloves, dark lacy thigh-high stockings",
-  female_vampire_lady: "elegant vampire woman, long silver-white hair, glowing crimson red eyes, pale porcelain skin, dark gothic Victorian dress with high collar, ruby choker, small bat wings",
-  female_succubus: "seductive succubus woman, long wavy dark purple hair, glowing pink eyes, small curved black demon horns, large leathery bat wings, pointed devil tail",
-  female_werewolf_f: "alpha female werewolf, wild ash-blonde hair with silver streaks, glowing amber wolf eyes, subtle white wolf ears, tribal leather outfit with fur mantle",
-  female_fallen_angel: "fallen angel woman, long platinum blonde hair, sorrowful blue eyes, broken halo glowing faintly, large torn white feathered wings with black tips, elegant white robe",
-  female_kitsune: "magical kitsune fox spirit woman, long silver-white hair with pink tips, glowing golden amber slit eyes, white fox ears, three fluffy white fox tails, traditional white and crimson short kimono, glowing blue spirit flames",
-  female_elf: "elegant high elf archer, long flowing golden blonde hair with subtle braids, bright emerald green eyes, pointed elf ears, flawless pale skin, emerald green and silver woodland outfit with leaf embroidery, silver arm guard, ornate silver circlet with gem, silver longbow",
-  female_witch: "mysterious witch sorceress, long wavy midnight-black hair with deep purple streaks, sharp violet eyes, fitted dark purple and black lace corset dress, black choker with glowing crystal, subtle pointed black witch hat tilted back, large black raven on shoulder, glowing purple potion vial, ornate silver rings",
-  female_nun_fantasy: "devoted fantasy nun, long dark brown hair mostly hidden under a white coif, gentle conflicted blue eyes, soft rosy cheeks, classic black and white nun habit with silver cross pendant, delicate silver rosary on wrist, holding a small worn leather bible",
-  female_demon_girl: "playful young demon girl, short wild red hair with black tips, glowing amber-gold slit eyes, two small curved dark red demon horns, thin pointed devil tail with arrow tip, small black leathery bat wings, fitted black and crimson gothic mini-dress with silver lace, choker with silver skull pendant",
+  female_hairdresser: "black woman, natural curly hair styled up, warm brown eyes, stylish salon outfit",
+  female_nurse: "black woman, neat braids, kind brown eyes, nurse scrubs",
+  female_singer: "black woman, glamorous long hair, bold makeup, sequined stage outfit",
+  female_yoga_instructor: "black woman, athletic slim body, natural hair in top knot, sports bra",
+  female_surfer_f: "latina woman, sun-kissed skin, wavy beach hair, athletic body, bikini top",
+  female_maid: "young woman, short light blue bob hair, soft blue eyes, classic maid outfit",
+  female_goth_dom: "elegant gothic dominatrix, long black hair with violet streaks, crimson eyes",
+  female_vampire_lady: "elegant vampire woman, long silver-white hair, crimson eyes, pale skin",
+  female_succubus: "seductive succubus, long wavy dark purple hair, glowing pink eyes, bat wings",
+  female_werewolf_f: "alpha female werewolf, wild ash-blonde hair, amber wolf eyes, wolf ears",
+  female_fallen_angel: "fallen angel woman, long platinum blonde hair, blue eyes, torn white wings",
+  female_kitsune: "magical kitsune, long silver-white hair with pink tips, golden eyes, fox tails",
+  female_elf: "elegant high elf archer, long golden blonde hair, emerald green eyes, elf ears",
+  female_witch: "mysterious witch, long midnight-black hair with purple streaks, violet eyes",
+  female_nun_fantasy: "devoted fantasy nun, dark brown hair under white coif, blue eyes",
+  female_demon_girl: "playful demon girl, short red hair with black tips, amber eyes, demon horns",
   male_stepdad: "mature man, salt and pepper hair, broad shoulders, dress shirt",
   male_ceo: "man, sharp haircut, steel-blue eyes, tailored suit, expensive watch",
-  male_stepbrother: "young man, buzz cut, strong jawline, muscular, tank top",
+  male_stepbrother: "young man, buzz cut, strong jawline, muscular",
   male_boss: "man, slicked back hair, intense eyes, three-piece suit",
-  male_bodyguard: "large man, shaved head, scar on eyebrow, muscular, black suit",
+  male_bodyguard: "large man, shaved head, scar on eyebrow, muscular",
   male_childhood_friend: "young man, casual dark hair, brown eyes, grey hoodie",
   male_teacher: "man, neat dark hair, glasses, professional shirt",
   male_doctor: "man, short dark hair, blue eyes, white lab coat",
-  male_trainer: "man, spiky hair, muscular build, grey tank top, sweat",
+  male_trainer: "man, spiky hair, muscular build, athletic",
   male_musician: "man, messy dark hair, earring, band t-shirt, guitar",
-  male_chef: "man, dark hair tied back, stubble, apron, rolled sleeves",
-  male_actor: "man, styled brown hair, sharp features, dark shirt",
+  male_chef: "man, dark hair tied back, stubble, apron",
+  male_actor: "man, styled brown hair, sharp features, dramatic expression",
   male_artist: "man, messy hair, paint smudge, casual shirt",
   male_writer: "man, messy hair, reading glasses, cozy sweater",
   male_schoolmate: "young man, casual messy hair, playful grin, school hoodie",
   male_neighbor: "man, relaxed hair, brown eyes, casual summer shirt",
-  male_rapper: "black man, short faded haircut, gold chain, designer streetwear, dominant expression",
-  male_firefighter: "latino man, short dark hair, muscular build, firefighter uniform, heroic look",
-  male_basketball_player: "black man, athletic tall build, short hair, basketball jersey, confident grin",
-  male_barber: "black man, sharp fade haircut, well-groomed beard, fitted shirt and apron, charming smirk",
-  male_surfer_m: "afro-latino man, sun-bleached hair, athletic lean body, board shorts, relaxed smile",
-  male_tattoo_artist: "latino man, muscular build, dark slicked back hair, short beard, tattooed forearms and neck, silver chain, black t-shirt and leather apron, edgy confident smirk",
-  male_mma_fighter: "muscular MMA fighter, short buzz cut with faded sides, sharp angular jawline, light stubble, intense dark brown eyes, small brow cut, athletic tape wrapped around both hands, fitted black tank top, professional MMA shorts, silver dog-tag necklace",
-  male_vampire_lord: "ancient vampire lord, long black hair pulled back, glowing crimson red eyes, sharp fangs, pale skin, black high-collared Victorian coat with red velvet lining",
-  male_demon_lord: "powerful demon lord, long flowing dark crimson hair, glowing golden slit eyes, large curved black demon horns, large leathery bat wings, black and gold aristocratic armor with red cape",
-  male_werewolf_m: "alpha male werewolf, wild dark brown hair with grey streaks, glowing amber wolf eyes, subtle dark wolf ears, muscular bare chest with tribal tattoos, leather straps and fur mantle",
-  male_dark_hunter: "brooding demon hunter, messy black hair with white streak, intense steel-grey eyes, scarred face, long dark leather trench coat, silver katana on back, bandaged arms",
-  male_dragon_lord: "ancient dragon lord, long flowing dark silver hair with red streaks, glowing molten gold slit eyes, large curved black dragon horns, subtle golden scales on jaw and forearms, black and gold armored coat with high collar, golden dragon wings folded behind",
-  male_elf_prince: "elegant elf prince, long flowing silver-blonde hair with subtle waves, sharp piercing emerald green eyes, pointed elf ears, refined aristocratic features, emerald green and gold regal outfit with silver embroidery and leaf motifs, ornate silver crown circlet with small emerald, long white cape with gold trim, silver longbow",
-  male_oni_male: "powerful oni demon warrior, muscular imposing build, wild short dark red hair tied in topknot, glowing molten gold slit eyes, two sharp black horns, subtle red tiger-stripe markings on forearms and shoulders, sharp fangs in fierce grin, traditional short dark red kimono open chest showing muscular torso, red rope belt, large black kanabo club over shoulder",
-  male_knight: "noble knight, wavy shoulder-length chestnut hair, kind blue-grey eyes, strong square jaw with light stubble, faint cheek scar, polished silver plate armor with gold accents and sacred engravings, crimson red cape over one shoulder, ornate silver cross pendant, silver longsword pointed down in ceremonial stance",
-  male_angel_m: "celestial angel, long flowing golden-blonde hair with soft waves, luminous pale blue eyes with soft glow, flawless serene features, faint golden forehead markings, glowing golden halo floating above head, large pristine white feathered wings, elegant flowing white and gold celestial robe with sacred engravings, golden bracers on both wrists, gold chain necklace with small glowing gem",
+  male_rapper: "black man, short faded haircut, gold chain, designer streetwear",
+  male_firefighter: "latino man, short dark hair, muscular build, firefighter uniform",
+  male_basketball_player: "black man, athletic tall build, short hair, basketball jersey",
+  male_barber: "black man, sharp fade haircut, well-groomed beard, fitted shirt and apron",
+  male_surfer_m: "afro-latino man, sun-bleached hair, athletic lean body, board shorts",
+  male_tattoo_artist: "latino man, muscular build, dark slicked back hair, short beard, tattoos",
+  male_mma_fighter: "muscular MMA fighter, short buzz cut, sharp jawline, brow cut, athletic tape",
+  male_vampire_lord: "ancient vampire lord, long black hair pulled back, crimson eyes, fangs",
+  male_demon_lord: "powerful demon lord, long dark crimson hair, golden slit eyes, demon horns",
+  male_werewolf_m: "alpha male werewolf, wild dark brown hair, amber wolf eyes, wolf ears",
+  male_dark_hunter: "brooding demon hunter, messy black hair with white streak, scarred",
+  male_dragon_lord: "ancient dragon lord, long dark silver hair with red streaks, golden slit eyes",
+  male_elf_prince: "elegant elf prince, long silver-blonde hair, emerald eyes, elf ears",
+  male_oni_male: "powerful oni warrior, muscular imposing build, dark red hair, black horns",
+  male_knight: "noble knight, wavy shoulder-length chestnut hair, blue-grey eyes, silver armor",
+  male_angel_m: "celestial angel, long golden-blonde hair, pale blue eyes, white feathered wings",
 }
 
+// ═══════════════════════════════════════════════════════════════
+// ✅ NUEVA CAPA: ARCHETYPE_IMAGE_HINTS
+// Toques visuales específicos por arquetipo
+// Se aplican en niveles 4-5 para dar personalidad visual
+// ═══════════════════════════════════════════════════════════════
+const ARCHETYPE_IMAGE_HINTS: Record<string, string> = {
+  // ─── FEMENINOS ───
+  stepmom: 'luxurious silk robe, mature elegance, wine glass, sophisticated boudoir',
+  tsundere: 'proud expression with blush, red ribbon still in hair, school uniform displaced',
+  yandere: 'obsessive loving gaze, pink aesthetic, plushies around, intense devotion',
+  stepsister: 'casual home setting, playful rebellious energy, messy sheets',
+  boss: 'powerful executive aura, silk blouse open, office after hours, commanding',
+  teacher: 'glasses slightly lowered, intellectual seductive, books in background',
+  model_student: 'popular vibe, trendy outfit, natural confidence, playful tease',
+  model: 'high fashion glamour, editorial pose, perfect skin, designer lingerie',
+  secretary: 'pencil skirt displaced, glasses on chain, office intimacy after hours',
+  trainer: 'athletic toned body, sporty bra, sweat glow, confident smirk',
+  schoolmate: 'casual uniform, playful energy, natural charm, blushing',
+  neighbor: 'cozy apartment warmth, casual intimacy, morning light, natural',
+  doctor: 'white coat slipping, clinical privacy, professional allure',
+  actor: 'dramatic hollywood glamour, backstage intimacy, cinematic aura',
+  musician: 'bohemian sensuality, artistic vulnerability, leather and lace',
+  chef: 'apron still on, sensual culinary aesthetic, warm kitchen glow',
+  hairdresser: 'salon intimacy, warm brown skin glowing, closeness',
+  nurse: 'nurse scrubs, late night hospital, tender seduction',
+  singer: 'stage glamour, sequins and spotlight, superstar aura',
+  yoga_instructor: 'serene athletic body, warm studio light, flexible pose',
+  surfer_f: 'sun-kissed skin, beach intimacy, ocean sounds, natural beauty',
+  maid: 'classic maid outfit, devoted expression, elegant service aesthetic',
+  goth_dom: 'gothic dominance, leather corset, crimson lights, commanding',
+  vampire_lady: 'gothic castle chamber, crimson candles, aristocratic dominance',
+  succubus: 'demonic seduction, purple hellfire glow, leathery wings extended',
+  werewolf_f: 'moonlit wilderness, primal instincts, tribal leather outfit',
+  fallen_angel: 'broken cathedral, torn wings, tragic melancholy, moonlit',
+  kitsune: 'shrine at night, magical flames, fox tails curled, playful mystery',
+  elf: 'enchanted forest, moonlight through leaves, ethereal beauty',
+  witch: 'candlelit coven, magical runes floating, mystical seduction',
+  nun_fantasy: 'dim chapel, candlelight, sacred and forbidden conflict',
+  demon_girl: 'hellish flame, playful teasing, chaotic energy, red glow',
+  // ─── MASCULINOS ───
+  stepdad: 'mature authority, whiskey glass, dark study, dominant presence',
+  stepbrother: 'athletic casual, home setting, playful dominance',
+  boss: 'executive power, dark office after hours, commanding presence',
+  ceo: 'luxury penthouse, tailored suit removed, city skyline behind',
+  bodyguard: 'protective intensity, black suit open, muscular frame',
+  teacher: 'classroom after hours, intellectual allure, formal but unbuttoned',
+  doctor: 'clinical privacy, white coat opened, professional control',
+  firefighter: 'post-shift intimacy, heroic aura, warm skin, exhausted strength',
+  trainer: 'gym after hours, athletic body, intensity and discipline',
+  mma_fighter: 'fighter intensity, taped hands, sweat and determination',
+  childhood_friend: 'familiar intimacy, casual warmth, home setting',
+  neighbor: 'apartment intimacy, relaxed charm, natural closeness',
+  basketball_player: 'athletic dominance, locker room privacy, competitive',
+  barber: 'shop after close, leather apron, intimate grooming',
+  musician: 'studio after recording, artistic vulnerability, guitar nearby',
+  rapper: 'studio privacy, gold chains glint, dominant presence',
+  chef: 'kitchen intimacy after service, apron discarded, warm authority',
+  actor: 'dressing room intimacy, dramatic gaze, cinematic mood',
+  tattoo_artist: 'tattoo studio privacy, neon lighting, tattoos visible',
+  artist: 'studio with canvas, bohemian sensuality, painter hands',
+  writer: 'library intimacy, intellectual seduction, glasses on',
+  surfer_m: 'beach at sunset, athletic body glistening, primal sensuality',
+  schoolmate: 'dorm room intimacy, youthful energy, playful tension',
+  vampire_lord: 'gothic castle chamber, crimson candles, aristocratic dominance',
+  demon_lord: 'hellish throne, black and gold armor removed, demonic power',
+  werewolf_m: 'moonlit wilderness, tribal muscles, primal dominance',
+  dark_hunter: 'rainy gothic alley, trench coat removed, scarred intensity',
+  dragon_lord: 'volcanic cavern, treasure hoard behind, ancient power',
+  elf_prince: 'elven palace chamber, ethereal elegance, aristocratic allure',
+  oni_male: 'mountain shrine, red lanterns, primal demonic strength',
+  knight: 'castle chamber, armor removed, honor and heat',
+  angel_m: 'celestial clouds, divine golden light, sacred intimacy',
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Face rules (ya existían)
+// ═══════════════════════════════════════════════════════════════
 const FACE_HIDDEN_FRAGMENT_ES = 'IMPORTANT: the subject\'s face is NOT visible in the photo. Use creative framing: shot from behind, back turned to camera, close-up on body and hands only, selfie cropped at the chin, over-the-shoulder angle without face, face hidden by phone or object, or facing away. The face must NOT appear.'
 
 const FACE_PARTIAL_FRAGMENT_ES = 'The subject\'s face is only partially visible: side profile, three-quarter angle with hair covering one eye, or face softly obscured by shadow/dim light. Do not show a full clear face.'
 
+// ═══════════════════════════════════════════════════════════════
+// Base scenes por nivel (ya existían, ajustadas para v4-5)
+// ═══════════════════════════════════════════════════════════════
 const SFW_SCENE_PROMPTS: Record<number, string> = {
   1: 'selfie style, casual daytime environment, fully dressed, cozy and wholesome, soft natural lighting, friendly smile, cute anime aesthetic, safe for work',
   2: 'selfie or mirror photo, bedroom setting, warm cozy lighting, fully dressed in casual outfit, subtle suggestive pose, flirty playful expression, safe for work',
@@ -93,8 +177,8 @@ const SFW_SCENE_PROMPTS: Record<number, string> = {
 }
 
 const NSFW_SCENE_PROMPTS: Record<number, string> = {
-  4: 'intimate photo, minimal tasteful clothing or elegant lingerie, very revealing but no explicit nudity, artistic suggestive pose, low intimate lighting, bedroom setting, high-end boudoir aesthetic',
-  5: 'artistic boudoir photo, tasteful implied nudity with strategic coverage (sheets, shadows, artistic angles), no exposed genitalia, no explicit sexual acts, high-end artistic composition, dramatic cinematic lighting, elegant and tasteful',
+  4: 'intimate photo, minimal tasteful clothing or elegant lingerie, very revealing but no explicit nudity, artistic suggestive pose, low intimate lighting, bedroom setting, high-end boudoir aesthetic, heat and tension palpable, flushed skin, breathless expression, sensual atmosphere',
+  5: 'artistic boudoir photo, tasteful implied nudity with strategic coverage (sheets, shadows, artistic angles), no exposed genitalia, no explicit sexual acts, high-end artistic composition, dramatic cinematic lighting, peak intimacy moment, tangled sheets, marked skin, glowing skin, post-intimacy atmosphere, sensual silence, everything suggested nothing shown',
 }
 
 const AUTO_SCENES: Record<number, string> = {
@@ -113,6 +197,52 @@ const AUTO_SCENES_MALE: Record<number, string> = {
   5: 'artistic intimate composition, cinematic dramatic lighting, elegant and tasteful, high-end boudoir editorial',
 }
 
+// ═══════════════════════════════════════════════════════════════
+// ✅ NUEVA FUNCIÓN: extractMoodFromMessages
+// Analiza los últimos mensajes y devuelve un "mood tag" visual
+// que se añade al prompt de la imagen
+// ═══════════════════════════════════════════════════════════════
+function extractMoodFromMessages(messages: string[]): string {
+  if (!messages || messages.length === 0) return ''
+
+  const text = messages.join(' ').toLowerCase()
+
+  // Pasión / breathless
+  if (/\b(jadeo|jadea|respira|suspiro|temblor|tiembla|calor|fuego|húmedo|mojado|acelerado|entrecortad)\b/.test(text)) {
+    return 'breathless passionate mood, disheveled, intense breathing'
+  }
+
+  // Sumisión / entrega
+  if (/\b(hazme|tuyo|tuya|obedec|pide|por favor|tómame|tomame|más|mas|entrégate|entregate|soy tu)\b/.test(text)) {
+    return 'submission and surrender mood, devoted gaze, yielding posture'
+  }
+
+  // Dominación
+  if (/\b(domin|manda|control|orden|obedece|rodillas|sumiso|sumisa|mia|mio)\b/.test(text)) {
+    return 'dominant commanding mood, intense stare, powerful posture'
+  }
+
+  // Slow burn / sensual
+  if (/\b(beso|lento|despacio|cerca|roza|toca|acaricia|susurr|muerde|labio)\b/.test(text)) {
+    return 'sensual slow burn mood, intimate closeness, tender tension'
+  }
+
+  // Tease / provocación
+  if (/\b(provoc|broma|jugueto|desaf|atrev|coqueto|pícara|picara|tentaci)\b/.test(text)) {
+    return 'playful teasing mood, challenging gaze, mischievous energy'
+  }
+
+  // Romance / ternura
+  if (/\b(amor|quiero|corazón|corazon|tierno|dulce|beso tierno|abrazo)\b/.test(text)) {
+    return 'romantic tender mood, warm affectionate gaze'
+  }
+
+  return ''
+}
+
+// ═══════════════════════════════════════════════════════════════
+// POST /api/generate-image
+// ═══════════════════════════════════════════════════════════════
 export async function POST(request: Request) {
   try {
     const tid = request.headers.get('x-telegram-id-validated')
@@ -128,7 +258,13 @@ export async function POST(request: Request) {
         ? body.description.trim().slice(0, 200)
         : ''
 
-    // ✅ FIX: crea el usuario si no existe
+    // ✅ NUEVO: recibir últimos mensajes de la conversación
+    const recent_messages: string[] = Array.isArray(body?.recent_messages)
+      ? body.recent_messages
+          .filter((m: any) => typeof m === 'string' && m.trim().length > 0)
+          .slice(-4)
+      : []
+
     const user = await ensureUser(tid)
     if (!user) {
       return NextResponse.json(
@@ -154,7 +290,9 @@ export async function POST(request: Request) {
       .eq('telegram_id', tid)
       .maybeSingle()
 
-    if (!character) return NextResponse.json({ error: 'Personaje no encontrado' }, { status: 404 })
+    if (!character) {
+      return NextResponse.json({ error: 'Personaje no encontrado' }, { status: 404 })
+    }
 
     const { count: userMsgCount } = await supabaseAdmin
       .from('conversation_history')
@@ -187,6 +325,7 @@ export async function POST(request: Request) {
     const NO_GENITALIA = 'tasteful artistic composition, no explicit genitalia, no nudity visible below waist, strategic coverage, high-end boudoir photography aesthetic, safe for platform'
 
     if (level.level <= 3) {
+      // ─── SFW (niveles 1-3) → DeepInfra
       const dna = CHARACTER_DNA[`${character.gender}_${character.archetype}`] || 'anime character'
       const scene = SFW_SCENE_PROMPTS[level.level] || SFW_SCENE_PROMPTS[1]
 
@@ -197,14 +336,35 @@ export async function POST(request: Request) {
         faceRule = FACE_PARTIAL_FRAGMENT_ES
       }
 
-      imagePrompt = `[CHARACTER DNA: ${dna}], anime style, cel shading, vibrant colors, detailed anime eyes, ${scene}, ${sceneHint}, ${faceRule}, high detail, beautiful cinematic lighting, 2D illustration, best quality, safe for work, no nudity, no explicit content`
+      imagePrompt = `[CHARACTER DNA: ${dna}], anime style, cel shading, moody atmospheric lighting, deep shadows, muted color palette, cinematic dark tones, detailed anime eyes, ${scene}, ${sceneHint}, ${faceRule}, high detail, beautiful cinematic lighting, 2D illustration, best quality, safe for work, no nudity, no explicit content`
       referenceUrl = undefined
     } else {
+      // ─── NSFW (niveles 4-5) → Wiro v4-5-uncensored
+      // ✅ SISTEMA 3 CAPAS:
+      //   1. DNA base del personaje
+      //   2. Escena base por nivel (4 o 5)
+      //   3. Hint por arquetipo (personalidad visual)
+      //   + 4. Mood de la conversación (contexto)
       const facePrompt = getCharacterFace(character.archetype, character.gender)
       const clothing = getClothingLevel(level.level)
       const scene = NSFW_SCENE_PROMPTS[level.level] || NSFW_SCENE_PROMPTS[4]
+      const archetypeHint = ARCHETYPE_IMAGE_HINTS[character.archetype] || ''
+      const moodHint = extractMoodFromMessages(recent_messages)
 
-      imagePrompt = `${facePrompt}, anime style, cel shading, vibrant colors, detailed anime eyes, ${clothing}, ${scene}, ${sceneHint}, ${NO_GENITALIA}, beautiful cinematic lighting, 2D illustration, best quality`
+      // Construcción en capas, filtrando strings vacíos
+      const layers = [
+        facePrompt,
+        'anime style, cel shading, moody atmospheric lighting, deep shadows, muted color palette, cinematic dark tones, detailed anime eyes',
+        clothing,
+        scene,
+        archetypeHint,  // ✅ Hint por arquetipo
+        moodHint,       // ✅ Mood de la conversación
+        sceneHint,
+        NO_GENITALIA,
+        'beautiful cinematic lighting, 2D illustration, best quality',
+      ].filter((s) => s && s.length > 0)
+
+      imagePrompt = layers.join(', ')
       referenceUrl = getCharacterImageUrl(character.archetype, character.gender)
     }
 
@@ -227,7 +387,6 @@ export async function POST(request: Request) {
 
     if (rpcErr) {
       console.error('[generate-image] RPC failed:', rpcErr)
-      // La imagen ya se generó — devolvemos igual pero con advertencia
       return NextResponse.json(
         { error: 'Error actualizando gemas. Contacta soporte.' },
         { status: 500 }
@@ -252,7 +411,7 @@ export async function POST(request: Request) {
       level: level.level,
       cost: imageCost,
       face_visibility: faceVisibility,
-      model: level.level <= 3 ? 'deepinfra' : 'wiro',
+      model: level.level <= 3 ? 'deepinfra' : 'wiro-v4-5',
     })
   } catch (error: any) {
     console.error('Error generando imagen:', error)
