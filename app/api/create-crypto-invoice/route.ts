@@ -1,7 +1,7 @@
 // app/api/create-crypto-invoice/route.ts
 
 import { NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase-admin'
+import { getLastPurchase, getUser } from '@/lib/db-queries'
 import { CRYPTO_PACKAGES, getFinalCryptoGems } from '@/lib/constants'
 
 const RECIPIENT_WALLET =
@@ -10,14 +10,13 @@ const RECIPIENT_WALLET =
 
 export async function POST(request: Request) {
   try {
-    // ✅ AUTH: telegram_id validado por el middleware
     const tid = request.headers.get('x-telegram-id-validated')
     if (!tid) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
-    // Body sin telegram_id (ya no es fuente de verdad)
-    const { package_id } = await request.json()
+    const body = await request.json().catch(() => ({}))
+    const { package_id } = body
 
     if (
       typeof package_id !== 'number' ||
@@ -39,26 +38,22 @@ export async function POST(request: Request) {
 
     // Verificar first_time_only
     if (pkg.first_time_only) {
-      const { data: purchases } = await supabaseAdmin
-        .from('star_purchases')
-        .select('id')
-        .eq('telegram_id', tid)
-        .limit(1)
-
-      if (purchases && purchases.length > 0) {
-        return NextResponse.json({ error: 'Paquete no disponible' }, { status: 400 })
+      const purchase = await getLastPurchase(tid)
+      if (purchase) {
+        return NextResponse.json(
+          { error: 'Paquete no disponible' },
+          { status: 400 }
+        )
       }
     }
 
     // Verificar usuario
-    const { data: user } = await supabaseAdmin
-      .from('users')
-      .select('telegram_id')
-      .eq('telegram_id', tid)
-      .maybeSingle()
-
+    const user = await getUser(tid)
     if (!user) {
-      return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
+      return NextResponse.json(
+        { error: 'Usuario no encontrado' },
+        { status: 404 }
+      )
     }
 
     // Reference único — se envía como comentario en la transacción USDT
@@ -83,6 +78,9 @@ export async function POST(request: Request) {
     })
   } catch (e: any) {
     console.error('[create-crypto-invoice] Error:', e)
-    return NextResponse.json({ error: e.message || 'Error interno' }, { status: 500 })
+    return NextResponse.json(
+      { error: e.message || 'Error interno' },
+      { status: 500 }
+    )
   }
 }
