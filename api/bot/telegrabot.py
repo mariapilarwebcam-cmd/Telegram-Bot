@@ -13,24 +13,21 @@ from aiogram.types import (
     InlineKeyboardMarkup,
 )
 from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
-from supabase import create_client, Client
+
+from turso_client import turso_query, turso_query_one, turso_execute
 
 load_dotenv()
 
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-SUPABASE_URL = os.getenv('SUPABASE_URL')
-SUPABASE_KEY = os.getenv('SUPABASE_KEY')
 MINI_APP_URL = os.getenv('MINI_APP_URL', 'https://tu-dominio.vercel.app')
 
 if not TELEGRAM_BOT_TOKEN:
     raise RuntimeError("❌ Falta TELEGRAM_BOT_TOKEN")
-if not SUPABASE_URL or not SUPABASE_KEY:
-    raise RuntimeError("❌ Falta SUPABASE_URL o SUPABASE_KEY")
 
 # ==================== ECONOMÍA ====================
 BASE_DAILY_GEMS = 3
 GEMS_PER_REFERRAL = 10
-STARTING_GEMS = 10  # ✅ Igual que en TS (init-user)
+STARTING_GEMS = 10
 
 REFERRAL_PURCHASE_COMMISSION_PCT = 5
 REFERRAL_TOP_TIER_THRESHOLD = 5
@@ -53,8 +50,6 @@ def calc_final_gems(pkg: dict) -> int:
     return pkg['gems'] + percent + flat
 
 
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -74,21 +69,28 @@ def detect_language(language_code: Optional[str]) -> str:
 
 
 async def get_user(telegram_id: int):
-    result = supabase.table('users').select('*').eq('telegram_id', str(telegram_id)).execute()
-    return result.data[0] if result.data else None
+    return turso_query_one(
+        "SELECT * FROM users WHERE telegram_id = ? LIMIT 1",
+        [str(telegram_id)]
+    )
 
 
 async def get_user_by_referral_code(referral_code: str):
-    result = supabase.table('users').select('*').eq('referral_code', referral_code).execute()
-    return result.data[0] if result.data else None
+    return turso_query_one(
+        "SELECT * FROM users WHERE referral_code = ? LIMIT 1",
+        [referral_code]
+    )
 
 
 async def get_user_by_username(username: str):
     clean = username.replace('@', '').strip()
     if not clean:
         return None
-    result = supabase.table('users').select('*').ilike('username', clean).execute()
-    return result.data[0] if result.data else None
+    # SQLite no tiene ILIKE; usamos LOWER(col) = LOWER(?)
+    return turso_query_one(
+        "SELECT * FROM users WHERE LOWER(username) = LOWER(?) LIMIT 1",
+        [clean]
+    )
 
 
 async def create_user_immediately(
@@ -98,58 +100,55 @@ async def create_user_immediately(
     language: str,
     pending_referral_code: Optional[str] = None,
 ):
-    """Crea el usuario. Maneja duplicados correctamente (fix race con Mini App)."""
+    """Crea el usuario. Maneja duplicados (fix race con Mini App)."""
     referral_code = generate_referral_code()
-    user_data = {
-        'telegram_id': str(telegram_id),
-        'username': username or None,
-        'first_name': first_name or 'User',
-        'language': language,
-        'gems': STARTING_GEMS,
-        'purchased_gems': 0,
-        'referral_code': referral_code,
-        'referred_by': None,
-        'total_referrals': 0,
-        'paying_referrals_count': 0,
-        'hook_messages_remaining': 0,
-        'hook_used': False,
-        'age_verified': False,
-        'pending_referral_code': pending_referral_code,
-    }
 
     try:
-        result = supabase.table('users').insert(user_data).execute()
-        if result.data:
-            return result.data[0]
-        return None
+        turso_execute(
+            """INSERT INTO users
+              (telegram_id, username, first_name, language, gems, purchased_gems,
+               referral_code, referred_by, total_referrals, paying_referrals_count,
+               hook_messages_remaining, hook_used, age_verified, pending_referral_code)
+             VALUES (?, ?, ?, ?, ?, 0, ?, NULL, 0, 0, 0, 0, 0, ?)""",
+            [
+                str(telegram_id),
+                username or None,
+                first_name or 'User',
+                language,
+                STARTING_GEMS,
+                referral_code,
+                pending_referral_code,
+            ]
+        )
+        return await get_user(telegram_id)
     except Exception as e:
         err_str = str(e)
         logger.error(f"Error insertando usuario: {err_str}")
 
-        # ✅ FIX: si ya existe (creado por la Mini App u otro proceso),
-        # simplemente lo devolvemos en lugar de fallar.
-        # PostgREST devuelve 409 o 23505 para unique violation.
-        if '23505' in err_str or 'duplicate' in err_str.lower() or '409' in err_str:
+        # UNIQUE constraint → ya existe, recuperar
+        if 'UNIQUE' in err_str or 'unique' in err_str.lower() or 'constraint' in err_str.lower():
             logger.info(f"Usuario {telegram_id} ya existe, recuperando...")
-            existing = await get_user(telegram_id)
-            return existing
+            return await get_user(telegram_id)
         return None
 
 
 async def add_gems(telegram_id: int, amount: int, transaction_type: str, description: str = ''):
     """Suma gemas SOLO a 'gems' (no a purchased_gems)."""
     try:
-        supabase.rpc('increment_gems', {
-            'p_telegram_id': str(telegram_id),
-            'p_amount': amount
-        }).execute()
-
-        supabase.table('gem_transactions').insert({
-            'telegram_id': str(telegram_id),
-            'amount': amount,
-            'transaction_type': transaction_type,
-            'description': description
-        }).execute()
+        row = turso_query_one(
+            """UPDATE users
+             SET gems = COALESCE(gems, 0) + ?,
+                 updated_at = ?
+             WHERE telegram_id = ?
+             RETURNING gems""",
+            [amount, datetime.now(timezone.utc).isoformat(), str(telegram_id)]
+        )
+        turso_execute(
+            """INSERT INTO gem_transactions
+              (telegram_id, amount, transaction_type, description)
+             VALUES (?, ?, ?, ?)""",
+            [str(telegram_id), amount, transaction_type, description]
+        )
         return True
     except Exception as e:
         logger.error(f"Error en add_gems: {e}")
@@ -178,13 +177,14 @@ async def pay_referral_commission(
         if not referrer:
             return
 
-        existing = supabase.table('referral_commissions')\
-            .select('referred_id')\
-            .eq('referrer_id', str(referrer_id))\
-            .execute()
+        # Contar compradores únicos del referidor
+        existing_rows = turso_query(
+            "SELECT referred_id FROM referral_commissions WHERE referrer_id = ?",
+            [str(referrer_id)]
+        )
 
         unique_buyers = set()
-        for row in (existing.data or []):
+        for row in existing_rows:
             unique_buyers.add(str(row['referred_id']))
         unique_buyers.add(str(buyer_id))
 
@@ -201,41 +201,57 @@ async def pay_referral_commission(
         if commission <= 0:
             return
 
-        rpc_result = supabase.rpc('increment_gems', {
-            'p_telegram_id': str(referrer_id),
-            'p_amount': commission
-        }).execute()
+        # Pagar comisión (solo a gems)
+        now_iso = datetime.now(timezone.utc).isoformat()
+        rpc_row = turso_query_one(
+            """UPDATE users
+             SET gems = COALESCE(gems, 0) + ?,
+                 updated_at = ?
+             WHERE telegram_id = ?
+             RETURNING gems""",
+            [commission, now_iso, str(referrer_id)]
+        )
+        new_ref_gems = rpc_row['gems'] if rpc_row else 0
 
-        new_ref_gems = None
-        if rpc_result.data is not None:
-            new_ref_gems = rpc_result.data if isinstance(rpc_result.data, int) else None
-        if new_ref_gems is None:
-            updated = await get_user(int(referrer_id))
-            new_ref_gems = (updated.get('gems') if updated else 0)
+        # Actualizar contador de referidos que compraron
+        turso_execute(
+            "UPDATE users SET paying_referrals_count = ?, updated_at = ? WHERE telegram_id = ?",
+            [total_unique, now_iso, str(referrer_id)]
+        )
 
-        supabase.table('users').update({
-            'paying_referrals_count': total_unique,
-        }).eq('telegram_id', str(referrer_id)).execute()
+        # Registrar transacción
+        turso_execute(
+            """INSERT INTO gem_transactions
+              (telegram_id, amount, transaction_type, description)
+             VALUES (?, ?, ?, ?)""",
+            [
+                str(referrer_id),
+                commission,
+                'referral_commission',
+                f'Comisión {pct}% por compra de referido',
+            ]
+        )
 
-        supabase.table('gem_transactions').insert({
-            'telegram_id': str(referrer_id),
-            'amount': commission,
-            'transaction_type': 'referral_commission',
-            'description': f'Comisión {pct}% por compra de referido',
-        }).execute()
-
-        supabase.table('referral_commissions').insert({
-            'referrer_id': str(referrer_id),
-            'referred_id': str(buyer_id),
-            'purchase_gems': gems_purchased,
-            'commission_gems': commission,
-            'commission_pct': pct,
-            'source': source,
-            'reference': reference,
-        }).execute()
+        # Registrar comisión
+        turso_execute(
+            """INSERT INTO referral_commissions
+              (referrer_id, referred_id, purchase_gems, commission_gems,
+               commission_pct, source, reference)
+             VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            [
+                str(referrer_id),
+                str(buyer_id),
+                gems_purchased,
+                commission,
+                pct,
+                source,
+                reference,
+            ]
+        )
 
         logger.info(f"Commission paid: {commission} gems to {referrer_id} ({pct}%)")
 
+        # Notificar al referidor
         try:
             bot = Bot(token=TELEGRAM_BOT_TOKEN)
             lang = referrer.get('language', 'es')
@@ -271,18 +287,17 @@ async def pay_referral_commission(
 async def record_star_purchase(telegram_id: int, stars: int, gems: int, is_first_purchase: bool, charge_id: str):
     """Acredita la compra. Suma a gems Y purchased_gems atómicamente."""
     try:
-        supabase.table('star_purchases').insert({
-            'telegram_id': str(telegram_id),
-            'stars_amount': stars,
-            'gems_amount': gems,
-            'is_first_purchase': is_first_purchase,
-            'telegram_charge_id': charge_id,
-            'payment_method': 'stars'
-        }).execute()
+        turso_execute(
+            """INSERT INTO star_purchases
+              (telegram_id, stars_amount, gems_amount, is_first_purchase,
+               telegram_charge_id, payment_method)
+             VALUES (?, ?, ?, ?, ?, 'stars')""",
+            [str(telegram_id), stars, gems, 1 if is_first_purchase else 0, charge_id]
+        )
     except Exception as e:
         err_str = str(e)
-        # ✅ Anti doble-acreditación: si el charge_id ya existe, salir.
-        if '23505' in err_str or 'duplicate' in err_str.lower() or '409' in err_str:
+        # Anti doble-acreditación: charge_id ya existe
+        if 'UNIQUE' in err_str or 'unique' in err_str.lower() or 'constraint' in err_str.lower():
             logger.warning(f"⚠️ Charge {charge_id} ya procesado, ignorando")
             return
         logger.error(f"Error insertando star_purchase: {err_str}")
@@ -290,19 +305,26 @@ async def record_star_purchase(telegram_id: int, stars: int, gems: int, is_first
 
     # ✅ Atómico: sumar a gems + purchased_gems + reset hook
     try:
-        supabase.rpc('increment_gems_and_purchased', {
-            'p_telegram_id': str(telegram_id),
-            'p_amount': gems
-        }).execute()
+        now_iso = datetime.now(timezone.utc).isoformat()
+        turso_query_one(
+            """UPDATE users
+             SET gems = COALESCE(gems, 0) + ?,
+                 purchased_gems = COALESCE(purchased_gems, 0) + ?,
+                 hook_messages_remaining = 0,
+                 updated_at = ?
+             WHERE telegram_id = ?
+             RETURNING gems, purchased_gems""",
+            [gems, gems, now_iso, str(telegram_id)]
+        )
     except Exception as e:
         logger.error(f"Error incrementando gemas post-compra: {e}")
 
-    supabase.table('gem_transactions').insert({
-        'telegram_id': str(telegram_id),
-        'amount': gems,
-        'transaction_type': 'purchase',
-        'description': f'Compra con {stars} stars'
-    }).execute()
+    turso_execute(
+        """INSERT INTO gem_transactions
+          (telegram_id, amount, transaction_type, description)
+         VALUES (?, ?, ?, ?)""",
+        [str(telegram_id), gems, 'purchase', f'Compra con {stars} stars']
+    )
 
     await pay_referral_commission(telegram_id, gems, 'stars', charge_id)
 
@@ -371,34 +393,38 @@ async def apply_pending_referral(telegram_id: int, ref_code: str) -> bool:
         if str(referrer['telegram_id']) == str(telegram_id):
             return False
 
-        existing = supabase.table('referrals').select('id').eq(
-            'referred_id', str(telegram_id)
-        ).execute()
+        existing = turso_query_one(
+            "SELECT id FROM referrals WHERE referred_id = ? LIMIT 1",
+            [str(telegram_id)]
+        )
 
-        if existing.data and len(existing.data) > 0:
-            supabase.table('users').update({
-                'pending_referral_code': None
-            }).eq('telegram_id', str(telegram_id)).execute()
+        if existing:
+            turso_execute(
+                "UPDATE users SET pending_referral_code = NULL WHERE telegram_id = ?",
+                [str(telegram_id)]
+            )
             return False
 
         try:
-            supabase.table('referrals').insert({
-                'referrer_id': str(referrer['telegram_id']),
-                'referred_id': str(telegram_id),
-                'reward_paid': False,
-                'referred_message_count': 0,
-            }).execute()
+            turso_execute(
+                """INSERT INTO referrals
+                  (referrer_id, referred_id, reward_paid, referred_message_count)
+                 VALUES (?, ?, 0, 0)""",
+                [str(referrer['telegram_id']), str(telegram_id)]
+            )
         except Exception as e:
             err_str = str(e)
-            if '23505' in err_str or 'duplicate' in err_str.lower() or '409' in err_str:
+            if 'UNIQUE' in err_str or 'unique' in err_str.lower() or 'constraint' in err_str.lower():
                 logger.info(f"Referral ya existente para {telegram_id}")
                 return False
             raise
 
-        supabase.table('users').update({
-            'referred_by': str(referrer['telegram_id']),
-            'pending_referral_code': None,
-        }).eq('telegram_id', str(telegram_id)).execute()
+        turso_execute(
+            """UPDATE users
+             SET referred_by = ?, pending_referral_code = NULL
+             WHERE telegram_id = ?""",
+            [str(referrer['telegram_id']), str(telegram_id)]
+        )
 
         try:
             bot = Bot(token=TELEGRAM_BOT_TOKEN)
@@ -499,8 +525,6 @@ async def cmd_start(message: Message, command: CommandObject = None):
             telegram_id, username, first_name, language,
             pending_referral_code=ref_code
         )
-        # ✅ FIX: Aunque create_user falle, si get_user devuelve algo
-        # (porque alguien más lo creó), seguimos.
         if not user:
             user = await get_user(telegram_id)
 
@@ -512,8 +536,6 @@ async def cmd_start(message: Message, command: CommandObject = None):
             )
             return
 
-        # ✅ FIX: SIEMPRE enviar age warning si no está verificado
-        # (aunque ya existiera el usuario)
         if not user.get('age_verified'):
             await send_age_warning(message, language)
             return
@@ -524,16 +546,14 @@ async def cmd_start(message: Message, command: CommandObject = None):
     # Usuario existente
     if ref_code and not user.get('age_verified'):
         try:
-            supabase.table('users').update({
-                'pending_referral_code': ref_code
-            }).eq('telegram_id', str(telegram_id)).execute()
+            turso_execute(
+                "UPDATE users SET pending_referral_code = ? WHERE telegram_id = ?",
+                [ref_code, str(telegram_id)]
+            )
             user['pending_referral_code'] = ref_code
         except Exception as e:
             logger.error(f"Error updating pending_referral: {e}")
 
-    # ✅ FIX CLAVE: Si no está verificado, enviamos warning.
-    # Si el callback falló antes (por lo que sea), el usuario puede
-    # volver a pulsar /start y recibir la verificación de nuevo.
     if not user.get('age_verified'):
         await send_age_warning(message, user.get('language', language) or language)
         return
@@ -548,7 +568,6 @@ async def on_age_confirm(callback: CallbackQuery):
     user = await get_user(telegram_id)
 
     if not user:
-        # ✅ FIX: Auto-crear si por algún motivo no existe
         user = await create_user_immediately(
             telegram_id,
             callback.from_user.username or "",
@@ -562,10 +581,13 @@ async def on_age_confirm(callback: CallbackQuery):
     lang = user.get('language', 'es') or 'es'
 
     try:
-        supabase.table('users').update({
-            'age_verified': True,
-            'age_verified_at': datetime.now(timezone.utc).isoformat(),
-        }).eq('telegram_id', str(telegram_id)).execute()
+        now_iso = datetime.now(timezone.utc).isoformat()
+        turso_execute(
+            """UPDATE users
+             SET age_verified = 1, age_verified_at = ?, updated_at = ?
+             WHERE telegram_id = ?""",
+            [now_iso, now_iso, str(telegram_id)]
+        )
     except Exception as e:
         logger.error(f"Error updating age_verified: {e}")
         await callback.answer("⚠️ Error. Intenta de nuevo", show_alert=True)
