@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { tgFetch } from '@/lib/telegram-fetch'
 import { getTranslations } from '@/lib/i18n'
 import { getRelationshipLevel, getDisplayName, getCharacterImageUrl } from '@/lib/constants'
 import { useUser } from '@/lib/UserContext'
@@ -45,62 +45,26 @@ export default function ChatsPage() {
       setLoading(false)
       return
     }
-    loadChats(user.telegram_id)
+    loadChats()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.telegram_id, userLoading])
 
-  const loadChats = async (tid: string) => {
+  // ═══════════════════════════════════════════════════════════════
+  // ✅ MIGRADO: ahora carga vía /api/chat-list (Turso)
+  // ═══════════════════════════════════════════════════════════════
+  const loadChats = async () => {
     try {
-      const { data: chars } = await supabase
-        .from('user_characters')
-        .select('id, character_name, archetype, gender')
-        .eq('telegram_id', tid)
-
-      if (!chars || chars.length === 0) {
+      const res = await tgFetch('/api/chat-list')
+      if (!res.ok) {
+        console.error('[chats] HTTP', res.status)
         setChats([])
-        setLoading(false)
         return
       }
-
-      // ✅ NUEVO: incluir `role` para poder filtrar
-      const { data: history } = await supabase
-        .from('conversation_history')
-        .select('character_id, content, created_at, role')
-        .eq('telegram_id', tid)
-        .order('created_at', { ascending: false })
-
-      const byChar: Record<
-        number,
-        { lastMessage: string; lastAt: string; count: number }
-      > = {}
-
-      for (const h of history || []) {
-        if (!byChar[h.character_id]) {
-          byChar[h.character_id] = {
-            lastMessage: h.content,
-            lastAt: h.created_at,
-            count: 0,
-          }
-        }
-        // ✅ NUEVO: contar SOLO mensajes del usuario
-        if (h.role === 'user') {
-          byChar[h.character_id].count++
-        }
-      }
-
-      const rows: ChatRow[] = chars.map((c) => ({
-        id: c.id,
-        character_name: getDisplayName(c),
-        archetype: c.archetype,
-        gender: c.gender,
-        lastMessage: byChar[c.id]?.lastMessage,
-        lastAt: byChar[c.id]?.lastAt,
-        messageCount: byChar[c.id]?.count || 0,
-      }))
-
-      rows.sort((a, b) => (b.lastAt || '').localeCompare(a.lastAt || ''))
-      setChats(rows)
+      const data = await res.json()
+      setChats(data.chats || [])
     } catch (e) {
-      console.error(e)
+      console.error('[chats] loadChats error:', e)
+      setChats([])
     } finally {
       setLoading(false)
     }
@@ -150,9 +114,13 @@ export default function ChatsPage() {
       ) : (
         <div className="chat-list">
           {chats.map((c) => {
-            // ✅ Ahora messageCount = solo mensajes del usuario → niveles alineados
             const level = getRelationshipLevel(c.messageCount)
             const avatar = getCharacterImageUrl(c.archetype, c.gender)
+            const displayName = getDisplayName({
+              character_name: c.character_name,
+              archetype: c.archetype,
+              gender: c.gender,
+            })
             return (
               <button
                 key={c.id}
@@ -182,12 +150,12 @@ export default function ChatsPage() {
                       }}
                     />
                   ) : (
-                    c.character_name?.[0]?.toUpperCase()
+                    displayName?.[0]?.toUpperCase()
                   )}
                 </div>
                 <div className="chat-row-body">
                   <div className="chat-row-top">
-                    <p className="chat-row-name">{c.character_name}</p>
+                    <p className="chat-row-name">{displayName}</p>
                     <span className="chat-row-time">{formatTime(c.lastAt)}</span>
                   </div>
                   <div className="chat-row-bottom">
