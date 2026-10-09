@@ -17,7 +17,6 @@ export const maxDuration = 60
 
 // ═══════════════════════════════════════════════════════════════
 // CHARACTER DNA — identidad visual mínima por arquetipo
-// (ya existía, se mantiene igual)
 // ═══════════════════════════════════════════════════════════════
 const CHARACTER_DNA: Record<string, string> = {
   female_stepmom: "mature woman, long dark hair, green eyes, elegant",
@@ -87,9 +86,8 @@ const CHARACTER_DNA: Record<string, string> = {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ✅ NUEVA CAPA: ARCHETYPE_IMAGE_HINTS
-// Toques visuales específicos por arquetipo
-// Se aplican en niveles 4-5 para dar personalidad visual
+// ✅ ARCHETYPE_IMAGE_HINTS
+// Toques visuales específicos por arquetipo (niveles 4-5)
 // ═══════════════════════════════════════════════════════════════
 const ARCHETYPE_IMAGE_HINTS: Record<string, string> = {
   // ─── FEMENINOS ───
@@ -161,27 +159,83 @@ const ARCHETYPE_IMAGE_HINTS: Record<string, string> = {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// Face rules (ya existían)
+// Face rules (para niveles 1-2 y parciales 3)
 // ═══════════════════════════════════════════════════════════════
-const FACE_HIDDEN_FRAGMENT_ES = 'IMPORTANT: the subject\'s face is NOT visible in the photo. Use creative framing: shot from behind, back turned to camera, close-up on body and hands only, selfie cropped at the chin, over-the-shoulder angle without face, face hidden by phone or object, or facing away. The face must NOT appear.'
+const FACE_HIDDEN_FRAGMENT = 'The subject\'s face is NOT visible in the photo. Use creative framing: selfie cropped at chin level, shot from behind, close-up on body and hands only, over-the-shoulder angle without face, face hidden by phone position, hair, turned away, or by an object. The face must NOT appear or must be completely obscured.'
 
-const FACE_PARTIAL_FRAGMENT_ES = 'The subject\'s face is only partially visible: side profile, three-quarter angle with hair covering one eye, or face softly obscured by shadow/dim light. Do not show a full clear face.'
+const FACE_PARTIAL_FRAGMENT = 'The subject\'s face is only partially visible: side profile in soft shadow, three-quarter angle with hair covering one eye, face softly obscured by dim light or shadow, or turned to the side. Do not show a full clear frontal face.'
 
 // ═══════════════════════════════════════════════════════════════
-// Base scenes por nivel (ya existían, ajustadas para v4-5)
+// ✅ SFW SCENE PROMPTS (niveles 1-3) → DeepInfra / FLUX
+// Selfie-style, cara oculta/parcial, muy específicos
+// ✅ Nivel 3: más coqueto, sugerente, elegante — pero SFW
 // ═══════════════════════════════════════════════════════════════
 const SFW_SCENE_PROMPTS: Record<number, string> = {
-  1: 'selfie style, casual daytime environment, fully dressed, cozy and wholesome, soft natural lighting, friendly smile, cute anime aesthetic, safe for work',
-  2: 'selfie or mirror photo, bedroom setting, warm cozy lighting, fully dressed in casual outfit, subtle suggestive pose, flirty playful expression, safe for work',
-  3: 'photo in bedroom or living room, dim moody lighting, provocative but fully covered outfit or elegant lingerie, seductive artistic pose, safe for work',
+  1: `selfie photo taken by the character with the phone in hand, close to the body,
+      framing: chest-up or waist-up selfie, face naturally cropped by phone position or turned away,
+      pose: casual relaxed natural body posture, one hand holding the phone, weight on one leg,
+      outfit: casual everyday clothes fully covered (oversized hoodie, plain t-shirt, comfortable sweater, casual jeans),
+      environment: cozy home setting, warm afternoon daylight, soft natural window light,
+      mood: wholesome, friendly, approachable, playful casual vibe,
+      focus: casual outfit details, natural body language, hands holding phone, room atmosphere,
+      detail level: high detail on fabric, hands, hair, room decor,
+      avoid showing face clearly, mysterious framing,
+      style: anime illustration, cel shading, muted color palette, soft cinematic lighting,
+      no nudity, no suggestive content, safe for work, cozy anime aesthetic`,
+
+  2: `mirror selfie in bedroom, phone in hand or one hand resting on hip,
+      framing: waist-up mirror shot, face obscured by the phone, hair falling in front, or turned away,
+      pose: flirty relaxed pose, weight shifted on one hip, subtle playful body language,
+      one hand adjusting hair or resting on collarbone, slight hip tilt,
+      outfit: slightly revealing casual outfit fully covered
+              (crop top with high-waist jeans, fitted tank top, short summer skirt, thin knit sweater slipping off one shoulder) — no cleavage visible, no nudity,
+      environment: cozy bedroom, warm intimate lighting, soft shadows, dim lamp in background,
+      mood: flirty, playful, teasing, mysterious — inviting but safe,
+      focus: body silhouette, outfit details, playful pose, hair movement, environment atmosphere,
+      detail level: very high detail on fabric texture, hair strands, lighting on skin, room depth,
+      avoid showing face clearly,
+      style: anime illustration, cel shading, muted color palette, warm cinematic lighting with soft rim light,
+      no nudity, no explicit content, safe for work, flirty anime aesthetic`,
+
+  3: `seductive artistic photo in bedroom or bathroom, selfie-style composition,
+      framing: artistic shot from neck down, or from behind, or from the side with strong shadow,
+      face only partially visible: soft side profile in dim shadow, or hair covering the eyes,
+      or turned fully away — elegant framing that hides or veils the face,
+      pose: confident elegant seductive pose, artistic silhouette, graceful body language,
+      one hand on hip or slowly tracing collarbone, subtle arched back, chin lifted slightly,
+      outfit: elegant provocative lingerie or minimal but tasteful coverage
+              (black lace bralette with silk robe slipping off one shoulder,
+               sleek satin slip dress with thin straps,
+               delicate lace set with thigh-high stockings,
+               silk camisole and high-waist underwear) —
+              very revealing but ALWAYS covered, no nudity, no exposed genitalia,
+      environment: dim moody bedroom or elegant bathroom, warm intimate lighting,
+                   single warm light source (bedside lamp, candle, or window at dusk),
+                   soft shadows on skin, silk sheets visible, perfume bottle or wine glass nearby,
+      mood: seductive, intimate, artistic, mysterious, tasteful tease —
+            sensual but classy, elegant and confident,
+      focus: body curves under fabric, elegant posture, lighting on skin and fabric,
+             silk texture, lace details, environment atmosphere, artistic shadow play,
+      detail level: extremely high detail on fabric, lace, lighting, skin tones, shadow gradients,
+      strongly avoid showing face clearly — keep it mysterious,
+      style: anime illustration, cel shading, muted color palette,
+             dramatic cinematic lighting with rich shadows and warm rim light,
+             high detail, best quality,
+      no nudity, no explicit content, safe for work, elegant anime aesthetic`,
 }
 
+// ═══════════════════════════════════════════════════════════════
+// ✅ NSFW SCENE PROMPTS (niveles 4-5) → Wiro v4-5-uncensored
+// ═══════════════════════════════════════════════════════════════
 const NSFW_SCENE_PROMPTS: Record<number, string> = {
   4: 'intimate photo, minimal tasteful clothing or elegant lingerie, very revealing but no explicit nudity, artistic suggestive pose, low intimate lighting, bedroom setting, high-end boudoir aesthetic, heat and tension palpable, flushed skin, breathless expression, sensual atmosphere',
   5: 'artistic boudoir photo, tasteful implied nudity with strategic coverage (sheets, shadows, artistic angles), no exposed genitalia, no explicit sexual acts, high-end artistic composition, dramatic cinematic lighting, peak intimacy moment, tangled sheets, marked skin, glowing skin, post-intimacy atmosphere, sensual silence, everything suggested nothing shown',
 }
 
-const AUTO_SCENES: Record<number, string> = {
+// ═══════════════════════════════════════════════════════════════
+// AUTO SCENES (fallback cuando no hay userHint)
+// ═══════════════════════════════════════════════════════════════
+const AUTO_SCENES_FEMALE: Record<number, string> = {
   1: 'relaxed at home in a cozy room, natural soft smile, casual daylight atmosphere, warm and wholesome vibe',
   2: 'lying on her bed, playful flirty look toward the camera, warm intimate lighting, teasing energy',
   3: 'seductive pose in a dimly lit room, elegant lingerie, moody atmosphere, confident inviting gaze',
@@ -198,42 +252,34 @@ const AUTO_SCENES_MALE: Record<number, string> = {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ✅ NUEVA FUNCIÓN: extractMoodFromMessages
-// Analiza los últimos mensajes y devuelve un "mood tag" visual
-// que se añade al prompt de la imagen
+// ✅ extractMoodFromMessages — contexto de la conversación
 // ═══════════════════════════════════════════════════════════════
 function extractMoodFromMessages(messages: string[]): string {
   if (!messages || messages.length === 0) return ''
 
   const text = messages.join(' ').toLowerCase()
 
-  // Pasión / breathless
   if (/\b(jadeo|jadea|respira|suspiro|temblor|tiembla|calor|fuego|húmedo|mojado|acelerado|entrecortad)\b/.test(text)) {
     return 'breathless passionate mood, disheveled, intense breathing'
   }
 
-  // Sumisión / entrega
-  if (/\b(hazme|tuyo|tuya|obedec|pide|por favor|tómame|tomame|más|mas|entrégate|entregate|soy tu)\b/.test(text)) {
+  if (/\b(hazme|tuyo|tuya|obedec|pide|por favor|tómame|tomame|entrégate|entregate|soy tu)\b/.test(text)) {
     return 'submission and surrender mood, devoted gaze, yielding posture'
   }
 
-  // Dominación
-  if (/\b(domin|manda|control|orden|obedece|rodillas|sumiso|sumisa|mia|mio)\b/.test(text)) {
+  if (/\b(domin|manda|control|orden|obedece|rodillas|sumiso|sumisa|mía|mio)\b/.test(text)) {
     return 'dominant commanding mood, intense stare, powerful posture'
   }
 
-  // Slow burn / sensual
   if (/\b(beso|lento|despacio|cerca|roza|toca|acaricia|susurr|muerde|labio)\b/.test(text)) {
     return 'sensual slow burn mood, intimate closeness, tender tension'
   }
 
-  // Tease / provocación
   if (/\b(provoc|broma|jugueto|desaf|atrev|coqueto|pícara|picara|tentaci)\b/.test(text)) {
     return 'playful teasing mood, challenging gaze, mischievous energy'
   }
 
-  // Romance / ternura
-  if (/\b(amor|quiero|corazón|corazon|tierno|dulce|beso tierno|abrazo)\b/.test(text)) {
+  if (/\b(amor|quiero|corazón|corazon|tierno|dulce|abrazo)\b/.test(text)) {
     return 'romantic tender mood, warm affectionate gaze'
   }
 
@@ -258,7 +304,7 @@ export async function POST(request: Request) {
         ? body.description.trim().slice(0, 200)
         : ''
 
-    // ✅ NUEVO: recibir últimos mensajes de la conversación
+    // ✅ Recibir últimos mensajes
     const recent_messages: string[] = Array.isArray(body?.recent_messages)
       ? body.recent_messages
           .filter((m: any) => typeof m === 'string' && m.trim().length > 0)
@@ -316,7 +362,7 @@ export async function POST(request: Request) {
       }, { status: 402 })
     }
 
-    const autoScenes = character.gender === 'male' ? AUTO_SCENES_MALE : AUTO_SCENES
+    const autoScenes = character.gender === 'male' ? AUTO_SCENES_MALE : AUTO_SCENES_FEMALE
     const sceneHint = userHint || autoScenes[level.level] || autoScenes[1]
 
     let imagePrompt: string
@@ -325,40 +371,50 @@ export async function POST(request: Request) {
     const NO_GENITALIA = 'tasteful artistic composition, no explicit genitalia, no nudity visible below waist, strategic coverage, high-end boudoir photography aesthetic, safe for platform'
 
     if (level.level <= 3) {
-      // ─── SFW (niveles 1-3) → DeepInfra
+      // ══════════════════════════════════════════════════════
+      // NIVELES 1-3 → DeepInfra / FLUX (SFW, sin watermark)
+      // ══════════════════════════════════════════════════════
       const dna = CHARACTER_DNA[`${character.gender}_${character.archetype}`] || 'anime character'
       const scene = SFW_SCENE_PROMPTS[level.level] || SFW_SCENE_PROMPTS[1]
 
       let faceRule = ''
       if (faceVisibility === 'hidden') {
-        faceRule = FACE_HIDDEN_FRAGMENT_ES
+        faceRule = FACE_HIDDEN_FRAGMENT
       } else if (faceVisibility === 'partial') {
-        faceRule = FACE_PARTIAL_FRAGMENT_ES
+        faceRule = FACE_PARTIAL_FRAGMENT
       }
 
-      imagePrompt = `[CHARACTER DNA: ${dna}], anime style, cel shading, moody atmospheric lighting, deep shadows, muted color palette, cinematic dark tones, detailed anime eyes, ${scene}, ${sceneHint}, ${faceRule}, high detail, beautiful cinematic lighting, 2D illustration, best quality, safe for work, no nudity, no explicit content`
+      // ✅ Ensamblado específico para SFW
+      const layers = [
+        `[CHARACTER: ${dna}]`,
+        'highly detailed anime illustration, cel shading, soft cinematic lighting',
+        scene,
+        sceneHint,
+        faceRule,
+        'muted color palette, elegant composition, best quality, masterpiece',
+        'safe for work, no nudity, no explicit content',
+      ].filter((s) => s && s.length > 0)
+
+      imagePrompt = layers.join(', ')
       referenceUrl = undefined
     } else {
-      // ─── NSFW (niveles 4-5) → Wiro v4-5-uncensored
-      // ✅ SISTEMA 3 CAPAS:
-      //   1. DNA base del personaje
-      //   2. Escena base por nivel (4 o 5)
-      //   3. Hint por arquetipo (personalidad visual)
-      //   + 4. Mood de la conversación (contexto)
+      // ══════════════════════════════════════════════════════
+      // NIVELES 4-5 → Wiro v4-5-uncensored (NSFW sugerente)
+      // Sistema de 3 capas: DNA + escena + archetype hint + mood
+      // ══════════════════════════════════════════════════════
       const facePrompt = getCharacterFace(character.archetype, character.gender)
       const clothing = getClothingLevel(level.level)
       const scene = NSFW_SCENE_PROMPTS[level.level] || NSFW_SCENE_PROMPTS[4]
       const archetypeHint = ARCHETYPE_IMAGE_HINTS[character.archetype] || ''
       const moodHint = extractMoodFromMessages(recent_messages)
 
-      // Construcción en capas, filtrando strings vacíos
       const layers = [
         facePrompt,
         'anime style, cel shading, moody atmospheric lighting, deep shadows, muted color palette, cinematic dark tones, detailed anime eyes',
         clothing,
         scene,
-        archetypeHint,  // ✅ Hint por arquetipo
-        moodHint,       // ✅ Mood de la conversación
+        archetypeHint,
+        moodHint,
         sceneHint,
         NO_GENITALIA,
         'beautiful cinematic lighting, 2D illustration, best quality',
