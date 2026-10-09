@@ -1,22 +1,21 @@
 // app/api/health/route.ts
 
 import { NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase-admin'
+import { query } from '@/lib/turso'
 
 export const dynamic = 'force-dynamic'
 
-/**
- * ✅ Protegido: solo accesible con header `x-admin-secret`.
- * Configura ADMIN_API_SECRET en Vercel.
- * En desarrollo (sin secreto configurado), se permite el acceso.
- */
 function isAuthorized(request: Request): boolean {
   const secret = process.env.ADMIN_API_SECRET
   if (!secret) {
-    // Sin secreto configurado → solo dev permite
     return process.env.NODE_ENV !== 'production'
   }
-  return request.headers.get('x-admin-secret') === secret
+
+  const headerSecret = request.headers.get('x-admin-secret')
+  const url = new URL(request.url)
+  const querySecret = url.searchParams.get('x-admin-secret')
+
+  return headerSecret === secret || querySecret === secret
 }
 
 export async function GET(request: Request) {
@@ -27,60 +26,53 @@ export async function GET(request: Request) {
   const result: any = {
     timestamp: new Date().toISOString(),
     env: {
-      NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL ? '✅' : '❌',
-      SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY ? '✅' : '❌',
+      TURSO_DATABASE_URL: process.env.TURSO_DATABASE_URL ? '✅' : '❌',
+      TURSO_AUTH_TOKEN: process.env.TURSO_AUTH_TOKEN ? '✅' : '❌',
+      TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN ? '✅' : '❌',
+      TELEGRAM_WEBHOOK_SECRET: process.env.TELEGRAM_WEBHOOK_SECRET ? '✅' : '❌',
+      ADMIN_API_SECRET: process.env.ADMIN_API_SECRET ? '✅' : '❌',
+      OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY ? '✅' : '❌',
+      DEEPINFRA_TOKEN: process.env.DEEPINFRA_TOKEN ? '✅' : '❌',
+      WIRO_API_KEY: process.env.WIRO_API_KEY ? '✅' : '❌',
       NEXT_PUBLIC_R2_PUBLIC_URL: process.env.NEXT_PUBLIC_R2_PUBLIC_URL ? '✅' : '❌',
     },
   }
 
   try {
-    // Test 1: SELECT
-    const { data, error } = await supabaseAdmin
-      .from('users')
-      .select('telegram_id')
-      .limit(1)
+    const users = await query<{ telegram_id: string }>(
+      'SELECT telegram_id FROM users LIMIT 1'
+    )
+    result.select_test = { status: 'ok', rowCount: users.length }
 
-    if (error) {
-      result.select_test = {
-        status: 'error',
-        message: error.message,
-        code: error.code,
-      }
-    } else {
-      result.select_test = { status: 'ok', rowCount: data?.length ?? 0 }
-    }
-
-    // Test 2: INSERT + DELETE en user_characters
     const testId = `test_${Date.now()}`
-    const { data: inserted, error: insertError } = await supabaseAdmin
-      .from('user_characters')
-      .insert({
-        telegram_id: testId,
-        character_name: 'TEST_DELETE_ME',
-        gender: 'female',
-        archetype: 'stepmom',
-        personality: 'test',
-        is_active: false,
-      })
-      .select('id')
-      .single()
+    try {
+      const insertResult = await query<{ id: number }>(
+        `INSERT INTO user_characters
+          (telegram_id, character_name, gender, archetype, personality, is_active)
+         VALUES (?, ?, ?, ?, ?, 0)
+         RETURNING id`,
+        [testId, 'TEST_DELETE_ME', 'female', 'stepmom', 'test']
+      )
 
-    if (insertError) {
+      const insertedId = insertResult[0]?.id
+
+      if (insertedId) {
+        await query('DELETE FROM user_characters WHERE id = ?', [insertedId])
+        result.write_test = { status: 'ok', insertedId, cleaned: true }
+      } else {
+        result.write_test = { status: 'error', message: 'No id returned' }
+      }
+    } catch (writeErr: any) {
       result.write_test = {
         status: 'error',
-        message: insertError.message,
-        code: insertError.code,
-      }
-    } else {
-      result.write_test = { status: 'ok', insertedId: inserted?.id }
-      if (inserted?.id) {
-        await supabaseAdmin.from('user_characters').delete().eq('id', inserted.id)
-        result.write_test.cleaned = true
+        message: writeErr?.message || String(writeErr),
       }
     }
 
     const allOk =
-      result.select_test?.status === 'ok' && result.write_test?.status === 'ok'
+      result.select_test?.status === 'ok' &&
+      result.write_test?.status === 'ok'
+
     result.overall = allOk ? 'ok' : 'has_errors'
   } catch (e: any) {
     result.fatal = e?.message || String(e)
