@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
 import { tgFetch } from '@/lib/telegram-fetch'
 import {
   ARCHETYPES_MALE, ARCHETYPES_FEMALE,
@@ -52,17 +51,18 @@ export default function HomePage() {
   const [tab, setTab] = useState<'all' | 'male' | 'female' | 'fantasy'>('all')
   const [creating, setCreating] = useState<string | null>(null)
 
+  // ═══════════════════════════════════════════════════════════════
+  // ✅ MIGRADO: carga vía /api/characters?active=1 (Turso)
+  // ═══════════════════════════════════════════════════════════════
   useEffect(() => {
     if (!user?.telegram_id) return
-    supabase
-      .from('user_characters')
-      .select('*')
-      .eq('telegram_id', user.telegram_id)
-      .eq('is_active', true)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data) setActiveChar(data)
+    tgFetch('/api/characters?active=1')
+      .then(async (res) => {
+        if (!res.ok) return
+        const data = await res.json()
+        if (data?.character) setActiveChar(data.character)
       })
+      .catch((e) => console.warn('[home] active char error:', e))
   }, [user?.telegram_id])
 
   const t = getTranslations(lang)
