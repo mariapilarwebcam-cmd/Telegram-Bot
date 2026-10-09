@@ -10,12 +10,12 @@ import {
   insertGemTransaction,
   getRecentMessages,
   countUserMessages,
+  countAllUserMessages,
   insertMessages,
   getReferralByReferred,
   updateReferralCount,
   markReferralPaid,
   incrementTotalReferrals,
-  incrementPayingReferrals,
 } from '@/lib/db-queries'
 import {
   GEM_COSTS,
@@ -227,7 +227,7 @@ export async function POST(request: Request) {
       const referral = await getReferralByReferred(tid)
 
       if (referral && !referral.reward_paid) {
-        const totalMsg = await countAllUserMessagesSafe(tid)
+        const totalMsg = await countAllUserMessages(tid)
 
         await updateReferralCount(referral.id, totalMsg)
 
@@ -294,10 +294,4 @@ export async function POST(request: Request) {
     console.error('Error en chat:', error)
     return NextResponse.json({ error: 'Error interno' }, { status: 500 })
   }
-}
-
-// Helper local para no importar dos veces
-async function countAllUserMessagesSafe(tid: string): Promise<number> {
-  const { countAllUserMessages } = await import('@/lib/db-queries')
-  return countAllUserMessages(tid)
 }
