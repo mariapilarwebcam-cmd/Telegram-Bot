@@ -216,10 +216,6 @@ export function getIntensity(messageCount: number, isHookMode = false): Intensit
   return getIntensityFromLevel(level.level)
 }
 
-/**
- * ✅ NUEVO: ahora recibe `level` para adaptar el límite de caracteres.
- * Los niveles 1-2 usan 180 chars, 3 usa 220, 4 usa 250, 5 usa 300.
- */
 export function buildSystemPrompt(
   language: 'es' | 'en',
   intensity: Intensity,
@@ -247,7 +243,6 @@ const MODEL_CHAIN = [
   'deepseek/deepseek-chat-v3-0324',
 ]
 
-// ✅ Subimos max_tokens a 400 para dar margen al nivel 5 (300 chars + reasoning)
 const MAX_TOKENS = 400
 
 interface ModelResult {
@@ -391,6 +386,11 @@ function sanitizeAsterisks(text: string): string {
   return cleaned.join('\n')
 }
 
+// ═══════════════════════════════════════════════════════════════
+// IMAGE GENERATION
+// Niveles 1-3 → DeepInfra (FLUX-1-schnell) — sin watermark
+// Niveles 4-5 → Wiro (seedream-v4-5-uncensored) — sin watermark
+// ═══════════════════════════════════════════════════════════════
 export async function generateImage(
   prompt: string,
   referenceImageUrl?: string,
@@ -401,7 +401,7 @@ export async function generateImage(
   } else {
     try {
       return await runSeedreamSync(prompt, referenceImageUrl, {
-        resolution: '2K',
+        resolution: '2k',      // ✅ minúscula — Wiro solo acepta "auto", "2k", "3k"
         aspectRatio: '3:4',
         maxImages: 1,
       })
