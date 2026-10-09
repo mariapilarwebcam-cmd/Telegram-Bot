@@ -79,7 +79,6 @@ const LEVEL_UP_COPY_EN: Record<number, (name: string) => string> = {
   5: (n) => `😈 Something forbidden. No one has gotten this far with ${n}.`,
 }
 
-// ✅ Máximo de altura del textarea (px). Aprox 5 líneas.
 const TEXTAREA_MAX_HEIGHT = 120
 
 export default function ChatPage() {
@@ -133,8 +132,6 @@ export default function ChatPage() {
   const endRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const sendingRef = useRef(false)
-
-  // ✅ REF del textarea para auto-resize
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   // ✅ Rotación de badges del header cada 5s
@@ -145,16 +142,12 @@ export default function ChatPage() {
     return () => clearInterval(interval)
   }, [])
 
-  // ═══════════════════════════════════════════════════════
-  // ✅ FIX 1: Scroll al último mensaje cuando se abre el teclado
-  // ═══════════════════════════════════════════════════════
+  // ✅ FIX: Scroll al último mensaje cuando se abre el teclado
   useEffect(() => {
     const vv = window.visualViewport
     if (!vv) return
 
     const handleViewportResize = () => {
-      // El viewport cambia cuando el teclado se abre/cierra
-      // Esperamos un poco a que la animación del teclado termine
       setTimeout(() => {
         endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
       }, 150)
@@ -164,25 +157,17 @@ export default function ChatPage() {
     return () => vv.removeEventListener('resize', handleViewportResize)
   }, [])
 
-  // ═══════════════════════════════════════════════════════
-  // ✅ FIX 2: Auto-resize del textarea
-  // ═══════════════════════════════════════════════════════
+  // ✅ FIX: Auto-resize del textarea
   useEffect(() => {
     const el = textareaRef.current
     if (!el) return
-
-    // Reset height para recalcular
     el.style.height = 'auto'
-
-    // Aplicar nueva altura limitada al máximo
     const newHeight = Math.min(el.scrollHeight, TEXTAREA_MAX_HEIGHT)
     el.style.height = `${newHeight}px`
-
-    // Habilitar scroll interno si excede el máximo
     el.style.overflowY = el.scrollHeight > TEXTAREA_MAX_HEIGHT ? 'auto' : 'hidden'
   }, [input])
 
-  // Carga inicial: personaje + historial + premium + contador
+  // Carga inicial
   useEffect(() => {
     if (userLoading) return
     if (!user?.telegram_id) return
@@ -318,11 +303,7 @@ export default function ChatPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [historyLoaded, user, character, messages.length])
 
-  // ═══════════════════════════════════════════════════════
-  // ✅ FIX 1b: Scroll al final cuando el usuario enfoca el input
-  // ═══════════════════════════════════════════════════════
   const handleInputFocus = () => {
-    // Esperamos a que el teclado se abra
     setTimeout(() => {
       endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
     }, 300)
@@ -443,6 +424,9 @@ export default function ChatPage() {
     }
   }
 
+  // ═══════════════════════════════════════════════════════
+  // ✅ FUNCIÓN ACTUALIZADA: envía los últimos 4 mensajes
+  // ═══════════════════════════════════════════════════════
   const generateImage = async () => {
     if (!user || !character || generatingImage) return
     if (!isPremium) {
@@ -456,11 +440,24 @@ export default function ChatPage() {
 
     setGeneratingImage(true)
     try {
+      // ✅ NUEVO: extraer últimos 4 mensajes (limpios) para contexto
+      const recentMessages = messages
+        .slice(-4)
+        .map((m) => {
+          return m.content
+            .replace(/!\[[^\]]*\]\([^)]+\)/g, '') // quitar imágenes markdown
+            .replace(/\*+/g, '')                  // quitar asteriscos
+            .replace(/\s+/g, ' ')                 // colapsar espacios
+            .trim()
+        })
+        .filter((t) => t.length > 0)
+
       const res = await tgFetch('/api/generate-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           character_id: characterId,
+          recent_messages: recentMessages,  // ✅ NUEVO
         }),
       })
       const data = await res.json()
@@ -1059,7 +1056,6 @@ export default function ChatPage() {
             </svg>
           </button>
 
-          {/* ✅ TEXTAREA AUTO-EXPANDIBLE en lugar de input */}
           <textarea
             ref={textareaRef}
             value={input}
