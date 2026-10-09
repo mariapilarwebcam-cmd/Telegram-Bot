@@ -1,8 +1,13 @@
 // app/api/daily/route.ts
 
 import { NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase-admin'
-import { ensureUser } from '@/lib/user-helpers'
+import {
+  ensureUser,
+  getUser,
+  incrementGems,
+  setLastDailyClaim,
+  insertGemTransaction,
+} from '@/lib/db-queries'
 import { BASE_DAILY_GEMS, HOURS_BETWEEN_CLAIMS } from '@/lib/constants'
 
 export async function POST(request: Request) {
@@ -12,7 +17,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
-    // ✅ FIX: crea el usuario si no existe
+    // ✅ ensureUser (crea si no existe)
     const user = await ensureUser(tid)
     if (!user) {
       return NextResponse.json(
@@ -43,36 +48,17 @@ export async function POST(request: Request) {
       }
     }
 
-    // ✅ Recompensa plana: 3 gemas siempre
+    // ── Recompensa plana: 3 gemas ──
     const dailyTotal = BASE_DAILY_GEMS
 
-    // ✅ RPC ATÓMICA
-    const { data: newGems, error: rpcErr } = await supabaseAdmin.rpc(
-      'increment_gems',
-      {
-        p_telegram_id: tid,
-        p_amount: dailyTotal,
-      }
-    )
+    // ✅ RPC atómica (Turso)
+    const newGems = await incrementGems(tid, dailyTotal)
 
-    if (rpcErr) {
-      console.error('[daily] RPC failed:', rpcErr)
-      return NextResponse.json(
-        { error: 'Error actualizando gemas' },
-        { status: 500 }
-      )
-    }
+    // Timestamp + reset hook
+    await setLastDailyClaim(tid)
 
-    // Actualizar timestamp + reset hook (no crítico si hay race)
-    await supabaseAdmin
-      .from('users')
-      .update({
-        last_daily_claim: new Date().toISOString(),
-        hook_messages_remaining: 0,
-      })
-      .eq('telegram_id', tid)
-
-    await supabaseAdmin.from('gem_transactions').insert({
+    // Registrar transacción
+    await insertGemTransaction({
       telegram_id: tid,
       amount: dailyTotal,
       transaction_type: 'daily',
@@ -80,7 +66,7 @@ export async function POST(request: Request) {
     })
 
     return NextResponse.json({
-      gems: typeof newGems === 'number' ? newGems : (user.gems || 0) + dailyTotal,
+      gems: newGems,
       claimed: dailyTotal,
       base: BASE_DAILY_GEMS,
       referral_bonus: 0,
