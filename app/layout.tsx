@@ -1,6 +1,7 @@
 import { Metadata, Viewport } from 'next'
 import './globals.css'
 import BottomNav from '@/components/BottomNav'
+import SwipeBack from '@/components/SwipeBack'                  // ✅ NUEVO
 import { UserProvider } from '@/lib/UserContext'
 import { TonConnectProvider } from './providers'
 
@@ -27,6 +28,7 @@ export default function RootLayout({
       <body className="antialiased">
         <UserProvider>
           <TonConnectProvider>
+            <SwipeBack />                                       {/* ✅ NUEVO */}
             <div className="app-shell">
               <div className="app-content">{children}</div>
               <BottomNav />
