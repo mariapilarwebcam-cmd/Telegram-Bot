@@ -1,6 +1,7 @@
 "use client"
 
 import { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react'
+import { useRouter } from 'next/navigation'                        // ← NUEVO
 import { getLanguage, Language } from '@/lib/i18n'
 import { setInitDataRaw } from '@/lib/telegram-fetch'
 
@@ -54,6 +55,9 @@ function getTelegramWebApp(): any {
   return (window as any).Telegram?.WebApp || null
 }
 
+// ✅ Rutas que NO requieren onboarding
+const ONBOARDING_WHITELIST = ['/onboarding']
+
 export function UserProvider({ children }: { children: ReactNode }) {
   const [user, setUserState] = useState<UserData | null>(memUserCache)
   const [loading, setLoading] = useState(!memUserCache)
@@ -62,11 +66,30 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [telegramId, setTelegramId] = useState<number | null>(null)
   const referralProcessed = useRef(false)
   const initStarted = useRef(false)
+  const router = useRouter()                                        // ← NUEVO
 
   useEffect(() => {
     const t = setTimeout(() => setLoading(false), 8000)
     return () => clearTimeout(t)
   }, [])
+
+  // ✅ NUEVO: Gate de onboarding — redirige a /onboarding si no completó
+  useEffect(() => {
+    if (loading || !user) return
+    if (typeof window === 'undefined') return
+
+    const path = window.location.pathname
+    if (ONBOARDING_WHITELIST.some((p) => path.startsWith(p))) return
+
+    const isComplete =
+      user.onboarding_complete === true ||
+      (user.onboarding_complete as any) === 1
+
+    if (!isComplete) {
+      console.log('[UserContext] onboarding incompleto → /onboarding')
+      router.replace('/onboarding')
+    }
+  }, [user, loading, router])
 
   useEffect(() => {
     if (initStarted.current) return
