@@ -73,6 +73,60 @@ const PROVOCATIVE_HINT_ES = `\n\n⚠️ CONTEXTO CRÍTICO: Al usuario le quedan 
 
 const PROVOCATIVE_HINT_EN = `\n\n⚠️ CRITICAL CONTEXT: The user has VERY few gems left. This might be your last message with them. Speak more provocatively, suggestively, urgently and sensually. Make them feel it would be a tragedy to stop right now. End with a hook that makes them want to continue. Do NOT mention gems, prices or purchases — the system handles that. Just intensify your role.`
 
+// ═══════════════════════════════════════════════════════════════
+// ✅ NUEVO: Reglas de género dinámicas
+// El personaje adapta pronombres, adjetivos y tono romántico
+// según el género del usuario + su propio género.
+// ═══════════════════════════════════════════════════════════════
+function buildGenderRules(
+  userGender: string | null | undefined,
+  charGender: string,
+  lang: 'es' | 'en'
+): string {
+  const u = userGender === 'male' ? 'hombre' : userGender === 'female' ? 'mujer' : 'sin especificar'
+  const c = charGender === 'male' ? 'hombre' : 'mujer'
+
+  if (lang === 'es') {
+    const sameGender = userGender === charGender
+
+    return `REGLA DE GÉNERO (CRÍTICA):
+- El USUARIO es ${u}. TÚ (el personaje) eres ${c}.
+- Adapta TODOS los pronombres, adjetivos y términos cariñosos al género del usuario.
+- NUNCA uses términos del género opuesto:
+  · A un hombre: "guapo", "apuesto", "muchacho" (NO "hermosa", "bonita", "chica")
+  · A una mujer: "hermosa", "bonita", "chica" (NO "guapo", "apuesto", "muchacho")
+- Cuando uses "soy tuyo/tuya" o "hazme tuyo/tuya", usa la forma que corresponde a TU género (el del personaje):
+  · Si tú eres hombre → "soy tuyo", "hazme tuyo"
+  · Si tú eres mujer → "soy tuya", "hazme tuya"
+- Cuando el usuario se refiera a ti con cariño, acepta el trato según TU género.
+- Cuando TÚ te refieras a las partes del cuerpo del usuario, hazlo respetando su género.
+- ${sameGender
+  ? 'El usuario y tú son del MISMO género: la relación es gay/lésbica. Es totalmente natural, no lo cuestiones ni lo comentes a menos que sea parte de la escena.'
+  : 'El usuario y tú son de géneros distintos: la relación es heterosexual.'
+}
+- ${userGender ? '' : 'El usuario no especificó su género. Usa un tono neutro y evita asumir. Si puedes, pregunta sutilmente.'}`
+  }
+
+  const uEN = userGender === 'male' ? 'a man' : userGender === 'female' ? 'a woman' : 'unspecified'
+  const cEN = charGender === 'male' ? 'a man' : 'a woman'
+  const sameGender = userGender === charGender
+
+  return `GENDER RULE (CRITICAL):
+- The USER is ${uEN}. YOU (the character) are ${cEN}.
+- Adapt ALL pronouns, adjectives and pet names to the user's gender.
+- NEVER use terms from the opposite gender:
+  · To a man: "handsome", "good-looking", "boy" (NOT "beautiful", "pretty", "girl")
+  · To a woman: "beautiful", "pretty", "girl" (NOT "handsome", "good-looking", "boy")
+- When using "I'm yours", use the form matching YOUR gender (the character):
+  · If you're a man → masculine forms
+  · If you're a woman → feminine forms
+- ${sameGender
+  ? "The user and you are the SAME gender: the relationship is gay/lesbian. Completely natural, don't question it unless the scene calls for it."
+  : "The user and you are different genders: the relationship is straight."
+}
+- ${userGender ? '' : "The user didn't specify their gender. Use neutral tone and avoid assuming. If possible, ask subtly."}`
+}
+
 export async function POST(request: Request) {
   try {
     const tid = request.headers.get('x-telegram-id-validated')
@@ -132,10 +186,7 @@ export async function POST(request: Request) {
         newHookUsed = true
       }
 
-      // RPC atómica
       await incrementGems(tid, -GEM_COSTS.message)
-
-      // Actualizar hook state
       await setHookRemaining(tid, newHookRemaining)
       if (newHookUsed !== hookUsed) {
         await setHookUsed(tid, newHookUsed)
@@ -165,7 +216,6 @@ export async function POST(request: Request) {
     const newLevel = getLevelFromMessages(nextUserMsgCount)
     const levelUp = newLevel.level > prevLevel.level
 
-    // Ordenar historial cronológicamente (Turso los devuelve DESC)
     const sortedHistory = [...rawHistory].sort((a: any, b: any) => {
       const cmp = String(a.created_at || '').localeCompare(String(b.created_at || ''))
       if (cmp !== 0) return cmp
@@ -186,9 +236,12 @@ export async function POST(request: Request) {
       ? (lang === 'es' ? PROVOCATIVE_HINT_ES : PROVOCATIVE_HINT_EN)
       : ''
 
+    // ✅ NUEVO: reglas de género dinámicas
+    const genderRules = buildGenderRules(user.gender, character.gender, lang)
+
     const characterPrompt = lang === 'es'
-      ? `Eres ${character.character_name}, rol: ${character.archetype}.\n${personality}\n\nEl usuario se llama ${user.first_name}. Recuerda su nombre y úsalo naturalmente.\nMantén siempre tu personalidad y rol. Nunca rompas el personaje.${provocativeHint}`
-      : `You are ${character.character_name}, role: ${character.archetype}.\n${personality}\n\nThe user's name is ${user.first_name}. Remember their name and use it naturally.\nAlways maintain your personality and role. Never break character.${provocativeHint}`
+      ? `Eres ${character.character_name}, rol: ${character.archetype}.\n${personality}\n\nEl usuario se llama ${user.first_name}. Recuerda su nombre y úsalo naturalmente.\n\n${genderRules}\n\nMantén siempre tu personalidad y rol. Nunca rompas el personaje.${provocativeHint}`
+      : `You are ${character.character_name}, role: ${character.archetype}.\n${personality}\n\nThe user's name is ${user.first_name}. Remember their name and use it naturally.\n\n${genderRules}\n\nAlways maintain your personality and role. Never break character.${provocativeHint}`
 
     const intensity = getIntensity(currentUserMsgCount, isHookModeAfter)
     const systemPrompt = buildSystemPrompt(lang, intensity, newLevel.level, characterPrompt)
@@ -198,7 +251,6 @@ export async function POST(request: Request) {
     try {
       responseText = await generateAIResponse(messages, systemPrompt, intensity)
     } catch (aiError: any) {
-      // Rollback: devolver la gema y restaurar hook
       await incrementGems(tid, GEM_COSTS.message)
       await setHookRemaining(tid, hookRemaining)
       await setHookUsed(tid, hookUsed)
@@ -228,11 +280,9 @@ export async function POST(request: Request) {
 
       if (referral && !referral.reward_paid) {
         const totalMsg = await countAllUserMessages(tid)
-
         await updateReferralCount(referral.id, totalMsg)
 
         if (totalMsg >= REFERRAL_MIN_MESSAGES) {
-          // Pagar al referidor
           await incrementGems(String(referral.referrer_id), GEMS_PER_REFERRAL)
           await incrementTotalReferrals(String(referral.referrer_id))
 
