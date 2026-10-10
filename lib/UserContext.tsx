@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useState, useRef, ReactNode } fro
 import { getLanguage, Language } from '@/lib/i18n'
 import { setInitDataRaw } from '@/lib/telegram-fetch'
 
-interface UserData {
+export interface UserData {
   telegram_id: string
   first_name: string
   username: string | null
@@ -20,6 +20,9 @@ interface UserData {
   longest_streak: number
   last_daily_claim: string | null
   age_verified?: boolean
+  gender?: string | null
+  interested_in?: string | null
+  onboarding_complete?: boolean
 }
 
 interface UserContextType {
@@ -29,6 +32,7 @@ interface UserContextType {
   isTelegram: boolean
   setGems: (n: number) => void
   setHookRemaining: (n: number) => void
+  setUser: (u: UserData) => void
   refresh: () => Promise<void>
 }
 
@@ -39,6 +43,7 @@ const UserContext = createContext<UserContextType>({
   isTelegram: false,
   setGems: () => {},
   setHookRemaining: () => {},
+  setUser: () => {},
   refresh: async () => {},
 })
 
@@ -50,7 +55,7 @@ function getTelegramWebApp(): any {
 }
 
 export function UserProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<UserData | null>(memUserCache)
+  const [user, setUserState] = useState<UserData | null>(memUserCache)
   const [loading, setLoading] = useState(!memUserCache)
   const [lang, setLang] = useState<Language>('es')
   const [isTelegram, setIsTelegram] = useState(false)
@@ -58,7 +63,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const referralProcessed = useRef(false)
   const initStarted = useRef(false)
 
-  // Fallback de seguridad: si algo cuelga, no dejar la UI bloqueada
   useEffect(() => {
     const t = setTimeout(() => setLoading(false), 8000)
     return () => clearTimeout(t)
@@ -119,14 +123,12 @@ export function UserProvider({ children }: { children: ReactNode }) {
         setTelegramId(u.id)
         setLang(getLanguage(u.language_code))
 
-        // ✅ Cargar usuario con reintentos (ahora vía /api/me → Turso)
         await loadUserWithRetry(u.id, {
           first_name: u.first_name || '',
           username: u.username || null,
           language: getLanguage(u.language_code),
         })
 
-        // Procesar referral si venimos de un link ?start=xxx
         const startParam = initDataUnsafe?.start_param
         if (startParam && !referralProcessed.current) {
           const processedKey = `taboo_ref_${u.id}_${startParam}`
@@ -152,7 +154,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
     init()
   }, [])
 
-  // Refrescar al volver a la app
   useEffect(() => {
     if (!telegramId) return
 
@@ -178,18 +179,12 @@ export function UserProvider({ children }: { children: ReactNode }) {
     for (let attempt = 0; attempt < 3; attempt++) {
       const ok = await loadUser(id, telegramData)
       if (ok) return true
-      // Backoff: 500ms, 1500ms
       await new Promise((r) => setTimeout(r, 500 + attempt * 1000))
     }
     console.error('[UserContext] loadUser falló después de 3 intentos')
     return false
   }
 
-  /**
-   * ✅ MIGRADO: ahora carga vía /api/me (Turso).
-   * El cliente NO lee la DB directamente (Turso no permite acceso anon).
-   * Si /api/me falla, cae a /api/init-user como fallback.
-   */
   const loadUser = async (
     id: number,
     telegramData?: { first_name: string; username: string | null; language: Language }
@@ -197,7 +192,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
     try {
       const { tgFetch } = await import('@/lib/telegram-fetch')
 
-      // ── Intento 1: /api/me (rápido, solo lee)
       try {
         const res = await tgFetch('/api/me')
         if (res.ok) {
@@ -205,7 +199,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
           if (data?.user) {
             const u = data.user as UserData
             memUserCache = u
-            setUser(u)
+            setUserState(u)
             return true
           }
         } else {
@@ -215,7 +209,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
         console.warn('[UserContext] /api/me error:', e)
       }
 
-      // ── Fallback: /api/init-user (crea si no existe)
       try {
         const res = await tgFetch('/api/init-user', {
           method: 'POST',
@@ -236,7 +229,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         if (initData?.user) {
           const u = initData.user as UserData
           memUserCache = u
-          setUser(u)
+          setUserState(u)
           return true
         }
       } catch (e) {
@@ -257,7 +250,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   }
 
   const setGems = (n: number) => {
-    setUser((prev) => {
+    setUserState((prev) => {
       if (!prev) return prev
       const next = { ...prev, gems: n }
       memUserCache = next
@@ -266,7 +259,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   }
 
   const setHookRemaining = (n: number) => {
-    setUser((prev) => {
+    setUserState((prev) => {
       if (!prev) return prev
       const next = { ...prev, hook_messages_remaining: n }
       memUserCache = next
@@ -274,9 +267,23 @@ export function UserProvider({ children }: { children: ReactNode }) {
     })
   }
 
+  const setUser = (u: UserData) => {
+    memUserCache = u
+    setUserState(u)
+  }
+
   return (
     <UserContext.Provider
-      value={{ user, loading, lang, isTelegram, setGems, setHookRemaining, refresh }}
+      value={{
+        user,
+        loading,
+        lang,
+        isTelegram,
+        setGems,
+        setHookRemaining,
+        setUser,
+        refresh,
+      }}
     >
       {children}
     </UserContext.Provider>
