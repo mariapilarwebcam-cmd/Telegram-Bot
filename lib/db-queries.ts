@@ -22,7 +22,8 @@ const USER_COLS = `
   telegram_id, first_name, username, gems, purchased_gems, language,
   hook_messages_remaining, hook_used, referral_code, total_referrals,
   paying_referrals_count, age_verified, streak_count, longest_streak,
-  last_daily_claim, referred_by, pending_referral_code
+  last_daily_claim, referred_by, pending_referral_code,
+  gender, interested_in, onboarding_complete
 `
 
 export async function getUser(telegram_id: string) {
@@ -73,8 +74,9 @@ export async function createUser(data: {
       `INSERT INTO users
         (telegram_id, first_name, username, language, gems, purchased_gems,
          referral_code, referred_by, total_referrals, paying_referrals_count,
-         hook_messages_remaining, hook_used, age_verified, pending_referral_code)
-       VALUES (?, ?, ?, ?, ?, 0, ?, NULL, 0, 0, 0, 0, 0, ?)`,
+         hook_messages_remaining, hook_used, age_verified, pending_referral_code,
+         gender, interested_in, onboarding_complete)
+       VALUES (?, ?, ?, ?, ?, 0, ?, NULL, 0, 0, 0, 0, 0, ?, NULL, NULL, 0)`,
       [
         data.telegram_id,
         data.first_name || 'User',
@@ -112,13 +114,37 @@ export async function ensureUser(
 }
 
 // ═══════════════════════════════════════════════════════════════
+// ONBOARDING (gender + interested_in)
+// ═══════════════════════════════════════════════════════════════
+
+export async function setUserGender(telegram_id: string, gender: string) {
+  return execute(
+    `UPDATE users SET gender = ?, updated_at = ?
+     WHERE telegram_id = ?`,
+    [gender, nowISO(), telegram_id]
+  )
+}
+
+export async function setUserInterest(telegram_id: string, interested_in: string) {
+  return execute(
+    `UPDATE users SET interested_in = ?, updated_at = ?
+     WHERE telegram_id = ?`,
+    [interested_in, nowISO(), telegram_id]
+  )
+}
+
+export async function completeOnboarding(telegram_id: string) {
+  return execute(
+    `UPDATE users SET onboarding_complete = 1, updated_at = ?
+     WHERE telegram_id = ?`,
+    [nowISO(), telegram_id]
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════
 // GEM OPERATIONS (atómico, sin RPC)
 // ═══════════════════════════════════════════════════════════════
 
-/**
- * Suma o resta gemas. Equivalente a `increment_gems` de Supabase.
- * Devuelve el nuevo balance.
- */
 export async function incrementGems(
   telegram_id: string,
   amount: number
@@ -134,9 +160,6 @@ export async function incrementGems(
   return row?.gems ?? 0
 }
 
-/**
- * Suma gemas a `gems` Y `purchased_gems` (compras). Resetea el hook.
- */
 export async function incrementGemsAndPurchased(
   telegram_id: string,
   amount: number
@@ -157,9 +180,6 @@ export async function incrementGemsAndPurchased(
   }
 }
 
-/**
- * Resta gemas de `gems` Y `purchased_gems` (audio/imágenes premium).
- */
 export async function decrementGemsAndPurchased(
   telegram_id: string,
   amount: number
