@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'              // ✅ useRef añadido
 import { useRouter } from 'next/navigation'
 import { tgFetch } from '@/lib/telegram-fetch'
 import {
@@ -50,6 +50,25 @@ export default function HomePage() {
   const [search, setSearch] = useState('')
   const [tab, setTab] = useState<'all' | 'male' | 'female' | 'fantasy'>('all')
   const [creating, setCreating] = useState<string | null>(null)
+  const tabInitialized = useRef(false)                            // ✅ NUEVO
+
+  // ═══════════════════════════════════════════════════════════════
+  // ✅ NUEVO: Filtro automático por interés (solo la primera vez)
+  //    - 'male'    → tab "Hombres"
+  //    - 'female'  → tab "Mujeres"
+  //    - 'both'    → tab "Todo"
+  //    - null      → tab "Todo"
+  //    El usuario puede cambiar el tab manualmente después.
+  // ═══════════════════════════════════════════════════════════════
+  useEffect(() => {
+    if (tabInitialized.current || !user) return
+    tabInitialized.current = true
+
+    const interest = user.interested_in
+    if (interest === 'male') setTab('male')
+    else if (interest === 'female') setTab('female')
+    else setTab('all')
+  }, [user])
 
   // ═══════════════════════════════════════════════════════════════
   // ✅ MIGRADO: carga vía /api/characters?active=1 (Turso)
