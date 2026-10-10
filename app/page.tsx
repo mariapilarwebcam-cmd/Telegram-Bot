@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useRef } from 'react'              // ✅ useRef añadido
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { tgFetch } from '@/lib/telegram-fetch'
 import {
@@ -50,16 +50,9 @@ export default function HomePage() {
   const [search, setSearch] = useState('')
   const [tab, setTab] = useState<'all' | 'male' | 'female' | 'fantasy'>('all')
   const [creating, setCreating] = useState<string | null>(null)
-  const tabInitialized = useRef(false)                            // ✅ NUEVO
+  const tabInitialized = useRef(false)
 
-  // ═══════════════════════════════════════════════════════════════
-  // ✅ NUEVO: Filtro automático por interés (solo la primera vez)
-  //    - 'male'    → tab "Hombres"
-  //    - 'female'  → tab "Mujeres"
-  //    - 'both'    → tab "Todo"
-  //    - null      → tab "Todo"
-  //    El usuario puede cambiar el tab manualmente después.
-  // ═══════════════════════════════════════════════════════════════
+  // ✅ Filtro automático por interés (solo la primera vez)
   useEffect(() => {
     if (tabInitialized.current || !user) return
     tabInitialized.current = true
@@ -70,9 +63,7 @@ export default function HomePage() {
     else setTab('all')
   }, [user])
 
-  // ═══════════════════════════════════════════════════════════════
-  // ✅ MIGRADO: carga vía /api/characters?active=1 (Turso)
-  // ═══════════════════════════════════════════════════════════════
+  // Carga personaje activo
   useEffect(() => {
     if (!user?.telegram_id) return
     tgFetch('/api/characters?active=1')
@@ -238,11 +229,44 @@ export default function HomePage() {
             alignItems: 'center',
             justifyContent: 'space-between',
             marginBottom: 12,
+            gap: 8,
           }}
         >
-          <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0, letterSpacing: '-0.02em' }}>
+          <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0, letterSpacing: '-0.02em', flex: 1 }}>
             Taboo<span style={{ color: '#a78bfa' }}>Realm</span>
           </h1>
+
+          {/* ✅ NUEVO: botón de ajustes */}
+          <button
+            onClick={() => router.push('/settings')}
+            aria-label="Settings"
+            style={{
+              background: 'rgba(255, 255, 255, 0.05)',
+              border: '1px solid rgba(255, 255, 255, 0.06)',
+              borderRadius: 12,
+              width: 36,
+              height: 36,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              color: '#a395c9',
+              flexShrink: 0,
+              transition: 'all 0.2s ease',
+            }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" />
+              <path
+                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+
           <div
             style={{
               display: 'flex',
@@ -252,6 +276,7 @@ export default function HomePage() {
               padding: '6px 12px',
               borderRadius: 20,
               border: '1px solid rgba(255, 255, 255, 0.06)',
+              flexShrink: 0,
             }}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
