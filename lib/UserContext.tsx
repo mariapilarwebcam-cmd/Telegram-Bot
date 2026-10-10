@@ -1,7 +1,7 @@
 "use client"
 
 import { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react'
-import { useRouter } from 'next/navigation'                        // ← NUEVO
+import { useRouter } from 'next/navigation'
 import { getLanguage, Language } from '@/lib/i18n'
 import { setInitDataRaw } from '@/lib/telegram-fetch'
 
@@ -58,6 +58,11 @@ function getTelegramWebApp(): any {
 // ✅ Rutas que NO requieren onboarding
 const ONBOARDING_WHITELIST = ['/onboarding']
 
+// ✅ Helper: convierte boolean/0/1 → boolean
+function isTrue(v: any): boolean {
+  return v === true || v === 1 || v === '1'
+}
+
 export function UserProvider({ children }: { children: ReactNode }) {
   const [user, setUserState] = useState<UserData | null>(memUserCache)
   const [loading, setLoading] = useState(!memUserCache)
@@ -66,14 +71,18 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [telegramId, setTelegramId] = useState<number | null>(null)
   const referralProcessed = useRef(false)
   const initStarted = useRef(false)
-  const router = useRouter()                                        // ← NUEVO
+  const router = useRouter()
 
   useEffect(() => {
     const t = setTimeout(() => setLoading(false), 8000)
     return () => clearTimeout(t)
   }, [])
 
-  // ✅ NUEVO: Gate de onboarding — redirige a /onboarding si no completó
+  // ═══════════════════════════════════════════════════════════════
+  // ✅ GATE DE ONBOARDING — reforzado
+  // Verifica los 3 campos: age_verified + gender + interested_in
+  // Si falta cualquiera → redirige a /onboarding
+  // ═══════════════════════════════════════════════════════════════
   useEffect(() => {
     if (loading || !user) return
     if (typeof window === 'undefined') return
@@ -81,12 +90,20 @@ export function UserProvider({ children }: { children: ReactNode }) {
     const path = window.location.pathname
     if (ONBOARDING_WHITELIST.some((p) => path.startsWith(p))) return
 
-    const isComplete =
-      user.onboarding_complete === true ||
-      (user.onboarding_complete as any) === 1
+    const ageOk = isTrue(user.age_verified)
+    const hasGender = !!user.gender
+    const hasInterest = !!user.interested_in
+    const onboardingOk = isTrue(user.onboarding_complete)
+
+    const isComplete = ageOk && hasGender && hasInterest && onboardingOk
 
     if (!isComplete) {
-      console.log('[UserContext] onboarding incompleto → /onboarding')
+      console.log('[UserContext] onboarding incompleto → /onboarding', {
+        ageOk,
+        hasGender,
+        hasInterest,
+        onboardingOk,
+      })
       router.replace('/onboarding')
     }
   }, [user, loading, router])
