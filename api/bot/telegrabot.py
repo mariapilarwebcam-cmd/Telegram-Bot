@@ -86,7 +86,6 @@ async def get_user_by_username(username: str):
     clean = username.replace('@', '').strip()
     if not clean:
         return None
-    # SQLite no tiene ILIKE; usamos LOWER(col) = LOWER(?)
     return turso_query_one(
         "SELECT * FROM users WHERE LOWER(username) = LOWER(?) LIMIT 1",
         [clean]
@@ -108,8 +107,9 @@ async def create_user_immediately(
             """INSERT INTO users
               (telegram_id, username, first_name, language, gems, purchased_gems,
                referral_code, referred_by, total_referrals, paying_referrals_count,
-               hook_messages_remaining, hook_used, age_verified, pending_referral_code)
-             VALUES (?, ?, ?, ?, ?, 0, ?, NULL, 0, 0, 0, 0, 0, ?)""",
+               hook_messages_remaining, hook_used, age_verified, pending_referral_code,
+               gender, interested_in, onboarding_complete)
+             VALUES (?, ?, ?, ?, ?, 0, ?, NULL, 0, 0, 0, 0, 0, ?, NULL, NULL, 0)""",
             [
                 str(telegram_id),
                 username or None,
@@ -125,7 +125,6 @@ async def create_user_immediately(
         err_str = str(e)
         logger.error(f"Error insertando usuario: {err_str}")
 
-        # UNIQUE constraint → ya existe, recuperar
         if 'UNIQUE' in err_str or 'unique' in err_str.lower() or 'constraint' in err_str.lower():
             logger.info(f"Usuario {telegram_id} ya existe, recuperando...")
             return await get_user(telegram_id)
@@ -135,7 +134,7 @@ async def create_user_immediately(
 async def add_gems(telegram_id: int, amount: int, transaction_type: str, description: str = ''):
     """Suma gemas SOLO a 'gems' (no a purchased_gems)."""
     try:
-        row = turso_query_one(
+        turso_query_one(
             """UPDATE users
              SET gems = COALESCE(gems, 0) + ?,
                  updated_at = ?
@@ -177,7 +176,6 @@ async def pay_referral_commission(
         if not referrer:
             return
 
-        # Contar compradores únicos del referidor
         existing_rows = turso_query(
             "SELECT referred_id FROM referral_commissions WHERE referrer_id = ?",
             [str(referrer_id)]
@@ -201,7 +199,6 @@ async def pay_referral_commission(
         if commission <= 0:
             return
 
-        # Pagar comisión (solo a gems)
         now_iso = datetime.now(timezone.utc).isoformat()
         rpc_row = turso_query_one(
             """UPDATE users
@@ -213,13 +210,11 @@ async def pay_referral_commission(
         )
         new_ref_gems = rpc_row['gems'] if rpc_row else 0
 
-        # Actualizar contador de referidos que compraron
         turso_execute(
             "UPDATE users SET paying_referrals_count = ?, updated_at = ? WHERE telegram_id = ?",
             [total_unique, now_iso, str(referrer_id)]
         )
 
-        # Registrar transacción
         turso_execute(
             """INSERT INTO gem_transactions
               (telegram_id, amount, transaction_type, description)
@@ -232,7 +227,6 @@ async def pay_referral_commission(
             ]
         )
 
-        # Registrar comisión
         turso_execute(
             """INSERT INTO referral_commissions
               (referrer_id, referred_id, purchase_gems, commission_gems,
@@ -251,7 +245,6 @@ async def pay_referral_commission(
 
         logger.info(f"Commission paid: {commission} gems to {referrer_id} ({pct}%)")
 
-        # Notificar al referidor
         try:
             bot = Bot(token=TELEGRAM_BOT_TOKEN)
             lang = referrer.get('language', 'es')
@@ -296,14 +289,12 @@ async def record_star_purchase(telegram_id: int, stars: int, gems: int, is_first
         )
     except Exception as e:
         err_str = str(e)
-        # Anti doble-acreditación: charge_id ya existe
         if 'UNIQUE' in err_str or 'unique' in err_str.lower() or 'constraint' in err_str.lower():
             logger.warning(f"⚠️ Charge {charge_id} ya procesado, ignorando")
             return
         logger.error(f"Error insertando star_purchase: {err_str}")
         return
 
-    # ✅ Atómico: sumar a gems + purchased_gems + reset hook
     try:
         now_iso = datetime.now(timezone.utc).isoformat()
         turso_query_one(
@@ -373,6 +364,102 @@ async def send_age_warning(message: Message, language: str):
         parse_mode="Markdown",
         reply_markup=get_age_keyboard(language),
     )
+
+
+# ==================== GENDER + INTEREST ====================
+
+def get_gender_text(language: str) -> str:
+    if language == 'es':
+        return (
+            "👤 *¿Cuál es tu género?*\n\n"
+            "Nos ayuda a personalizar tu experiencia."
+        )
+    return (
+        "👤 *What is your gender?*\n\n"
+        "Helps us personalize your experience."
+    )
+
+
+def get_gender_keyboard(language: str) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    if language == 'es':
+        builder.button(text="👨 Hombre", callback_data="gender_male")
+        builder.button(text="👩 Mujer", callback_data="gender_female")
+    else:
+        builder.button(text="👨 Man", callback_data="gender_male")
+        builder.button(text="👩 Woman", callback_data="gender_female")
+    builder.adjust(2)
+    return builder.as_markup()
+
+
+async def send_gender_question(message: Message, language: str):
+    await message.answer(
+        get_gender_text(language),
+        parse_mode="Markdown",
+        reply_markup=get_gender_keyboard(language),
+    )
+
+
+def get_interest_text(language: str) -> str:
+    if language == 'es':
+        return (
+            "💫 *¿Qué buscas?*\n\n"
+            "Filtraremos los personajes según tu preferencia."
+        )
+    return (
+        "💫 *What are you looking for?*\n\n"
+        "We'll filter characters based on your preference."
+    )
+
+
+def get_interest_keyboard(language: str) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    if language == 'es':
+        builder.button(text="👨 Hombres", callback_data="interest_male")
+        builder.button(text="👩 Mujeres", callback_data="interest_female")
+        builder.button(text="👥 Ambos", callback_data="interest_both")
+    else:
+        builder.button(text="👨 Men", callback_data="interest_male")
+        builder.button(text="👩 Women", callback_data="interest_female")
+        builder.button(text="👥 Both", callback_data="interest_both")
+    builder.adjust(2, 1)
+    return builder.as_markup()
+
+
+async def send_interest_question(message: Message, language: str):
+    await message.answer(
+        get_interest_text(language),
+        parse_mode="Markdown",
+        reply_markup=get_interest_keyboard(language),
+    )
+
+
+# ==================== ONBOARDING ROUTER ====================
+
+async def route_onboarding_state(message: Message, user: dict, language: str):
+    """
+    Determina qué paso del onboarding mostrar al usuario.
+    Orden: age_verified → gender → interested_in → done
+    """
+    lang = user.get('language', language) or language
+
+    # 1. Verificación de edad
+    if not user.get('age_verified'):
+        await send_age_warning(message, lang)
+        return
+
+    # 2. Género
+    if not user.get('gender'):
+        await send_gender_question(message, lang)
+        return
+
+    # 3. Interés
+    if not user.get('interested_in'):
+        await send_interest_question(message, lang)
+        return
+
+    # 4. Todo listo
+    await send_mini_app_message(message, lang, is_new_user=True)
 
 
 # ==================== REFERRAL APPLICATION ====================
@@ -536,14 +623,7 @@ async def cmd_start(message: Message, command: CommandObject = None):
             )
             return
 
-        if not user.get('age_verified'):
-            await send_age_warning(message, language)
-            return
-
-        await send_mini_app_message(message, language, is_new_user=True)
-        return
-
-    # Usuario existente
+    # Usuario existente con ref_code pendiente
     if ref_code and not user.get('age_verified'):
         try:
             turso_execute(
@@ -554,12 +634,8 @@ async def cmd_start(message: Message, command: CommandObject = None):
         except Exception as e:
             logger.error(f"Error updating pending_referral: {e}")
 
-    if not user.get('age_verified'):
-        await send_age_warning(message, user.get('language', language) or language)
-        return
-
-    lang = user.get('language', language) or language
-    await send_mini_app_message(message, lang, is_new_user=False)
+    # Enrutar al paso correcto del onboarding
+    await route_onboarding_state(message, user, language)
 
 
 @router.callback_query(F.data == "age_confirm")
@@ -599,6 +675,7 @@ async def on_age_confirm(callback: CallbackQuery):
         await callback.answer("⚠️ Error guardando. Intenta de nuevo", show_alert=True)
         return
 
+    # Aplicar referral pendiente
     pending_ref = user.get('pending_referral_code')
     if pending_ref:
         await apply_pending_referral(telegram_id, pending_ref)
@@ -610,7 +687,9 @@ async def on_age_confirm(callback: CallbackQuery):
         pass
 
     await callback.answer("✅")
-    await send_mini_app_message(callback.message, lang, is_new_user=True)
+
+    # Continuar con género
+    await send_gender_question(callback.message, lang)
 
 
 @router.callback_query(F.data == "age_decline")
@@ -637,6 +716,85 @@ async def on_age_decline(callback: CallbackQuery):
 
     await callback.message.answer(text)
     await callback.answer()
+
+
+@router.callback_query(F.data.in_({"gender_male", "gender_female"}))
+async def on_gender_select(callback: CallbackQuery):
+    telegram_id = callback.from_user.id
+    user = await get_user(telegram_id)
+
+    if not user:
+        await callback.answer("⚠️ Usa /start primero", show_alert=True)
+        return
+
+    lang = user.get('language', 'es') or 'es'
+    gender = "male" if callback.data == "gender_male" else "female"
+
+    try:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        turso_execute(
+            """UPDATE users SET gender = ?, updated_at = ?
+             WHERE telegram_id = ?""",
+            [gender, now_iso, str(telegram_id)]
+        )
+    except Exception as e:
+        logger.error(f"Error updating gender: {e}")
+        await callback.answer("⚠️ Error. Intenta de nuevo", show_alert=True)
+        return
+
+    try:
+        if callback.message:
+            await callback.message.delete()
+    except Exception:
+        pass
+
+    await callback.answer("✅")
+
+    # Continuar con interés
+    await send_interest_question(callback.message, lang)
+
+
+@router.callback_query(F.data.in_({"interest_male", "interest_female", "interest_both"}))
+async def on_interest_select(callback: CallbackQuery):
+    telegram_id = callback.from_user.id
+    user = await get_user(telegram_id)
+
+    if not user:
+        await callback.answer("⚠️ Usa /start primero", show_alert=True)
+        return
+
+    lang = user.get('language', 'es') or 'es'
+
+    interest_map = {
+        "interest_male": "male",
+        "interest_female": "female",
+        "interest_both": "both",
+    }
+    interested_in = interest_map.get(callback.data, "both")
+
+    try:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        turso_execute(
+            """UPDATE users
+             SET interested_in = ?, onboarding_complete = 1, updated_at = ?
+             WHERE telegram_id = ?""",
+            [interested_in, now_iso, str(telegram_id)]
+        )
+    except Exception as e:
+        logger.error(f"Error updating interested_in: {e}")
+        await callback.answer("⚠️ Error. Intenta de nuevo", show_alert=True)
+        return
+
+    try:
+        if callback.message:
+            await callback.message.delete()
+    except Exception:
+        pass
+
+    await callback.answer("✅")
+
+    # Completar onboarding → mini app
+    await send_mini_app_message(callback.message, lang, is_new_user=True)
 
 
 @router.message(Command("balance", "saldo", "gems"))
