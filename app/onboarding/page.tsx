@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { tgFetch } from '@/lib/telegram-fetch'
 import { useUser } from '@/lib/UserContext'
 import { getTranslations } from '@/lib/i18n'
+import { Analytics } from '@/lib/posthog'                       // ✅ PostHog
 
 type Step = 'loading' | 'age' | 'gender' | 'interest' | 'declined'
 
@@ -16,6 +17,9 @@ export default function OnboardingPage() {
   const [step, setStep] = useState<Step>('loading')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // ✅ PostHog: medir tiempo del onboarding
+  const [onboardingStartTime] = useState(Date.now())
 
   // Detecta en qué paso está el usuario al entrar
   useEffect(() => {
@@ -74,6 +78,14 @@ export default function OnboardingPage() {
             interested_in: value,
             onboarding_complete: true,
           })
+
+          // ✅ PostHog: onboarding completado
+          Analytics.onboardingCompleted({
+            gender: user.gender || 'unknown',
+            interested_in: value,
+            time_seconds: Math.round((Date.now() - onboardingStartTime) / 1000),
+          })
+
           router.replace('/')
         }
       }
@@ -86,16 +98,12 @@ export default function OnboardingPage() {
 
   const handleDecline = () => {
     setStep('declined')
-    // Intenta cerrar la Mini App si es posible
     try {
       const tg = (window as any).Telegram?.WebApp
       tg?.close?.()
     } catch {}
   }
 
-  // ═══════════════════════════════════════════════
-  // RENDER
-  // ═══════════════════════════════════════════════
   if (step === 'loading' || userLoading) {
     return (
       <div className="spinner-full">
