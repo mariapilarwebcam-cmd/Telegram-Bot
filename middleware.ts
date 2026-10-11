@@ -75,6 +75,7 @@ const PUBLIC_ENDPOINTS = [
   '/api/health',
   '/api/debug',
   '/api/bot',       // ← webhook Python
+  '/api/cron',      // ← Vercel Cron (se protege con CRON_SECRET internamente)
 ]
 
 const DEV_BYPASS =
