@@ -15,5 +15,11 @@
     "app/api/image-status/route.ts": {
       "maxDuration": 10
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/proactive",
+      "schedule": "0 6 * * *"
+    }
+  ]
 }
