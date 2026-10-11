@@ -23,7 +23,8 @@ const USER_COLS = `
   hook_messages_remaining, hook_used, referral_code, total_referrals,
   paying_referrals_count, age_verified, streak_count, longest_streak,
   last_daily_claim, referred_by, pending_referral_code,
-  gender, interested_in, onboarding_complete
+  gender, interested_in, onboarding_complete,
+  last_proactive_at, proactive_count, bot_blocked
 `
 
 export async function getUser(telegram_id: string) {
@@ -660,4 +661,120 @@ export async function getChatListData(telegram_id: string) {
     lastAt: byChar[c.id]?.lastAt,
     messageCount: byChar[c.id]?.count || 0,
   }))
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PROACTIVE MESSAGES
+// ═══════════════════════════════════════════════════════════════
+
+export interface InactiveUserRow {
+  telegram_id: string
+  first_name: string
+  language: string
+  user_gender: string | null
+  proactive_count: number
+  last_proactive_at: string | null
+  last_active: string | null
+  character_id: number
+  character_name: string
+  character_gender: string
+  character_archetype: string
+}
+
+/**
+ * Devuelve usuarios inactivos elegibles para un mensaje proactivo.
+ *
+ * Reglas:
+ * - Debe tener edad verificada
+ * - No debe haber bloqueado el bot
+ * - Debe tener un personaje activo
+ * - Máx 3 mensajes proactivos por usuario (día 2, 5, 10)
+ * - Mínimo 48h entre mensajes proactivos
+ */
+export async function getInactiveUsers(
+  limit = 200
+): Promise<InactiveUserRow[]> {
+  return query<InactiveUserRow>(
+    `
+    SELECT
+      u.telegram_id,
+      u.first_name,
+      u.language,
+      u.gender AS user_gender,
+      COALESCE(u.proactive_count, 0) AS proactive_count,
+      u.last_proactive_at,
+      u.last_active,
+      uc.id AS character_id,
+      uc.character_name,
+      uc.gender AS character_gender,
+      uc.archetype AS character_archetype
+    FROM users u
+    INNER JOIN user_characters uc
+      ON uc.telegram_id = u.telegram_id AND uc.is_active = 1
+    WHERE
+      COALESCE(u.age_verified, 0) = 1
+      AND COALESCE(u.bot_blocked, 0) = 0
+      AND COALESCE(u.proactive_count, 0) < 3
+      AND u.last_active IS NOT NULL
+      -- Mín 48h entre proactivos consecutivos
+      AND (
+        u.last_proactive_at IS NULL
+        OR u.last_proactive_at < datetime('now', '-2 days')
+      )
+      -- Regla por número de proactivo:
+      AND (
+        -- 1er proactivo: 2 días sin entrar
+        (COALESCE(u.proactive_count, 0) = 0
+          AND u.last_active < datetime('now', '-2 days'))
+        OR
+        -- 2do: 5 días sin entrar
+        (COALESCE(u.proactive_count, 0) = 1
+          AND u.last_active < datetime('now', '-5 days'))
+        OR
+        -- 3ro: 10 días sin entrar
+        (COALESCE(u.proactive_count, 0) = 2
+          AND u.last_active < datetime('now', '-10 days'))
+      )
+    ORDER BY u.last_active ASC
+    LIMIT ?
+    `,
+    [limit]
+  )
+}
+
+/**
+ * Marca que se envió un proactivo al usuario.
+ */
+export async function markProactiveSent(telegram_id: string) {
+  return execute(
+    `UPDATE users
+     SET last_proactive_at = ?,
+         proactive_count = COALESCE(proactive_count, 0) + 1,
+         updated_at = ?
+     WHERE telegram_id = ?`,
+    [nowISO(), nowISO(), telegram_id]
+  )
+}
+
+/**
+ * Marca al usuario como bloqueador del bot (evita reintentos).
+ */
+export async function markBotBlocked(telegram_id: string) {
+  return execute(
+    `UPDATE users
+     SET bot_blocked = 1, updated_at = ?
+     WHERE telegram_id = ?`,
+    [nowISO(), telegram_id]
+  )
+}
+
+/**
+ * Actualiza el timestamp de última actividad.
+ * Llamado desde el bot de Python y desde /api/chat.
+ */
+export async function updateLastActive(telegram_id: string) {
+  return execute(
+    `UPDATE users SET last_active = ? WHERE telegram_id = ?`,
+    [nowISO(), telegram_id]
+  )
 }
