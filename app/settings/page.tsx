@@ -9,9 +9,11 @@ import { getTranslations } from '@/lib/i18n'
 type Gender = 'male' | 'female'
 type Interest = 'male' | 'female' | 'both'
 
+const SUPPORT_URL = 'https://t.me/TabooRealmSupport'
+
 export default function SettingsPage() {
   const router = useRouter()
-  const { user, loading: userLoading, lang, setUser, refresh } = useUser()
+  const { user, loading: userLoading, lang, setUser } = useUser()
   const t = getTranslations(lang)
 
   const [gender, setGender] = useState<Gender | null>(null)
@@ -19,6 +21,9 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState<'gender' | 'interest' | null>(null)
   const [savedAt, setSavedAt] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  // Estado del modal de eliminación
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
 
   // Hidrata los valores actuales
   useEffect(() => {
@@ -59,7 +64,6 @@ export default function SettingsPage() {
         return
       }
 
-      // Actualizar contexto local
       if (user) {
         if (step === 'gender') {
           setUser({ ...user, gender: value })
@@ -73,6 +77,19 @@ export default function SettingsPage() {
       setError(e?.message || 'Error de conexión')
     } finally {
       setSaving(null)
+    }
+  }
+
+  const openSupport = () => {
+    try {
+      const tg = (window as any).Telegram?.WebApp
+      if (tg?.openTelegramLink) {
+        tg.openTelegramLink(SUPPORT_URL)
+      } else {
+        window.open(SUPPORT_URL, '_blank')
+      }
+    } catch {
+      window.open(SUPPORT_URL, '_blank')
     }
   }
 
@@ -108,6 +125,7 @@ export default function SettingsPage() {
             display: 'flex',
             alignItems: 'center',
           }}
+          aria-label={lang === 'es' ? 'Volver' : 'Back'}
         >
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
             <path
@@ -125,6 +143,7 @@ export default function SettingsPage() {
         <div style={{ width: 22 }} />
       </header>
 
+      {/* ─── Toast "Guardado" ─── */}
       {savedAt && (
         <div
           style={{
@@ -147,6 +166,9 @@ export default function SettingsPage() {
         </div>
       )}
 
+      {/* ═══════════════════════════════════════════════
+          SECCIÓN 1: GÉNERO
+      ═══════════════════════════════════════════════ */}
       <section style={{ padding: '24px 16px 0' }}>
         <div style={{ marginBottom: 8 }}>
           <p
@@ -241,6 +263,9 @@ export default function SettingsPage() {
         </div>
       </section>
 
+      {/* ═══════════════════════════════════════════════
+          SECCIÓN 2: INTERÉS
+      ═══════════════════════════════════════════════ */}
       <section style={{ padding: '32px 16px 0' }}>
         <div style={{ marginBottom: 8 }}>
           <p
@@ -310,6 +335,289 @@ export default function SettingsPage() {
         </div>
       </section>
 
+      {/* ═══════════════════════════════════════════════
+          ✅ NUEVA SECCIÓN 3: LEGAL
+      ═══════════════════════════════════════════════ */}
+      <section style={{ padding: '40px 16px 0' }}>
+        <p
+          style={{
+            fontSize: 11,
+            textTransform: 'uppercase',
+            letterSpacing: '0.08em',
+            fontWeight: 700,
+            color: '#a78bfa',
+            margin: '0 0 4px 0',
+          }}
+        >
+          {lang === 'es' ? 'Legal y soporte' : 'Legal & support'}
+        </p>
+        <p style={{ fontSize: 12, color: '#8b8b9e', margin: '0 0 12px 0' }}>
+          {lang === 'es'
+            ? 'Información importante sobre el servicio.'
+            : 'Important information about the service.'}
+        </p>
+
+        <div
+          style={{
+            background: 'rgba(255, 255, 255, 0.03)',
+            border: '1px solid rgba(168, 85, 247, 0.15)',
+            borderRadius: 16,
+            overflow: 'hidden',
+          }}
+        >
+          {/* Términos */}
+          <button
+            onClick={() => router.push('/legal/terms')}
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              padding: '14px 16px',
+              background: 'transparent',
+              border: 'none',
+              borderBottom: '1px solid rgba(168, 85, 247, 0.1)',
+              color: '#f5f0ff',
+              fontSize: 14,
+              fontWeight: 500,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              textAlign: 'left',
+            }}
+          >
+            <div
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 10,
+                background: 'rgba(168, 85, 247, 0.15)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+                  stroke="#c4b5fd"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M14 2v6h6M16 13H8M16 17H8M10 9H8"
+                  stroke="#c4b5fd"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </div>
+            <span style={{ flex: 1 }}>
+              {lang === 'es' ? 'Términos de servicio' : 'Terms of Service'}
+            </span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path
+                d="m9 6 6 6-6 6"
+                stroke="#6b5b8e"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+
+          {/* Privacidad */}
+          <button
+            onClick={() => router.push('/legal/privacy')}
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              padding: '14px 16px',
+              background: 'transparent',
+              border: 'none',
+              borderBottom: '1px solid rgba(168, 85, 247, 0.1)',
+              color: '#f5f0ff',
+              fontSize: 14,
+              fontWeight: 500,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              textAlign: 'left',
+            }}
+          >
+            <div
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 10,
+                background: 'rgba(168, 85, 247, 0.15)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"
+                  stroke="#c4b5fd"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </div>
+            <span style={{ flex: 1 }}>
+              {lang === 'es' ? 'Política de Privacidad' : 'Privacy Policy'}
+            </span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path
+                d="m9 6 6 6-6 6"
+                stroke="#6b5b8e"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+
+          {/* Soporte */}
+          <button
+            onClick={openSupport}
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              padding: '14px 16px',
+              background: 'transparent',
+              border: 'none',
+              color: '#f5f0ff',
+              fontSize: 14,
+              fontWeight: 500,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              textAlign: 'left',
+            }}
+          >
+            <div
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 10,
+                background: 'rgba(168, 85, 247, 0.15)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
+                  stroke="#c4b5fd"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </div>
+            <span style={{ flex: 1 }}>
+              {lang === 'es' ? 'Soporte y ayuda' : 'Support & help'}
+            </span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path
+                d="m9 6 6 6-6 6"
+                stroke="#6b5b8e"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════
+          ✅ NUEVA SECCIÓN 4: CUENTA
+      ═══════════════════════════════════════════════ */}
+      <section style={{ padding: '32px 16px 0' }}>
+        <p
+          style={{
+            fontSize: 11,
+            textTransform: 'uppercase',
+            letterSpacing: '0.08em',
+            fontWeight: 700,
+            color: '#fca5a5',
+            margin: '0 0 4px 0',
+          }}
+        >
+          {lang === 'es' ? 'Cuenta' : 'Account'}
+        </p>
+        <p style={{ fontSize: 12, color: '#8b8b9e', margin: '0 0 12px 0' }}>
+          {lang === 'es'
+            ? 'Acciones permanentes sobre tu cuenta.'
+            : 'Permanent actions on your account.'}
+        </p>
+
+        <button
+          onClick={() => setShowDeleteModal(true)}
+          style={{
+            width: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            padding: '14px 16px',
+            background: 'rgba(220, 38, 38, 0.08)',
+            border: '1px solid rgba(220, 38, 38, 0.3)',
+            borderRadius: 16,
+            color: '#fca5a5',
+            fontSize: 14,
+            fontWeight: 600,
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+            textAlign: 'left',
+          }}
+        >
+          <div
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 10,
+              background: 'rgba(220, 38, 38, 0.15)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"
+                stroke="#fca5a5"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </div>
+          <span style={{ flex: 1 }}>
+            {lang === 'es' ? 'Eliminar mi cuenta y datos' : 'Delete my account and data'}
+          </span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <path
+              d="m9 6 6 6-6 6"
+              stroke="#fca5a5"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
+      </section>
+
       {error && (
         <p
           style={{
@@ -324,6 +632,7 @@ export default function SettingsPage() {
         </p>
       )}
 
+      {/* ─── Info footer ─── */}
       <section style={{ padding: '40px 16px 0' }}>
         <div
           style={{
@@ -343,11 +652,113 @@ export default function SettingsPage() {
             }}
           >
             {lang === 'es'
-              ? '💡 Los cambios se aplican al instante. Los chats existentes se mantienen.'
-              : '💡 Changes apply instantly. Existing chats stay intact.'}
+              ? '💡 Los cambios de género e interés se aplican al instante. Los chats existentes se mantienen.'
+              : '💡 Gender and interest changes apply instantly. Existing chats stay intact.'}
           </p>
         </div>
       </section>
+
+      {/* ═══════════════════════════════════════════════
+          MODAL DE ELIMINACIÓN DE CUENTA
+      ═══════════════════════════════════════════════ */}
+      {showDeleteModal && (
+        <div
+          className="modal-backdrop"
+          onClick={() => setShowDeleteModal(false)}
+        >
+          <div
+            className="modal-box danger"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ textAlign: 'center', marginBottom: 12 }}>
+              <div style={{ fontSize: 44 }}>⚠️</div>
+            </div>
+            <h3 className="modal-title" style={{ textAlign: 'center' }}>
+              {lang === 'es'
+                ? '¿Eliminar tu cuenta?'
+                : 'Delete your account?'}
+            </h3>
+            <p
+              className="modal-desc"
+              style={{ textAlign: 'center', lineHeight: 1.55 }}
+            >
+              {lang === 'es'
+                ? 'Esta acción es irreversible. Se eliminarán:'
+                : 'This action is irreversible. Will be deleted:'}
+            </p>
+
+            <ul
+              style={{
+                listStyle: 'none',
+                padding: 0,
+                margin: '0 0 20px 0',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 8,
+              }}
+            >
+              {[
+                lang === 'es' ? 'Tu perfil y preferencias' : 'Your profile and preferences',
+                lang === 'es' ? 'Todos los personajes creados' : 'All created characters',
+                lang === 'es' ? 'Historial de conversaciones' : 'Conversation history',
+                lang === 'es' ? 'Saldo de gemas restante' : 'Remaining gem balance',
+                lang === 'es' ? 'Progreso de racha y referidos' : 'Streak and referral progress',
+              ].map((item, i) => (
+                <li
+                  key={i}
+                  style={{
+                    fontSize: 13,
+                    color: '#c4b5fd',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                  }}
+                >
+                  <span style={{ color: '#fca5a5' }}>✕</span>
+                  {item}
+                </li>
+              ))}
+            </ul>
+
+            <p
+              style={{
+                fontSize: 12,
+                color: '#8b8b9e',
+                margin: '0 0 16px 0',
+                textAlign: 'center',
+                lineHeight: 1.55,
+              }}
+            >
+              {lang === 'es'
+                ? 'Para completar la eliminación, contacta a soporte. La solicitud se procesará en un plazo máximo de 30 días.'
+                : 'To complete deletion, contact support. The request will be processed within a maximum of 30 days.'}
+            </p>
+
+            <div className="modal-btn-row">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="modal-btn secondary"
+              >
+                {lang === 'es' ? 'Cancelar' : 'Cancel'}
+              </button>
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false)
+                  openSupport()
+                }}
+                className="modal-btn primary"
+                style={{
+                  background:
+                    'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)',
+                  boxShadow: '0 4px 20px rgba(220, 38, 38, 0.5)',
+                }}
+              >
+                {lang === 'es' ? 'Contactar soporte' : 'Contact support'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
