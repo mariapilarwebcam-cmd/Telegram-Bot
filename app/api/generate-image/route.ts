@@ -7,6 +7,8 @@ import {
   countUserMessages,
   decrementGemsAndPurchased,
   insertGemTransaction,
+  getSeenImageCount,      // ✅ NUEVO
+  markImageSeen,          // ✅ NUEVO
 } from '@/lib/db-queries'
 import { getCharacterFace, getCharacterImageUrl } from '@/lib/constants'
 import { generateImage } from '@/lib/ai'
@@ -278,6 +280,20 @@ function extractMoodFromMessages(messages: string[]): string {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// ✅ NUEVO: construir URL de imagen R2 con índice (_1, _2, _3, _4)
+// ═══════════════════════════════════════════════════════════════
+function buildR2VariantUrl(
+  gender: string,
+  archetype: string,
+  index: number
+): string {
+  const base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL
+  if (!base) return ''
+  const clean = base.replace(/\/$/, '')
+  return `${clean}/${gender}_${archetype}_${index}.jpg?v=8`
+}
+
+// ═══════════════════════════════════════════════════════════════
 // POST /api/generate-image
 // ═══════════════════════════════════════════════════════════════
 export async function POST(request: Request) {
@@ -332,12 +348,45 @@ export async function POST(request: Request) {
     }
 
     const userMsgCount = await countUserMessages(tid, character_id)
-
     const level = getLevelFromMessages(userMsgCount || 0)
     const imageCost = getImageCost(level.level)
     const faceVisibility = getFaceVisibility(level.level)
 
-    if (purchasedGems < imageCost) {
+    // ═══════════════════════════════════════════════════════════════
+    // ✅ NUEVA LÓGICA DE ROTACIÓN
+    // Consulta cuántas imágenes de R2 ha visto el usuario con este personaje
+    // ═══════════════════════════════════════════════════════════════
+    const seenCount = await getSeenImageCount(tid, character_id)
+
+    const genderKey = character.gender === 'male' ? 'male' : 'female'
+    const r2Base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL
+
+    // Determinar qué índice toca (si toca R2) y si es gratis
+    let r2Index: number | null = null
+    let isFree = false
+
+    if (seenCount === 0) {
+      // Primera imagen: _1 gratis
+      r2Index = 1
+      isFree = true
+    } else if (seenCount === 1) {
+      // Segunda: _2 con costo
+      r2Index = 2
+    } else if (seenCount === 2 && level.level >= 3) {
+      // Tercera: _3 (solo nivel 3+)
+      r2Index = 3
+    } else if (seenCount === 3 && level.level >= 3) {
+      // Cuarta: _4 (solo nivel 3+)
+      r2Index = 4
+    }
+
+    // Si hay R2 disponible y toca enviarla
+    const useR2 = r2Index !== null && r2Base
+
+    // ═══════════════════════════════════════════════════════════════
+    // Verificar gems SOLO si NO es gratis
+    // ═══════════════════════════════════════════════════════════════
+    if (!isFree && purchasedGems < imageCost) {
       return NextResponse.json(
         {
           error: 'insufficient_gems',
@@ -352,92 +401,130 @@ export async function POST(request: Request) {
       )
     }
 
-    const autoScenes = character.gender === 'male' ? AUTO_SCENES_MALE : AUTO_SCENES_FEMALE
-    const sceneHint = userHint || autoScenes[level.level] || autoScenes[1]
+    // ═══════════════════════════════════════════════════════════════
+    // OBTENER IMAGEN: desde R2 (rotación) o generándola con IA
+    // ═══════════════════════════════════════════════════════════════
+    let imageUrl: string
+    let source: 'r2' | 'generated'
+    let modelUsed: string
 
-    let imagePrompt: string
-    let referenceUrl: string | undefined
+    if (useR2) {
+      // ─── R2: enviar variante pre-generada ───
+      imageUrl = buildR2VariantUrl(genderKey, character.archetype, r2Index!)
+      source = 'r2'
+      modelUsed = 'r2'
 
-    const NO_GENITALIA =
-      'tasteful artistic composition, no explicit genitalia, no nudity visible below waist, strategic coverage, high-end boudoir photography aesthetic, safe for platform'
-
-    if (level.level <= 3) {
-      // NIVELES 1-3 → DeepInfra / FLUX (SFW)
-      const dna = CHARACTER_DNA[`${character.gender}_${character.archetype}`] || 'anime character'
-      const scene = SFW_SCENE_PROMPTS[level.level] || SFW_SCENE_PROMPTS[1]
-
-      let faceRule = ''
-      if (faceVisibility === 'hidden') {
-        faceRule = FACE_HIDDEN_FRAGMENT
-      } else if (faceVisibility === 'partial') {
-        faceRule = FACE_PARTIAL_FRAGMENT
+      // Marcar como vista
+      try {
+        await markImageSeen(tid, character_id, r2Index!, false)
+      } catch (markErr) {
+        console.warn('[generate-image] markImageSeen failed:', markErr)
       }
 
-      const layers = [
-        `[CHARACTER: ${dna}]`,
-        'highly detailed anime illustration, cel shading, soft cinematic lighting',
-        scene,
-        sceneHint,
-        faceRule,
-        'muted color palette, elegant composition, best quality, masterpiece',
-        'safe for work, no nudity, no explicit content',
-      ].filter((s) => s && s.length > 0)
-
-      imagePrompt = layers.join(', ')
-      referenceUrl = undefined
+      console.log(`[generate-image] ✅ R2 hit: ${r2Index} (${isFree ? 'FREE' : `${imageCost}g`})`)
     } else {
-      // NIVELES 4-5 → Wiro v4-5-uncensored
-      const facePrompt = getCharacterFace(character.archetype, character.gender)
-      const clothing = getClothingLevel(level.level)
-      const scene = NSFW_SCENE_PROMPTS[level.level] || NSFW_SCENE_PROMPTS[4]
-      const archetypeHint =
-        ARCHETYPE_IMAGE_HINTS[`${character.gender}_${character.archetype}`] || ''
-      const moodHint = extractMoodFromMessages(recent_messages)
+      // ─── Generar con IA (DeepInfra nivel 1-3, Wiro nivel 4-5) ───
+      const autoScenes = character.gender === 'male' ? AUTO_SCENES_MALE : AUTO_SCENES_FEMALE
+      const sceneHint = userHint || autoScenes[level.level] || autoScenes[1]
 
-      const layers = [
-        facePrompt,
-        'anime style, cel shading, moody atmospheric lighting, deep shadows, muted color palette, cinematic dark tones, detailed anime eyes',
-        clothing,
-        scene,
-        archetypeHint,
-        moodHint,
-        sceneHint,
-        NO_GENITALIA,
-        'beautiful cinematic lighting, 2D illustration, best quality',
-      ].filter((s) => s && s.length > 0)
+      const NO_GENITALIA =
+        'tasteful artistic composition, no explicit genitalia, no nudity visible below waist, strategic coverage, high-end boudoir photography aesthetic, safe for platform'
 
-      imagePrompt = layers.join(', ')
-      referenceUrl = getCharacterImageUrl(character.archetype, character.gender)
+      let imagePrompt: string
+      let referenceUrl: string | undefined
+
+      if (level.level <= 3) {
+        // NIVELES 1-3 → DeepInfra / FLUX (SFW)
+        const dna = CHARACTER_DNA[`${character.gender}_${character.archetype}`] || 'anime character'
+        const scene = SFW_SCENE_PROMPTS[level.level] || SFW_SCENE_PROMPTS[1]
+
+        let faceRule = ''
+        if (faceVisibility === 'hidden') {
+          faceRule = FACE_HIDDEN_FRAGMENT
+        } else if (faceVisibility === 'partial') {
+          faceRule = FACE_PARTIAL_FRAGMENT
+        }
+
+        const layers = [
+          `[CHARACTER: ${dna}]`,
+          'highly detailed anime illustration, cel shading, soft cinematic lighting',
+          scene,
+          sceneHint,
+          faceRule,
+          'muted color palette, elegant composition, best quality, masterpiece',
+          'safe for work, no nudity, no explicit content',
+        ].filter((s) => s && s.length > 0)
+
+        imagePrompt = layers.join(', ')
+        referenceUrl = undefined
+      } else {
+        // NIVELES 4-5 → Wiro v4-5-uncensored
+        const facePrompt = getCharacterFace(character.archetype, character.gender)
+        const clothing = getClothingLevel(level.level)
+        const scene = NSFW_SCENE_PROMPTS[level.level] || NSFW_SCENE_PROMPTS[4]
+        const archetypeHint =
+          ARCHETYPE_IMAGE_HINTS[`${character.gender}_${character.archetype}`] || ''
+        const moodHint = extractMoodFromMessages(recent_messages)
+
+        const layers = [
+          facePrompt,
+          'anime style, cel shading, moody atmospheric lighting, deep shadows, muted color palette, cinematic dark tones, detailed anime eyes',
+          clothing,
+          scene,
+          archetypeHint,
+          moodHint,
+          sceneHint,
+          NO_GENITALIA,
+          'beautiful cinematic lighting, 2D illustration, best quality',
+        ].filter((s) => s && s.length > 0)
+
+        imagePrompt = layers.join(', ')
+        referenceUrl = getCharacterImageUrl(character.archetype, character.gender)
+      }
+
+      try {
+        imageUrl = await generateImage(imagePrompt, referenceUrl, level.level)
+        source = 'generated'
+        modelUsed = level.level <= 3 ? 'deepinfra' : 'wiro-v4-5'
+      } catch (imgError) {
+        console.error('Image generation error:', imgError)
+        return NextResponse.json({ error: 'Error al generar la imagen' }, { status: 500 })
+      }
     }
 
-    let imageUrl: string
-    try {
-      imageUrl = await generateImage(imagePrompt, referenceUrl, level.level)
-    } catch (imgError) {
-      console.error('Image generation error:', imgError)
-      return NextResponse.json({ error: 'Error al generar la imagen' }, { status: 500 })
+    // ═══════════════════════════════════════════════════════════════
+    // COBRAR (solo si no es gratis)
+    // ═══════════════════════════════════════════════════════════════
+    let newGems = user.gems || 0
+    let newPurchasedGems = purchasedGems
+
+    if (!isFree) {
+      const rpcData = await decrementGemsAndPurchased(tid, imageCost)
+      newGems = rpcData.new_gems
+      newPurchasedGems = rpcData.new_purchased
+
+      await insertGemTransaction({
+        telegram_id: tid,
+        amount: -imageCost,
+        transaction_type: 'image',
+        description:
+          source === 'r2'
+            ? `Imagen R2 _${r2Index} nivel ${level.level}`
+            : `Imagen generada nivel ${level.level}`,
+      })
     }
-
-    // RPC atómica: descuenta de gems Y purchased_gems
-    const rpcData = await decrementGemsAndPurchased(tid, imageCost)
-    const newGems = rpcData.new_gems
-    const newPurchasedGems = rpcData.new_purchased
-
-    await insertGemTransaction({
-      telegram_id: tid,
-      amount: -imageCost,
-      transaction_type: 'image',
-      description: `Selfie nivel ${level.level}: ${sceneHint.substring(0, 50)}`,
-    })
 
     return NextResponse.json({
       image_url: imageUrl,
       remaining_gems: newGems,
       remaining_purchased_gems: newPurchasedGems,
       level: level.level,
-      cost: imageCost,
+      cost: isFree ? 0 : imageCost,
+      free: isFree,                    // ✅ NUEVO
+      source,                          // ✅ NUEVO: 'r2' | 'generated'
+      image_index: r2Index,            // ✅ NUEVO: 1-4 si es R2, null si generada
       face_visibility: faceVisibility,
-      model: level.level <= 3 ? 'deepinfra' : 'wiro-v4-5',
+      model: modelUsed,
     })
   } catch (error: any) {
     console.error('Error generando imagen:', error)
