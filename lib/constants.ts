@@ -879,9 +879,10 @@ export const VIP_PLANS: VipPlan[] = [
 ]
 
 // Límites fair-use VIP (para evitar abuso)
-export const VIP_DAILY_MESSAGE_LIMIT = 200
-export const VIP_DAILY_FREE_IMAGES = 5
-export const VIP_DAILY_FREE_AUDIOS = 3
+export const VIP_DAILY_MESSAGE_LIMIT = 150       // antes 200
+export const VIP_DAILY_FREE_IMAGES = 3           // antes 5
+export const VIP_DAILY_FREE_WIRO_IMAGES = 1      // ✅ NUEVO
+export const VIP_DAILY_FREE_AUDIOS = 2           // antes 3
 
 // Arquetipos exclusivos para VIPs (no aparecen en el catálogo público)
 export const VIP_ARCHETYPES: string[] = [
