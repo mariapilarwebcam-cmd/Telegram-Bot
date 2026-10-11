@@ -1,9 +1,9 @@
 import { Metadata, Viewport } from 'next'
 import './globals.css'
 import BottomNav from '@/components/BottomNav'
-import SwipeBack from '@/components/SwipeBack'                  // ✅ NUEVO
+import SwipeBack from '@/components/SwipeBack'
 import { UserProvider } from '@/lib/UserContext'
-import { TonConnectProvider } from './providers'
+import { TonConnectProvider, PostHogProvider } from './providers'
 
 export const metadata: Metadata = {
   title: 'Taboo Realm',
@@ -26,15 +26,17 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body className="antialiased">
-        <UserProvider>
-          <TonConnectProvider>
-            <SwipeBack />                                       {/* ✅ NUEVO */}
-            <div className="app-shell">
-              <div className="app-content">{children}</div>
-              <BottomNav />
-            </div>
-          </TonConnectProvider>
-        </UserProvider>
+        <PostHogProvider>
+          <UserProvider>
+            <TonConnectProvider>
+              <SwipeBack />
+              <div className="app-shell">
+                <div className="app-content">{children}</div>
+                <BottomNav />
+              </div>
+            </TonConnectProvider>
+          </UserProvider>
+        </PostHogProvider>
       </body>
     </html>
   )
