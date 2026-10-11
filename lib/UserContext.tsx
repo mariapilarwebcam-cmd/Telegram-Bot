@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState, useRef, ReactNode } fro
 import { useRouter } from 'next/navigation'
 import { getLanguage, Language } from '@/lib/i18n'
 import { setInitDataRaw } from '@/lib/telegram-fetch'
+import { identifyUser } from '@/lib/posthog'                    // ✅ PostHog
 
 export interface UserData {
   telegram_id: string
@@ -55,10 +56,8 @@ function getTelegramWebApp(): any {
   return (window as any).Telegram?.WebApp || null
 }
 
-// ✅ Rutas que NO requieren onboarding
 const ONBOARDING_WHITELIST = ['/onboarding']
 
-// ✅ Helper: convierte boolean/0/1 → boolean
 function isTrue(v: any): boolean {
   return v === true || v === 1 || v === '1'
 }
@@ -78,11 +77,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(t)
   }, [])
 
-  // ═══════════════════════════════════════════════════════════════
-  // ✅ GATE DE ONBOARDING — reforzado
-  // Verifica los 3 campos: age_verified + gender + interested_in
-  // Si falta cualquiera → redirige a /onboarding
-  // ═══════════════════════════════════════════════════════════════
+  // Gate de onboarding
   useEffect(() => {
     if (loading || !user) return
     if (typeof window === 'undefined') return
@@ -240,6 +235,15 @@ export function UserProvider({ children }: { children: ReactNode }) {
             const u = data.user as UserData
             memUserCache = u
             setUserState(u)
+
+            // ✅ PostHog: identificar al usuario
+            identifyUser(u.telegram_id, {
+              language: u.language,
+              gender: u.gender || 'unknown',
+              interested_in: u.interested_in || 'unknown',
+              is_vip: (u as any).is_vip || false,
+            })
+
             return true
           }
         } else {
@@ -270,6 +274,15 @@ export function UserProvider({ children }: { children: ReactNode }) {
           const u = initData.user as UserData
           memUserCache = u
           setUserState(u)
+
+          // ✅ PostHog: identificar al usuario
+          identifyUser(u.telegram_id, {
+            language: u.language,
+            gender: u.gender || 'unknown',
+            interested_in: u.interested_in || 'unknown',
+            is_vip: (u as any).is_vip || false,
+          })
+
           return true
         }
       } catch (e) {
