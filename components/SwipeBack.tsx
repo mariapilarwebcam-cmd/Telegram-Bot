@@ -14,20 +14,20 @@ import { useRouter, usePathname } from 'next/navigation'
 //   /invite     → /
 //   /           → cerrar Mini App
 //
-// También bloquea el gesto nativo de Telegram que cierra la app.
+// ✅ Los listeners touchmove/touchend se registran SOLO durante un
+//    swipe activo (arrancado desde el borde). Esto evita que se
+//    bloqueen scrolls verticales normales.
 // ═══════════════════════════════════════════════════════════════
 
-const EDGE_ZONE_PX = 50          // Zona activa desde el borde izquierdo
-const SWIPE_THRESHOLD_PX = 80    // Distancia mínima para activar
-const FLICK_THRESHOLD_PX = 35    // Swipe rápido (flick)
+const EDGE_ZONE_PX = 50
+const SWIPE_THRESHOLD_PX = 80
+const FLICK_THRESHOLD_PX = 35
 const FLICK_MAX_MS = 300
 const MAX_VERTICAL_DRIFT = 80
 const MAX_VISUAL_OFFSET = 220
 
-// Rutas donde NO se aplica
 const DISABLED_ROUTES = ['/onboarding']
 
-// ✅ Mapa de navegación — determina a dónde va el swipe
 function getBackDestination(path: string): string | 'close' {
   if (path === '/' || path === '') return 'close'
   if (path.startsWith('/chat/')) return '/chats'
@@ -36,7 +36,6 @@ function getBackDestination(path: string): string | 'close' {
   if (path.startsWith('/shop')) return '/'
   if (path.startsWith('/invite')) return '/'
   if (path.startsWith('/rewards')) return '/'
-  // Default: home
   return '/'
 }
 
@@ -53,9 +52,7 @@ export default function SwipeBack() {
   const offsetRef = useRef(0)
 
   // ═══════════════════════════════════════════════════════════════
-  // ✅ Manejo del BackButton nativo de Telegram
-  //    - En el home: oculto (no hay a dónde volver)
-  //    - En páginas interiores: mostrar flecha nativa
+  // BackButton nativo de Telegram
   // ═══════════════════════════════════════════════════════════════
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -88,7 +85,7 @@ export default function SwipeBack() {
   }, [pathname, router])
 
   // ═══════════════════════════════════════════════════════════════
-  // ✅ Gesture handling
+  // ✅ Gesture handling — solo touchstart se registra al montar
   // ═══════════════════════════════════════════════════════════════
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -99,18 +96,38 @@ export default function SwipeBack() {
     const path = window.location.pathname
     if (DISABLED_ROUTES.some((p) => path.startsWith(p))) return
 
+    // ✅ Referencias a los handlers (para poder removerlos)
+    let moveHandler: ((e: TouchEvent) => void) | null = null
+    let endHandler: ((e: TouchEvent) => void) | null = null
+
+    const cleanupActiveHandlers = () => {
+      if (moveHandler) {
+        document.removeEventListener('touchmove', moveHandler)
+        moveHandler = null
+      }
+      if (endHandler) {
+        document.removeEventListener('touchend', endHandler)
+        document.removeEventListener('touchcancel', endHandler)
+        endHandler = null
+      }
+    }
+
     const reset = () => {
       isActive.current = false
       offsetRef.current = 0
       setDragging(false)
       setOffset(0)
+      cleanupActiveHandlers()
     }
 
     const handleTouchStart = (e: TouchEvent) => {
       const touch = e.touches[0]
       if (!touch) return
+
+      // Ignorar si empieza fuera del borde izquierdo
       if (touch.clientX > EDGE_ZONE_PX) return
 
+      // Ignorar si empieza en input/textarea
       const target = e.target as HTMLElement
       if (
         target.tagName === 'INPUT' ||
@@ -127,76 +144,79 @@ export default function SwipeBack() {
       isActive.current = true
       setDragging(true)
       setOffset(0)
-    }
 
-    const handleTouchMove = (e: TouchEvent) => {
-      if (!isActive.current) return
+      // ✅ Registrar move/end SOLO ahora (durante el swipe)
+      moveHandler = (ev: TouchEvent) => {
+        if (!isActive.current) return
 
-      const touch = e.touches[0]
-      if (!touch) return
+        const t = ev.touches[0]
+        if (!t) return
 
-      const dx = touch.clientX - startX.current
-      const dy = Math.abs(touch.clientY - startY.current)
+        const dx = t.clientX - startX.current
+        const dy = Math.abs(t.clientY - startY.current)
 
-      // ✅ CRÍTICO: bloquear el gesto nativo de Telegram
-      //    Si el swipe es hacia la derecha y empezó cerca del borde,
-      //    bloqueamos el default para que Telegram NO minimice la app.
-      if (dx > 5 && dy < MAX_VERTICAL_DRIFT) {
-        if (e.cancelable) e.preventDefault()
+        // Bloquear gesto nativo de Telegram
+        if (dx > 5 && dy < MAX_VERTICAL_DRIFT) {
+          if (ev.cancelable) ev.preventDefault()
+        }
+
+        // Cancelar si el movimiento es más vertical
+        if (dy > MAX_VERTICAL_DRIFT && Math.abs(dx) < dy * 1.2) {
+          reset()
+          return
+        }
+
+        // Solo hacia la derecha
+        if (dx < 0) {
+          offsetRef.current = 0
+          setOffset(0)
+          return
+        }
+
+        const visual = Math.min(dx, MAX_VISUAL_OFFSET)
+        offsetRef.current = visual
+        setOffset(visual)
       }
 
-      // Cancelar si el movimiento es más vertical
-      if (dy > MAX_VERTICAL_DRIFT && Math.abs(dx) < dy * 1.2) {
+      endHandler = () => {
+        if (!isActive.current) {
+          reset()
+          return
+        }
+
+        const elapsed = Date.now() - startTime.current
+        const finalOffset = offsetRef.current
+        const wasFlick = elapsed < FLICK_MAX_MS && finalOffset > FLICK_THRESHOLD_PX
+
         reset()
-        return
-      }
 
-      // Solo hacia la derecha
-      if (dx < 0) {
-        offsetRef.current = 0
-        setOffset(0)
-        return
-      }
+        if (finalOffset > SWIPE_THRESHOLD_PX || wasFlick) {
+          const currentPath = window.location.pathname
+          const dest = getBackDestination(currentPath)
 
-      const visual = Math.min(dx, MAX_VISUAL_OFFSET)
-      offsetRef.current = visual
-      setOffset(visual)
-    }
-
-    const handleTouchEnd = () => {
-      if (!isActive.current) return
-
-      const elapsed = Date.now() - startTime.current
-      const finalOffset = offsetRef.current
-      const wasFlick = elapsed < FLICK_MAX_MS && finalOffset > FLICK_THRESHOLD_PX
-
-      reset()
-
-      if (finalOffset > SWIPE_THRESHOLD_PX || wasFlick) {
-        const currentPath = window.location.pathname
-        const dest = getBackDestination(currentPath)
-
-        if (dest === 'close') {
-          try { tg.close() } catch (err) {
-            console.warn('[SwipeBack] close failed:', err)
+          if (dest === 'close') {
+            try {
+              tg.close()
+            } catch (err) {
+              console.warn('[SwipeBack] close failed:', err)
+            }
+          } else {
+            router.push(dest)
           }
-        } else {
-          router.push(dest)
         }
       }
+
+      document.addEventListener('touchmove', moveHandler, { passive: false })
+      document.addEventListener('touchend', endHandler, { passive: true })
+      document.addEventListener('touchcancel', endHandler, { passive: true })
     }
 
-    // ✅ passive: false en touchmove para poder usar preventDefault()
+    // ✅ Solo touchstart se registra al montar (passive, no bloquea nada)
     document.addEventListener('touchstart', handleTouchStart, { passive: true })
-    document.addEventListener('touchmove', handleTouchMove, { passive: false })
-    document.addEventListener('touchend', handleTouchEnd, { passive: true })
-    document.addEventListener('touchcancel', handleTouchEnd, { passive: true })
 
     return () => {
       document.removeEventListener('touchstart', handleTouchStart)
-      document.removeEventListener('touchmove', handleTouchMove)
-      document.removeEventListener('touchend', handleTouchEnd)
-      document.removeEventListener('touchcancel', handleTouchEnd)
+      cleanupActiveHandlers()
     }
   }, [router])
 
@@ -207,7 +227,6 @@ export default function SwipeBack() {
 
   return (
     <>
-      {/* Tinte lateral que sigue el dedo */}
       <div
         aria-hidden
         style={{
@@ -224,7 +243,6 @@ export default function SwipeBack() {
         }}
       />
 
-      {/* Indicador circular con flecha */}
       <div
         aria-hidden
         style={{
