@@ -76,6 +76,21 @@ const LEVEL_UP_COPY_EN: Record<number, (name: string) => string> = {
 
 const TEXTAREA_MAX_HEIGHT = 120
 
+// ✅ NUEVO: razones de reporte
+const REPORT_REASONS = [
+  { key: 'inappropriate_content', es: 'Contenido no apropiado', en: 'Inappropriate content' },
+  { key: 'offensive', es: 'Ofensivo o discriminatorio', en: 'Offensive or discriminatory' },
+  { key: 'harassment', es: 'Acoso', en: 'Harassment' },
+  { key: 'non_consensual', es: 'Contenido no consensuado', en: 'Non-consensual content' },
+  { key: 'minor_safety', es: 'Seguridad de menores', en: 'Minor safety' },
+  { key: 'spam', es: 'Spam', en: 'Spam' },
+  { key: 'other', es: 'Otro', en: 'Other' },
+] as const
+
+type ReportReason = (typeof REPORT_REASONS)[number]['key']
+
+const SUPPORT_URL = 'https://t.me/TabooRealmSupport'
+
 export default function ChatPage() {
   const { id } = useParams()
   const router = useRouter()
@@ -120,6 +135,14 @@ export default function ChatPage() {
   const [newName, setNewName] = useState('')
   const [renaming, setRenaming] = useState(false)
 
+  // ✅ NUEVO: estado del modal de reporte
+  const [showReportModal, setShowReportModal] = useState(false)
+  const [reportReason, setReportReason] = useState<ReportReason | null>(null)
+  const [reportDetails, setReportDetails] = useState('')
+  const [reportSending, setReportSending] = useState(false)
+  const [reportSent, setReportSent] = useState(false)
+  const [reportError, setReportError] = useState<string | null>(null)
+
   const [characterLoading, setCharacterLoading] = useState(true)
   const [historyLoaded, setHistoryLoaded] = useState(false)
   const [autoStartAttempted, setAutoStartAttempted] = useState(false)
@@ -155,9 +178,6 @@ export default function ChatPage() {
     el.style.overflowY = el.scrollHeight > TEXTAREA_MAX_HEIGHT ? 'auto' : 'hidden'
   }, [input])
 
-  // ═══════════════════════════════════════════════════════════════
-  // ✅ MIGRADO: carga inicial vía /api/character/[id] (Turso)
-  // ═══════════════════════════════════════════════════════════════
   useEffect(() => {
     if (userLoading) return
     if (!user?.telegram_id) return
@@ -509,6 +529,70 @@ export default function ChatPage() {
     }
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  // ✅ NUEVO: envío de reporte
+  // ═══════════════════════════════════════════════════════════════
+  const submitReport = async () => {
+    if (!reportReason) {
+      setReportError(lang === 'es' ? 'Selecciona una razón' : 'Select a reason')
+      return
+    }
+    if (reportSending) return
+
+    setReportSending(true)
+    setReportError(null)
+
+    // Último mensaje del personaje como contexto
+    const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant')
+
+    try {
+      const res = await tgFetch('/api/report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          character_id: characterId,
+          message_content: lastAssistant?.content || null,
+          reason: reportReason,
+          details: reportDetails.trim() || null,
+        }),
+      })
+
+      const data = await res.json().catch(() => ({}))
+
+      if (!res.ok) {
+        setReportError(data?.error || `Error HTTP ${res.status}`)
+        setReportSending(false)
+        return
+      }
+
+      setReportSent(true)
+      // Cerrar modal tras 2s
+      setTimeout(() => {
+        setShowReportModal(false)
+        setReportReason(null)
+        setReportDetails('')
+        setReportSent(false)
+      }, 2000)
+    } catch (e: any) {
+      setReportError(e?.message || 'Error de conexión')
+    } finally {
+      setReportSending(false)
+    }
+  }
+
+  const openSupport = () => {
+    try {
+      const tg = (window as any).Telegram?.WebApp
+      if (tg?.openTelegramLink) {
+        tg.openTelegramLink(SUPPORT_URL)
+      } else {
+        window.open(SUPPORT_URL, '_blank')
+      }
+    } catch {
+      window.open(SUPPORT_URL, '_blank')
+    }
+  }
+
   const formatMessage = (content: string) => {
     let html = content
       .replace(/&/g, '&amp;')
@@ -643,13 +727,126 @@ export default function ChatPage() {
               <circle cx="12" cy="19" r="1.6" fill="currentColor" />
             </svg>
           </button>
+
+          {/* ✅ MENÚ EXPANDIDO */}
           {menuOpen && (
-            <div className="menu-dropdown">
-              <button className="menu-item" onClick={() => { setMenuOpen(false); setShowRename(true) }}>
+            <div className="menu-dropdown" style={{ minWidth: 220 }}>
+              {/* Renombrar */}
+              <button
+                className="menu-item"
+                onClick={() => {
+                  setMenuOpen(false)
+                  setShowRename(true)
+                }}
+              >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                   <path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
                 {t.renameTitle}
+              </button>
+
+              {/* Divisor */}
+              <div
+                style={{
+                  height: 1,
+                  background: 'rgba(168, 85, 247, 0.15)',
+                  margin: '4px 8px',
+                }}
+              />
+
+              {/* Reportar */}
+              <button
+                className="menu-item"
+                onClick={() => {
+                  setMenuOpen(false)
+                  setShowReportModal(true)
+                  setReportReason(null)
+                  setReportDetails('')
+                  setReportError(null)
+                  setReportSent(false)
+                }}
+                style={{ color: '#fca5a5' }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M12 9v4M12 17h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                {lang === 'es' ? 'Reportar' : 'Report'}
+              </button>
+
+              {/* Divisor */}
+              <div
+                style={{
+                  height: 1,
+                  background: 'rgba(168, 85, 247, 0.15)',
+                  margin: '4px 8px',
+                }}
+              />
+
+              {/* Términos */}
+              <button
+                className="menu-item"
+                onClick={() => {
+                  setMenuOpen(false)
+                  router.push('/legal/terms')
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+                {lang === 'es' ? 'Términos de servicio' : 'Terms of Service'}
+              </button>
+
+              {/* Privacidad */}
+              <button
+                className="menu-item"
+                onClick={() => {
+                  setMenuOpen(false)
+                  router.push('/legal/privacy')
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                {lang === 'es' ? 'Privacidad' : 'Privacy'}
+              </button>
+
+              {/* Soporte */}
+              <button
+                className="menu-item"
+                onClick={() => {
+                  setMenuOpen(false)
+                  openSupport()
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                {lang === 'es' ? 'Soporte' : 'Support'}
               </button>
             </div>
           )}
@@ -870,6 +1067,180 @@ export default function ChatPage() {
                 {renaming ? t.saving : `${t.save} (${GEM_COSTS.rename_character})`}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ NUEVO: MODAL DE REPORTE */}
+      {showReportModal && (
+        <div className="modal-backdrop" onClick={() => !reportSending && setShowReportModal(false)}>
+          <div
+            className="modal-box"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxHeight: '90vh', overflowY: 'auto' }}
+          >
+            {reportSent ? (
+              // Estado de éxito
+              <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                <div style={{ fontSize: 48, marginBottom: 12 }}>✅</div>
+                <h3 className="modal-title" style={{ textAlign: 'center', marginBottom: 8 }}>
+                  {lang === 'es' ? 'Reporte recibido' : 'Report received'}
+                </h3>
+                <p className="modal-desc" style={{ textAlign: 'center', margin: 0 }}>
+                  {lang === 'es'
+                    ? 'Nuestro equipo lo revisará en un plazo máximo de 48 horas. Gracias por ayudarnos a mantener la comunidad segura.'
+                    : 'Our team will review it within a maximum of 48 hours. Thanks for helping us keep the community safe.'}
+                </p>
+              </div>
+            ) : (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                  <div style={{ fontSize: 28 }}>🚨</div>
+                  <h3 className="modal-title" style={{ margin: 0, flex: 1 }}>
+                    {lang === 'es' ? 'Reportar contenido' : 'Report content'}
+                  </h3>
+                </div>
+
+                <p className="modal-desc" style={{ marginBottom: 16 }}>
+                  {lang === 'es'
+                    ? '¿Qué quieres reportar? Tu reporte es anónimo.'
+                    : 'What do you want to report? Your report is anonymous.'}
+                </p>
+
+                {/* Lista de razones */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
+                  {REPORT_REASONS.map((r) => {
+                    const active = reportReason === r.key
+                    const isUrgent = r.key === 'minor_safety'
+                    return (
+                      <button
+                        key={r.key}
+                        onClick={() => setReportReason(r.key)}
+                        disabled={reportSending}
+                        style={{
+                          textAlign: 'left',
+                          padding: '10px 12px',
+                          borderRadius: 12,
+                          background: active
+                            ? 'linear-gradient(135deg, rgba(236,72,153,0.25) 0%, rgba(168,85,247,0.2) 100%)'
+                            : 'rgba(168, 85, 247, 0.06)',
+                          border: active
+                            ? '1.5px solid rgba(236,72,153,0.6)'
+                            : '1.5px solid rgba(168,85,247,0.15)',
+                          color: active ? '#fff' : '#c4b5fd',
+                          fontSize: 13,
+                          fontWeight: active ? 700 : 500,
+                          cursor: reportSending ? 'not-allowed' : 'pointer',
+                          fontFamily: 'inherit',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
+                          transition: 'all 0.15s ease',
+                          opacity: reportSending ? 0.5 : 1,
+                        }}
+                      >
+                        <span
+                          style={{
+                            width: 16,
+                            height: 16,
+                            borderRadius: '50%',
+                            border: active
+                              ? '5px solid #ec4899'
+                              : '1.5px solid rgba(168,85,247,0.4)',
+                            flexShrink: 0,
+                            transition: 'all 0.15s ease',
+                          }}
+                        />
+                        <span style={{ flex: 1 }}>
+                          {lang === 'es' ? r.es : r.en}
+                        </span>
+                        {isUrgent && (
+                          <span style={{ fontSize: 10, color: '#fca5a5', fontWeight: 700 }}>
+                            ⚠️
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+
+                {/* Detalles opcionales */}
+                <p
+                  style={{
+                    fontSize: 11,
+                    color: '#8b8b9e',
+                    margin: '0 0 6px 0',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.06em',
+                    fontWeight: 700,
+                  }}
+                >
+                  {lang === 'es' ? 'Detalles (opcional)' : 'Details (optional)'}
+                </p>
+                <textarea
+                  value={reportDetails}
+                  onChange={(e) => setReportDetails(e.target.value.slice(0, 500))}
+                  placeholder={
+                    lang === 'es'
+                      ? 'Cuéntanos más sobre el problema...'
+                      : 'Tell us more about the issue...'
+                  }
+                  disabled={reportSending}
+                  maxLength={500}
+                  className="modal-textarea"
+                  style={{ marginBottom: 6 }}
+                />
+                <p
+                  style={{
+                    fontSize: 10,
+                    color: '#6b6b7e',
+                    margin: '0 0 16px 0',
+                    textAlign: 'right',
+                  }}
+                >
+                  {reportDetails.length}/500
+                </p>
+
+                {reportError && (
+                  <p
+                    style={{
+                      fontSize: 12,
+                      color: '#fca5a5',
+                      margin: '0 0 12px 0',
+                      textAlign: 'center',
+                    }}
+                  >
+                    ⚠️ {reportError}
+                  </p>
+                )}
+
+                {/* Botones */}
+                <div className="modal-btn-row">
+                  <button
+                    onClick={() => setShowReportModal(false)}
+                    disabled={reportSending}
+                    className="modal-btn secondary"
+                  >
+                    {t.cancel || (lang === 'es' ? 'Cancelar' : 'Cancel')}
+                  </button>
+                  <button
+                    onClick={submitReport}
+                    disabled={reportSending || !reportReason}
+                    className="modal-btn primary"
+                    style={{
+                      background: 'linear-gradient(135deg, #ec4899 0%, #a855f7 100%)',
+                      boxShadow: reportReason
+                        ? '0 4px 20px rgba(236,72,153,0.5)'
+                        : 'none',
+                    }}
+                  >
+                    {reportSending
+                      ? (lang === 'es' ? 'Enviando...' : 'Sending...')
+                      : (lang === 'es' ? 'Enviar reporte' : 'Send report')}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
