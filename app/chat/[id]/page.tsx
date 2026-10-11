@@ -8,11 +8,12 @@ import {
   getDisplayName,
   getCharacterImageUrl,
   getCharacterDescription,
-  VIP_DAILY_MESSAGE_LIMIT,        // ✅ VIP
+  VIP_DAILY_MESSAGE_LIMIT,
 } from '@/lib/constants'
 import { getLevelFromMessages, getImageCost, getAudioCost } from '@/lib/levels'
 import { getTranslations } from '@/lib/i18n'
 import { useUser } from '@/lib/UserContext'
+import { Analytics } from '@/lib/posthog'                       // ✅ PostHog
 
 interface Message {
   id?: number
@@ -111,9 +112,6 @@ export default function ChatPage() {
 
   const [seenImageCount, setSeenImageCount] = useState(0)
 
-  // ═══════════════════════════════════════════════════════════════
-  // ✅ VIP: estado del usuario VIP + contador de mensajes del día
-  // ═══════════════════════════════════════════════════════════════
   const [isVip, setIsVip] = useState(false)
   const [vipMessagesToday, setVipMessagesToday] = useState(0)
   const [showVipLimitModal, setShowVipLimitModal] = useState(false)
@@ -186,9 +184,6 @@ export default function ChatPage() {
     el.style.overflowY = el.scrollHeight > TEXTAREA_MAX_HEIGHT ? 'auto' : 'hidden'
   }, [input])
 
-  // ═══════════════════════════════════════════════════════════════
-  // ✅ VIP: cargar estado VIP al montar
-  // ═══════════════════════════════════════════════════════════════
   useEffect(() => {
     if (userLoading) return
     if (!user?.telegram_id) return
@@ -202,9 +197,6 @@ export default function ChatPage() {
       .catch((e) => console.warn('[chat] vip load error:', e))
   }, [user?.telegram_id, userLoading])
 
-  // ═══════════════════════════════════════════════════════════════
-  // Cargar personaje + historial
-  // ═══════════════════════════════════════════════════════════════
   useEffect(() => {
     if (userLoading) return
     if (!user?.telegram_id) return
@@ -301,7 +293,6 @@ export default function ChatPage() {
       const gems = user.gems || 0
       const hookRemaining = user.hook_messages_remaining || 0
 
-      // ✅ VIP: no requiere gemas ni hook
       if (!isVip && gems < GEM_COSTS.message && hookRemaining <= 0) {
         setBlocked(true)
         return
@@ -347,7 +338,6 @@ export default function ChatPage() {
     const gems = user.gems || 0
     const hookRemaining = user.hook_messages_remaining || 0
 
-    // ✅ VIP: no requiere gemas ni hook
     if (!isVip && gems < GEM_COSTS.message && hookRemaining <= 0) {
       sendingRef.current = false
       setBlocked(true)
@@ -355,6 +345,7 @@ export default function ChatPage() {
     }
 
     const text = input.trim()
+    const wasFirstMessage = totalUserMessages === 0                // ✅ PostHog
     setInput('')
     setLoading(true)
     setMessages((p) => [...p, { role: 'user', content: text }])
@@ -368,7 +359,6 @@ export default function ChatPage() {
       const data = await res.json()
       if (res.ok) {
         if (data.blocked) {
-          // ✅ VIP: si es límite VIP alcanzado → mostrar modal especial
           if (data.vip_limit_reached) {
             setMessages((p) => p.slice(0, -1))
             setShowVipLimitModal(true)
@@ -389,7 +379,6 @@ export default function ChatPage() {
           setLowGemsWarning(!!data.low_gems_warning)
           setLowGemsCount(data.low_gems_count || 0)
 
-          // ✅ VIP: actualizar estado y contador desde la respuesta
           if (data.is_vip) {
             setIsVip(true)
             if (typeof data.vip_messages_today === 'number') {
@@ -404,10 +393,26 @@ export default function ChatPage() {
             })
           }
 
+          // ✅ PostHog: primer mensaje enviado
+          if (wasFirstMessage && character) {
+            Analytics.firstMessageSent({
+              character_id: characterId,
+              archetype: character.archetype,
+              level: data.level || 1,
+            })
+          }
+
           if (data.level_up && data.new_level && data.new_level_badge) {
             setLevelUpModal({
               level: data.new_level,
               badgeKey: data.new_level_badge,
+            })
+
+            // ✅ PostHog: subida de nivel
+            Analytics.levelUp({
+              character_id: characterId,
+              new_level: data.new_level,
+              total_messages: data.total_user_messages || 0,
             })
           }
         }
@@ -455,6 +460,13 @@ export default function ChatPage() {
       if (res.ok) {
         setGems(data.remaining_gems)
         new Audio(`data:audio/wav;base64,${data.audio}`).play()
+
+        // ✅ PostHog: audio generado
+        Analytics.audioGenerated({
+          character_id: characterId,
+          cost: data.cost || currentAudioCost,
+          level: currentLevel.level,
+        })
       } else if (data.error === 'premium_required') {
         setPremiumModalReason('audio')
         setShowPremiumModal(true)
@@ -518,6 +530,16 @@ export default function ChatPage() {
         if (data.source === 'r2') {
           setSeenImageCount((prev) => prev + 1)
         }
+
+        // ✅ PostHog: imagen generada
+        Analytics.imageGenerated({
+          character_id: characterId,
+          source: data.source || 'r2',
+          image_index: data.image_index ?? null,
+          cost: data.cost || 0,
+          free: !!data.free,
+          level: currentLevel.level,
+        })
       } else if (data.error === 'premium_required') {
         setPremiumModalReason('image')
         setShowPremiumModal(true)
@@ -717,7 +739,6 @@ export default function ChatPage() {
   let headerBadgeText = ''
   let headerBadgeVariant: 'hook' | 'low-gems' | null = null
 
-  // ✅ VIP: el badge VIP tiene prioridad sobre hook/low-gems
   if (isVip) {
     headerBadgeVariant = null
     headerBadgeText = ''
@@ -741,7 +762,6 @@ export default function ChatPage() {
       ? Math.min(100, (levelProgress.current / levelProgress.next) * 100)
       : 0
 
-  // ✅ VIP: calcular mensajes restantes
   const vipMessagesLeft = isVip ? Math.max(0, VIP_DAILY_MESSAGE_LIMIT - vipMessagesToday) : 0
   const vipUsagePercent = isVip
     ? Math.min(100, (vipMessagesToday / VIP_DAILY_MESSAGE_LIMIT) * 100)
@@ -781,7 +801,6 @@ export default function ChatPage() {
             {displayName}
           </p>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            {/* ✅ VIP: mostrar badge VIP en vez de nivel */}
             {isVip ? (
               <span
                 className="level-badge"
@@ -815,7 +834,6 @@ export default function ChatPage() {
             )}
           </div>
 
-          {/* ✅ VIP: barra de progreso del fair-use diario */}
           {isVip ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
               <div style={{ flex: 1, height: 3, background: 'rgba(251, 191, 36, 0.15)', borderRadius: 2, overflow: 'hidden', maxWidth: 90 }}>
@@ -1127,9 +1145,6 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* ═══════════════════════════════════════════════════════════════
-          ✅ VIP: MODAL DE LÍMITE DIARIO ALCANZADO
-      ═══════════════════════════════════════════════════════════════ */}
       {showVipLimitModal && (
         <div className="modal-backdrop">
           <div className="modal-box level-up-modal">
