@@ -92,6 +92,20 @@ async def get_user_by_username(username: str):
     )
 
 
+# ✅ NUEVO: actualiza el timestamp de última actividad del usuario.
+# Se llama en cada interacción con el bot para que el cron proactivo
+# sepa quién realmente está inactivo.
+async def update_last_active(telegram_id: int):
+    """Actualiza last_active del usuario. Fail-safe: nunca rompe el flujo."""
+    try:
+        turso_execute(
+            "UPDATE users SET last_active = datetime('now') WHERE telegram_id = ?",
+            [str(telegram_id)]
+        )
+    except Exception as e:
+        logger.warning(f"update_last_active falló para {telegram_id}: {e}")
+
+
 async def create_user_immediately(
     telegram_id: int,
     username: str,
@@ -108,8 +122,8 @@ async def create_user_immediately(
               (telegram_id, username, first_name, language, gems, purchased_gems,
                referral_code, referred_by, total_referrals, paying_referrals_count,
                hook_messages_remaining, hook_used, age_verified, pending_referral_code,
-               gender, interested_in, onboarding_complete)
-             VALUES (?, ?, ?, ?, ?, 0, ?, NULL, 0, 0, 0, 0, 0, ?, NULL, NULL, 0)""",
+               gender, interested_in, onboarding_complete, last_active)
+             VALUES (?, ?, ?, ?, ?, 0, ?, NULL, 0, 0, 0, 0, 0, ?, NULL, NULL, 0, datetime('now'))""",
             [
                 str(telegram_id),
                 username or None,
@@ -599,6 +613,9 @@ async def cmd_start(message: Message, command: CommandObject = None):
     first_name = message.from_user.first_name or ""
     language = detect_language(message.from_user.language_code)
 
+    # ✅ NUEVO: marcar actividad
+    await update_last_active(telegram_id)
+
     ref_code: Optional[str] = None
     if command and command.args:
         arg = command.args.strip()
@@ -641,6 +658,10 @@ async def cmd_start(message: Message, command: CommandObject = None):
 @router.callback_query(F.data == "age_confirm")
 async def on_age_confirm(callback: CallbackQuery):
     telegram_id = callback.from_user.id
+
+    # ✅ NUEVO: marcar actividad
+    await update_last_active(telegram_id)
+
     user = await get_user(telegram_id)
 
     if not user:
@@ -721,6 +742,10 @@ async def on_age_decline(callback: CallbackQuery):
 @router.callback_query(F.data.in_({"gender_male", "gender_female"}))
 async def on_gender_select(callback: CallbackQuery):
     telegram_id = callback.from_user.id
+
+    # ✅ NUEVO: marcar actividad
+    await update_last_active(telegram_id)
+
     user = await get_user(telegram_id)
 
     if not user:
@@ -757,6 +782,10 @@ async def on_gender_select(callback: CallbackQuery):
 @router.callback_query(F.data.in_({"interest_male", "interest_female", "interest_both"}))
 async def on_interest_select(callback: CallbackQuery):
     telegram_id = callback.from_user.id
+
+    # ✅ NUEVO: marcar actividad
+    await update_last_active(telegram_id)
+
     user = await get_user(telegram_id)
 
     if not user:
@@ -800,6 +829,9 @@ async def on_interest_select(callback: CallbackQuery):
 @router.message(Command("balance", "saldo", "gems"))
 @router.message(F.text.in_({"💎 Balance", "💎 Saldo"}))
 async def cmd_balance(message: Message):
+    # ✅ NUEVO: marcar actividad
+    await update_last_active(message.from_user.id)
+
     user = await get_user(message.from_user.id)
     if not user:
         return await message.answer("⚠️ Usa /start primero")
@@ -814,6 +846,9 @@ async def cmd_balance(message: Message):
 @router.message(Command("shop", "tienda", "store"))
 @router.message(F.text.in_({"🛒 Tienda", "🛒 Shop"}))
 async def cmd_shop(message: Message):
+    # ✅ NUEVO: marcar actividad
+    await update_last_active(message.from_user.id)
+
     user = await get_user(message.from_user.id)
     if not user:
         return await message.answer("⚠️ Usa /start primero")
@@ -917,6 +952,9 @@ async def process_successful_payment(message: Message):
 @router.message(Command("invite", "invitar", "referral", "ref"))
 @router.message(F.text.in_({"🎁 Invitar", "🎁 Invite"}))
 async def cmd_invite(message: Message):
+    # ✅ NUEVO: marcar actividad
+    await update_last_active(message.from_user.id)
+
     user = await get_user(message.from_user.id)
     if not user:
         return await message.answer("⚠️ Usa /start primero")
@@ -961,6 +999,9 @@ async def cmd_invite(message: Message):
 @router.message(Command("help", "ayuda", "start_help"))
 @router.message(F.text.in_({"❓ Ayuda", "❓ Help"}))
 async def cmd_help(message: Message):
+    # ✅ NUEVO: marcar actividad
+    await update_last_active(message.from_user.id)
+
     user = await get_user(message.from_user.id)
     if not user:
         return await message.answer("⚠️ Usa /start primero")
