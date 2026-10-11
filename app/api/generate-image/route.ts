@@ -93,7 +93,7 @@ const CHARACTER_DNA: Record<string, string> = {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ARCHETYPE_IMAGE_HINTS — 64 claves únicas (gender_archetype)
+// ARCHETYPE_IMAGE_HINTS
 // ═══════════════════════════════════════════════════════════════
 const ARCHETYPE_IMAGE_HINTS: Record<string, string> = {
   female_stepmom: 'luxurious silk robe, mature elegance, wine glass, sophisticated boudoir',
@@ -168,9 +168,6 @@ const FACE_HIDDEN_FRAGMENT =
 const FACE_PARTIAL_FRAGMENT =
   "The subject's face is only partially visible: side profile in soft shadow, three-quarter angle with hair covering one eye, face softly obscured by dim light or shadow, or turned to the side. Do not show a full clear frontal face."
 
-// ═══════════════════════════════════════════════════════════════
-// SFW SCENE PROMPTS (niveles 1-3) → DeepInfra / FLUX
-// ═══════════════════════════════════════════════════════════════
 const SFW_SCENE_PROMPTS: Record<number, string> = {
   1: `selfie photo taken by the character with the phone in hand, close to the body,
       framing: chest-up or waist-up selfie, face naturally cropped by phone position or turned away,
@@ -225,9 +222,6 @@ const SFW_SCENE_PROMPTS: Record<number, string> = {
       no nudity, no explicit content, safe for work, elegant anime aesthetic`,
 }
 
-// ═══════════════════════════════════════════════════════════════
-// NSFW SCENE PROMPTS (niveles 4-5) → Wiro v4-5-uncensored
-// ═══════════════════════════════════════════════════════════════
 const NSFW_SCENE_PROMPTS: Record<number, string> = {
   4: 'intimate photo, minimal tasteful clothing or elegant lingerie, very revealing but no explicit nudity, artistic suggestive pose, low intimate lighting, bedroom setting, high-end boudoir aesthetic, heat and tension palpable, flushed skin, breathless expression, sensual atmosphere',
   5: 'artistic boudoir photo, tasteful implied nudity with strategic coverage (sheets, shadows, artistic angles), no exposed genitalia, no explicit sexual acts, high-end artistic composition, dramatic cinematic lighting, peak intimacy moment, tangled sheets, marked skin, glowing skin, post-intimacy atmosphere, sensual silence, everything suggested nothing shown',
@@ -249,9 +243,6 @@ const AUTO_SCENES_MALE: Record<number, string> = {
   5: 'artistic intimate composition, cinematic dramatic lighting, elegant and tasteful, high-end boudoir editorial',
 }
 
-// ═══════════════════════════════════════════════════════════════
-// extractMoodFromMessages — contexto conversacional
-// ═══════════════════════════════════════════════════════════════
 function extractMoodFromMessages(messages: string[]): string {
   if (!messages || messages.length === 0) return ''
 
@@ -279,9 +270,6 @@ function extractMoodFromMessages(messages: string[]): string {
   return ''
 }
 
-// ═══════════════════════════════════════════════════════════════
-// ✅ Helper: construye URL de imagen R2 con índice (_1, _2, _3, _4)
-// ═══════════════════════════════════════════════════════════════
 function buildR2VariantUrl(
   gender: string,
   archetype: string,
@@ -293,9 +281,6 @@ function buildR2VariantUrl(
   return `${clean}/${gender}_${archetype}_${index}.jpg?v=8`
 }
 
-// ═══════════════════════════════════════════════════════════════
-// POST /api/generate-image
-// ═══════════════════════════════════════════════════════════════
 export async function POST(request: Request) {
   try {
     const tid = request.headers.get('x-telegram-id-validated')
@@ -325,20 +310,6 @@ export async function POST(request: Request) {
       )
     }
 
-    const purchasedGems = user.purchased_gems || 0
-    if (purchasedGems <= 0) {
-      return NextResponse.json(
-        {
-          error: 'premium_required',
-          message:
-            user.language === 'en'
-              ? 'Image generation is a Premium feature. Buy gems with Stars to unlock it.'
-              : 'La generación de imágenes es Premium. Compra gemas con Stars para desbloquearla.',
-        },
-        { status: 403 }
-      )
-    }
-
     const character = await getCharacter(character_id, tid)
     if (!character) {
       return NextResponse.json(
@@ -362,61 +333,71 @@ export async function POST(request: Request) {
     const genderKey = character.gender === 'male' ? 'male' : 'female'
     const r2Base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL
 
-    // Determinar qué índice toca (si toca R2) y si es gratis
     let r2Index: number | null = null
     let isFree = false
 
     if (seenCount === 0) {
-      // 1ª imagen: _1 gratis (todos los niveles)
       r2Index = 1
       isFree = true
     } else if (seenCount === 1) {
-      // 2ª imagen: _2 con costo (todos los niveles)
       r2Index = 2
     } else if (seenCount === 2 && level.level >= 4) {
-      // 3ª imagen: _3 con costo (SOLO nivel 4+)
       r2Index = 3
     } else if (seenCount === 3 && level.level >= 4) {
-      // 4ª imagen: _4 con costo (SOLO nivel 4+)
       r2Index = 4
     }
-    // Si seenCount >= 4, o si no cumple nivel → r2Index queda null → genera IA
 
-    // Si hay R2 disponible y toca enviarla
     const useR2 = r2Index !== null && !!r2Base
 
     // ═══════════════════════════════════════════════════════════════
-    // Verificar gems SOLO si NO es gratis
+    // ✅ PREMIUM CHECK — solo si NO es gratis
+    // La primera foto (_1) es gratis para TODOS sin premium.
+    // A partir de la 2ª, se requiere premium + gemas.
     // ═══════════════════════════════════════════════════════════════
-    if (!isFree && purchasedGems < imageCost) {
-      return NextResponse.json(
-        {
-          error: 'insufficient_gems',
-          message:
-            user.language === 'en'
-              ? `You need ${imageCost} purchased gems`
-              : `Necesitas ${imageCost} gemas compradas`,
-          required: imageCost,
-          available: purchasedGems,
-        },
-        { status: 402 }
-      )
+    const purchasedGems = user.purchased_gems || 0
+
+    if (!isFree) {
+      if (purchasedGems <= 0) {
+        return NextResponse.json(
+          {
+            error: 'premium_required',
+            message:
+              user.language === 'en'
+                ? 'Image generation is a Premium feature. Buy gems with Stars to unlock it.'
+                : 'La generación de imágenes es Premium. Compra gemas con Stars para desbloquearla.',
+          },
+          { status: 403 }
+        )
+      }
+
+      if (purchasedGems < imageCost) {
+        return NextResponse.json(
+          {
+            error: 'insufficient_gems',
+            message:
+              user.language === 'en'
+                ? `You need ${imageCost} purchased gems`
+                : `Necesitas ${imageCost} gemas compradas`,
+            required: imageCost,
+            available: purchasedGems,
+          },
+          { status: 402 }
+        )
+      }
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // OBTENER IMAGEN: desde R2 (rotación) o generándola con IA
+    // OBTENER IMAGEN
     // ═══════════════════════════════════════════════════════════════
     let imageUrl: string
     let source: 'r2' | 'generated'
     let modelUsed: string
 
     if (useR2) {
-      // ─── R2: enviar variante pre-generada ───
       imageUrl = buildR2VariantUrl(genderKey, character.archetype, r2Index!)
       source = 'r2'
       modelUsed = 'r2'
 
-      // Marcar como vista
       try {
         await markImageSeen(tid, character_id, r2Index!, false)
       } catch (markErr) {
@@ -427,7 +408,6 @@ export async function POST(request: Request) {
         `[generate-image] ✅ R2 hit: _${r2Index} (${isFree ? 'FREE' : `${imageCost}g`})`
       )
     } else {
-      // ─── Generar con IA (DeepInfra nivel 1-3, Wiro nivel 4-5) ───
       const autoScenes =
         character.gender === 'male' ? AUTO_SCENES_MALE : AUTO_SCENES_FEMALE
       const sceneHint = userHint || autoScenes[level.level] || autoScenes[1]
@@ -439,7 +419,6 @@ export async function POST(request: Request) {
       let referenceUrl: string | undefined
 
       if (level.level <= 3) {
-        // NIVELES 1-3 → DeepInfra / FLUX (SFW)
         const dna =
           CHARACTER_DNA[`${character.gender}_${character.archetype}`] ||
           'anime character'
@@ -465,7 +444,6 @@ export async function POST(request: Request) {
         imagePrompt = layers.join(', ')
         referenceUrl = undefined
       } else {
-        // NIVELES 4-5 → Wiro v4-5-uncensored
         const facePrompt = getCharacterFace(character.archetype, character.gender)
         const clothing = getClothingLevel(level.level)
         const scene = NSFW_SCENE_PROMPTS[level.level] || NSFW_SCENE_PROMPTS[4]
