@@ -844,7 +844,9 @@ export interface VipPlan {
   bestValue?: boolean
   label: { es: string; en: string }
   price: { es: string; en: string }
+  crypto_price: number          // ✅ NUEVO: en USDT (ej. 6.79)
   savings?: { es: string; en: string }
+  crypto_savings: { es: string; en: string }  // ✅ NUEVO
 }
 
 export const VIP_PLANS: VipPlan[] = [
@@ -855,6 +857,8 @@ export const VIP_PLANS: VipPlan[] = [
     emoji: '⚡',
     label: { es: 'Semanal', en: 'Weekly' },
     price: { es: '$3.99', en: '$3.99' },
+    crypto_price: 3.39,
+    crypto_savings: { es: 'Ahorras 15%', en: 'Save 15%' },
   },
   {
     id: 'monthly',
@@ -864,7 +868,9 @@ export const VIP_PLANS: VipPlan[] = [
     popular: true,
     label: { es: 'Mensual', en: 'Monthly' },
     price: { es: '$7.99', en: '$7.99' },
+    crypto_price: 6.79,
     savings: { es: 'Ahorras 20%', en: 'Save 20%' },
+    crypto_savings: { es: 'Ahorras 32%', en: 'Save 32%' },
   },
   {
     id: 'quarterly',
@@ -874,17 +880,19 @@ export const VIP_PLANS: VipPlan[] = [
     bestValue: true,
     label: { es: 'Trimestral', en: 'Quarterly' },
     price: { es: '$17.99', en: '$17.99' },
+    crypto_price: 15.29,
     savings: { es: 'Ahorras 45%', en: 'Save 45%' },
+    crypto_savings: { es: 'Ahorras 53%', en: 'Save 53%' },
   },
 ]
 
 // Límites fair-use VIP (para evitar abuso)
-export const VIP_DAILY_MESSAGE_LIMIT = 150       // antes 200
-export const VIP_DAILY_FREE_IMAGES = 3           // antes 5
-export const VIP_DAILY_FREE_WIRO_IMAGES = 1      // ✅ NUEVO
-export const VIP_DAILY_FREE_AUDIOS = 2           // antes 3
+export const VIP_DAILY_MESSAGE_LIMIT = 150
+export const VIP_DAILY_FREE_IMAGES = 3
+export const VIP_DAILY_FREE_WIRO_IMAGES = 1
+export const VIP_DAILY_FREE_AUDIOS = 2
 
-// Arquetipos exclusivos para VIPs (no aparecen en el catálogo público)
+// Arquetipos exclusivos para VIPs
 export const VIP_ARCHETYPES: string[] = [
   'vampire_lady',
   'vampire_lord',
@@ -898,4 +906,9 @@ export const VIP_ARCHETYPES: string[] = [
 
 export function isVipArchetype(archetype: string): boolean {
   return VIP_ARCHETYPES.includes(archetype)
+}
+
+// Helper: convierte USD (con decimales) a unidades USDT on-chain (6 decimales)
+export function usdtToUnits(usd: number): number {
+  return Math.round(usd * 1_000_000)
 }
