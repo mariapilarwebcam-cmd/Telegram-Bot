@@ -108,7 +108,6 @@ export default function ChatPage() {
   const [totalUserMessages, setTotalUserMessages] = useState(0)
   const [photoOfferActive, setPhotoOfferActive] = useState(false)
 
-  // ✅ NUEVO: cuántas imágenes de R2 ha visto con este personaje
   const [seenImageCount, setSeenImageCount] = useState(0)
 
   const [lowGemsWarning, setLowGemsWarning] = useState(false)
@@ -210,7 +209,6 @@ export default function ChatPage() {
         })
         setMessages(deduped)
         setIsPremium(!!data.is_premium)
-        // ✅ NUEVO: leer el contador de imágenes vistas
         setSeenImageCount(data.seen_image_count || 0)
 
         const count = data.user_message_count || 0
@@ -422,20 +420,17 @@ export default function ChatPage() {
     }
   }
 
-  // ✅ MODIFICADO: primera imagen gratis sin premium
   const generateImage = async () => {
     if (!user || !character || generatingImage) return
 
     const isFirstImage = seenImageCount === 0
 
-    // Solo requerir premium si NO es la primera imagen
     if (!isFirstImage && !isPremium) {
       setPremiumModalReason('image')
       setShowPremiumModal(true)
       return
     }
 
-    // Solo verificar gemas si NO es gratis
     if (!isFirstImage && (user.gems || 0) < currentImageCost) {
       return alert(`Necesitas ${currentImageCost} gemas`)
     }
@@ -472,7 +467,6 @@ export default function ChatPage() {
         ])
         setGems(data.remaining_gems)
         setPhotoOfferActive(false)
-        // ✅ NUEVO: incrementar contador de imágenes vistas
         if (data.source === 'r2') {
           setSeenImageCount((prev) => prev + 1)
         }
@@ -491,7 +485,6 @@ export default function ChatPage() {
     }
   }
 
-  // ✅ MODIFICADO: primera imagen gratis sin premium
   const handleBannerTap = () => {
     const isFirstImage = seenImageCount === 0
 
@@ -607,20 +600,56 @@ export default function ChatPage() {
     }
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  // ✅ FIX: Extrae imágenes a placeholders ANTES de procesar el texto
+  //    Así evitamos que los `_` de la URL se confundan con énfasis
+  // ═══════════════════════════════════════════════════════════════
   const formatMessage = (content: string) => {
-    let html = content
+    // 1. Extraer imágenes a placeholders
+    const images: string[] = []
+    let text = content.replace(
+      /!\[([^\]]*)\]\(([^)]+)\)/g,
+      (_, alt, url) => {
+        const idx = images.length
+        const safeAlt = String(alt)
+          .replace(/&/g, '&amp;')
+          .replace(/"/g, '&quot;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+        images.push(
+          `<img src="${url}" alt="${safeAlt}" style="border-radius:16px;max-width:100%;margin-top:8px;box-shadow:0 8px 24px rgba(168,85,247,0.3);" />`
+        )
+        // Placeholder SIN guiones bajos
+        return `@@IMG${idx}@@`
+      }
+    )
+
+    // 2. Escapar HTML del texto restante
+    text = text
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
-    html = html.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
-    html = html.replace(
-      /!\[([^\]]*)\]\(([^)]+)\)/g,
-      '<img src="$2" alt="$1" style="border-radius:16px;max-width:100%;margin-top:8px;box-shadow:0 8px 24px rgba(168,85,247,0.3);" />'
+
+    // 3. Bold
+    text = text.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
+
+    // 4. Acciones *...*
+    text = text.replace(
+      /\*([^*\n]+)\*/g,
+      '<span class="chat-action">*$1*</span>'
     )
-    html = html.replace(/\*([^*\n]+)\*/g, '<span class="chat-action">*$1*</span>')
-    html = html.replace(/_([^_\n]+)_/g, '<em style="color:#c4b5fd;">$1</em>')
-    return html
+
+    // 5. Énfasis _..._ (ahora seguro, URL ya extraída)
+    text = text.replace(/_([^_\n]+)_/g, '<em style="color:#c4b5fd;">$1</em>')
+
+    // 6. Restaurar imágenes
+    text = text.replace(
+      /@@IMG(\d+)@@/g,
+      (_, idx) => images[parseInt(idx)] || ''
+    )
+
+    return text
   }
 
   const t = getTranslations(lang)
@@ -644,7 +673,6 @@ export default function ChatPage() {
   const characterAvatar = getCharacterImageUrl(character.archetype, character.gender)
   const characterDescription = getCharacterDescription(character.archetype, lang)
 
-  // ✅ NUEVO: la primera foto siempre es gratis
   const isFirstImage = seenImageCount === 0
   const canAfford = gems >= currentImageCost || isFirstImage
   const missingGems = isFirstImage ? 0 : Math.max(0, currentImageCost - gems)
