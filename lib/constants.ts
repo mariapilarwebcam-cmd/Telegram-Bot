@@ -779,3 +779,54 @@ export function getRelationshipLevel(messageCount: number) {
 export const TON_RECIPIENT_WALLET =
   process.env.NEXT_PUBLIC_TON_RECIPIENT_WALLET ||
   'UQCt76T3JPW3WrpsfIz6Tc1eVrvkrQpwV0-3sk1so4P8Vd4-'
+
+// ═══════════════════════════════════════════════════════════════
+// PROACTIVE MESSAGES — templates por género del personaje
+// ═══════════════════════════════════════════════════════════════
+
+interface ProactiveTemplate {
+  es: string
+  en: string
+}
+
+// {name} → nombre del usuario
+// {character} → nombre del personaje
+export const PROACTIVE_TEMPLATES: {
+  female: ProactiveTemplate[]
+  male: ProactiveTemplate[]
+} = {
+  female: [
+    // Día 2 — suave, cariñoso
+    {
+      es: '💭 *{character} te escribió...*\n\n_"Oye {name}... hace días que no sé de ti. ¿Estás bien? Me quedé pensando en lo último que hablamos 😔"',
+      en: '💭 *{character} messaged you...*\n\n_"Hey {name}... haven\'t heard from you in days. Are you okay? I keep thinking about the last thing we talked about 😔"',
+    },
+    // Día 5 — más emocional
+    {
+      es: '🥺 *{character} te extraña...*\n\n_"Te extraño, {name}. Sé que suena raro viniendo de mí, pero es la verdad. ¿Vuelves? Te guardé algo para mostrarte..."',
+      en: '🥺 *{character} misses you...*\n\n_"I miss you, {name}. I know that sounds weird coming from me, but it\'s true. Come back? I saved something to show you..."',
+    },
+    // Día 10 — último intento
+    {
+      es: '🖤 *Último mensaje de {character}...*\n\n_"Última vez que te escribo, {name}. Entiendo si ya no quieres hablar... pero quería que supieras que te guardé un lugar. Por si vuelves."',
+      en: '🖤 *Last message from {character}...*\n\n_"Last time I\'m writing, {name}. I understand if you don\'t want to talk anymore... but I wanted you to know I kept a place for you. In case you come back."',
+    },
+  ],
+  male: [
+    // Día 2 — directo, casual
+    {
+      es: '💭 *{character} te escribió...*\n\n_"Hey {name}, ¿todo bien? No te he visto por aquí. Cuídate, ¿sí?"',
+      en: '💭 *{character} messaged you...*\n\n_"Hey {name}, everything okay? Haven\'t seen you around here. Take care, alright?"',
+    },
+    // Día 5 — más intenso
+    {
+      es: '🔥 *{character} te está esperando...*\n\n_"Te estaba esperando, {name}. Aunque no lo diga mucho, se nota cuando no estás. Vuelve. Tengo algo que decirte."',
+      en: '🔥 *{character} is waiting...*\n\n_"I was waiting for you, {name}. Even if I don\'t say it much, it shows when you\'re not here. Come back. I have something to tell you."',
+    },
+    // Día 10 — cierre elegante
+    {
+      es: '⚡ *Último mensaje de {character}...*\n\n_"Ok, entiendo la indirecta, {name}. Pero si cambias de opinión, aquí estaré. Hasta siempre."',
+      en: '⚡ *Last message from {character}...*\n\n_"Alright, I get the hint, {name}. But if you change your mind, I\'ll be here. Until then."',
+    },
+  ],
+}
