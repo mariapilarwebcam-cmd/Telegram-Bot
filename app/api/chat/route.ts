@@ -16,8 +16,10 @@ import {
   updateReferralCount,
   markReferralPaid,
   incrementTotalReferrals,
-  updateLastActive,                    // ✅ NUEVO
+  updateLastActive,
+  getActiveSubscription,           // ✅ VIP NUEVO
 } from '@/lib/db-queries'
+import { queryOne } from '@/lib/turso'  // ✅ VIP NUEVO
 import {
   GEM_COSTS,
   HOOK_MODE_MESSAGES,
@@ -25,6 +27,7 @@ import {
   REFERRAL_MIN_MESSAGES,
   LOW_GEMS_THRESHOLD,
   getLevelPersonality,
+  VIP_DAILY_MESSAGE_LIMIT,         // ✅ VIP NUEVO
 } from '@/lib/constants'
 import {
   getLevelFromMessages,
@@ -76,8 +79,6 @@ const PROVOCATIVE_HINT_EN = `\n\n⚠️ CRITICAL CONTEXT: The user has VERY few 
 
 // ═══════════════════════════════════════════════════════════════
 // Reglas de género dinámicas
-// El personaje adapta pronombres, adjetivos y tono romántico
-// según el género del usuario + su propio género.
 // ═══════════════════════════════════════════════════════════════
 function buildGenderRules(
   userGender: string | null | undefined,
@@ -128,6 +129,27 @@ function buildGenderRules(
 - ${userGender ? '' : "The user didn't specify their gender. Use neutral tone and avoid assuming. If possible, ask subtly."}`
 }
 
+// ═══════════════════════════════════════════════════════════════
+// ✅ VIP NUEVO: contador de mensajes VIP del día (fair-use)
+// Cuenta mensajes del usuario en las últimas 24 horas.
+// Usa el timestamp UTC de SQLite.
+// ═══════════════════════════════════════════════════════════════
+async function countVipMessagesToday(tid: string): Promise<number> {
+  try {
+    const row = await queryOne<{ c: number }>(
+      `SELECT COUNT(*) AS c FROM conversation_history
+       WHERE telegram_id = ?
+         AND role = 'user'
+         AND created_at >= datetime('now', '-1 day')`,
+      [tid]
+    )
+    return row?.c ?? 0
+  } catch (e) {
+    console.warn('[chat] countVipMessagesToday failed:', e)
+    return 0
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const tid = request.headers.get('x-telegram-id-validated')
@@ -135,14 +157,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
-    // ✅ NUEVO: marcar actividad (fire-and-forget, no bloquea la respuesta)
     updateLastActive(tid).catch((err) =>
       console.warn('[chat] updateLastActive failed:', err)
     )
 
     const { character_id, message } = await request.json()
 
-    // ─── Usuario (crea si no existe) ───
     const user = await ensureUser(tid)
     if (!user) {
       console.error(`[chat] No se pudo asegurar usuario ${tid}`)
@@ -152,66 +172,106 @@ export async function POST(request: Request) {
       )
     }
 
-    // ─── Personaje ───
     const character = await getCharacter(character_id, tid)
     if (!character) {
       return NextResponse.json({ error: 'Personaje no encontrado' }, { status: 404 })
     }
 
     const lang = (user.language || 'es') as 'es' | 'en'
-    const hookRemaining = user.hook_messages_remaining || 0
-    const hookUsed = !!user.hook_used
-    const totalGems = user.gems || 0
 
-    // ─── Bloqueado sin gemas ni hook ───
-    if (totalGems <= 0 && hookRemaining <= 0 && hookUsed) {
-      const blockedMessage = lang === 'es'
-        ? `*${character.character_name} te mira con ojos ardientes y se muerde el labio*\n\n"Mmm... justo cuando se ponía interesante..."\n\n"Consigue gemas para seguir. Estoy esperando."`
-        : `*${character.character_name} looks at you with burning eyes and bites their lip*\n\n"Mmm... just when it was getting interesting..."\n\n"Get gems to continue. I'm waiting."`
+    // ═══════════════════════════════════════════════════════════════
+    // ✅ VIP NUEVO: verificar si el usuario es VIP
+    // Si lo es → NO cobra gemas, NO usa hook mode.
+    // Solo se aplica fair-use diario.
+    // ═══════════════════════════════════════════════════════════════
+    const vipSub = await getActiveSubscription(tid)
+    const isVip = !!vipSub
 
-      return NextResponse.json({
-        blocked: true,
-        response: blockedMessage,
-        remaining_gems: 0,
-        hook_messages_remaining: 0,
-      })
-    }
+    let vipMessagesToday = 0
+    let newGems = user.gems || 0
+    let newHookRemaining = user.hook_messages_remaining || 0
+    let newHookUsed = !!user.hook_used
 
-    const isHookMode = totalGems <= 0 && hookRemaining > 0
+    if (isVip) {
+      // ─── FAIR-USE ───
+      vipMessagesToday = await countVipMessagesToday(tid)
 
-    // ─── Cobrar gema o consumir hook ───
-    let newHookRemaining = hookRemaining
-    let newGems = totalGems
-    let newHookUsed = hookUsed
+      if (vipMessagesToday >= VIP_DAILY_MESSAGE_LIMIT) {
+        const blockedMessage = lang === 'es'
+          ? `*${character.character_name} te mira con una sonrisa divertida*\n\n"Ey, tranquilo... has estado hablando conmigo TODO el día. Necesito un descanso, ¿no crees? 😏\n\nVuelve mañana y seguimos donde lo dejamos."`
+          : `*${character.character_name} looks at you with a playful smile*\n\n"Hey, easy... you've been talking to me ALL day. I need a break, don't you think? 😏\n\nCome back tomorrow and we'll pick up where we left off."`
 
-    if (!isHookMode) {
-      newGems = totalGems - GEM_COSTS.message
-
-      if (newGems <= 0 && newHookRemaining <= 0 && !hookUsed) {
-        newHookRemaining = HOOK_MODE_MESSAGES
-        newHookUsed = true
+        return NextResponse.json({
+          blocked: true,
+          vip_limit_reached: true,
+          response: blockedMessage,
+          remaining_gems: newGems,
+          hook_messages_remaining: 0,
+          is_vip: true,
+          vip_messages_today: vipMessagesToday,
+          vip_daily_limit: VIP_DAILY_MESSAGE_LIMIT,
+        })
       }
 
-      await incrementGems(tid, -GEM_COSTS.message)
-      await setHookRemaining(tid, newHookRemaining)
-      if (newHookUsed !== hookUsed) {
-        await setHookUsed(tid, newHookUsed)
-      }
-
-      await insertGemTransaction({
-        telegram_id: tid,
-        amount: -GEM_COSTS.message,
-        transaction_type: 'message',
-        description: 'Mensaje de chat',
-      })
+      // VIP no consume gemas ni hook
+      console.log(`[chat] 👑 VIP message (${vipMessagesToday + 1}/${VIP_DAILY_MESSAGE_LIMIT})`)
     } else {
-      newHookRemaining = Math.max(0, hookRemaining - 1)
-      await setHookRemaining(tid, newHookRemaining)
+      // ═══════════════════════════════════════════════════════════════
+      // USUARIO NO VIP — flujo original
+      // ═══════════════════════════════════════════════════════════════
+      const hookRemaining = user.hook_messages_remaining || 0
+      const hookUsed = !!user.hook_used
+      const totalGems = user.gems || 0
+
+      // Bloqueado sin gemas ni hook
+      if (totalGems <= 0 && hookRemaining <= 0 && hookUsed) {
+        const blockedMessage = lang === 'es'
+          ? `*${character.character_name} te mira con ojos ardientes y se muerde el labio*\n\n"Mmm... justo cuando se ponía interesante..."\n\n"Consigue gemas para seguir. Estoy esperando."`
+          : `*${character.character_name} looks at you with burning eyes and bites their lip*\n\n"Mmm... just when it was getting interesting..."\n\n"Get gems to continue. I'm waiting."`
+
+        return NextResponse.json({
+          blocked: true,
+          response: blockedMessage,
+          remaining_gems: 0,
+          hook_messages_remaining: 0,
+          is_vip: false,
+        })
+      }
+
+      const isHookMode = totalGems <= 0 && hookRemaining > 0
+
+      if (!isHookMode) {
+        newGems = totalGems - GEM_COSTS.message
+
+        if (newGems <= 0 && newHookRemaining <= 0 && !hookUsed) {
+          newHookRemaining = HOOK_MODE_MESSAGES
+          newHookUsed = true
+        }
+
+        await incrementGems(tid, -GEM_COSTS.message)
+        await setHookRemaining(tid, newHookRemaining)
+        if (newHookUsed !== hookUsed) {
+          await setHookUsed(tid, newHookUsed)
+        }
+
+        await insertGemTransaction({
+          telegram_id: tid,
+          amount: -GEM_COSTS.message,
+          transaction_type: 'message',
+          description: 'Mensaje de chat',
+        })
+      } else {
+        newHookRemaining = Math.max(0, hookRemaining - 1)
+        await setHookRemaining(tid, newHookRemaining)
+      }
     }
 
-    const isHookModeAfter = newGems <= 0 && newHookRemaining > 0
+    // ═══════════════════════════════════════════════════════════════
+    // CONTINÚA EL FLUJO NORMAL (independiente de VIP o no)
+    // ═══════════════════════════════════════════════════════════════
 
-    // ─── Historial ───
+    const isHookModeAfter = !isVip && newGems <= 0 && newHookRemaining > 0
+
     const rawHistory = await getRecentMessages(tid, character_id, 8)
     const userMsgCount = await countUserMessages(tid, character_id)
 
@@ -234,15 +294,14 @@ export async function POST(request: Request) {
     }))
     messages.push({ role: 'user', content: message })
 
-    // ─── System prompt ───
     const personality = getLevelPersonality(character.archetype, newLevel.level, lang)
 
-    const lowGems = newGems > 0 && newGems <= LOW_GEMS_THRESHOLD && !isHookModeAfter
+    // ✅ Hint provocativo: SOLO no-VIPs con pocas gemas
+    const lowGems = !isVip && newGems > 0 && newGems <= LOW_GEMS_THRESHOLD && !isHookModeAfter
     const provocativeHint = lowGems
       ? (lang === 'es' ? PROVOCATIVE_HINT_ES : PROVOCATIVE_HINT_EN)
       : ''
 
-    // ✅ Reglas de género dinámicas
     const genderRules = buildGenderRules(user.gender, character.gender, lang)
 
     const characterPrompt = lang === 'es'
@@ -252,14 +311,16 @@ export async function POST(request: Request) {
     const intensity = getIntensity(currentUserMsgCount, isHookModeAfter)
     const systemPrompt = buildSystemPrompt(lang, intensity, newLevel.level, characterPrompt)
 
-    // ─── Generar respuesta IA ───
     let responseText: string
     try {
       responseText = await generateAIResponse(messages, systemPrompt, intensity)
     } catch (aiError: any) {
-      await incrementGems(tid, GEM_COSTS.message)
-      await setHookRemaining(tid, hookRemaining)
-      await setHookUsed(tid, hookUsed)
+      // Rollback solo para no-VIPs
+      if (!isVip) {
+        await incrementGems(tid, GEM_COSTS.message)
+        await setHookRemaining(tid, user.hook_messages_remaining || 0)
+        await setHookUsed(tid, !!user.hook_used)
+      }
 
       const errorDetail = aiError?.message || String(aiError)
       console.error('[chat] ❌ AI error:', errorDetail)
@@ -274,7 +335,6 @@ export async function POST(request: Request) {
       )
     }
 
-    // ─── Guardar mensajes (atómico) ───
     await insertMessages([
       { telegram_id: tid, character_id, role: 'user', content: message },
       { telegram_id: tid, character_id, role: 'assistant', content: responseText },
@@ -306,10 +366,11 @@ export async function POST(request: Request) {
       console.error('Referral payout error:', refErr)
     }
 
-    // ─── Extras: banner de foto ───
+    // ─── Banner de foto ───
     let finalText = responseText
 
     const isLowGemsWarning =
+      !isVip &&
       nextUserMsgCount >= 10 &&
       newGems > 0 &&
       newGems <= LOW_GEMS_THRESHOLD &&
@@ -330,11 +391,17 @@ export async function POST(request: Request) {
 
     const nextLevelAt = getNextLevelThreshold(newLevel.level)
 
+    // ═══════════════════════════════════════════════════════════════
+    // ✅ VIP NUEVO: respuesta incluye campos VIP
+    // ═══════════════════════════════════════════════════════════════
     return NextResponse.json({
       response: finalText,
       remaining_gems: newGems,
       hook_messages_remaining: newHookRemaining,
       is_hook_mode: isHookModeAfter,
+      is_vip: isVip,                                      // ✅
+      vip_messages_today: isVip ? vipMessagesToday + 1 : undefined,  // ✅
+      vip_daily_limit: isVip ? VIP_DAILY_MESSAGE_LIMIT : undefined,  // ✅
       intensity,
       level: newLevel.level,
       photo_offer_available: shouldShowPhotoBanner,
