@@ -8,11 +8,12 @@ import {
   CHARACTER_NAMES_MALE, CHARACTER_NAMES_FEMALE,
   PERSONALITIES, getDisplayName, getCharacterImageUrl,
   FANTASY_ARCHETYPES,
-  isVipArchetype,        // ✅ VIP
-  VIP_PLANS,             // ✅ VIP
+  isVipArchetype,
+  VIP_PLANS,
 } from '@/lib/constants'
 import { getTranslations } from '@/lib/i18n'
 import { useUser } from '@/lib/UserContext'
+import { Analytics } from '@/lib/posthog'                       // ✅ PostHog
 
 interface Char {
   archetype: string
@@ -54,13 +55,11 @@ export default function HomePage() {
   const [creating, setCreating] = useState<string | null>(null)
   const tabInitialized = useRef(false)
 
-  // ✅ VIP: estado VIP + modal
   const [isVip, setIsVip] = useState(false)
   const [vipChecked, setVipChecked] = useState(false)
   const [showVipModal, setShowVipModal] = useState(false)
   const [vipBlockedChar, setVipBlockedChar] = useState<Char | null>(null)
 
-  // Filtro automático por interés (solo la primera vez)
   useEffect(() => {
     if (tabInitialized.current || !user) return
     tabInitialized.current = true
@@ -71,7 +70,6 @@ export default function HomePage() {
     else setTab('all')
   }, [user])
 
-  // ✅ VIP: cargar estado VIP
   useEffect(() => {
     if (!user?.telegram_id) {
       if (!userLoading) setVipChecked(true)
@@ -93,7 +91,6 @@ export default function HomePage() {
       })
   }, [user?.telegram_id, userLoading])
 
-  // Carga personaje activo
   useEffect(() => {
     if (!user?.telegram_id) return
     tgFetch('/api/characters?active=1')
@@ -154,7 +151,6 @@ export default function HomePage() {
     }
     if (creating !== null) return
 
-    // ✅ VIP: bloquear personajes VIP para no-VIPs
     if (isVipArchetype(c.archetype) && !isVip) {
       setVipBlockedChar(c)
       setShowVipModal(true)
@@ -163,6 +159,13 @@ export default function HomePage() {
 
     const key = `${c.gender}_${c.archetype}`
     setCreating(key)
+
+    // ✅ PostHog: personaje seleccionado
+    Analytics.characterSelected({
+      archetype: c.archetype,
+      gender: c.gender,
+      is_vip_archetype: isVipArchetype(c.archetype),
+    })
 
     try {
       const res = await tgFetch('/api/select-character', {
@@ -185,7 +188,6 @@ export default function HomePage() {
       if (res.ok && data.character_id) {
         router.push(`/chat/${data.character_id}`)
       } else if (data.error === 'vip_required') {
-        // ✅ VIP: por si el check del cliente falló
         setVipBlockedChar(c)
         setShowVipModal(true)
         setCreating(null)
@@ -278,7 +280,6 @@ export default function HomePage() {
             Taboo<span style={{ color: '#a78bfa' }}>Realm</span>
           </h1>
 
-          {/* ✅ VIP: badge VIP en header */}
           {isVip && (
             <span
               style={{
@@ -402,7 +403,6 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* ✅ VIP: banner para usuarios no-VIP */}
       {vipChecked && !isVip && (
         <section style={{ padding: '12px 16px 0' }}>
           <button
@@ -689,7 +689,6 @@ export default function HomePage() {
           const key = `${c.gender}_${c.archetype}`
           const imageUrl = getCharacterImageUrl(c.archetype, c.gender)
           const isCreating = creating === key
-          // ✅ VIP: detectar si es personaje VIP y el usuario no lo es
           const isVipChar = isVipArchetype(c.archetype)
           const isLocked = isVipChar && !isVip
 
@@ -713,7 +712,6 @@ export default function HomePage() {
                   />
                 )}
 
-                {/* ✅ VIP: overlay con blur para personajes bloqueados */}
                 {isLocked && (
                   <div
                     style={{
@@ -756,7 +754,6 @@ export default function HomePage() {
                   </div>
                 )}
 
-                {/* ✅ VIP: corona para personajes VIP (incluso si el user es VIP) */}
                 {isVipChar && isVip && (
                   <div
                     style={{
@@ -803,9 +800,6 @@ export default function HomePage() {
         })}
       </div>
 
-      {/* ═══════════════════════════════════════════════════════════════
-          ✅ VIP: MODAL "HAZTE VIP"
-      ═══════════════════════════════════════════════════════════════ */}
       {showVipModal && vipBlockedChar && (
         <div
           className="modal-backdrop"
@@ -899,7 +893,6 @@ export default function HomePage() {
                 </p>
               </div>
 
-              {/* Lista de beneficios */}
               <div
                 style={{
                   marginTop: 14,
@@ -932,7 +925,6 @@ export default function HomePage() {
                 ))}
               </div>
 
-              {/* Precio desde */}
               <p
                 style={{
                   fontSize: 11,
