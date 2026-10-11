@@ -2,15 +2,25 @@
 // Endpoint para gestionar suscripciones VIP.
 //
 // GET  → devuelve el estado actual de la suscripción
-// POST → acciones: create_invoice | confirm | cancel
+// POST → acciones:
+//   - create_invoice       (⭐ Stars)
+//   - confirm              (⭐ después de pagar)
+//   - create_crypto_invoice (💎 USDT) ← ✅ NUEVO
+//   - confirm_crypto       (💎 polling on-chain) ← ✅ NUEVO
+//   - cancel
 //
-// Flujo de pago:
-//   1. Cliente POST { action: 'create_invoice', plan: 'monthly' }
+// Flujo Stars:
+//   1. Cliente POST { action: 'create_invoice', plan }
 //      → recibe { invoice_link, reference }
 //   2. Cliente abre invoice_link con WebApp.openInvoice
-//   3. Si callback status === 'paid':
-//      Cliente POST { action: 'confirm', plan: 'monthly', reference }
-//      → backend activa suscripción (idempotente)
+//   3. Si status === 'paid' → POST { action: 'confirm', plan, reference }
+//
+// Flujo Crypto:
+//   1. Cliente POST { action: 'create_crypto_invoice', plan }
+//      → recibe { amount, recipientAddr, reference }
+//   2. Cliente firma y envía la tx USDT con el reference como comentario
+//   3. Cliente hace polling POST { action: 'confirm_crypto', plan, reference }
+//      cada 4s hasta que devuelva { status: 'paid' }
 
 import { NextResponse } from 'next/server'
 import {
@@ -20,16 +30,73 @@ import {
   createSubscription,
   cancelActiveSubscription,
 } from '@/lib/db-queries'
-import { VIP_PLANS } from '@/lib/constants'
+import { VIP_PLANS, usdtToUnits } from '@/lib/constants'  // ✅ usdtToUnits nuevo
 
 export const dynamic = 'force-dynamic'
 
+// ✅ NUEVO: config TON
+const TONAPI_KEY = process.env.TONAPI_KEY || ''
+const RECIPIENT_WALLET =
+  process.env.TON_RECIPIENT_WALLET ||
+  process.env.NEXT_PUBLIC_TON_RECIPIENT_WALLET ||
+  'UQCt76T3JPW3WrpsfIz6Tc1eVrvkrQpwV0-3sk1so4P8Vd4-'
+
+const USDT_MASTER = 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs'
+
 // ═══════════════════════════════════════════════════════════════
-// Helper: convierte Date → formato compatible con datetime('now')
-// SQLite espera 'YYYY-MM-DD HH:MM:SS' (no ISO con T y Z)
+// Helpers
 // ═══════════════════════════════════════════════════════════════
+
 function toSqliteDate(date: Date): string {
   return date.toISOString().slice(0, 19).replace('T', ' ')
+}
+
+// ✅ NUEVO: verifica una transacción USDT on-chain contra un reference
+async function verifyCryptoPayment(
+  reference: string,
+  expectedUnits: number
+): Promise<{ ok: boolean; reason?: string }> {
+  try {
+    const url = `https://tonapi.io/v2/accounts/${RECIPIENT_WALLET}/events?limit=30`
+    const headers: Record<string, string> = { Accept: 'application/json' }
+    if (TONAPI_KEY) headers['Authorization'] = `Bearer ${TONAPI_KEY}`
+
+    const res = await fetch(url, { headers, cache: 'no-store' })
+    if (!res.ok) {
+      console.warn('[subscription] TonAPI error:', res.status)
+      return { ok: false, reason: 'tonapi_error' }
+    }
+
+    const data = await res.json()
+    const events = data.events || []
+
+    for (const ev of events) {
+      for (const action of ev.actions || []) {
+        if (action.type !== 'JettonTransfer') continue
+        const jt = action.JettonTransfer
+        if (!jt) continue
+        if (jt.comment !== reference) continue
+        if (jt.jetton?.address !== USDT_MASTER) continue
+
+        const receivedUnits = parseInt(jt.amount || '0', 10)
+        // Tolerancia de 1000 unidades (0.001 USDT) por redondeo
+        if (receivedUnits < expectedUnits - 1000) {
+          console.warn('[subscription] Amount mismatch:', {
+            expectedUnits,
+            receivedUnits,
+          })
+          return { ok: false, reason: 'amount_mismatch' }
+        }
+
+        return { ok: true }
+      }
+    }
+
+    return { ok: false, reason: 'not_found' }
+  } catch (e: any) {
+    console.error('[subscription] verifyCryptoPayment error:', e?.message)
+    return { ok: false, reason: 'exception' }
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -114,12 +181,22 @@ export async function POST(request: Request) {
       case 'confirm':
         return await handleConfirm(tid, body)
 
+      // ✅ NUEVO: acciones crypto
+      case 'create_crypto_invoice':
+        return await handleCreateCryptoInvoice(tid, body, user)
+
+      case 'confirm_crypto':
+        return await handleConfirmCrypto(tid, body)
+
       case 'cancel':
         return await handleCancel(tid)
 
       default:
         return NextResponse.json(
-          { error: 'Acción inválida. Usa: create_invoice, confirm o cancel' },
+          {
+            error:
+              'Acción inválida. Usa: create_invoice, confirm, create_crypto_invoice, confirm_crypto o cancel',
+          },
           { status: 400 }
         )
     }
@@ -133,7 +210,7 @@ export async function POST(request: Request) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// HANDLERS
+// HANDLERS — STARS
 // ═══════════════════════════════════════════════════════════════
 
 async function handleCreateInvoice(tid: string, body: any, user: any) {
@@ -144,11 +221,7 @@ async function handleCreateInvoice(tid: string, body: any, user: any) {
     return NextResponse.json({ error: 'Plan inválido' }, { status: 400 })
   }
 
-  // ─── Reference único ───
-  // Formato: vip_sub_<plan>_<telegram_id>_<timestamp>
-  // Se usa también como identificador de idempotencia
   const reference = `vip_sub_${planId}_${tid}_${Date.now()}`
-
   const lang = user.language === 'en' ? 'en' : 'es'
 
   const title =
@@ -186,7 +259,7 @@ async function handleCreateInvoice(tid: string, body: any, user: any) {
     )
   }
 
-  console.log('[subscription] 📝 Invoice created:', {
+  console.log('[subscription] 📝 Invoice Stars created:', {
     tid,
     plan: planId,
     reference,
@@ -220,7 +293,127 @@ async function handleConfirm(tid: string, body: any) {
     return NextResponse.json({ error: 'Plan inválido' }, { status: 400 })
   }
 
-  // ─── Idempotencia: ¿ya existe? ───
+  return await activateSubscription(tid, plan, reference)
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ✅ NUEVO — HANDLERS CRYPTO
+// ═══════════════════════════════════════════════════════════════
+
+async function handleCreateCryptoInvoice(tid: string, body: any, user: any) {
+  const planId = String(body?.plan || '')
+  const plan = VIP_PLANS.find((p) => p.id === planId)
+
+  if (!plan) {
+    return NextResponse.json({ error: 'Plan inválido' }, { status: 400 })
+  }
+
+  if (!RECIPIENT_WALLET || RECIPIENT_WALLET.length < 40) {
+    console.error('[subscription crypto] RECIPIENT_WALLET no configurada')
+    return NextResponse.json(
+      { error: 'Configuración incompleta: falta wallet de destino' },
+      { status: 500 }
+    )
+  }
+
+  // Reference único con prefijo VIP
+  // Formato: VIP_<plan>_<telegram_id>_<timestamp>
+  const reference = `VIP_${planId}_${tid}_${Date.now()}`
+
+  const units = usdtToUnits(plan.crypto_price)
+
+  console.log('[subscription] 💎 Crypto invoice created:', {
+    tid,
+    plan: planId,
+    reference,
+    usd: plan.crypto_price,
+    units,
+  })
+
+  return NextResponse.json({
+    payment_data: {
+      amount: plan.crypto_price,      // USD visible
+      amountUnits: units,              // unidades on-chain (6 decimales)
+      recipientAddr: RECIPIENT_WALLET,
+      reference,
+    },
+    plan: {
+      id: plan.id,
+      label: plan.label,
+      crypto_price: plan.crypto_price,
+      days: plan.days,
+    },
+  })
+}
+
+async function handleConfirmCrypto(tid: string, body: any) {
+  const planId = String(body?.plan || '')
+  const reference = String(body?.reference || '')
+
+  if (!planId || !reference) {
+    return NextResponse.json(
+      { error: 'Faltan datos: plan y reference' },
+      { status: 400 }
+    )
+  }
+
+  const plan = VIP_PLANS.find((p) => p.id === planId)
+  if (!plan) {
+    return NextResponse.json({ error: 'Plan inválido' }, { status: 400 })
+  }
+
+  // ─── Idempotencia: ¿ya está activada? ───
+  const existing = await getSubscriptionByChargeId(reference)
+  if (existing) {
+    return NextResponse.json({
+      status: 'paid',
+      already: true,
+      subscription: {
+        plan: existing.plan,
+        expires_at: existing.expires_at,
+        status: existing.status,
+      },
+    })
+  }
+
+  // ─── Verificar on-chain ───
+  const expectedUnits = usdtToUnits(plan.crypto_price)
+  const verification = await verifyCryptoPayment(reference, expectedUnits)
+
+  if (!verification.ok) {
+    // Pending normal — sigue esperando
+    if (verification.reason === 'not_found') {
+      return NextResponse.json({ status: 'pending' })
+    }
+    // Errores de amount o tonapi → pending con razón
+    return NextResponse.json({
+      status: 'pending',
+      reason: verification.reason,
+    })
+  }
+
+  // ─── Verificado → activar suscripción ───
+  const activation = await activateSubscription(tid, plan, reference)
+
+  // Reformatear la respuesta de activateSubscription para el flujo crypto
+  const activationData = await activation.json()
+
+  if (!activationData.ok) {
+    return NextResponse.json(activationData, { status: activation.status })
+  }
+
+  return NextResponse.json({
+    status: 'paid',
+    subscription: activationData.subscription,
+  })
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Lógica compartida: activar suscripción (Stars o Crypto)
+// ═══════════════════════════════════════════════════════════════
+
+async function activateSubscription(tid: string, plan: any, reference: string) {
+  // Idempotencia
   const existing = await getSubscriptionByChargeId(reference)
   if (existing) {
     console.log('[subscription] ⚠️ Already confirmed:', reference)
@@ -235,9 +428,7 @@ async function handleConfirm(tid: string, body: any) {
     })
   }
 
-  // ─── Calcular expiración ───
-  // Si ya tiene suscripción activa → extender desde su expiración actual
-  // Si no → empezar desde ahora
+  // Calcular expiración (extiende si ya tiene activa)
   const currentSub = await getActiveSubscription(tid)
 
   let baseDate = new Date()
@@ -254,26 +445,23 @@ async function handleConfirm(tid: string, body: any) {
     baseDate.getTime() + plan.days * 24 * 60 * 60 * 1000
   )
 
-  // ─── Crear suscripción ───
+  // Crear suscripción
   const created = await createSubscription({
     telegram_id: tid,
     plan: plan.id,
-    stars_paid: plan.stars,
+    stars_paid: plan.stars,             // Guardamos stars equivalentes siempre
     telegram_charge_id: reference,
     expires_at: toSqliteDate(expiresAt),
   })
 
   if (!created) {
-    // Race condition: alguien lo creó entre el check y el insert
+    // Race condition
     const existing2 = await getSubscriptionByChargeId(reference)
     return NextResponse.json({
       ok: true,
       already: true,
       subscription: existing2
-        ? {
-            plan: existing2.plan,
-            expires_at: existing2.expires_at,
-          }
+        ? { plan: existing2.plan, expires_at: existing2.expires_at }
         : null,
     })
   }
@@ -281,6 +469,7 @@ async function handleConfirm(tid: string, body: any) {
   console.log('[subscription] ✅ VIP activated:', {
     tid,
     plan: plan.id,
+    reference,
     expires_at: toSqliteDate(expiresAt),
   })
 
@@ -293,6 +482,10 @@ async function handleConfirm(tid: string, body: any) {
     },
   })
 }
+
+// ═══════════════════════════════════════════════════════════════
+// HANDLER — CANCEL
+// ═══════════════════════════════════════════════════════════════
 
 async function handleCancel(tid: string) {
   const cancelled = await cancelActiveSubscription(tid)
