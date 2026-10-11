@@ -74,9 +74,6 @@ const LEVEL_UP_COPY_EN: Record<number, (name: string) => string> = {
   5: (n) => `😈 Something forbidden. No one has gotten this far with ${n}.`,
 }
 
-const TEXTAREA_MAX_HEIGHT = 120
-
-// ✅ NUEVO: razones de reporte
 const REPORT_REASONS = [
   { key: 'inappropriate_content', es: 'Contenido no apropiado', en: 'Inappropriate content' },
   { key: 'offensive', es: 'Ofensivo o discriminatorio', en: 'Offensive or discriminatory' },
@@ -90,6 +87,8 @@ const REPORT_REASONS = [
 type ReportReason = (typeof REPORT_REASONS)[number]['key']
 
 const SUPPORT_URL = 'https://t.me/TabooRealmSupport'
+
+const TEXTAREA_MAX_HEIGHT = 120
 
 export default function ChatPage() {
   const { id } = useParams()
@@ -108,6 +107,9 @@ export default function ChatPage() {
 
   const [totalUserMessages, setTotalUserMessages] = useState(0)
   const [photoOfferActive, setPhotoOfferActive] = useState(false)
+
+  // ✅ NUEVO: cuántas imágenes de R2 ha visto con este personaje
+  const [seenImageCount, setSeenImageCount] = useState(0)
 
   const [lowGemsWarning, setLowGemsWarning] = useState(false)
   const [lowGemsCount, setLowGemsCount] = useState(0)
@@ -135,7 +137,6 @@ export default function ChatPage() {
   const [newName, setNewName] = useState('')
   const [renaming, setRenaming] = useState(false)
 
-  // ✅ NUEVO: estado del modal de reporte
   const [showReportModal, setShowReportModal] = useState(false)
   const [reportReason, setReportReason] = useState<ReportReason | null>(null)
   const [reportDetails, setReportDetails] = useState('')
@@ -209,6 +210,8 @@ export default function ChatPage() {
         })
         setMessages(deduped)
         setIsPremium(!!data.is_premium)
+        // ✅ NUEVO: leer el contador de imágenes vistas
+        setSeenImageCount(data.seen_image_count || 0)
 
         const count = data.user_message_count || 0
         setTotalUserMessages(count)
@@ -419,14 +422,21 @@ export default function ChatPage() {
     }
   }
 
+  // ✅ MODIFICADO: primera imagen gratis sin premium
   const generateImage = async () => {
     if (!user || !character || generatingImage) return
-    if (!isPremium) {
+
+    const isFirstImage = seenImageCount === 0
+
+    // Solo requerir premium si NO es la primera imagen
+    if (!isFirstImage && !isPremium) {
       setPremiumModalReason('image')
       setShowPremiumModal(true)
       return
     }
-    if ((user.gems || 0) < currentImageCost) {
+
+    // Solo verificar gemas si NO es gratis
+    if (!isFirstImage && (user.gems || 0) < currentImageCost) {
       return alert(`Necesitas ${currentImageCost} gemas`)
     }
 
@@ -462,9 +472,15 @@ export default function ChatPage() {
         ])
         setGems(data.remaining_gems)
         setPhotoOfferActive(false)
+        // ✅ NUEVO: incrementar contador de imágenes vistas
+        if (data.source === 'r2') {
+          setSeenImageCount((prev) => prev + 1)
+        }
       } else if (data.error === 'premium_required') {
         setPremiumModalReason('image')
         setShowPremiumModal(true)
+      } else if (data.error === 'insufficient_gems') {
+        alert(data.message || `Necesitas ${data.required || currentImageCost} gemas`)
       } else {
         alert(data.message || data.error || 'Error')
       }
@@ -475,13 +491,16 @@ export default function ChatPage() {
     }
   }
 
+  // ✅ MODIFICADO: primera imagen gratis sin premium
   const handleBannerTap = () => {
-    if (!isPremium) {
+    const isFirstImage = seenImageCount === 0
+
+    if (!isFirstImage && !isPremium) {
       setPremiumModalReason('image')
       setShowPremiumModal(true)
       return
     }
-    if ((user?.gems || 0) < currentImageCost) {
+    if (!isFirstImage && (user?.gems || 0) < currentImageCost) {
       router.push('/shop')
       return
     }
@@ -529,9 +548,6 @@ export default function ChatPage() {
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════
-  // ✅ NUEVO: envío de reporte
-  // ═══════════════════════════════════════════════════════════════
   const submitReport = async () => {
     if (!reportReason) {
       setReportError(lang === 'es' ? 'Selecciona una razón' : 'Select a reason')
@@ -542,7 +558,6 @@ export default function ChatPage() {
     setReportSending(true)
     setReportError(null)
 
-    // Último mensaje del personaje como contexto
     const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant')
 
     try {
@@ -566,7 +581,6 @@ export default function ChatPage() {
       }
 
       setReportSent(true)
-      // Cerrar modal tras 2s
       setTimeout(() => {
         setShowReportModal(false)
         setReportReason(null)
@@ -630,8 +644,10 @@ export default function ChatPage() {
   const characterAvatar = getCharacterImageUrl(character.archetype, character.gender)
   const characterDescription = getCharacterDescription(character.archetype, lang)
 
-  const canAfford = gems >= currentImageCost
-  const missingGems = Math.max(0, currentImageCost - gems)
+  // ✅ NUEVO: la primera foto siempre es gratis
+  const isFirstImage = seenImageCount === 0
+  const canAfford = gems >= currentImageCost || isFirstImage
+  const missingGems = isFirstImage ? 0 : Math.max(0, currentImageCost - gems)
 
   let headerBadgeText = ''
   let headerBadgeVariant: 'hook' | 'low-gems' | null = null
@@ -728,10 +744,8 @@ export default function ChatPage() {
             </svg>
           </button>
 
-          {/* ✅ MENÚ EXPANDIDO */}
           {menuOpen && (
             <div className="menu-dropdown" style={{ minWidth: 220 }}>
-              {/* Renombrar */}
               <button
                 className="menu-item"
                 onClick={() => {
@@ -745,16 +759,8 @@ export default function ChatPage() {
                 {t.renameTitle}
               </button>
 
-              {/* Divisor */}
-              <div
-                style={{
-                  height: 1,
-                  background: 'rgba(168, 85, 247, 0.15)',
-                  margin: '4px 8px',
-                }}
-              />
+              <div style={{ height: 1, background: 'rgba(168, 85, 247, 0.15)', margin: '4px 8px' }} />
 
-              {/* Reportar */}
               <button
                 className="menu-item"
                 onClick={() => {
@@ -779,72 +785,26 @@ export default function ChatPage() {
                 {lang === 'es' ? 'Reportar' : 'Report'}
               </button>
 
-              {/* Divisor */}
-              <div
-                style={{
-                  height: 1,
-                  background: 'rgba(168, 85, 247, 0.15)',
-                  margin: '4px 8px',
-                }}
-              />
+              <div style={{ height: 1, background: 'rgba(168, 85, 247, 0.15)', margin: '4px 8px' }} />
 
-              {/* Términos */}
-              <button
-                className="menu-item"
-                onClick={() => {
-                  setMenuOpen(false)
-                  router.push('/legal/terms')
-                }}
-              >
+              <button className="menu-item" onClick={() => { setMenuOpen(false); router.push('/legal/terms') }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                  <path
-                    d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                   <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                 </svg>
                 {lang === 'es' ? 'Términos de servicio' : 'Terms of Service'}
               </button>
 
-              {/* Privacidad */}
-              <button
-                className="menu-item"
-                onClick={() => {
-                  setMenuOpen(false)
-                  router.push('/legal/privacy')
-                }}
-              >
+              <button className="menu-item" onClick={() => { setMenuOpen(false); router.push('/legal/privacy') }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                  <path
-                    d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
                 {lang === 'es' ? 'Privacidad' : 'Privacy'}
               </button>
 
-              {/* Soporte */}
-              <button
-                className="menu-item"
-                onClick={() => {
-                  setMenuOpen(false)
-                  openSupport()
-                }}
-              >
+              <button className="menu-item" onClick={() => { setMenuOpen(false); openSupport() }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                  <path
-                    d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
                 {lang === 'es' ? 'Soporte' : 'Support'}
               </button>
@@ -919,11 +879,15 @@ export default function ChatPage() {
               marginBottom: 10,
               padding: '14px 16px',
               borderRadius: 16,
-              background: canAfford && isPremium
+              background: isFirstImage
+                ? 'linear-gradient(135deg, rgba(34,197,94,0.4) 0%, rgba(16,185,129,0.3) 50%, rgba(34,197,94,0.4) 100%)'
+                : canAfford && isPremium
                 ? 'linear-gradient(135deg, rgba(236,72,153,0.4) 0%, rgba(168,85,247,0.3) 50%, rgba(236,72,153,0.4) 100%)'
                 : 'linear-gradient(135deg, rgba(124,92,255,0.35) 0%, rgba(168,85,247,0.25) 100%)',
               backgroundSize: '200% 200%',
-              border: canAfford && isPremium
+              border: isFirstImage
+                ? '2px solid rgba(34,197,94,0.85)'
+                : canAfford && isPremium
                 ? '2px solid rgba(236,72,153,0.85)'
                 : '2px solid rgba(168,85,247,0.6)',
               display: 'flex',
@@ -931,7 +895,7 @@ export default function ChatPage() {
               gap: 12,
               cursor: 'pointer',
               overflow: 'hidden',
-              animation: canAfford && isPremium
+              animation: isFirstImage || (canAfford && isPremium)
                 ? 'pulseGlow 1.8s ease-in-out infinite, shimmer 3s linear infinite'
                 : 'pulseSoft 2.4s ease-in-out infinite',
             }}
@@ -939,25 +903,41 @@ export default function ChatPage() {
             <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(110deg, transparent 40%, rgba(255,255,255,0.2) 50%, transparent 60%)', backgroundSize: '200% 100%', animation: 'shimmer 2.5s linear infinite', pointerEvents: 'none' }} />
 
             <div style={{ fontSize: 30, animation: 'float 1.8s ease-in-out infinite', filter: 'drop-shadow(0 0 10px rgba(236,72,153,1))', flexShrink: 0, position: 'relative', zIndex: 1 }}>
-              {isPremium ? '📸' : '🔒'}
+              {isFirstImage ? '🎁' : isPremium ? '📸' : '🔒'}
             </div>
 
             <div style={{ flex: 1, minWidth: 0, position: 'relative', zIndex: 1 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-                <span style={{ fontSize: 9, fontWeight: 900, letterSpacing: '0.1em', background: canAfford && isPremium ? 'linear-gradient(90deg, #f0abfc, #ec4899)' : 'linear-gradient(90deg, #a78bfa, #7c5cff)', color: '#fff', padding: '2px 8px', borderRadius: 6, animation: 'badgePulse 1.2s ease-in-out infinite', textShadow: '0 0 4px rgba(0,0,0,0.3)' }}>
-                  {!isPremium ? (lang === 'es' ? 'DESBLOQUEA' : 'UNLOCK') : canAfford ? (lang === 'es' ? 'REGALO · TOCA' : 'GIFT · TAP') : (lang === 'es' ? 'BLOQUEADO' : 'LOCKED')}
+                <span style={{ fontSize: 9, fontWeight: 900, letterSpacing: '0.1em', background: isFirstImage ? 'linear-gradient(90deg, #22c55e, #16a34a)' : canAfford && isPremium ? 'linear-gradient(90deg, #f0abfc, #ec4899)' : 'linear-gradient(90deg, #a78bfa, #7c5cff)', color: '#fff', padding: '2px 8px', borderRadius: 6, animation: 'badgePulse 1.2s ease-in-out infinite', textShadow: '0 0 4px rgba(0,0,0,0.3)' }}>
+                  {isFirstImage
+                    ? (lang === 'es' ? 'GRATIS · TOCA' : 'FREE · TAP')
+                    : !isPremium
+                    ? (lang === 'es' ? 'DESBLOQUEA' : 'UNLOCK')
+                    : canAfford
+                    ? (lang === 'es' ? 'REGALO · TOCA' : 'GIFT · TAP')
+                    : (lang === 'es' ? 'BLOQUEADO' : 'LOCKED')}
                 </span>
                 <span style={{ fontSize: 10, color: '#fbcfe8', fontWeight: 700, letterSpacing: '0.05em' }}>
-                  {!isPremium ? 'PREMIUM' : canAfford ? '→' : (lang === 'es' ? 'IR A TIENDA' : 'GO TO SHOP')}
+                  {isFirstImage ? '✨' : !isPremium ? 'PREMIUM' : canAfford ? '→' : (lang === 'es' ? 'IR A TIENDA' : 'GO TO SHOP')}
                 </span>
               </div>
 
               <p style={{ fontSize: 13, fontWeight: 800, color: '#fff', margin: 0, textShadow: '0 1px 4px rgba(0,0,0,0.5)', lineHeight: 1.25 }}>
-                {lang === 'es' ? `${displayName} quiere mandarte algo especial` : `${displayName} wants to send you something special`}
+                {isFirstImage
+                  ? (lang === 'es' ? `¡Foto de bienvenida de ${displayName}!` : `Welcome photo from ${displayName}!`)
+                  : lang === 'es'
+                  ? `${displayName} quiere mandarte algo especial`
+                  : `${displayName} wants to send you something special`}
               </p>
 
-              <p style={{ fontSize: 11, color: canAfford && isPremium ? '#f0abfc' : '#fbbf24', margin: '3px 0 0 0', fontWeight: 800 }}>
-                {!isPremium ? (lang === 'es' ? 'Compra gemas para verla' : 'Buy gems to see it') : canAfford ? `📸 ${currentImageCost} — ${lang === 'es' ? 'reclamar ahora' : 'claim now'}` : `⚠️ ${lang === 'es' ? 'Te faltan' : "You're missing"} ${missingGems} gemas`}
+              <p style={{ fontSize: 11, color: isFirstImage ? '#86efac' : canAfford && isPremium ? '#f0abfc' : '#fbbf24', margin: '3px 0 0 0', fontWeight: 800 }}>
+                {isFirstImage
+                  ? (lang === 'es' ? '🎁 Primera foto gratis · reclamar ahora' : '🎁 First photo free · claim now')
+                  : !isPremium
+                  ? (lang === 'es' ? 'Compra gemas para verla' : 'Buy gems to see it')
+                  : canAfford
+                  ? `📸 ${currentImageCost} — ${lang === 'es' ? 'reclamar ahora' : 'claim now'}`
+                  : `⚠️ ${lang === 'es' ? 'Te faltan' : "You're missing"} ${missingGems} gemas`}
               </p>
             </div>
 
@@ -975,7 +955,7 @@ export default function ChatPage() {
             </svg>
           </button>
 
-          <button onClick={handleBannerTap} disabled={generatingImage} className="chat-icon-btn" title={`${t.imageTooltip} (${currentImageCost} gemas)`} style={{ opacity: isPremium && gems < currentImageCost ? 0.4 : 1, boxShadow: photoOfferActive ? '0 0 20px rgba(236,72,153,0.9), 0 0 30px rgba(168,85,247,0.6)' : undefined, borderColor: photoOfferActive ? '#ec4899' : undefined }}>
+          <button onClick={handleBannerTap} disabled={generatingImage} className="chat-icon-btn" title={`${t.imageTooltip} (${currentImageCost} gemas)`} style={{ opacity: !isFirstImage && isPremium && gems < currentImageCost ? 0.4 : 1, boxShadow: photoOfferActive ? '0 0 20px rgba(236,72,153,0.9), 0 0 30px rgba(168,85,247,0.6)' : undefined, borderColor: photoOfferActive ? '#ec4899' : undefined }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
               <rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="2" />
               <circle cx="9" cy="10" r="2" stroke="currentColor" strokeWidth="2" />
@@ -1071,16 +1051,10 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* ✅ NUEVO: MODAL DE REPORTE */}
       {showReportModal && (
         <div className="modal-backdrop" onClick={() => !reportSending && setShowReportModal(false)}>
-          <div
-            className="modal-box"
-            onClick={(e) => e.stopPropagation()}
-            style={{ maxHeight: '90vh', overflowY: 'auto' }}
-          >
+          <div className="modal-box" onClick={(e) => e.stopPropagation()} style={{ maxHeight: '90vh', overflowY: 'auto' }}>
             {reportSent ? (
-              // Estado de éxito
               <div style={{ textAlign: 'center', padding: '20px 0' }}>
                 <div style={{ fontSize: 48, marginBottom: 12 }}>✅</div>
                 <h3 className="modal-title" style={{ textAlign: 'center', marginBottom: 8 }}>
@@ -1107,7 +1081,6 @@ export default function ChatPage() {
                     : 'What do you want to report? Your report is anonymous.'}
                 </p>
 
-                {/* Lista de razones */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
                   {REPORT_REASONS.map((r) => {
                     const active = reportReason === r.key
@@ -1164,63 +1137,30 @@ export default function ChatPage() {
                   })}
                 </div>
 
-                {/* Detalles opcionales */}
-                <p
-                  style={{
-                    fontSize: 11,
-                    color: '#8b8b9e',
-                    margin: '0 0 6px 0',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.06em',
-                    fontWeight: 700,
-                  }}
-                >
+                <p style={{ fontSize: 11, color: '#8b8b9e', margin: '0 0 6px 0', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700 }}>
                   {lang === 'es' ? 'Detalles (opcional)' : 'Details (optional)'}
                 </p>
                 <textarea
                   value={reportDetails}
                   onChange={(e) => setReportDetails(e.target.value.slice(0, 500))}
-                  placeholder={
-                    lang === 'es'
-                      ? 'Cuéntanos más sobre el problema...'
-                      : 'Tell us more about the issue...'
-                  }
+                  placeholder={lang === 'es' ? 'Cuéntanos más sobre el problema...' : 'Tell us more about the issue...'}
                   disabled={reportSending}
                   maxLength={500}
                   className="modal-textarea"
                   style={{ marginBottom: 6 }}
                 />
-                <p
-                  style={{
-                    fontSize: 10,
-                    color: '#6b6b7e',
-                    margin: '0 0 16px 0',
-                    textAlign: 'right',
-                  }}
-                >
+                <p style={{ fontSize: 10, color: '#6b6b7e', margin: '0 0 16px 0', textAlign: 'right' }}>
                   {reportDetails.length}/500
                 </p>
 
                 {reportError && (
-                  <p
-                    style={{
-                      fontSize: 12,
-                      color: '#fca5a5',
-                      margin: '0 0 12px 0',
-                      textAlign: 'center',
-                    }}
-                  >
+                  <p style={{ fontSize: 12, color: '#fca5a5', margin: '0 0 12px 0', textAlign: 'center' }}>
                     ⚠️ {reportError}
                   </p>
                 )}
 
-                {/* Botones */}
                 <div className="modal-btn-row">
-                  <button
-                    onClick={() => setShowReportModal(false)}
-                    disabled={reportSending}
-                    className="modal-btn secondary"
-                  >
+                  <button onClick={() => setShowReportModal(false)} disabled={reportSending} className="modal-btn secondary">
                     {t.cancel || (lang === 'es' ? 'Cancelar' : 'Cancel')}
                   </button>
                   <button
@@ -1229,9 +1169,7 @@ export default function ChatPage() {
                     className="modal-btn primary"
                     style={{
                       background: 'linear-gradient(135deg, #ec4899 0%, #a855f7 100%)',
-                      boxShadow: reportReason
-                        ? '0 4px 20px rgba(236,72,153,0.5)'
-                        : 'none',
+                      boxShadow: reportReason ? '0 4px 20px rgba(236,72,153,0.5)' : 'none',
                     }}
                   >
                     {reportSending
