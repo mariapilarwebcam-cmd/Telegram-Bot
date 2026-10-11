@@ -13,6 +13,7 @@ import { getTranslations } from '@/lib/i18n'
 import { useUser } from '@/lib/UserContext'
 import { useTonPay } from '@ton-pay/ui-react'
 import { createTonPayTransfer, USDT } from '@ton-pay/api'
+import { Analytics } from '@/lib/posthog'                       // ✅ PostHog
 
 const purchaseCache: Record<string, boolean> = {}
 
@@ -26,13 +27,11 @@ export default function ShopPage() {
   const [pendingStatus, setPendingStatus] = useState<string>('')
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  // ✅ VIP CRYPTO: estados
   const [vipSub, setVipSub] = useState<{ active: boolean; subscription: any } | null>(null)
   const [vipLoading, setVipLoading] = useState(true)
   const [vipPurchasing, setVipPurchasing] = useState<string | null>(null)
   const [showVipSuccess, setShowVipSuccess] = useState(false)
 
-  // ✅ VIP CRYPTO: polling crypto VIP
   const [vipPendingRef, setVipPendingRef] = useState<string | null>(null)
   const [vipPendingStatus, setVipPendingStatus] = useState<string>('')
   const vipPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -40,9 +39,6 @@ export default function ShopPage() {
   const { pay } = useTonPay()
   const t = getTranslations(lang)
 
-  // ═══════════════════════════════════════════════════════════════
-  // Cargar estado VIP
-  // ═══════════════════════════════════════════════════════════════
   useEffect(() => {
     if (!user?.telegram_id) {
       if (!userLoading) setVipLoading(false)
@@ -58,6 +54,9 @@ export default function ShopPage() {
       if (res.ok) {
         const data = await res.json()
         setVipSub(data)
+
+        // ✅ PostHog: VIP page viewed
+        Analytics.vipPageViewed({ is_vip: !!data.active })
       }
     } catch (e) {
       console.warn('[shop] vip status error:', e)
@@ -66,9 +65,7 @@ export default function ShopPage() {
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════
   // ⭐ Comprar plan VIP con STARS
-  // ═══════════════════════════════════════════════════════════════
   const buyVipWithStars = async (planId: 'weekly' | 'monthly' | 'quarterly') => {
     if (!user || vipPurchasing) return
     setVipPurchasing(planId)
@@ -109,6 +106,17 @@ export default function ShopPage() {
               await loadVipStatus()
               await refresh()
               setTimeout(() => setShowVipSuccess(false), 5000)
+
+              // ✅ PostHog: VIP comprado con Stars
+              const plan = VIP_PLANS.find((p) => p.id === planId)
+              if (plan) {
+                Analytics.vipPurchased({
+                  plan: planId,
+                  method: 'stars',
+                  price_usd: parseFloat(plan.price.es.replace('$', '')),
+                  stars: plan.stars,
+                })
+              }
             } else {
               alert(confirmData.error || 'Error activando suscripción')
             }
@@ -126,15 +134,12 @@ export default function ShopPage() {
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════
-  // ✅ VIP CRYPTO: Comprar plan VIP con USDT
-  // ═══════════════════════════════════════════════════════════════
+  // 💎 Comprar plan VIP con USDT
   const buyVipWithCrypto = async (planId: 'weekly' | 'monthly' | 'quarterly') => {
     if (!user || vipPurchasing) return
     setVipPurchasing(planId)
 
     try {
-      // 1. Crear invoice crypto
       const res = await tgFetch('/api/subscription', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -150,7 +155,6 @@ export default function ShopPage() {
 
       const { payment_data } = data
 
-      // 2. Firmar y enviar transacción vía TON Pay
       try {
         const result = await pay(async (senderAddr: string) => {
           const transfer = await createTonPayTransfer(
@@ -172,8 +176,6 @@ export default function ShopPage() {
         })
 
         console.log('[shop] vip crypto sent:', result)
-
-        // 3. Arrancar polling
         startVipPolling(planId, payment_data.reference)
       } catch (cryptoErr: any) {
         const msg = cryptoErr?.message || String(cryptoErr)
@@ -181,7 +183,7 @@ export default function ShopPage() {
           msg.toLowerCase().includes('user rejected') ||
           msg.toLowerCase().includes('cancel')
         ) {
-          // Usuario canceló → no hacer nada
+          // cancelado
         } else {
           alert(
             lang === 'es'
@@ -198,7 +200,6 @@ export default function ShopPage() {
     }
   }
 
-  // ✅ VIP CRYPTO: polling que verifica on-chain
   const startVipPolling = (
     planId: 'weekly' | 'monthly' | 'quarterly',
     reference: string
@@ -209,7 +210,7 @@ export default function ShopPage() {
     )
 
     let attempts = 0
-    const MAX_ATTEMPTS = 25 // ~100 segundos
+    const MAX_ATTEMPTS = 25
 
     vipPollRef.current = setInterval(async () => {
       attempts++
@@ -241,6 +242,17 @@ export default function ShopPage() {
           await loadVipStatus()
           await refresh()
           setTimeout(() => setShowVipSuccess(false), 5000)
+
+          // ✅ PostHog: VIP comprado con Crypto
+          const plan = VIP_PLANS.find((p) => p.id === planId)
+          if (plan) {
+            Analytics.vipPurchased({
+              plan: planId,
+              method: 'crypto',
+              price_usd: plan.crypto_price,
+              stars: plan.stars,
+            })
+          }
         } else {
           setVipPendingStatus(
             lang === 'es'
@@ -263,9 +275,6 @@ export default function ShopPage() {
     setVipPendingStatus('')
   }
 
-  // ═══════════════════════════════════════════════════════════════
-  // Cancelar VIP
-  // ═══════════════════════════════════════════════════════════════
   const cancelVip = async () => {
     const confirmed = confirm(
       lang === 'es'
@@ -296,9 +305,7 @@ export default function ShopPage() {
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════
-  // Packs de gemas (existente)
-  // ═══════════════════════════════════════════════════════════════
+  // Packs de gemas
   useEffect(() => {
     if (!user?.telegram_id) {
       if (!userLoading) setChecking(false)
@@ -369,6 +376,17 @@ export default function ShopPage() {
               await refresh()
               if (user.telegram_id) purchaseCache[user.telegram_id] = true
               setHasPurchased(true)
+
+              // ✅ PostHog: gemas compradas con Stars
+              const pkg = STAR_PACKAGES[idx]
+              if (pkg) {
+                Analytics.gemsPurchased({
+                  package_index: idx,
+                  gems: getFinalGems(pkg),
+                  method: 'stars',
+                  amount: pkg.stars,
+                })
+              }
             }
             setPurchasing(null)
           })
@@ -392,7 +410,7 @@ export default function ShopPage() {
     setPendingStatus('')
   }
 
-  const startPolling = (reference: string) => {
+  const startPolling = (reference: string, pkgIndex: number) => {
     setPendingReference(reference)
     setPendingStatus(lang === 'es' ? 'Verificando pago…' : 'Verifying payment…')
 
@@ -424,6 +442,18 @@ export default function ShopPage() {
           await refresh()
           if (user?.telegram_id) purchaseCache[user.telegram_id] = true
           setHasPurchased(true)
+
+          // ✅ PostHog: gemas compradas con Crypto
+          const pkg = CRYPTO_PACKAGES[pkgIndex]
+          if (pkg) {
+            Analytics.gemsPurchased({
+              package_index: pkgIndex,
+              gems: getFinalCryptoGems(pkg),
+              method: 'crypto',
+              amount: pkg.usdt,
+            })
+          }
+
           alert(
             lang === 'es'
               ? `✅ Pago confirmado. +${data.gems_added} gemas acreditadas.`
@@ -480,12 +510,12 @@ export default function ShopPage() {
       })
 
       console.log('[shop] crypto payment sent:', result)
-      startPolling(payment_data.reference)
+      startPolling(payment_data.reference, idx)
     } catch (e: any) {
       console.error('[shop] crypto error:', e)
       const msg = e?.message || String(e)
       if (msg.toLowerCase().includes('user rejected') || msg.toLowerCase().includes('cancel')) {
-        // Usuario canceló
+        // cancelado
       } else {
         alert(
           lang === 'es'
@@ -548,9 +578,6 @@ export default function ShopPage() {
         </div>
       </header>
 
-      {/* ═══════════════════════════════════════════════════════════════
-          SECCIÓN VIP
-      ═══════════════════════════════════════════════════════════════ */}
       <section style={{ padding: '20px 16px 0' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
           <span style={{ fontSize: 22 }}>👑</span>
@@ -559,7 +586,6 @@ export default function ShopPage() {
           </h2>
         </div>
 
-        {/* ✅ VIP CRYPTO: banner de verificación crypto */}
         {vipPendingRef && (
           <div
             style={{
@@ -586,7 +612,6 @@ export default function ShopPage() {
             <div className="spinner" />
           </div>
         ) : isVipActive ? (
-          // ─── USUARIO YA ES VIP ───
           <div
             style={{
               padding: 20,
@@ -757,7 +782,6 @@ export default function ShopPage() {
             </div>
           </div>
         ) : (
-          // ─── NO ES VIP: MOSTRAR PLANES ───
           <>
             <p
               style={{
@@ -809,7 +833,6 @@ export default function ShopPage() {
                       transition: 'opacity 0.2s ease',
                     }}
                   >
-                    {/* Badge popular / best value */}
                     {(plan.popular || plan.bestValue) && (
                       <div
                         style={{
@@ -835,7 +858,6 @@ export default function ShopPage() {
                       </div>
                     )}
 
-                    {/* Info del plan */}
                     <div style={{ padding: 16, display: 'flex', alignItems: 'center', gap: 14 }}>
                       <div
                         style={{
@@ -904,7 +926,6 @@ export default function ShopPage() {
                       </div>
                     </div>
 
-                    {/* ✅ VIP CRYPTO: dos botones de pago */}
                     <div
                       style={{
                         display: 'grid',
@@ -913,7 +934,6 @@ export default function ShopPage() {
                         padding: '0 16px 16px 16px',
                       }}
                     >
-                      {/* Botón STARS */}
                       <button
                         onClick={() => buyVipWithStars(plan.id)}
                         disabled={!!vipPurchasing || !!vipPendingRef}
@@ -944,7 +964,6 @@ export default function ShopPage() {
                         </span>
                       </button>
 
-                      {/* Botón USDT */}
                       <button
                         onClick={() => buyVipWithCrypto(plan.id)}
                         disabled={!!vipPurchasing || !!vipPendingRef}
@@ -993,9 +1012,6 @@ export default function ShopPage() {
         )}
       </section>
 
-      {/* ═══════════════════════════════════════════════════════════════
-          BANNER PREMIUM (existente)
-      ═══════════════════════════════════════════════════════════════ */}
       <section style={{ padding: '28px 16px 0' }}>
         <div
           style={{
@@ -1033,9 +1049,6 @@ export default function ShopPage() {
         </div>
       </section>
 
-      {/* ═══════════════════════════════════════════════════════════════
-          TABS DE MÉTODO DE PAGO para GEMAS (existente)
-      ═══════════════════════════════════════════════════════════════ */}
       <section style={{ padding: '20px 16px 0' }}>
         <div style={{ display: 'flex', gap: 8 }}>
           <button
@@ -1309,9 +1322,6 @@ export default function ShopPage() {
         </div>
       </section>
 
-      {/* ═══════════════════════════════════════════════════════════════
-          MODAL DE ÉXITO VIP
-      ═══════════════════════════════════════════════════════════════ */}
       {showVipSuccess && (
         <div className="modal-backdrop">
           <div className="modal-box level-up-modal">
