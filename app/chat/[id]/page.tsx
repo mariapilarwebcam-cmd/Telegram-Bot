@@ -8,6 +8,7 @@ import {
   getDisplayName,
   getCharacterImageUrl,
   getCharacterDescription,
+  VIP_DAILY_MESSAGE_LIMIT,        // ✅ VIP
 } from '@/lib/constants'
 import { getLevelFromMessages, getImageCost, getAudioCost } from '@/lib/levels'
 import { getTranslations } from '@/lib/i18n'
@@ -110,6 +111,13 @@ export default function ChatPage() {
 
   const [seenImageCount, setSeenImageCount] = useState(0)
 
+  // ═══════════════════════════════════════════════════════════════
+  // ✅ VIP: estado del usuario VIP + contador de mensajes del día
+  // ═══════════════════════════════════════════════════════════════
+  const [isVip, setIsVip] = useState(false)
+  const [vipMessagesToday, setVipMessagesToday] = useState(0)
+  const [showVipLimitModal, setShowVipLimitModal] = useState(false)
+
   const [lowGemsWarning, setLowGemsWarning] = useState(false)
   const [lowGemsCount, setLowGemsCount] = useState(0)
 
@@ -178,6 +186,25 @@ export default function ChatPage() {
     el.style.overflowY = el.scrollHeight > TEXTAREA_MAX_HEIGHT ? 'auto' : 'hidden'
   }, [input])
 
+  // ═══════════════════════════════════════════════════════════════
+  // ✅ VIP: cargar estado VIP al montar
+  // ═══════════════════════════════════════════════════════════════
+  useEffect(() => {
+    if (userLoading) return
+    if (!user?.telegram_id) return
+
+    tgFetch('/api/subscription')
+      .then(async (res) => {
+        if (!res.ok) return
+        const data = await res.json()
+        setIsVip(!!data.active)
+      })
+      .catch((e) => console.warn('[chat] vip load error:', e))
+  }, [user?.telegram_id, userLoading])
+
+  // ═══════════════════════════════════════════════════════════════
+  // Cargar personaje + historial
+  // ═══════════════════════════════════════════════════════════════
   useEffect(() => {
     if (userLoading) return
     if (!user?.telegram_id) return
@@ -274,7 +301,8 @@ export default function ChatPage() {
       const gems = user.gems || 0
       const hookRemaining = user.hook_messages_remaining || 0
 
-      if (gems < GEM_COSTS.message && hookRemaining <= 0) {
+      // ✅ VIP: no requiere gemas ni hook
+      if (!isVip && gems < GEM_COSTS.message && hookRemaining <= 0) {
         setBlocked(true)
         return
       }
@@ -304,7 +332,7 @@ export default function ChatPage() {
 
     startChat()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [historyLoaded, user, character, messages.length])
+  }, [historyLoaded, user, character, messages.length, isVip])
 
   const handleInputFocus = () => {
     setTimeout(() => {
@@ -318,11 +346,14 @@ export default function ChatPage() {
 
     const gems = user.gems || 0
     const hookRemaining = user.hook_messages_remaining || 0
-    if (gems < GEM_COSTS.message && hookRemaining <= 0) {
+
+    // ✅ VIP: no requiere gemas ni hook
+    if (!isVip && gems < GEM_COSTS.message && hookRemaining <= 0) {
       sendingRef.current = false
       setBlocked(true)
       return
     }
+
     const text = input.trim()
     setInput('')
     setLoading(true)
@@ -337,9 +368,18 @@ export default function ChatPage() {
       const data = await res.json()
       if (res.ok) {
         if (data.blocked) {
-          setBlockedMessage(data.response || '')
-          setBlocked(true)
-          setMessages((p) => p.slice(0, -1))
+          // ✅ VIP: si es límite VIP alcanzado → mostrar modal especial
+          if (data.vip_limit_reached) {
+            setMessages((p) => p.slice(0, -1))
+            setShowVipLimitModal(true)
+            if (typeof data.vip_messages_today === 'number') {
+              setVipMessagesToday(data.vip_messages_today)
+            }
+          } else {
+            setBlockedMessage(data.response || '')
+            setBlocked(true)
+            setMessages((p) => p.slice(0, -1))
+          }
         } else {
           setMessages((p) => [...p, { role: 'assistant', content: data.response }])
           setGems(data.remaining_gems)
@@ -348,6 +388,14 @@ export default function ChatPage() {
           setPhotoOfferActive(!!data.photo_offer_available)
           setLowGemsWarning(!!data.low_gems_warning)
           setLowGemsCount(data.low_gems_count || 0)
+
+          // ✅ VIP: actualizar estado y contador desde la respuesta
+          if (data.is_vip) {
+            setIsVip(true)
+            if (typeof data.vip_messages_today === 'number') {
+              setVipMessagesToday(data.vip_messages_today)
+            }
+          }
 
           if (data.total_user_messages !== undefined) {
             setLevelProgress({
@@ -600,12 +648,7 @@ export default function ChatPage() {
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════
-  // ✅ FIX: Extrae imágenes a placeholders ANTES de procesar el texto
-  //    Así evitamos que los `_` de la URL se confundan con énfasis
-  // ═══════════════════════════════════════════════════════════════
   const formatMessage = (content: string) => {
-    // 1. Extraer imágenes a placeholders
     const images: string[] = []
     let text = content.replace(
       /!\[([^\]]*)\]\(([^)]+)\)/g,
@@ -619,31 +662,25 @@ export default function ChatPage() {
         images.push(
           `<img src="${url}" alt="${safeAlt}" style="border-radius:16px;max-width:100%;margin-top:8px;box-shadow:0 8px 24px rgba(168,85,247,0.3);" />`
         )
-        // Placeholder SIN guiones bajos
         return `@@IMG${idx}@@`
       }
     )
 
-    // 2. Escapar HTML del texto restante
     text = text
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
 
-    // 3. Bold
     text = text.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
 
-    // 4. Acciones *...*
     text = text.replace(
       /\*([^*\n]+)\*/g,
       '<span class="chat-action">*$1*</span>'
     )
 
-    // 5. Énfasis _..._ (ahora seguro, URL ya extraída)
     text = text.replace(/_([^_\n]+)_/g, '<em style="color:#c4b5fd;">$1</em>')
 
-    // 6. Restaurar imágenes
     text = text.replace(
       /@@IMG(\d+)@@/g,
       (_, idx) => images[parseInt(idx)] || ''
@@ -680,7 +717,11 @@ export default function ChatPage() {
   let headerBadgeText = ''
   let headerBadgeVariant: 'hook' | 'low-gems' | null = null
 
-  if (hookRemaining > 0) {
+  // ✅ VIP: el badge VIP tiene prioridad sobre hook/low-gems
+  if (isVip) {
+    headerBadgeVariant = null
+    headerBadgeText = ''
+  } else if (hookRemaining > 0) {
     const rotations = lang === 'es' ? HOOK_ROTATIONS_ES : HOOK_ROTATIONS_EN
     headerBadgeText = rotations[rotationIndex % rotations.length](hookRemaining)
     headerBadgeVariant = 'hook'
@@ -699,6 +740,12 @@ export default function ChatPage() {
     levelProgress.next && levelProgress.next > 0
       ? Math.min(100, (levelProgress.current / levelProgress.next) * 100)
       : 0
+
+  // ✅ VIP: calcular mensajes restantes
+  const vipMessagesLeft = isVip ? Math.max(0, VIP_DAILY_MESSAGE_LIMIT - vipMessagesToday) : 0
+  const vipUsagePercent = isVip
+    ? Math.min(100, (vipMessagesToday / VIP_DAILY_MESSAGE_LIMIT) * 100)
+    : 0
 
   return (
     <div className="chat-page">
@@ -734,9 +781,26 @@ export default function ChatPage() {
             {displayName}
           </p>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            <span className="level-badge" style={{ color: currentLevel.color, background: `${currentLevel.color}20` }}>
-              {t[currentLevel.badgeKey as keyof typeof t]}
-            </span>
+            {/* ✅ VIP: mostrar badge VIP en vez de nivel */}
+            {isVip ? (
+              <span
+                className="level-badge"
+                style={{
+                  color: '#fbbf24',
+                  background: 'linear-gradient(135deg, rgba(251,191,36,0.25) 0%, rgba(217,119,6,0.2) 100%)',
+                  border: '1px solid rgba(251,191,36,0.5)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 3,
+                }}
+              >
+                👑 VIP
+              </span>
+            ) : (
+              <span className="level-badge" style={{ color: currentLevel.color, background: `${currentLevel.color}20` }}>
+                {t[currentLevel.badgeKey as keyof typeof t]}
+              </span>
+            )}
 
             {headerBadgeVariant === 'hook' && (
               <span className="status-badge status-badge-hook">{headerBadgeText}</span>
@@ -751,7 +815,27 @@ export default function ChatPage() {
             )}
           </div>
 
-          {showLevelProgress && (
+          {/* ✅ VIP: barra de progreso del fair-use diario */}
+          {isVip ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+              <div style={{ flex: 1, height: 3, background: 'rgba(251, 191, 36, 0.15)', borderRadius: 2, overflow: 'hidden', maxWidth: 90 }}>
+                <div
+                  style={{
+                    height: '100%',
+                    width: `${vipUsagePercent}%`,
+                    background:
+                      vipUsagePercent >= 90
+                        ? 'linear-gradient(90deg, #f59e0b, #dc2626)'
+                        : 'linear-gradient(90deg, #fbbf24, #f59e0b)',
+                    transition: 'width 0.4s ease',
+                  }}
+                />
+              </div>
+              <span style={{ fontSize: 9, color: '#fbbf24', fontWeight: 700, letterSpacing: '0.02em' }}>
+                {vipMessagesToday}/{VIP_DAILY_MESSAGE_LIMIT}
+              </span>
+            </div>
+          ) : showLevelProgress ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
               <div style={{ flex: 1, height: 3, background: 'rgba(168, 85, 247, 0.15)', borderRadius: 2, overflow: 'hidden', maxWidth: 70 }}>
                 <div style={{ height: '100%', width: `${levelProgressPercent}%`, background: 'linear-gradient(90deg, #a855f7, #ec4899)', transition: 'width 0.4s ease' }} />
@@ -760,7 +844,7 @@ export default function ChatPage() {
                 {levelProgress.current}/{levelProgress.next}
               </span>
             </div>
-          )}
+          ) : null}
         </div>
 
         <div className="menu-wrap" ref={menuRef}>
@@ -976,14 +1060,14 @@ export default function ChatPage() {
         )}
 
         <div className="chat-input-row">
-          <button onClick={playAudio} disabled={generatingAudio || (isPremium && gems < currentAudioCost)} className="chat-icon-btn" title={`${t.audioTooltip} (${currentAudioCost} gemas)`} style={{ opacity: isPremium && gems < currentAudioCost ? 0.3 : 1 }}>
+          <button onClick={playAudio} disabled={generatingAudio || (!isVip && isPremium && gems < currentAudioCost)} className="chat-icon-btn" title={`${t.audioTooltip} (${currentAudioCost} gemas)`} style={{ opacity: !isVip && isPremium && gems < currentAudioCost ? 0.3 : 1 }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
               <path d="M11 5 6 9H2v6h4l5 4V5z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
               <path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
             </svg>
           </button>
 
-          <button onClick={handleBannerTap} disabled={generatingImage} className="chat-icon-btn" title={`${t.imageTooltip} (${currentImageCost} gemas)`} style={{ opacity: !isFirstImage && isPremium && gems < currentImageCost ? 0.4 : 1, boxShadow: photoOfferActive ? '0 0 20px rgba(236,72,153,0.9), 0 0 30px rgba(168,85,247,0.6)' : undefined, borderColor: photoOfferActive ? '#ec4899' : undefined }}>
+          <button onClick={handleBannerTap} disabled={generatingImage} className="chat-icon-btn" title={`${t.imageTooltip} (${currentImageCost} gemas)`} style={{ opacity: !isFirstImage && !isVip && isPremium && gems < currentImageCost ? 0.4 : 1, boxShadow: photoOfferActive ? '0 0 20px rgba(236,72,153,0.9), 0 0 30px rgba(168,85,247,0.6)' : undefined, borderColor: photoOfferActive ? '#ec4899' : undefined }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
               <rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="2" />
               <circle cx="9" cy="10" r="2" stroke="currentColor" strokeWidth="2" />
@@ -1039,6 +1123,89 @@ export default function ChatPage() {
                 {lang === 'es' ? '📸 Ver sorpresa' : '📸 See surprise'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════
+          ✅ VIP: MODAL DE LÍMITE DIARIO ALCANZADO
+      ═══════════════════════════════════════════════════════════════ */}
+      {showVipLimitModal && (
+        <div className="modal-backdrop">
+          <div className="modal-box level-up-modal">
+            <div style={{ fontSize: 60, textAlign: 'center', marginBottom: 8 }}>🌙</div>
+            <p style={{ fontSize: 10, fontWeight: 900, letterSpacing: '0.18em', color: '#fbbf24', textAlign: 'center', margin: 0 }}>
+              {lang === 'es' ? 'LÍMITE DIARIO' : 'DAILY LIMIT'}
+            </p>
+            <h2
+              className="modal-title"
+              style={{
+                textAlign: 'center',
+                fontSize: 22,
+                marginTop: 6,
+                marginBottom: 0,
+                background: 'linear-gradient(135deg, #fbbf24, #f59e0b)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+              }}
+            >
+              {lang === 'es' ? 'Necesitas un descanso' : 'You need a break'}
+            </h2>
+            <div
+              style={{
+                marginTop: 20,
+                padding: 16,
+                borderRadius: 14,
+                background: 'rgba(251, 191, 36, 0.1)',
+                border: '1px solid rgba(251, 191, 36, 0.3)',
+              }}
+            >
+              <p
+                style={{
+                  fontSize: 14,
+                  color: '#f5f0ff',
+                  margin: 0,
+                  textAlign: 'center',
+                  lineHeight: 1.6,
+                }}
+              >
+                {lang === 'es'
+                  ? `${displayName} y tú han hablado MUCHO hoy. Incluso lo mejor necesita un descanso. Vuelve mañana y seguirán donde lo dejaron. ✨`
+                  : `You and ${displayName} have talked A LOT today. Even the best needs a break. Come back tomorrow and pick up where you left off. ✨`}
+              </p>
+            </div>
+
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                marginTop: 16,
+                padding: '10px 14px',
+                borderRadius: 12,
+                background: 'rgba(0,0,0,0.2)',
+              }}
+            >
+              <span style={{ fontSize: 12, color: '#a395c9' }}>
+                {lang === 'es' ? 'Mensajes hoy' : 'Messages today'}
+              </span>
+              <span style={{ fontSize: 13, color: '#fbbf24', fontWeight: 800 }}>
+                {vipMessagesToday}/{VIP_DAILY_MESSAGE_LIMIT}
+              </span>
+            </div>
+
+            <button
+              onClick={() => setShowVipLimitModal(false)}
+              className="modal-btn primary"
+              style={{
+                width: '100%',
+                marginTop: 20,
+                background: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)',
+                boxShadow: '0 4px 20px rgba(251, 191, 36, 0.5)',
+              }}
+            >
+              {lang === 'es' ? 'Entendido' : 'Got it'}
+            </button>
           </div>
         </div>
       )}
