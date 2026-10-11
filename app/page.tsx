@@ -8,6 +8,8 @@ import {
   CHARACTER_NAMES_MALE, CHARACTER_NAMES_FEMALE,
   PERSONALITIES, getDisplayName, getCharacterImageUrl,
   FANTASY_ARCHETYPES,
+  isVipArchetype,        // ✅ VIP
+  VIP_PLANS,             // ✅ VIP
 } from '@/lib/constants'
 import { getTranslations } from '@/lib/i18n'
 import { useUser } from '@/lib/UserContext'
@@ -52,7 +54,13 @@ export default function HomePage() {
   const [creating, setCreating] = useState<string | null>(null)
   const tabInitialized = useRef(false)
 
-  // ✅ Filtro automático por interés (solo la primera vez)
+  // ✅ VIP: estado VIP + modal
+  const [isVip, setIsVip] = useState(false)
+  const [vipChecked, setVipChecked] = useState(false)
+  const [showVipModal, setShowVipModal] = useState(false)
+  const [vipBlockedChar, setVipBlockedChar] = useState<Char | null>(null)
+
+  // Filtro automático por interés (solo la primera vez)
   useEffect(() => {
     if (tabInitialized.current || !user) return
     tabInitialized.current = true
@@ -62,6 +70,28 @@ export default function HomePage() {
     else if (interest === 'female') setTab('female')
     else setTab('all')
   }, [user])
+
+  // ✅ VIP: cargar estado VIP
+  useEffect(() => {
+    if (!user?.telegram_id) {
+      if (!userLoading) setVipChecked(true)
+      return
+    }
+    tgFetch('/api/subscription')
+      .then(async (res) => {
+        if (!res.ok) {
+          setVipChecked(true)
+          return
+        }
+        const data = await res.json()
+        setIsVip(!!data.active)
+        setVipChecked(true)
+      })
+      .catch((e) => {
+        console.warn('[home] vip check error:', e)
+        setVipChecked(true)
+      })
+  }, [user?.telegram_id, userLoading])
 
   // Carga personaje activo
   useEffect(() => {
@@ -124,6 +154,13 @@ export default function HomePage() {
     }
     if (creating !== null) return
 
+    // ✅ VIP: bloquear personajes VIP para no-VIPs
+    if (isVipArchetype(c.archetype) && !isVip) {
+      setVipBlockedChar(c)
+      setShowVipModal(true)
+      return
+    }
+
     const key = `${c.gender}_${c.archetype}`
     setCreating(key)
 
@@ -147,6 +184,11 @@ export default function HomePage() {
 
       if (res.ok && data.character_id) {
         router.push(`/chat/${data.character_id}`)
+      } else if (data.error === 'vip_required') {
+        // ✅ VIP: por si el check del cliente falló
+        setVipBlockedChar(c)
+        setShowVipModal(true)
+        setCreating(null)
       } else {
         const msg = data.detail
           ? `${data.error}: ${data.detail}`
@@ -236,7 +278,29 @@ export default function HomePage() {
             Taboo<span style={{ color: '#a78bfa' }}>Realm</span>
           </h1>
 
-          {/* ✅ NUEVO: botón de ajustes */}
+          {/* ✅ VIP: badge VIP en header */}
+          {isVip && (
+            <span
+              style={{
+                fontSize: 10,
+                fontWeight: 900,
+                letterSpacing: '0.08em',
+                color: '#fbbf24',
+                background:
+                  'linear-gradient(135deg, rgba(251,191,36,0.25) 0%, rgba(217,119,6,0.15) 100%)',
+                border: '1px solid rgba(251, 191, 36, 0.5)',
+                padding: '4px 8px',
+                borderRadius: 8,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 3,
+                flexShrink: 0,
+              }}
+            >
+              👑 VIP
+            </span>
+          )}
+
           <button
             onClick={() => router.push('/settings')}
             aria-label="Settings"
@@ -336,6 +400,91 @@ export default function HomePage() {
             {hookRemaining} {t.specialMoments}
           </p>
         </div>
+      )}
+
+      {/* ✅ VIP: banner para usuarios no-VIP */}
+      {vipChecked && !isVip && (
+        <section style={{ padding: '12px 16px 0' }}>
+          <button
+            onClick={() => router.push('/shop')}
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              padding: 14,
+              borderRadius: 16,
+              background:
+                'linear-gradient(135deg, rgba(251,191,36,0.15) 0%, rgba(217,119,6,0.08) 100%)',
+              border: '1px solid rgba(251, 191, 36, 0.4)',
+              textAlign: 'left',
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              color: 'inherit',
+              position: 'relative',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                position: 'absolute',
+                top: -30,
+                right: -20,
+                fontSize: 100,
+                opacity: 0.1,
+                pointerEvents: 'none',
+              }}
+            >
+              👑
+            </div>
+            <div
+              style={{
+                width: 42,
+                height: 42,
+                borderRadius: 12,
+                background:
+                  'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 22,
+                flexShrink: 0,
+                boxShadow: '0 4px 16px rgba(251, 191, 36, 0.4)',
+              }}
+            >
+              👑
+            </div>
+            <div style={{ flex: 1, minWidth: 0, position: 'relative', zIndex: 1 }}>
+              <p
+                style={{
+                  fontSize: 13,
+                  fontWeight: 800,
+                  margin: 0,
+                  color: '#fbbf24',
+                }}
+              >
+                {lang === 'es' ? 'Hazte VIP' : 'Go VIP'}
+              </p>
+              <p
+                style={{
+                  fontSize: 11,
+                  color: '#a395c9',
+                  margin: '2px 0 0 0',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {lang === 'es'
+                  ? 'Mensajes ilimitados · Imágenes gratis · 8 personajes exclusivos'
+                  : 'Unlimited messages · Free images · 8 exclusive characters'}
+              </p>
+            </div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
+              <path d="m9 6 6 6-6 6" stroke="#fbbf24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        </section>
       )}
 
       {activeChar && (
@@ -540,6 +689,10 @@ export default function HomePage() {
           const key = `${c.gender}_${c.archetype}`
           const imageUrl = getCharacterImageUrl(c.archetype, c.gender)
           const isCreating = creating === key
+          // ✅ VIP: detectar si es personaje VIP y el usuario no lo es
+          const isVipChar = isVipArchetype(c.archetype)
+          const isLocked = isVipChar && !isVip
+
           return (
             <button
               key={key}
@@ -559,6 +712,71 @@ export default function HomePage() {
                     }}
                   />
                 )}
+
+                {/* ✅ VIP: overlay con blur para personajes bloqueados */}
+                {isLocked && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      background: 'rgba(10, 5, 16, 0.55)',
+                      backdropFilter: 'blur(8px)',
+                      WebkitBackdropFilter: 'blur(8px)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                      zIndex: 3,
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: 32,
+                        filter: 'drop-shadow(0 0 12px rgba(251, 191, 36, 0.9))',
+                      }}
+                    >
+                      🔒
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 900,
+                        letterSpacing: '0.08em',
+                        color: '#fbbf24',
+                        background: 'rgba(251, 191, 36, 0.15)',
+                        border: '1px solid rgba(251, 191, 36, 0.5)',
+                        padding: '3px 8px',
+                        borderRadius: 6,
+                        textShadow: '0 0 6px rgba(251, 191, 36, 0.5)',
+                      }}
+                    >
+                      👑 VIP
+                    </span>
+                  </div>
+                )}
+
+                {/* ✅ VIP: corona para personajes VIP (incluso si el user es VIP) */}
+                {isVipChar && isVip && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: 8,
+                      right: 8,
+                      background: 'rgba(0, 0, 0, 0.5)',
+                      backdropFilter: 'blur(8px)',
+                      WebkitBackdropFilter: 'blur(8px)',
+                      padding: '4px 6px',
+                      borderRadius: 8,
+                      fontSize: 12,
+                      zIndex: 3,
+                      border: '1px solid rgba(251, 191, 36, 0.4)',
+                    }}
+                  >
+                    👑
+                  </div>
+                )}
+
                 {isCreating && (
                   <div
                     style={{
@@ -584,6 +802,181 @@ export default function HomePage() {
           )
         })}
       </div>
+
+      {/* ═══════════════════════════════════════════════════════════════
+          ✅ VIP: MODAL "HAZTE VIP"
+      ═══════════════════════════════════════════════════════════════ */}
+      {showVipModal && vipBlockedChar && (
+        <div
+          className="modal-backdrop"
+          onClick={() => {
+            setShowVipModal(false)
+            setVipBlockedChar(null)
+          }}
+        >
+          <div
+            className="modal-box level-up-modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{ position: 'relative' }}
+          >
+            <div
+              style={{
+                position: 'absolute',
+                top: -20,
+                right: -20,
+                fontSize: 140,
+                opacity: 0.08,
+                pointerEvents: 'none',
+                zIndex: 0,
+              }}
+            >
+              👑
+            </div>
+
+            <div style={{ position: 'relative', zIndex: 1 }}>
+              <div style={{ textAlign: 'center', marginBottom: 12 }}>
+                <span
+                  style={{
+                    fontSize: 56,
+                    filter: 'drop-shadow(0 0 20px rgba(251, 191, 36, 0.9))',
+                  }}
+                >
+                  👑
+                </span>
+              </div>
+
+              <p
+                style={{
+                  fontSize: 10,
+                  fontWeight: 900,
+                  letterSpacing: '0.18em',
+                  color: '#fbbf24',
+                  textAlign: 'center',
+                  margin: 0,
+                  textShadow: '0 0 12px rgba(251, 191, 36, 0.5)',
+                }}
+              >
+                {lang === 'es' ? 'PERSONAJE EXCLUSIVO' : 'EXCLUSIVE CHARACTER'}
+              </p>
+
+              <h2
+                className="modal-title"
+                style={{
+                  textAlign: 'center',
+                  fontSize: 24,
+                  marginTop: 6,
+                  marginBottom: 0,
+                  background: 'linear-gradient(135deg, #fbbf24, #f59e0b)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  backgroundClip: 'text',
+                }}
+              >
+                {vipBlockedChar.name}
+              </h2>
+
+              <div
+                style={{
+                  marginTop: 20,
+                  padding: 16,
+                  borderRadius: 14,
+                  background: 'rgba(251, 191, 36, 0.1)',
+                  border: '1px solid rgba(251, 191, 36, 0.3)',
+                }}
+              >
+                <p
+                  style={{
+                    fontSize: 14,
+                    color: '#f5f0ff',
+                    margin: 0,
+                    textAlign: 'center',
+                    lineHeight: 1.6,
+                  }}
+                >
+                  {lang === 'es'
+                    ? `${vipBlockedChar.name} es parte de nuestra colección VIP exclusiva. Hazte VIP para desbloquear este y otros 7 personajes únicos.`
+                    : `${vipBlockedChar.name} is part of our exclusive VIP collection. Go VIP to unlock this and 7 other unique characters.`}
+                </p>
+              </div>
+
+              {/* Lista de beneficios */}
+              <div
+                style={{
+                  marginTop: 14,
+                  padding: 14,
+                  borderRadius: 12,
+                  background: 'rgba(255, 255, 255, 0.03)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 8,
+                }}
+              >
+                {[
+                  lang === 'es' ? '💬 Mensajes ilimitados' : '💬 Unlimited messages',
+                  lang === 'es' ? '📸 Imágenes gratis diarias' : '📸 Free daily images',
+                  lang === 'es' ? '👑 8 personajes exclusivos' : '👑 8 exclusive characters',
+                  lang === 'es' ? '⚡ Sin esperas, sin límites' : '⚡ No waiting, no limits',
+                ].map((benefit, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      fontSize: 12,
+                      color: '#c4b5fd',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                    }}
+                  >
+                    {benefit}
+                  </div>
+                ))}
+              </div>
+
+              {/* Precio desde */}
+              <p
+                style={{
+                  fontSize: 11,
+                  color: '#8b8b9e',
+                  textAlign: 'center',
+                  margin: '14px 0 0 0',
+                }}
+              >
+                {lang === 'es' ? 'Desde' : 'From'}{' '}
+                <span style={{ color: '#fbbf24', fontWeight: 800, fontSize: 13 }}>
+                  {VIP_PLANS[0].price[lang === 'es' ? 'es' : 'en']}
+                </span>{' '}
+                {lang === 'es' ? '/ semana' : '/ week'}
+              </p>
+
+              <div className="modal-btn-row" style={{ marginTop: 18 }}>
+                <button
+                  onClick={() => {
+                    setShowVipModal(false)
+                    setVipBlockedChar(null)
+                  }}
+                  className="modal-btn secondary"
+                >
+                  {lang === 'es' ? 'Ahora no' : 'Not now'}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowVipModal(false)
+                    setVipBlockedChar(null)
+                    router.push('/shop')
+                  }}
+                  className="modal-btn primary"
+                  style={{
+                    background: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)',
+                    boxShadow: '0 4px 24px rgba(251, 191, 36, 0.6)',
+                  }}
+                >
+                  👑 {lang === 'es' ? 'Ver planes' : 'See plans'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
