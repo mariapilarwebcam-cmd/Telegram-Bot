@@ -1,5 +1,5 @@
 // app/api/character/[id]/route.ts
-// Carga personaje + historial + premium + contador en una sola request.
+// Carga personaje + historial + premium + contador + imágenes vistas.
 
 import { NextResponse } from 'next/server'
 import {
@@ -7,6 +7,7 @@ import {
   getAllMessages,
   countUserMessages,
   getLastPurchase,
+  getSeenImageCount,
 } from '@/lib/db-queries'
 
 export const dynamic = 'force-dynamic'
@@ -26,11 +27,12 @@ export async function GET(
       return NextResponse.json({ error: 'ID inválido' }, { status: 400 })
     }
 
-    const [character, messages, count, purchase] = await Promise.all([
+    const [character, messages, count, purchase, seenCount] = await Promise.all([
       getCharacter(characterId, tid),
       getAllMessages(tid, characterId, 50),
       countUserMessages(tid, characterId),
       getLastPurchase(tid),
+      getSeenImageCount(tid, characterId),
     ])
 
     if (!character) {
@@ -45,6 +47,7 @@ export async function GET(
       messages: messages || [],
       user_message_count: count,
       is_premium: !!purchase,
+      seen_image_count: seenCount,
     })
   } catch (e: any) {
     console.error('[character/[id]] error:', e)
