@@ -26,17 +26,22 @@ export default function ShopPage() {
   const [pendingStatus, setPendingStatus] = useState<string>('')
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  // ✅ NUEVO: estados VIP
+  // ✅ VIP CRYPTO: estados
   const [vipSub, setVipSub] = useState<{ active: boolean; subscription: any } | null>(null)
   const [vipLoading, setVipLoading] = useState(true)
   const [vipPurchasing, setVipPurchasing] = useState<string | null>(null)
   const [showVipSuccess, setShowVipSuccess] = useState(false)
 
+  // ✅ VIP CRYPTO: polling crypto VIP
+  const [vipPendingRef, setVipPendingRef] = useState<string | null>(null)
+  const [vipPendingStatus, setVipPendingStatus] = useState<string>('')
+  const vipPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
   const { pay } = useTonPay()
   const t = getTranslations(lang)
 
   // ═══════════════════════════════════════════════════════════════
-  // ✅ Cargar estado VIP al montar
+  // Cargar estado VIP
   // ═══════════════════════════════════════════════════════════════
   useEffect(() => {
     if (!user?.telegram_id) {
@@ -62,14 +67,13 @@ export default function ShopPage() {
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // ✅ Comprar plan VIP
+  // ⭐ Comprar plan VIP con STARS
   // ═══════════════════════════════════════════════════════════════
-  const buyVip = async (planId: 'weekly' | 'monthly' | 'quarterly') => {
+  const buyVipWithStars = async (planId: 'weekly' | 'monthly' | 'quarterly') => {
     if (!user || vipPurchasing) return
     setVipPurchasing(planId)
 
     try {
-      // 1. Crear invoice
       const res = await tgFetch('/api/subscription', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -83,13 +87,11 @@ export default function ShopPage() {
         return
       }
 
-      // 2. Abrir invoice
       const mod = await import('@twa-dev/sdk')
       const WebApp = mod.default
 
       WebApp.openInvoice(data.invoice_link, async (status: string) => {
         if (status === 'paid') {
-          // 3. Confirmar en backend
           try {
             const confirmRes = await tgFetch('/api/subscription', {
               method: 'POST',
@@ -116,7 +118,6 @@ export default function ShopPage() {
         } else if (status === 'failed') {
           alert(lang === 'es' ? 'Pago fallido' : 'Payment failed')
         }
-        // 'cancelled' → no hacer nada
         setVipPurchasing(null)
       })
     } catch (e: any) {
@@ -126,7 +127,144 @@ export default function ShopPage() {
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // ✅ Cancelar suscripción VIP
+  // ✅ VIP CRYPTO: Comprar plan VIP con USDT
+  // ═══════════════════════════════════════════════════════════════
+  const buyVipWithCrypto = async (planId: 'weekly' | 'monthly' | 'quarterly') => {
+    if (!user || vipPurchasing) return
+    setVipPurchasing(planId)
+
+    try {
+      // 1. Crear invoice crypto
+      const res = await tgFetch('/api/subscription', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'create_crypto_invoice', plan: planId }),
+      })
+      const data = await res.json()
+
+      if (!res.ok || !data.payment_data) {
+        alert(data.error || 'Error creando pago crypto')
+        setVipPurchasing(null)
+        return
+      }
+
+      const { payment_data } = data
+
+      // 2. Firmar y enviar transacción vía TON Pay
+      try {
+        const result = await pay(async (senderAddr: string) => {
+          const transfer = await createTonPayTransfer(
+            {
+              amount: payment_data.amount,
+              asset: USDT,
+              recipientAddr: payment_data.recipientAddr,
+              senderAddr,
+              commentToRecipient: payment_data.reference,
+              commentToSender: `Taboo Realm VIP — ${payment_data.amount} USDT`,
+            },
+            { chain: 'mainnet' }
+          )
+          return {
+            message: transfer.message,
+            reference: transfer.reference,
+            bodyBase64Hash: transfer.bodyBase64Hash,
+          }
+        })
+
+        console.log('[shop] vip crypto sent:', result)
+
+        // 3. Arrancar polling
+        startVipPolling(planId, payment_data.reference)
+      } catch (cryptoErr: any) {
+        const msg = cryptoErr?.message || String(cryptoErr)
+        if (
+          msg.toLowerCase().includes('user rejected') ||
+          msg.toLowerCase().includes('cancel')
+        ) {
+          // Usuario canceló → no hacer nada
+        } else {
+          alert(
+            lang === 'es'
+              ? 'No se pudo enviar la transacción: ' + msg
+              : 'Could not send transaction: ' + msg
+          )
+        }
+      } finally {
+        setVipPurchasing(null)
+      }
+    } catch (e: any) {
+      alert('Error: ' + (e?.message || 'desconocido'))
+      setVipPurchasing(null)
+    }
+  }
+
+  // ✅ VIP CRYPTO: polling que verifica on-chain
+  const startVipPolling = (
+    planId: 'weekly' | 'monthly' | 'quarterly',
+    reference: string
+  ) => {
+    setVipPendingRef(reference)
+    setVipPendingStatus(
+      lang === 'es' ? 'Verificando pago VIP…' : 'Verifying VIP payment…'
+    )
+
+    let attempts = 0
+    const MAX_ATTEMPTS = 25 // ~100 segundos
+
+    vipPollRef.current = setInterval(async () => {
+      attempts++
+      if (attempts > MAX_ATTEMPTS) {
+        stopVipPolling()
+        alert(
+          lang === 'es'
+            ? 'No hemos detectado el pago todavía. Si ya pagaste, contacta soporte.'
+            : "We haven't detected the payment yet. If you already paid, contact support."
+        )
+        return
+      }
+
+      try {
+        const res = await tgFetch('/api/subscription', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'confirm_crypto',
+            plan: planId,
+            reference,
+          }),
+        })
+        const data = await res.json()
+
+        if (data.status === 'paid') {
+          stopVipPolling()
+          setShowVipSuccess(true)
+          await loadVipStatus()
+          await refresh()
+          setTimeout(() => setShowVipSuccess(false), 5000)
+        } else {
+          setVipPendingStatus(
+            lang === 'es'
+              ? `Confirmando en la blockchain… (${attempts}/${MAX_ATTEMPTS})`
+              : `Confirming on-chain… (${attempts}/${MAX_ATTEMPTS})`
+          )
+        }
+      } catch (e) {
+        console.error('[shop] vip poll error:', e)
+      }
+    }, 4000)
+  }
+
+  const stopVipPolling = () => {
+    if (vipPollRef.current) {
+      clearInterval(vipPollRef.current)
+      vipPollRef.current = null
+    }
+    setVipPendingRef(null)
+    setVipPendingStatus('')
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // Cancelar VIP
   // ═══════════════════════════════════════════════════════════════
   const cancelVip = async () => {
     const confirmed = confirm(
@@ -205,6 +343,10 @@ export default function ShopPage() {
       if (pollRef.current) {
         clearInterval(pollRef.current)
         pollRef.current = null
+      }
+      if (vipPollRef.current) {
+        clearInterval(vipPollRef.current)
+        vipPollRef.current = null
       }
     }
   }, [])
@@ -407,15 +549,37 @@ export default function ShopPage() {
       </header>
 
       {/* ═══════════════════════════════════════════════════════════════
-          ✅ NUEVA SECCIÓN VIP
+          SECCIÓN VIP
       ═══════════════════════════════════════════════════════════════ */}
       <section style={{ padding: '20px 16px 0' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
           <span style={{ fontSize: 22 }}>👑</span>
           <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>
-            {lang === 'es' ? 'Taboo Realm VIP' : 'Taboo Realm VIP'}
+            Taboo Realm VIP
           </h2>
         </div>
+
+        {/* ✅ VIP CRYPTO: banner de verificación crypto */}
+        {vipPendingRef && (
+          <div
+            style={{
+              marginBottom: 12,
+              padding: 14,
+              borderRadius: 14,
+              background:
+                'linear-gradient(135deg, rgba(251,191,36,0.15), rgba(251,191,36,0.05))',
+              border: '1px solid rgba(251, 191, 36, 0.4)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+            }}
+          >
+            <div className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }} />
+            <p style={{ fontSize: 13, color: '#fbbf24', margin: 0, flex: 1 }}>
+              {vipPendingStatus}
+            </p>
+          </div>
+        )}
 
         {vipLoading ? (
           <div style={{ height: 140, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -553,8 +717,8 @@ export default function ShopPage() {
 
               <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                 <button
-                  onClick={() => buyVip(vipSub.subscription.plan)}
-                  disabled={!!vipPurchasing}
+                  onClick={() => buyVipWithStars(vipSub.subscription.plan)}
+                  disabled={!!vipPurchasing || !!vipPendingRef}
                   style={{
                     flex: 1,
                     padding: '12px 16px',
@@ -569,11 +733,11 @@ export default function ShopPage() {
                     opacity: vipPurchasing ? 0.6 : 1,
                   }}
                 >
-                  {lang === 'es' ? 'Extender' : 'Extend'}
+                  ⭐ {lang === 'es' ? 'Extender' : 'Extend'}
                 </button>
                 <button
                   onClick={cancelVip}
-                  disabled={!!vipPurchasing}
+                  disabled={!!vipPurchasing || !!vipPendingRef}
                   style={{
                     flex: 1,
                     padding: '12px 16px',
@@ -608,29 +772,24 @@ export default function ShopPage() {
                 : 'Unlimited messages · Free daily images · Exclusive characters'}
             </p>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {VIP_PLANS.map((plan) => {
                 const isPurchasing = vipPurchasing === plan.id
                 const planLabel = plan.label[lang === 'es' ? 'es' : 'en']
                 const planPrice = plan.price[lang === 'es' ? 'es' : 'en']
+                const cryptoPrice = `$${plan.crypto_price.toFixed(2)}`
                 const planSavings = plan.savings
                   ? plan.savings[lang === 'es' ? 'es' : 'en']
                   : null
+                const cryptoSavings = plan.crypto_savings[lang === 'es' ? 'es' : 'en']
 
                 return (
-                  <button
+                  <div
                     key={plan.id}
-                    onClick={() => buyVip(plan.id)}
-                    disabled={!!vipPurchasing}
                     style={{
                       position: 'relative',
-                      width: '100%',
-                      padding: 16,
                       borderRadius: 18,
-                      textAlign: 'left',
-                      cursor: vipPurchasing ? 'wait' : 'pointer',
-                      fontFamily: 'inherit',
-                      color: '#fff',
+                      overflow: 'hidden',
                       background: plan.popular
                         ? 'linear-gradient(135deg, #a855f7 0%, #ec4899 100%)'
                         : plan.bestValue
@@ -641,16 +800,13 @@ export default function ShopPage() {
                         : plan.bestValue
                         ? '2px solid rgba(251, 191, 36, 0.8)'
                         : '2px solid rgba(168, 85, 247, 0.3)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 14,
                       boxShadow: plan.popular
                         ? '0 8px 28px rgba(236, 72, 153, 0.5)'
                         : plan.bestValue
                         ? '0 8px 28px rgba(251, 191, 36, 0.5)'
                         : 'none',
-                      opacity: vipPurchasing && !isPurchasing ? 0.5 : 1,
-                      transition: 'all 0.2s ease',
+                      opacity: vipPurchasing && !isPurchasing ? 0.6 : 1,
+                      transition: 'opacity 0.2s ease',
                     }}
                   >
                     {/* Badge popular / best value */}
@@ -658,9 +814,9 @@ export default function ShopPage() {
                       <div
                         style={{
                           position: 'absolute',
-                          top: -8,
+                          top: 10,
                           right: 12,
-                          background: plan.bestValue ? '#1a1228' : '#1a1228',
+                          background: '#1a1228',
                           color: plan.bestValue ? '#fbbf24' : '#f0abfc',
                           fontSize: 9,
                           fontWeight: 900,
@@ -670,6 +826,7 @@ export default function ShopPage() {
                           border: plan.bestValue
                             ? '1px solid #fbbf24'
                             : '1px solid #f0abfc',
+                          zIndex: 2,
                         }}
                       >
                         {plan.bestValue
@@ -678,93 +835,143 @@ export default function ShopPage() {
                       </div>
                     )}
 
+                    {/* Info del plan */}
+                    <div style={{ padding: 16, display: 'flex', alignItems: 'center', gap: 14 }}>
+                      <div
+                        style={{
+                          width: 48,
+                          height: 48,
+                          borderRadius: 14,
+                          background:
+                            plan.popular || plan.bestValue
+                              ? 'rgba(0,0,0,0.2)'
+                              : 'rgba(168, 85, 247, 0.2)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: 24,
+                          flexShrink: 0,
+                        }}
+                      >
+                        {plan.emoji}
+                      </div>
+
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p
+                          style={{
+                            fontSize: 16,
+                            fontWeight: 800,
+                            margin: 0,
+                            color: '#fff',
+                            textShadow:
+                              plan.popular || plan.bestValue
+                                ? '0 1px 4px rgba(0,0,0,0.2)'
+                                : 'none',
+                          }}
+                        >
+                          {planLabel}
+                        </p>
+                        <p
+                          style={{
+                            fontSize: 11,
+                            margin: '2px 0 0 0',
+                            color:
+                              plan.popular || plan.bestValue
+                                ? 'rgba(255,255,255,0.85)'
+                                : '#a395c9',
+                            fontWeight: 600,
+                          }}
+                        >
+                          {plan.days} {lang === 'es' ? 'días' : 'days'}
+                          {planSavings && (
+                            <>
+                              {' · '}
+                              <span
+                                style={{
+                                  color: plan.bestValue
+                                    ? '#1a1228'
+                                    : plan.popular
+                                    ? '#fef3c7'
+                                    : '#22c55e',
+                                  fontWeight: 800,
+                                }}
+                              >
+                                {planSavings}
+                              </span>
+                            </>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* ✅ VIP CRYPTO: dos botones de pago */}
                     <div
                       style={{
-                        width: 48,
-                        height: 48,
-                        borderRadius: 14,
-                        background:
-                          plan.popular || plan.bestValue
-                            ? 'rgba(0,0,0,0.2)'
-                            : 'rgba(168, 85, 247, 0.2)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: 24,
-                        flexShrink: 0,
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1fr',
+                        gap: 8,
+                        padding: '0 16px 16px 16px',
                       }}
                     >
-                      {plan.emoji}
-                    </div>
-
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p
+                      {/* Botón STARS */}
+                      <button
+                        onClick={() => buyVipWithStars(plan.id)}
+                        disabled={!!vipPurchasing || !!vipPendingRef}
                         style={{
-                          fontSize: 16,
+                          padding: '12px 10px',
+                          borderRadius: 12,
+                          background: plan.popular || plan.bestValue
+                            ? '#fff'
+                            : 'rgba(255, 255, 255, 0.1)',
+                          border: 'none',
+                          color: plan.popular || plan.bestValue
+                            ? (plan.bestValue ? '#d97706' : '#a855f7')
+                            : '#fff',
+                          fontSize: 13,
                           fontWeight: 800,
-                          margin: 0,
-                          color: '#fff',
-                          textShadow:
-                            plan.popular || plan.bestValue
-                              ? '0 1px 4px rgba(0,0,0,0.2)'
-                              : 'none',
+                          cursor: 'pointer',
+                          fontFamily: 'inherit',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          gap: 2,
+                          opacity: vipPurchasing && !isPurchasing ? 0.5 : 1,
                         }}
                       >
-                        {planLabel}
-                      </p>
-                      <p
-                        style={{
-                          fontSize: 11,
-                          margin: '2px 0 0 0',
-                          color:
-                            plan.popular || plan.bestValue
-                              ? 'rgba(255,255,255,0.85)'
-                              : '#a395c9',
-                          fontWeight: 600,
-                        }}
-                      >
-                        {plan.days} {lang === 'es' ? 'días' : 'days'}
-                        {planSavings && (
-                          <>
-                            {' · '}
-                            <span style={{ color: plan.bestValue ? '#1a1228' : plan.popular ? '#fef3c7' : '#22c55e', fontWeight: 800 }}>
-                              {planSavings}
-                            </span>
-                          </>
-                        )}
-                      </p>
-                    </div>
+                        <span>⭐ {planPrice}</span>
+                        <span style={{ fontSize: 9, opacity: 0.75, fontWeight: 600 }}>
+                          {plan.stars} Stars
+                        </span>
+                      </button>
 
-                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                      <p
+                      {/* Botón USDT */}
+                      <button
+                        onClick={() => buyVipWithCrypto(plan.id)}
+                        disabled={!!vipPurchasing || !!vipPendingRef}
                         style={{
-                          fontSize: 17,
-                          fontWeight: 900,
-                          margin: 0,
-                          color: '#fff',
-                          textShadow:
-                            plan.popular || plan.bestValue
-                              ? '0 1px 4px rgba(0,0,0,0.2)'
-                              : 'none',
+                          padding: '12px 10px',
+                          borderRadius: 12,
+                          background: 'rgba(34, 197, 94, 0.15)',
+                          border: '1px solid rgba(34, 197, 94, 0.6)',
+                          color: '#4ade80',
+                          fontSize: 13,
+                          fontWeight: 800,
+                          cursor: 'pointer',
+                          fontFamily: 'inherit',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          gap: 2,
+                          opacity: vipPurchasing && !isPurchasing ? 0.5 : 1,
                         }}
                       >
-                        {planPrice}
-                      </p>
-                      <p
-                        style={{
-                          fontSize: 10,
-                          color:
-                            plan.popular || plan.bestValue
-                              ? 'rgba(255,255,255,0.75)'
-                              : '#8b8b9e',
-                          margin: 0,
-                          fontWeight: 700,
-                        }}
-                      >
-                        {plan.stars} ⭐
-                      </p>
+                        <span>💎 {cryptoPrice}</span>
+                        <span style={{ fontSize: 9, opacity: 0.9, fontWeight: 700 }}>
+                          {cryptoSavings}
+                        </span>
+                      </button>
                     </div>
-                  </button>
+                  </div>
                 )
               })}
             </div>
@@ -827,7 +1034,7 @@ export default function ShopPage() {
       </section>
 
       {/* ═══════════════════════════════════════════════════════════════
-          TABS DE MÉTODO DE PAGO (existente)
+          TABS DE MÉTODO DE PAGO para GEMAS (existente)
       ═══════════════════════════════════════════════════════════════ */}
       <section style={{ padding: '20px 16px 0' }}>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -1103,7 +1310,7 @@ export default function ShopPage() {
       </section>
 
       {/* ═══════════════════════════════════════════════════════════════
-          ✅ MODAL DE ÉXITO VIP
+          MODAL DE ÉXITO VIP
       ═══════════════════════════════════════════════════════════════ */}
       {showVipSuccess && (
         <div className="modal-backdrop">
