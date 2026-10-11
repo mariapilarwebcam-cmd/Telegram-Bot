@@ -862,15 +862,15 @@ export const VIP_PLANS: VipPlan[] = [
   },
   {
     id: 'monthly',
-    stars: 550,
+    stars: 650,
     days: 30,
     emoji: '💎',
     popular: true,
     label: { es: 'Mensual', en: 'Monthly' },
-    price: { es: '$7.99', en: '$7.99' },
-    crypto_price: 6.79,
-    savings: { es: 'Ahorras 20%', en: 'Save 20%' },
-    crypto_savings: { es: 'Ahorras 32%', en: 'Save 32%' },
+    price: { es: '$9.99', en: '$9.99' },
+    crypto_price: 8.49,
+    savings: { es: 'Ahorras 42%', en: 'Save 42%' },
+    crypto_savings: { es: 'Ahorras 51%', en: 'Save 51%' },
   },
   {
     id: 'quarterly',
@@ -879,13 +879,12 @@ export const VIP_PLANS: VipPlan[] = [
     emoji: '👑',
     bestValue: true,
     label: { es: 'Trimestral', en: 'Quarterly' },
-    price: { es: '$17.99', en: '$17.99' },
-    crypto_price: 15.29,
-    savings: { es: 'Ahorras 45%', en: 'Save 45%' },
-    crypto_savings: { es: 'Ahorras 53%', en: 'Save 53%' },
+    price: { es: '$19.99', en: '$19.99' },
+    crypto_price: 16.99,
+    savings: { es: 'Ahorras 61%', en: 'Save 61%' },
+    crypto_savings: { es: 'Ahorras 67%', en: 'Save 67%' },
   },
 ]
-
 // Límites fair-use VIP (para evitar abuso)
 export const VIP_DAILY_MESSAGE_LIMIT = 150
 export const VIP_DAILY_FREE_IMAGES = 3
