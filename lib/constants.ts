@@ -917,8 +917,11 @@ export const VIP_ARCHETYPES: string[] = [
   'angel_m',
 ]
 
-// ✅ Ahora VIP = todos los fantasy automáticamente
-// Si añades un fantasy nuevo, se marca VIP solo
+// ═══════════════════════════════════════════════════════════════
+// VIP ARCHETYPES — todos los fantasy son VIP
+// Se reutiliza la lista de FANTASY_ARCHETYPES definida arriba
+// ═══════════════════════════════════════════════════════════════
+
 export function isVipArchetype(archetype: string): boolean {
   return FANTASY_ARCHETYPES.includes(archetype)
 }
