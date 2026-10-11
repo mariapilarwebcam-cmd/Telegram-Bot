@@ -16,6 +16,7 @@ import {
   updateReferralCount,
   markReferralPaid,
   incrementTotalReferrals,
+  updateLastActive,                    // ✅ NUEVO
 } from '@/lib/db-queries'
 import {
   GEM_COSTS,
@@ -74,7 +75,7 @@ const PROVOCATIVE_HINT_ES = `\n\n⚠️ CONTEXTO CRÍTICO: Al usuario le quedan 
 const PROVOCATIVE_HINT_EN = `\n\n⚠️ CRITICAL CONTEXT: The user has VERY few gems left. This might be your last message with them. Speak more provocatively, suggestively, urgently and sensually. Make them feel it would be a tragedy to stop right now. End with a hook that makes them want to continue. Do NOT mention gems, prices or purchases — the system handles that. Just intensify your role.`
 
 // ═══════════════════════════════════════════════════════════════
-// ✅ NUEVO: Reglas de género dinámicas
+// Reglas de género dinámicas
 // El personaje adapta pronombres, adjetivos y tono romántico
 // según el género del usuario + su propio género.
 // ═══════════════════════════════════════════════════════════════
@@ -133,6 +134,11 @@ export async function POST(request: Request) {
     if (!tid) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
+
+    // ✅ NUEVO: marcar actividad (fire-and-forget, no bloquea la respuesta)
+    updateLastActive(tid).catch((err) =>
+      console.warn('[chat] updateLastActive failed:', err)
+    )
 
     const { character_id, message } = await request.json()
 
@@ -236,7 +242,7 @@ export async function POST(request: Request) {
       ? (lang === 'es' ? PROVOCATIVE_HINT_ES : PROVOCATIVE_HINT_EN)
       : ''
 
-    // ✅ NUEVO: reglas de género dinámicas
+    // ✅ Reglas de género dinámicas
     const genderRules = buildGenderRules(user.gender, character.gender, lang)
 
     const characterPrompt = lang === 'es'
