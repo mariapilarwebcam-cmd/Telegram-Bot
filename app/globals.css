@@ -33,9 +33,9 @@ html, body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
-  /* ✅ NUEVO: bloquea gestos de overscroll que Telegram usa para minimizar */
+  /* ✅ Solo bloquea overscroll horizontal (para el swipe-back).
+     El vertical NO se bloquea para no romper el scroll de /legal/* */
   overscroll-behavior-x: none;
-  overscroll-behavior-y: none;
 }
 
 /* ============ APP SHELL ============ */
