@@ -825,3 +825,121 @@ export async function markImageSeen(
     throw e
   }
 }
+
+// ═══════════════════════════════════════════════════════════════
+// SUBSCRIPTIONS (VIP)
+// ═══════════════════════════════════════════════════════════════
+
+export interface SubscriptionRow {
+  id: number
+  telegram_id: string
+  plan: 'weekly' | 'monthly' | 'quarterly'
+  stars_paid: number
+  telegram_charge_id: string
+  started_at: string
+  expires_at: string
+  status: 'active' | 'expired' | 'cancelled'
+  cancelled_at: string | null
+  created_at: string
+}
+
+/**
+ * Devuelve la suscripción activa del usuario, o null si no tiene.
+ * Una suscripción es activa si status='active' Y expires_at > ahora.
+ */
+export async function getActiveSubscription(
+  telegram_id: string
+): Promise<SubscriptionRow | null> {
+  return queryOne<SubscriptionRow>(
+    `SELECT * FROM subscriptions
+     WHERE telegram_id = ?
+       AND status = 'active'
+       AND expires_at > datetime('now')
+     ORDER BY expires_at DESC
+     LIMIT 1`,
+    [telegram_id]
+  )
+}
+
+/**
+ * Helper rápido: ¿es VIP ahora mismo?
+ */
+export async function isUserVip(telegram_id: string): Promise<boolean> {
+  const sub = await getActiveSubscription(telegram_id)
+  return !!sub
+}
+
+/**
+ * Crea una nueva suscripción.
+ * Maneja UNIQUE del charge_id (idempotencia).
+ */
+export async function createSubscription(data: {
+  telegram_id: string
+  plan: 'weekly' | 'monthly' | 'quarterly'
+  stars_paid: number
+  telegram_charge_id: string
+  expires_at: string
+}): Promise<boolean> {
+  try {
+    await execute(
+      `INSERT INTO subscriptions
+        (telegram_id, plan, stars_paid, telegram_charge_id, expires_at, status)
+       VALUES (?, ?, ?, ?, ?, 'active')`,
+      [
+        data.telegram_id,
+        data.plan,
+        data.stars_paid,
+        data.telegram_charge_id,
+        data.expires_at,
+      ]
+    )
+    return true
+  } catch (e: any) {
+    if (String(e?.message || '').includes('UNIQUE')) return false
+    throw e
+  }
+}
+
+/**
+ * Cancela la suscripción activa (no elimina el acceso hasta que expire).
+ */
+export async function cancelActiveSubscription(
+  telegram_id: string
+): Promise<boolean> {
+  const result = await execute(
+    `UPDATE subscriptions
+     SET status = 'cancelled',
+         cancelled_at = datetime('now')
+     WHERE telegram_id = ?
+       AND status = 'active'
+       AND expires_at > datetime('now')`,
+    [telegram_id]
+  )
+  return result.rowsAffected > 0
+}
+
+/**
+ * Marca como expiradas todas las suscripciones vencidas.
+ * Se llama desde el cron para mantener la DB limpia.
+ */
+export async function expireOldSubscriptions(): Promise<number> {
+  const result = await execute(
+    `UPDATE subscriptions
+     SET status = 'expired'
+     WHERE status = 'active'
+       AND expires_at <= datetime('now')`,
+    []
+  )
+  return result.rowsAffected
+}
+
+/**
+ * ¿Ya existe una suscripción con este charge_id? (idempotencia)
+ */
+export async function getSubscriptionByChargeId(charge_id: string) {
+  return queryOne<SubscriptionRow>(
+    `SELECT * FROM subscriptions
+     WHERE telegram_charge_id = ? LIMIT 1`,
+    [charge_id]
+  )
+}
