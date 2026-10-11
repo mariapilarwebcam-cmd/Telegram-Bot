@@ -20,7 +20,7 @@
     "next": "14.0.4",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "posthog-js": "^1.150.0"
+    "posthog-js": "^1.438.7"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
