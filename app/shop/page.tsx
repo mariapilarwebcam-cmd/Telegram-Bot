@@ -5,6 +5,7 @@ import { tgFetch } from '@/lib/telegram-fetch'
 import {
   STAR_PACKAGES,
   CRYPTO_PACKAGES,
+  VIP_PLANS,
   getFinalGems,
   getFinalCryptoGems,
 } from '@/lib/constants'
@@ -25,11 +26,140 @@ export default function ShopPage() {
   const [pendingStatus, setPendingStatus] = useState<string>('')
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
+  // ✅ NUEVO: estados VIP
+  const [vipSub, setVipSub] = useState<{ active: boolean; subscription: any } | null>(null)
+  const [vipLoading, setVipLoading] = useState(true)
+  const [vipPurchasing, setVipPurchasing] = useState<string | null>(null)
+  const [showVipSuccess, setShowVipSuccess] = useState(false)
+
   const { pay } = useTonPay()
   const t = getTranslations(lang)
 
   // ═══════════════════════════════════════════════════════════════
-  // ✅ MIGRADO: ahora usa /api/is-premium (Turso)
+  // ✅ Cargar estado VIP al montar
+  // ═══════════════════════════════════════════════════════════════
+  useEffect(() => {
+    if (!user?.telegram_id) {
+      if (!userLoading) setVipLoading(false)
+      return
+    }
+    loadVipStatus()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.telegram_id, userLoading])
+
+  const loadVipStatus = async () => {
+    try {
+      const res = await tgFetch('/api/subscription')
+      if (res.ok) {
+        const data = await res.json()
+        setVipSub(data)
+      }
+    } catch (e) {
+      console.warn('[shop] vip status error:', e)
+    } finally {
+      setVipLoading(false)
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // ✅ Comprar plan VIP
+  // ═══════════════════════════════════════════════════════════════
+  const buyVip = async (planId: 'weekly' | 'monthly' | 'quarterly') => {
+    if (!user || vipPurchasing) return
+    setVipPurchasing(planId)
+
+    try {
+      // 1. Crear invoice
+      const res = await tgFetch('/api/subscription', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'create_invoice', plan: planId }),
+      })
+      const data = await res.json()
+
+      if (!res.ok || !data.invoice_link) {
+        alert(data.error || 'Error creando factura')
+        setVipPurchasing(null)
+        return
+      }
+
+      // 2. Abrir invoice
+      const mod = await import('@twa-dev/sdk')
+      const WebApp = mod.default
+
+      WebApp.openInvoice(data.invoice_link, async (status: string) => {
+        if (status === 'paid') {
+          // 3. Confirmar en backend
+          try {
+            const confirmRes = await tgFetch('/api/subscription', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'confirm',
+                plan: planId,
+                reference: data.reference,
+              }),
+            })
+            const confirmData = await confirmRes.json()
+
+            if (confirmRes.ok && confirmData.ok) {
+              setShowVipSuccess(true)
+              await loadVipStatus()
+              await refresh()
+              setTimeout(() => setShowVipSuccess(false), 5000)
+            } else {
+              alert(confirmData.error || 'Error activando suscripción')
+            }
+          } catch (e: any) {
+            alert('Error activando: ' + (e?.message || 'desconocido'))
+          }
+        } else if (status === 'failed') {
+          alert(lang === 'es' ? 'Pago fallido' : 'Payment failed')
+        }
+        // 'cancelled' → no hacer nada
+        setVipPurchasing(null)
+      })
+    } catch (e: any) {
+      alert('Error: ' + (e?.message || 'desconocido'))
+      setVipPurchasing(null)
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // ✅ Cancelar suscripción VIP
+  // ═══════════════════════════════════════════════════════════════
+  const cancelVip = async () => {
+    const confirmed = confirm(
+      lang === 'es'
+        ? '¿Cancelar tu suscripción VIP? Mantendrás acceso hasta la fecha de expiración.'
+        : 'Cancel your VIP subscription? You will keep access until the expiration date.'
+    )
+    if (!confirmed) return
+
+    try {
+      const res = await tgFetch('/api/subscription', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'cancel' }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        alert(
+          lang === 'es'
+            ? '✅ Suscripción cancelada. Mantienes acceso VIP hasta que expire.'
+            : '✅ Subscription cancelled. You keep VIP access until it expires.'
+        )
+        await loadVipStatus()
+      } else {
+        alert(data.error || 'Error')
+      }
+    } catch (e: any) {
+      alert('Error: ' + (e?.message || 'desconocido'))
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // Packs de gemas (existente)
   // ═══════════════════════════════════════════════════════════════
   useEffect(() => {
     if (!user?.telegram_id) {
@@ -37,7 +167,6 @@ export default function ShopPage() {
       return
     }
 
-    // Cache en memoria
     if (purchaseCache[user.telegram_id] !== undefined) {
       setHasPurchased(purchaseCache[user.telegram_id])
       setChecking(false)
@@ -253,6 +382,8 @@ export default function ShopPage() {
       return !hasPurchased
     })
 
+  const isVipActive = !!vipSub?.active
+
   return (
     <div className="page">
       <header className="page-header">
@@ -275,7 +406,390 @@ export default function ShopPage() {
         </div>
       </header>
 
+      {/* ═══════════════════════════════════════════════════════════════
+          ✅ NUEVA SECCIÓN VIP
+      ═══════════════════════════════════════════════════════════════ */}
       <section style={{ padding: '20px 16px 0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+          <span style={{ fontSize: 22 }}>👑</span>
+          <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>
+            {lang === 'es' ? 'Taboo Realm VIP' : 'Taboo Realm VIP'}
+          </h2>
+        </div>
+
+        {vipLoading ? (
+          <div style={{ height: 140, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div className="spinner" />
+          </div>
+        ) : isVipActive ? (
+          // ─── USUARIO YA ES VIP ───
+          <div
+            style={{
+              padding: 20,
+              borderRadius: 20,
+              background:
+                'linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #d97706 100%)',
+              boxShadow: '0 12px 40px rgba(251, 191, 36, 0.4)',
+              position: 'relative',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                position: 'absolute',
+                top: -20,
+                right: -20,
+                fontSize: 140,
+                opacity: 0.15,
+                pointerEvents: 'none',
+              }}
+            >
+              👑
+            </div>
+
+            <div style={{ position: 'relative', zIndex: 1 }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  marginBottom: 12,
+                }}
+              >
+                <span style={{ fontSize: 24 }}>✨</span>
+                <div>
+                  <p
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 800,
+                      letterSpacing: '0.1em',
+                      color: 'rgba(255,255,255,0.85)',
+                      margin: 0,
+                    }}
+                  >
+                    VIP ACTIVO
+                  </p>
+                  <h3
+                    style={{
+                      fontSize: 22,
+                      fontWeight: 900,
+                      color: '#fff',
+                      margin: '2px 0 0 0',
+                      textShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                    }}
+                  >
+                    {VIP_PLANS.find((p) => p.id === vipSub.subscription.plan)
+                      ? VIP_PLANS.find((p) => p.id === vipSub.subscription.plan)!
+                          .label[lang === 'es' ? 'es' : 'en']
+                      : 'VIP'}
+                  </h3>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  display: 'flex',
+                  gap: 16,
+                  padding: 14,
+                  borderRadius: 14,
+                  background: 'rgba(0,0,0,0.15)',
+                  backdropFilter: 'blur(8px)',
+                }}
+              >
+                <div style={{ flex: 1 }}>
+                  <p
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 700,
+                      color: 'rgba(255,255,255,0.75)',
+                      margin: 0,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.06em',
+                    }}
+                  >
+                    {lang === 'es' ? 'Días restantes' : 'Days left'}
+                  </p>
+                  <p
+                    style={{
+                      fontSize: 24,
+                      fontWeight: 900,
+                      color: '#fff',
+                      margin: '2px 0 0 0',
+                    }}
+                  >
+                    {vipSub.subscription.days_remaining}
+                  </p>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <p
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 700,
+                      color: 'rgba(255,255,255,0.75)',
+                      margin: 0,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.06em',
+                    }}
+                  >
+                    {lang === 'es' ? 'Expira' : 'Expires'}
+                  </p>
+                  <p
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 700,
+                      color: '#fff',
+                      margin: '6px 0 0 0',
+                    }}
+                  >
+                    {new Date(
+                      vipSub.subscription.expires_at.replace(' ', 'T') + 'Z'
+                    ).toLocaleDateString(lang === 'es' ? 'es-ES' : 'en-US', {
+                      day: 'numeric',
+                      month: 'short',
+                    })}
+                  </p>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                <button
+                  onClick={() => buyVip(vipSub.subscription.plan)}
+                  disabled={!!vipPurchasing}
+                  style={{
+                    flex: 1,
+                    padding: '12px 16px',
+                    borderRadius: 12,
+                    background: '#fff',
+                    border: 'none',
+                    color: '#d97706',
+                    fontSize: 13,
+                    fontWeight: 800,
+                    cursor: vipPurchasing ? 'wait' : 'pointer',
+                    fontFamily: 'inherit',
+                    opacity: vipPurchasing ? 0.6 : 1,
+                  }}
+                >
+                  {lang === 'es' ? 'Extender' : 'Extend'}
+                </button>
+                <button
+                  onClick={cancelVip}
+                  disabled={!!vipPurchasing}
+                  style={{
+                    flex: 1,
+                    padding: '12px 16px',
+                    borderRadius: 12,
+                    background: 'rgba(0,0,0,0.2)',
+                    border: '1px solid rgba(255,255,255,0.3)',
+                    color: '#fff',
+                    fontSize: 13,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  {lang === 'es' ? 'Cancelar' : 'Cancel'}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          // ─── NO ES VIP: MOSTRAR PLANES ───
+          <>
+            <p
+              style={{
+                fontSize: 13,
+                color: '#a395c9',
+                margin: '0 0 14px 0',
+                lineHeight: 1.55,
+              }}
+            >
+              {lang === 'es'
+                ? 'Mensajes ilimitados · Imágenes gratis diarias · Personajes exclusivos'
+                : 'Unlimited messages · Free daily images · Exclusive characters'}
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {VIP_PLANS.map((plan) => {
+                const isPurchasing = vipPurchasing === plan.id
+                const planLabel = plan.label[lang === 'es' ? 'es' : 'en']
+                const planPrice = plan.price[lang === 'es' ? 'es' : 'en']
+                const planSavings = plan.savings
+                  ? plan.savings[lang === 'es' ? 'es' : 'en']
+                  : null
+
+                return (
+                  <button
+                    key={plan.id}
+                    onClick={() => buyVip(plan.id)}
+                    disabled={!!vipPurchasing}
+                    style={{
+                      position: 'relative',
+                      width: '100%',
+                      padding: 16,
+                      borderRadius: 18,
+                      textAlign: 'left',
+                      cursor: vipPurchasing ? 'wait' : 'pointer',
+                      fontFamily: 'inherit',
+                      color: '#fff',
+                      background: plan.popular
+                        ? 'linear-gradient(135deg, #a855f7 0%, #ec4899 100%)'
+                        : plan.bestValue
+                        ? 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #d97706 100%)'
+                        : 'rgba(168, 85, 247, 0.12)',
+                      border: plan.popular
+                        ? '2px solid rgba(240, 171, 252, 0.8)'
+                        : plan.bestValue
+                        ? '2px solid rgba(251, 191, 36, 0.8)'
+                        : '2px solid rgba(168, 85, 247, 0.3)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 14,
+                      boxShadow: plan.popular
+                        ? '0 8px 28px rgba(236, 72, 153, 0.5)'
+                        : plan.bestValue
+                        ? '0 8px 28px rgba(251, 191, 36, 0.5)'
+                        : 'none',
+                      opacity: vipPurchasing && !isPurchasing ? 0.5 : 1,
+                      transition: 'all 0.2s ease',
+                    }}
+                  >
+                    {/* Badge popular / best value */}
+                    {(plan.popular || plan.bestValue) && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: -8,
+                          right: 12,
+                          background: plan.bestValue ? '#1a1228' : '#1a1228',
+                          color: plan.bestValue ? '#fbbf24' : '#f0abfc',
+                          fontSize: 9,
+                          fontWeight: 900,
+                          letterSpacing: '0.1em',
+                          padding: '4px 10px',
+                          borderRadius: 8,
+                          border: plan.bestValue
+                            ? '1px solid #fbbf24'
+                            : '1px solid #f0abfc',
+                        }}
+                      >
+                        {plan.bestValue
+                          ? (lang === 'es' ? 'MEJOR VALOR' : 'BEST VALUE')
+                          : (lang === 'es' ? 'POPULAR' : 'POPULAR')}
+                      </div>
+                    )}
+
+                    <div
+                      style={{
+                        width: 48,
+                        height: 48,
+                        borderRadius: 14,
+                        background:
+                          plan.popular || plan.bestValue
+                            ? 'rgba(0,0,0,0.2)'
+                            : 'rgba(168, 85, 247, 0.2)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: 24,
+                        flexShrink: 0,
+                      }}
+                    >
+                      {plan.emoji}
+                    </div>
+
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p
+                        style={{
+                          fontSize: 16,
+                          fontWeight: 800,
+                          margin: 0,
+                          color: '#fff',
+                          textShadow:
+                            plan.popular || plan.bestValue
+                              ? '0 1px 4px rgba(0,0,0,0.2)'
+                              : 'none',
+                        }}
+                      >
+                        {planLabel}
+                      </p>
+                      <p
+                        style={{
+                          fontSize: 11,
+                          margin: '2px 0 0 0',
+                          color:
+                            plan.popular || plan.bestValue
+                              ? 'rgba(255,255,255,0.85)'
+                              : '#a395c9',
+                          fontWeight: 600,
+                        }}
+                      >
+                        {plan.days} {lang === 'es' ? 'días' : 'days'}
+                        {planSavings && (
+                          <>
+                            {' · '}
+                            <span style={{ color: plan.bestValue ? '#1a1228' : plan.popular ? '#fef3c7' : '#22c55e', fontWeight: 800 }}>
+                              {planSavings}
+                            </span>
+                          </>
+                        )}
+                      </p>
+                    </div>
+
+                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                      <p
+                        style={{
+                          fontSize: 17,
+                          fontWeight: 900,
+                          margin: 0,
+                          color: '#fff',
+                          textShadow:
+                            plan.popular || plan.bestValue
+                              ? '0 1px 4px rgba(0,0,0,0.2)'
+                              : 'none',
+                        }}
+                      >
+                        {planPrice}
+                      </p>
+                      <p
+                        style={{
+                          fontSize: 10,
+                          color:
+                            plan.popular || plan.bestValue
+                              ? 'rgba(255,255,255,0.75)'
+                              : '#8b8b9e',
+                          margin: 0,
+                          fontWeight: 700,
+                        }}
+                      >
+                        {plan.stars} ⭐
+                      </p>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+
+            <p
+              style={{
+                fontSize: 10,
+                color: '#6b6b7e',
+                margin: '12px 0 0 0',
+                textAlign: 'center',
+                lineHeight: 1.5,
+              }}
+            >
+              {lang === 'es'
+                ? '💡 Se renueva automáticamente. Puedes cancelar cuando quieras.'
+                : '💡 Auto-renews. Cancel anytime.'}
+            </p>
+          </>
+        )}
+      </section>
+
+      {/* ═══════════════════════════════════════════════════════════════
+          BANNER PREMIUM (existente)
+      ═══════════════════════════════════════════════════════════════ */}
+      <section style={{ padding: '28px 16px 0' }}>
         <div
           style={{
             position: 'relative',
@@ -312,6 +826,9 @@ export default function ShopPage() {
         </div>
       </section>
 
+      {/* ═══════════════════════════════════════════════════════════════
+          TABS DE MÉTODO DE PAGO (existente)
+      ═══════════════════════════════════════════════════════════════ */}
       <section style={{ padding: '20px 16px 0' }}>
         <div style={{ display: 'flex', gap: 8 }}>
           <button
@@ -584,6 +1101,55 @@ export default function ShopPage() {
               })}
         </div>
       </section>
+
+      {/* ═══════════════════════════════════════════════════════════════
+          ✅ MODAL DE ÉXITO VIP
+      ═══════════════════════════════════════════════════════════════ */}
+      {showVipSuccess && (
+        <div className="modal-backdrop">
+          <div className="modal-box level-up-modal">
+            <div style={{ fontSize: 60, textAlign: 'center', marginBottom: 8 }}>👑</div>
+            <h2
+              className="modal-title"
+              style={{
+                textAlign: 'center',
+                fontSize: 24,
+                marginTop: 6,
+                background: 'linear-gradient(135deg, #fbbf24, #f59e0b)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+              }}
+            >
+              {lang === 'es' ? '¡Bienvenido a VIP!' : 'Welcome to VIP!'}
+            </h2>
+            <p
+              style={{
+                fontSize: 14,
+                color: '#c4b5fd',
+                textAlign: 'center',
+                margin: '12px 0 20px 0',
+                lineHeight: 1.6,
+              }}
+            >
+              {lang === 'es'
+                ? 'Disfruta de mensajes ilimitados, imágenes gratis diarias y acceso a personajes exclusivos.'
+                : 'Enjoy unlimited messages, free daily images and access to exclusive characters.'}
+            </p>
+            <button
+              onClick={() => setShowVipSuccess(false)}
+              className="modal-btn primary"
+              style={{
+                width: '100%',
+                background: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)',
+                boxShadow: '0 4px 24px rgba(251, 191, 36, 0.6)',
+              }}
+            >
+              {lang === 'es' ? '¡Empezar!' : 'Get started!'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
