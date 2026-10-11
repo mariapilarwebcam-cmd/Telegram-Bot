@@ -74,8 +74,9 @@ try {
 const PUBLIC_ENDPOINTS = [
   '/api/health',
   '/api/debug',
-  '/api/bot',       // ← webhook Python
-  '/api/cron',      // ← Vercel Cron (se protege con CRON_SECRET internamente)
+  '/api/bot',       // ← webhook Python (bot principal)
+  '/api/cron',      // ← Vercel Cron (protegido con CRON_SECRET internamente)
+  '/api/support',   // ← webhook bot soporte (protegido con secret_token de Telegram)
 ]
 
 const DEV_BYPASS =
