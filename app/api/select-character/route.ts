@@ -6,8 +6,9 @@ import {
   deactivateAllCharacters,
   activateCharacter,
   insertCharacter,
+  getActiveSubscription,          // ✅ VIP
 } from '@/lib/db-queries'
-import { PERSONALITIES } from '@/lib/constants'
+import { PERSONALITIES, isVipArchetype } from '@/lib/constants'  // ✅ isVipArchetype
 
 export async function POST(request: Request) {
   try {
@@ -34,6 +35,20 @@ export async function POST(request: Request) {
     }
     if (gender !== 'male' && gender !== 'female') {
       return NextResponse.json({ error: 'gender inválido' }, { status: 400 })
+    }
+
+    // ✅ VIP: validar acceso a personajes exclusivos
+    if (isVipArchetype(archetype)) {
+      const sub = await getActiveSubscription(tid)
+      if (!sub) {
+        return NextResponse.json(
+          {
+            error: 'vip_required',
+            message: 'Este personaje es exclusivo para usuarios VIP',
+          },
+          { status: 403 }
+        )
+      }
     }
 
     // Buscar personaje existente
