@@ -830,3 +830,71 @@ export const PROACTIVE_TEMPLATES: {
     },
   ],
 }
+
+// ═══════════════════════════════════════════════════════════════
+// SUSCRIPCIONES VIP
+// ═══════════════════════════════════════════════════════════════
+
+export interface VipPlan {
+  id: 'weekly' | 'monthly' | 'quarterly'
+  stars: number
+  days: number
+  emoji: string
+  popular?: boolean
+  bestValue?: boolean
+  label: { es: string; en: string }
+  price: { es: string; en: string }
+  savings?: { es: string; en: string }
+}
+
+export const VIP_PLANS: VipPlan[] = [
+  {
+    id: 'weekly',
+    stars: 250,
+    days: 7,
+    emoji: '⚡',
+    label: { es: 'Semanal', en: 'Weekly' },
+    price: { es: '$3.99', en: '$3.99' },
+  },
+  {
+    id: 'monthly',
+    stars: 550,
+    days: 30,
+    emoji: '💎',
+    popular: true,
+    label: { es: 'Mensual', en: 'Monthly' },
+    price: { es: '$7.99', en: '$7.99' },
+    savings: { es: 'Ahorras 20%', en: 'Save 20%' },
+  },
+  {
+    id: 'quarterly',
+    stars: 1300,
+    days: 90,
+    emoji: '👑',
+    bestValue: true,
+    label: { es: 'Trimestral', en: 'Quarterly' },
+    price: { es: '$17.99', en: '$17.99' },
+    savings: { es: 'Ahorras 45%', en: 'Save 45%' },
+  },
+]
+
+// Límites fair-use VIP (para evitar abuso)
+export const VIP_DAILY_MESSAGE_LIMIT = 200
+export const VIP_DAILY_FREE_IMAGES = 5
+export const VIP_DAILY_FREE_AUDIOS = 3
+
+// Arquetipos exclusivos para VIPs (no aparecen en el catálogo público)
+export const VIP_ARCHETYPES: string[] = [
+  'vampire_lady',
+  'vampire_lord',
+  'succubus',
+  'demon_lord',
+  'kitsune',
+  'dragon_lord',
+  'fallen_angel',
+  'angel_m',
+]
+
+export function isVipArchetype(archetype: string): boolean {
+  return VIP_ARCHETYPES.includes(archetype)
+}
