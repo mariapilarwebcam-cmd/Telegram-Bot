@@ -778,3 +778,50 @@ export async function updateLastActive(telegram_id: string) {
     [nowISO(), telegram_id]
   )
 }
+
+// ═══════════════════════════════════════════════════════════════
+// IMAGE HISTORY (rotación de imágenes por personaje)
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Devuelve cuántas imágenes pre-generadas ha visto el usuario
+ * para un personaje específico. Solo cuenta las que vienen de R2
+ * (is_generated = 0). Máximo 4.
+ */
+export async function getSeenImageCount(
+  telegram_id: string,
+  character_id: number
+): Promise<number> {
+  const row = await queryOne<{ c: number }>(
+    `SELECT COUNT(*) AS c FROM user_image_history
+     WHERE telegram_id = ? AND character_id = ? AND is_generated = 0`,
+    [telegram_id, character_id]
+  )
+  return row?.c ?? 0
+}
+
+/**
+ * Registra que el usuario vio la imagen N del personaje.
+ * Si ya existía (UNIQUE), no hace nada.
+ */
+export async function markImageSeen(
+  telegram_id: string,
+  character_id: number,
+  image_index: number,
+  is_generated = false
+) {
+  try {
+    return await execute(
+      `INSERT INTO user_image_history
+        (telegram_id, character_id, image_index, is_generated)
+       VALUES (?, ?, ?, ?)`,
+      [telegram_id, character_id, image_index, is_generated ? 1 : 0]
+    )
+  } catch (e: any) {
+    // UNIQUE constraint: ya existía, OK
+    if (String(e?.message || '').includes('UNIQUE')) {
+      return { rowsAffected: 0, lastInsertRowid: 0 }
+    }
+    throw e
+  }
+}
