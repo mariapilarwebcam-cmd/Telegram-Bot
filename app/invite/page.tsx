@@ -13,6 +13,7 @@ import {
   REFERRAL_ELITE_TIER_THRESHOLD,
   REFERRAL_ELITE_TIER_PCT,
 } from '@/lib/constants'
+import { Analytics } from '@/lib/posthog'                       // ✅ PostHog
 
 export default function RewardsPage() {
   const { user, loading: userLoading, lang, refresh, isTelegram } = useUser()
@@ -59,7 +60,6 @@ export default function RewardsPage() {
     }
   }, [user, now])
 
-  // ✅ 3 gemas planas — sin racha
   const previewGems = BASE_DAILY_GEMS
 
   const handleRetry = async () => {
@@ -108,12 +108,14 @@ export default function RewardsPage() {
   const handleCopy = async () => {
     if (!user) return
     const refCode = user.username || user.referral_code
-    // ✅ Link pasa por el bot (?start=)
     const link = `https://t.me/TabooRealmBot?start=${refCode}`
     try {
       await navigator.clipboard.writeText(link)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
+
+      // ✅ PostHog: referido compartido (copiar)
+      Analytics.referralShared({ channel: 'copy' })
     } catch {
       alert(t.errorConnection)
     }
@@ -122,7 +124,6 @@ export default function RewardsPage() {
   const handleShare = () => {
     if (!user) return
     const refCode = user.username || user.referral_code
-    // ✅ Link pasa por el bot (?start=)
     const referralLink = `https://t.me/TabooRealmBot?start=${refCode}`
     const shareText =
       lang === 'es'
@@ -132,6 +133,9 @@ export default function RewardsPage() {
     const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(
       referralLink
     )}&text=${encodeURIComponent(shareText)}`
+
+    // ✅ PostHog: referido compartido (share)
+    Analytics.referralShared({ channel: 'share' })
 
     import('@twa-dev/sdk')
       .then((mod) => {
@@ -239,12 +243,10 @@ export default function RewardsPage() {
   }
 
   const refCode = user.username || user.referral_code
-  // ✅ Link pasa por el bot
   const referralLink = `https://t.me/TabooRealmBot?start=${refCode}`
   const earnedGems = (user.total_referrals || 0) * GEMS_PER_REFERRAL
   const payingCount = user.paying_referrals_count || 0
 
-  // ✅ Calcular tier actual
   let currentPct = REFERRAL_PURCHASE_COMMISSION_PCT
   let nextTierAt: number | null = REFERRAL_TOP_TIER_THRESHOLD
   let nextTierPct: number | null = REFERRAL_TOP_TIER_PCT
@@ -264,9 +266,6 @@ export default function RewardsPage() {
         <h1 className="page-title">{t.dailyClaimRewardsTitle}</h1>
       </header>
 
-      {/* ═══════════════════════════════════════════════
-          SECCIÓN 1: RECLAMO DIARIO
-      ═══════════════════════════════════════════════ */}
       <section style={{ padding: '20px 16px 0' }}>
         <div
           style={{
@@ -436,9 +435,6 @@ export default function RewardsPage() {
         </div>
       </section>
 
-      {/* ═══════════════════════════════════════════════
-          SECCIÓN 2: INVITAR AMIGOS
-      ═══════════════════════════════════════════════ */}
       <section style={{ padding: '24px 16px 0' }}>
         <div
           style={{
@@ -478,9 +474,6 @@ export default function RewardsPage() {
         </div>
       </section>
 
-      {/* ═══════════════════════════════════════════════
-          TIER DE COMISIÓN
-      ═══════════════════════════════════════════════ */}
       <section style={{ padding: '16px 16px 0' }}>
         <div
           style={{
@@ -538,7 +531,6 @@ export default function RewardsPage() {
             <span style={{ color: '#fff', fontWeight: 700 }}>{payingCount}</span>
           </div>
 
-          {/* Barra de progreso al siguiente tier */}
           {nextTierAt !== null && nextTierPct !== null && (
             <>
               <div
@@ -590,9 +582,6 @@ export default function RewardsPage() {
         </div>
       </section>
 
-      {/* ═══════════════════════════════════════════════
-          LINK DE REFERIDO
-      ═══════════════════════════════════════════════ */}
       <section style={{ padding: '24px 16px 0' }}>
         <p
           style={{
@@ -703,9 +692,6 @@ export default function RewardsPage() {
         </div>
       </section>
 
-      {/* ═══════════════════════════════════════════════
-          VERIFIED FRIENDS
-      ═══════════════════════════════════════════════ */}
       <section style={{ padding: '24px 16px 0' }}>
         <div
           style={{
@@ -770,9 +756,6 @@ export default function RewardsPage() {
         </div>
       </section>
 
-      {/* ═══════════════════════════════════════════════
-          HOW IT WORKS
-      ═══════════════════════════════════════════════ */}
       <section style={{ padding: '24px 16px' }}>
         <div
           style={{
@@ -872,9 +855,6 @@ export default function RewardsPage() {
         </div>
       </section>
 
-      {/* ═══════════════════════════════════════════════
-          MODAL DE RECLAMO
-      ═══════════════════════════════════════════════ */}
       {showClaimModal && claimResult && (
         <div className="modal-backdrop">
           <div className="modal-box">
