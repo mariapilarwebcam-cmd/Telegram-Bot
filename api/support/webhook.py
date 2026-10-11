@@ -1,15 +1,16 @@
 import sys
 import os
+import logging
 from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import JSONResponse          # ✅ FIX: import faltante
 from aiogram import Bot, Dispatcher
 from aiogram.types import Update
 from dotenv import load_dotenv
-import logging
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 load_dotenv()
 
-from support_bot import router  # Importa el router del bot de soporte
+from support_bot import router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -24,6 +25,7 @@ dp = Dispatcher()
 dp.include_router(router)
 
 app = FastAPI()
+
 
 @app.api_route("/{path:path}", methods=["GET", "POST"])
 async def catch_all(request: Request, path: str):
