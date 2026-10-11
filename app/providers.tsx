@@ -1,8 +1,44 @@
 "use client"
 
-import { ReactNode } from 'react'
+import { ReactNode, useEffect } from 'react'
+import { usePathname } from 'next/navigation'
 import { TonConnectUIProvider } from '@tonconnect/ui-react'
+import posthog from 'posthog-js'
+import { PostHogProvider as PHProvider } from 'posthog-js/react'
+import { initPostHog, capturePageView } from '@/lib/posthog'
 
+// ═══════════════════════════════════════════════════════════════
+// PageView tracker — captura cada cambio de ruta
+// ═══════════════════════════════════════════════════════════════
+function PageViewTracker() {
+  const pathname = usePathname()
+
+  useEffect(() => {
+    if (pathname) capturePageView()
+  }, [pathname])
+
+  return null
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PostHog Provider
+// ═══════════════════════════════════════════════════════════════
+export function PostHogProvider({ children }: { children: ReactNode }) {
+  useEffect(() => {
+    initPostHog()
+  }, [])
+
+  return (
+    <PHProvider client={posthog}>
+      <PageViewTracker />
+      {children}
+    </PHProvider>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TON Connect Provider (existente)
+// ═══════════════════════════════════════════════════════════════
 export function TonConnectProvider({ children }: { children: ReactNode }) {
   return (
     <TonConnectUIProvider
