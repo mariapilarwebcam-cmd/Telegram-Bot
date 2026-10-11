@@ -892,14 +892,28 @@ export const VIP_DAILY_FREE_WIRO_IMAGES = 1
 export const VIP_DAILY_FREE_AUDIOS = 2
 
 // Arquetipos exclusivos para VIPs
+// ✅ VIP = todos los personajes fantasy (18 en total)
+// Colección exclusiva que justifica el precio VIP
 export const VIP_ARCHETYPES: string[] = [
+  // Femeninos fantasy
   'vampire_lady',
-  'vampire_lord',
   'succubus',
-  'demon_lord',
-  'kitsune',
-  'dragon_lord',
+  'werewolf_f',
   'fallen_angel',
+  'kitsune',
+  'elf',
+  'witch',
+  'nun_fantasy',
+  'demon_girl',
+  // Masculinos fantasy
+  'vampire_lord',
+  'demon_lord',
+  'werewolf_m',
+  'dark_hunter',
+  'dragon_lord',
+  'elf_prince',
+  'oni_male',
+  'knight',
   'angel_m',
 ]
 
