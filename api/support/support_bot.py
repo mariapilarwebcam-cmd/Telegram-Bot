@@ -59,14 +59,12 @@ async def handle_user_message(message: Message):
     )
 
     # Reenviamos el mensaje original al grupo de admin
-    forwarded_msg = await message.forward(chat_id=ADMIN_CHAT_ID)
+   admin_notice = await message.bot.send_message(
+    chat_id=ADMIN_CHAT_ID,
+    text=header
+)
 
-    # Enviamos el encabezado como respuesta al mensaje reenviado
-    admin_notice = await message.bot.send_message(
-        chat_id=ADMIN_CHAT_ID,
-        text=header,
-        reply_to_message_id=forwarded_msg.message_id
-    )
+forwarded_msg = await message.forward(chat_id=ADMIN_CHAT_ID)
 
     # Guardamos la relación en la base de datos para poder responder
     save_conversation_state(user.id, admin_notice.message_id, forwarded_msg.message_id)
