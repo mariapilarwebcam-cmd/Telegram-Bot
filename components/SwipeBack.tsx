@@ -1,29 +1,48 @@
 "use client"
 
 import { useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 
 // ═══════════════════════════════════════════════════════════════
-// ✅ Swipe-back nativo estilo iOS/Android
-// - Detecta el gesto desde el borde izquierdo de la pantalla
-// - Si hay historial → retrocede (router.back())
-// - Si estamos en la raíz → cierra la Mini App
-// - Se desactiva si el gesto empieza en input/textarea
-// - Se desactiva si el movimiento es más vertical que horizontal
+// ✅ Swipe-back estilo iOS/Android con navegación determinista
+//
+// REGLA DE NAVEGACIÓN (no depende del historial):
+//   /chat/*     → /chats
+//   /chats      → /
+//   /settings   → /
+//   /shop       → /
+//   /invite     → /
+//   /           → cerrar Mini App
+//
+// También bloquea el gesto nativo de Telegram que cierra la app.
 // ═══════════════════════════════════════════════════════════════
 
-const EDGE_ZONE_PX = 40          // Zona activa desde el borde izquierdo
-const SWIPE_THRESHOLD_PX = 90    // Distancia mínima para activar el back
-const FLICK_THRESHOLD_PX = 40    // Swipe rápido (flick)
-const FLICK_MAX_MS = 300         // Duración máxima de un flick
-const MAX_VERTICAL_DRIFT = 60    // Movimiento vertical máximo permitido
-const MAX_VISUAL_OFFSET = 200    // Máximo desplazamiento visual
+const EDGE_ZONE_PX = 50          // Zona activa desde el borde izquierdo
+const SWIPE_THRESHOLD_PX = 80    // Distancia mínima para activar
+const FLICK_THRESHOLD_PX = 35    // Swipe rápido (flick)
+const FLICK_MAX_MS = 300
+const MAX_VERTICAL_DRIFT = 80
+const MAX_VISUAL_OFFSET = 220
 
-// Rutas donde NO se aplica el gesto (críticas o con UX específica)
+// Rutas donde NO se aplica
 const DISABLED_ROUTES = ['/onboarding']
+
+// ✅ Mapa de navegación — determina a dónde va el swipe
+function getBackDestination(path: string): string | 'close' {
+  if (path === '/' || path === '') return 'close'
+  if (path.startsWith('/chat/')) return '/chats'
+  if (path === '/chats') return '/'
+  if (path.startsWith('/settings')) return '/'
+  if (path.startsWith('/shop')) return '/'
+  if (path.startsWith('/invite')) return '/'
+  if (path.startsWith('/rewards')) return '/'
+  // Default: home
+  return '/'
+}
 
 export default function SwipeBack() {
   const router = useRouter()
+  const pathname = usePathname()
   const [dragging, setDragging] = useState(false)
   const [offset, setOffset] = useState(0)
 
@@ -33,10 +52,47 @@ export default function SwipeBack() {
   const isActive = useRef(false)
   const offsetRef = useRef(0)
 
+  // ═══════════════════════════════════════════════════════════════
+  // ✅ Manejo del BackButton nativo de Telegram
+  //    - En el home: oculto (no hay a dónde volver)
+  //    - En páginas interiores: mostrar flecha nativa
+  // ═══════════════════════════════════════════════════════════════
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const tg = (window as any).Telegram?.WebApp
+    if (!tg?.BackButton) return
+
+    const dest = getBackDestination(pathname || '/')
+
+    if (dest === 'close') {
+      try { tg.BackButton.hide() } catch {}
+      return
+    }
+
+    try {
+      tg.BackButton.show()
+      const handler = () => {
+        try {
+          if (dest === 'close') {
+            tg.close()
+          } else {
+            router.push(dest)
+          }
+        } catch {}
+      }
+      tg.BackButton.onClick(handler)
+      return () => {
+        try { tg.BackButton.offClick(handler) } catch {}
+      }
+    } catch {}
+  }, [pathname, router])
+
+  // ═══════════════════════════════════════════════════════════════
+  // ✅ Gesture handling
+  // ═══════════════════════════════════════════════════════════════
   useEffect(() => {
     if (typeof window === 'undefined') return
 
-    // Solo en Telegram Mini App
     const tg = (window as any).Telegram?.WebApp
     if (!tg) return
 
@@ -53,11 +109,8 @@ export default function SwipeBack() {
     const handleTouchStart = (e: TouchEvent) => {
       const touch = e.touches[0]
       if (!touch) return
-
-      // Ignorar si empieza fuera del borde izquierdo
       if (touch.clientX > EDGE_ZONE_PX) return
 
-      // Ignorar si empieza en un input/textarea (para no bloquear escribir)
       const target = e.target as HTMLElement
       if (
         target.tagName === 'INPUT' ||
@@ -85,14 +138,20 @@ export default function SwipeBack() {
       const dx = touch.clientX - startX.current
       const dy = Math.abs(touch.clientY - startY.current)
 
-      // Cancelar si el movimiento es más vertical que horizontal
-      // (así no interfiere con scroll)
+      // ✅ CRÍTICO: bloquear el gesto nativo de Telegram
+      //    Si el swipe es hacia la derecha y empezó cerca del borde,
+      //    bloqueamos el default para que Telegram NO minimice la app.
+      if (dx > 5 && dy < MAX_VERTICAL_DRIFT) {
+        if (e.cancelable) e.preventDefault()
+      }
+
+      // Cancelar si el movimiento es más vertical
       if (dy > MAX_VERTICAL_DRIFT && Math.abs(dx) < dy * 1.2) {
         reset()
         return
       }
 
-      // Solo hacia la derecha (swipe-back)
+      // Solo hacia la derecha
       if (dx < 0) {
         offsetRef.current = 0
         setOffset(0)
@@ -115,24 +174,21 @@ export default function SwipeBack() {
 
       if (finalOffset > SWIPE_THRESHOLD_PX || wasFlick) {
         const currentPath = window.location.pathname
-        const isRoot = currentPath === '/'
+        const dest = getBackDestination(currentPath)
 
-        if (isRoot) {
-          // En el home → cierra la Mini App
-          try {
-            tg.close()
-          } catch (err) {
+        if (dest === 'close') {
+          try { tg.close() } catch (err) {
             console.warn('[SwipeBack] close failed:', err)
           }
         } else {
-          // En cualquier otra página → retrocede
-          router.back()
+          router.push(dest)
         }
       }
     }
 
+    // ✅ passive: false en touchmove para poder usar preventDefault()
     document.addEventListener('touchstart', handleTouchStart, { passive: true })
-    document.addEventListener('touchmove', handleTouchMove, { passive: true })
+    document.addEventListener('touchmove', handleTouchMove, { passive: false })
     document.addEventListener('touchend', handleTouchEnd, { passive: true })
     document.addEventListener('touchcancel', handleTouchEnd, { passive: true })
 
@@ -202,11 +258,10 @@ export default function SwipeBack() {
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
           <path
             d="m15 18-6-6 6-6"
-            stroke="#f0afc"
+            stroke="#f0abfc"
             strokeWidth="2.5"
             strokeLinecap="round"
             strokeLinejoin="round"
-            style={{ stroke: '#f0abfc' }}
           />
         </svg>
       </div>
