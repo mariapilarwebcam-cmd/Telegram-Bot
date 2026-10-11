@@ -917,8 +917,10 @@ export const VIP_ARCHETYPES: string[] = [
   'angel_m',
 ]
 
+// ✅ Ahora VIP = todos los fantasy automáticamente
+// Si añades un fantasy nuevo, se marca VIP solo
 export function isVipArchetype(archetype: string): boolean {
-  return VIP_ARCHETYPES.includes(archetype)
+  return FANTASY_ARCHETYPES.includes(archetype)
 }
 
 // Helper: convierte USD (con decimales) a unidades USDT on-chain (6 decimales)
