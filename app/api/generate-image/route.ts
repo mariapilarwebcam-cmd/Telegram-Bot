@@ -7,8 +7,8 @@ import {
   countUserMessages,
   decrementGemsAndPurchased,
   insertGemTransaction,
-  getSeenImageCount,      // ✅ NUEVO
-  markImageSeen,          // ✅ NUEVO
+  getSeenImageCount,
+  markImageSeen,
 } from '@/lib/db-queries'
 import { getCharacterFace, getCharacterImageUrl } from '@/lib/constants'
 import { generateImage } from '@/lib/ai'
@@ -280,7 +280,7 @@ function extractMoodFromMessages(messages: string[]): string {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ✅ NUEVO: construir URL de imagen R2 con índice (_1, _2, _3, _4)
+// ✅ Helper: construye URL de imagen R2 con índice (_1, _2, _3, _4)
 // ═══════════════════════════════════════════════════════════════
 function buildR2VariantUrl(
   gender: string,
@@ -353,8 +353,9 @@ export async function POST(request: Request) {
     const faceVisibility = getFaceVisibility(level.level)
 
     // ═══════════════════════════════════════════════════════════════
-    // ✅ NUEVA LÓGICA DE ROTACIÓN
-    // Consulta cuántas imágenes de R2 ha visto el usuario con este personaje
+    // ✅ LÓGICA DE ROTACIÓN
+    // - Nivel 1-3: _1 (gratis), _2 (costo), resto genera IA (DeepInfra)
+    // - Nivel 4-5: _1 (gratis), _2 (costo), _3 (costo), _4 (costo), resto IA (Wiro)
     // ═══════════════════════════════════════════════════════════════
     const seenCount = await getSeenImageCount(tid, character_id)
 
@@ -366,22 +367,23 @@ export async function POST(request: Request) {
     let isFree = false
 
     if (seenCount === 0) {
-      // Primera imagen: _1 gratis
+      // 1ª imagen: _1 gratis (todos los niveles)
       r2Index = 1
       isFree = true
     } else if (seenCount === 1) {
-      // Segunda: _2 con costo
+      // 2ª imagen: _2 con costo (todos los niveles)
       r2Index = 2
-    } else if (seenCount === 2 && level.level >= 3) {
-      // Tercera: _3 (solo nivel 3+)
+    } else if (seenCount === 2 && level.level >= 4) {
+      // 3ª imagen: _3 con costo (SOLO nivel 4+)
       r2Index = 3
-    } else if (seenCount === 3 && level.level >= 3) {
-      // Cuarta: _4 (solo nivel 3+)
+    } else if (seenCount === 3 && level.level >= 4) {
+      // 4ª imagen: _4 con costo (SOLO nivel 4+)
       r2Index = 4
     }
+    // Si seenCount >= 4, o si no cumple nivel → r2Index queda null → genera IA
 
     // Si hay R2 disponible y toca enviarla
-    const useR2 = r2Index !== null && r2Base
+    const useR2 = r2Index !== null && !!r2Base
 
     // ═══════════════════════════════════════════════════════════════
     // Verificar gems SOLO si NO es gratis
@@ -421,10 +423,13 @@ export async function POST(request: Request) {
         console.warn('[generate-image] markImageSeen failed:', markErr)
       }
 
-      console.log(`[generate-image] ✅ R2 hit: ${r2Index} (${isFree ? 'FREE' : `${imageCost}g`})`)
+      console.log(
+        `[generate-image] ✅ R2 hit: _${r2Index} (${isFree ? 'FREE' : `${imageCost}g`})`
+      )
     } else {
       // ─── Generar con IA (DeepInfra nivel 1-3, Wiro nivel 4-5) ───
-      const autoScenes = character.gender === 'male' ? AUTO_SCENES_MALE : AUTO_SCENES_FEMALE
+      const autoScenes =
+        character.gender === 'male' ? AUTO_SCENES_MALE : AUTO_SCENES_FEMALE
       const sceneHint = userHint || autoScenes[level.level] || autoScenes[1]
 
       const NO_GENITALIA =
@@ -435,7 +440,9 @@ export async function POST(request: Request) {
 
       if (level.level <= 3) {
         // NIVELES 1-3 → DeepInfra / FLUX (SFW)
-        const dna = CHARACTER_DNA[`${character.gender}_${character.archetype}`] || 'anime character'
+        const dna =
+          CHARACTER_DNA[`${character.gender}_${character.archetype}`] ||
+          'anime character'
         const scene = SFW_SCENE_PROMPTS[level.level] || SFW_SCENE_PROMPTS[1]
 
         let faceRule = ''
@@ -488,7 +495,10 @@ export async function POST(request: Request) {
         modelUsed = level.level <= 3 ? 'deepinfra' : 'wiro-v4-5'
       } catch (imgError) {
         console.error('Image generation error:', imgError)
-        return NextResponse.json({ error: 'Error al generar la imagen' }, { status: 500 })
+        return NextResponse.json(
+          { error: 'Error al generar la imagen' },
+          { status: 500 }
+        )
       }
     }
 
@@ -520,14 +530,17 @@ export async function POST(request: Request) {
       remaining_purchased_gems: newPurchasedGems,
       level: level.level,
       cost: isFree ? 0 : imageCost,
-      free: isFree,                    // ✅ NUEVO
-      source,                          // ✅ NUEVO: 'r2' | 'generated'
-      image_index: r2Index,            // ✅ NUEVO: 1-4 si es R2, null si generada
+      free: isFree,
+      source,
+      image_index: r2Index,
       face_visibility: faceVisibility,
       model: modelUsed,
     })
   } catch (error: any) {
     console.error('Error generando imagen:', error)
-    return NextResponse.json({ error: 'Error al generar la imagen' }, { status: 500 })
+    return NextResponse.json(
+      { error: 'Error al generar la imagen' },
+      { status: 500 }
+    )
   }
 }
