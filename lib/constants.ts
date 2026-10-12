@@ -836,7 +836,9 @@ export const PROACTIVE_TEMPLATES: {
 // ═══════════════════════════════════════════════════════════════
 
 export interface VipPlan {
-  id: 'weekly' | 'monthly' | 'quarterly'
+  id: 'weekly' | 'monthly' | 'quarterly' | 'annual'
+  ...
+}
   stars: number
   days: number
   emoji: string
@@ -876,15 +878,28 @@ export const VIP_PLANS: VipPlan[] = [
     id: 'quarterly',
     stars: 1300,
     days: 90,
-    emoji: '👑',
-    bestValue: true,
+    emoji: '🔥',
     label: { es: 'Trimestral', en: 'Quarterly' },
     price: { es: '$19.99', en: '$19.99' },
     crypto_price: 16.99,
     savings: { es: 'Ahorras 61%', en: 'Save 61%' },
     crypto_savings: { es: 'Ahorras 67%', en: 'Save 67%' },
   },
+  {
+    id: 'annual',
+    stars: 5200,
+    days: 365,
+    emoji: '👑',
+    bestValue: true,
+    label: { es: 'Anual', en: 'Annual' },
+    price: { es: '$79.99', en: '$79.99' },
+    crypto_price: 67.99,
+    savings: { es: 'Ahorras 78%', en: 'Save 78%' },
+    crypto_savings: { es: 'Ahorras 81%', en: 'Save 81%' },
+  },
 ]
+
+export type VipPlanId = 'weekly' | 'monthly' | 'quarterly' | 'annual'
 // Límites fair-use VIP (para evitar abuso)
 export const VIP_DAILY_MESSAGE_LIMIT = 150
 export const VIP_DAILY_FREE_IMAGES = 3
