@@ -2,6 +2,7 @@
 "use client"
 
 import posthog from 'posthog-js'
+import type { VipPlanId } from './constants'                    // ✅ NUEVO
 
 let initialized = false
 
@@ -133,7 +134,7 @@ export const Analytics = {
   },
 
   vipPurchased: (props: {
-    plan: 'weekly' | 'monthly' | 'quarterly'
+    plan: VipPlanId                                             // ✅ FIX: usa el tipo compartido
     method: 'stars' | 'crypto'
     price_usd: number
     stars: number
