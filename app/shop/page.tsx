@@ -8,12 +8,13 @@ import {
   VIP_PLANS,
   getFinalGems,
   getFinalCryptoGems,
+  type VipPlanId,                                              // ✅ FIX
 } from '@/lib/constants'
 import { getTranslations } from '@/lib/i18n'
 import { useUser } from '@/lib/UserContext'
 import { useTonPay } from '@ton-pay/ui-react'
 import { createTonPayTransfer, USDT } from '@ton-pay/api'
-import { Analytics } from '@/lib/posthog'                       // ✅ PostHog
+import { Analytics } from '@/lib/posthog'
 
 const purchaseCache: Record<string, boolean> = {}
 
@@ -55,7 +56,6 @@ export default function ShopPage() {
         const data = await res.json()
         setVipSub(data)
 
-        // ✅ PostHog: VIP page viewed
         Analytics.vipPageViewed({ is_vip: !!data.active })
       }
     } catch (e) {
@@ -66,7 +66,7 @@ export default function ShopPage() {
   }
 
   // ⭐ Comprar plan VIP con STARS
-  const buyVipWithStars = async (planId: 'weekly' | 'monthly' | 'quarterly') => {
+  const buyVipWithStars = async (planId: VipPlanId) => {          // ✅ FIX
     if (!user || vipPurchasing) return
     setVipPurchasing(planId)
 
@@ -107,7 +107,6 @@ export default function ShopPage() {
               await refresh()
               setTimeout(() => setShowVipSuccess(false), 5000)
 
-              // ✅ PostHog: VIP comprado con Stars
               const plan = VIP_PLANS.find((p) => p.id === planId)
               if (plan) {
                 Analytics.vipPurchased({
@@ -135,7 +134,7 @@ export default function ShopPage() {
   }
 
   // 💎 Comprar plan VIP con USDT
-  const buyVipWithCrypto = async (planId: 'weekly' | 'monthly' | 'quarterly') => {
+  const buyVipWithCrypto = async (planId: VipPlanId) => {         // ✅ FIX
     if (!user || vipPurchasing) return
     setVipPurchasing(planId)
 
@@ -201,7 +200,7 @@ export default function ShopPage() {
   }
 
   const startVipPolling = (
-    planId: 'weekly' | 'monthly' | 'quarterly',
+    planId: VipPlanId,                                            // ✅ FIX
     reference: string
   ) => {
     setVipPendingRef(reference)
@@ -243,7 +242,6 @@ export default function ShopPage() {
           await refresh()
           setTimeout(() => setShowVipSuccess(false), 5000)
 
-          // ✅ PostHog: VIP comprado con Crypto
           const plan = VIP_PLANS.find((p) => p.id === planId)
           if (plan) {
             Analytics.vipPurchased({
@@ -377,7 +375,6 @@ export default function ShopPage() {
               if (user.telegram_id) purchaseCache[user.telegram_id] = true
               setHasPurchased(true)
 
-              // ✅ PostHog: gemas compradas con Stars
               const pkg = STAR_PACKAGES[idx]
               if (pkg) {
                 Analytics.gemsPurchased({
@@ -443,7 +440,6 @@ export default function ShopPage() {
           if (user?.telegram_id) purchaseCache[user.telegram_id] = true
           setHasPurchased(true)
 
-          // ✅ PostHog: gemas compradas con Crypto
           const pkg = CRYPTO_PACKAGES[pkgIndex]
           if (pkg) {
             Analytics.gemsPurchased({
