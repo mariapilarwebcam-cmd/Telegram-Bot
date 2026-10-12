@@ -13,7 +13,7 @@ import {
 } from '@/lib/constants'
 import { getTranslations } from '@/lib/i18n'
 import { useUser } from '@/lib/UserContext'
-import { Analytics } from '@/lib/posthog'                       // ✅ PostHog
+import { Analytics } from '@/lib/posthog'
 
 interface Char {
   archetype: string
@@ -45,6 +45,10 @@ function getGradient(key: string): string {
   return GRADIENTS[Math.abs(hash) % GRADIENTS.length]
 }
 
+// ✅ DISMISSABLE: claves de localStorage para recordar qué banners descartó el usuario
+const LS_KEY_VIP_DISMISSED = 'taboo_banner_vip_dismissed'
+const LS_KEY_INVITE_DISMISSED = 'taboo_banner_invite_dismissed'
+
 export default function HomePage() {
   const router = useRouter()
   const { user, loading: userLoading, lang, isTelegram } = useUser()
@@ -59,6 +63,40 @@ export default function HomePage() {
   const [vipChecked, setVipChecked] = useState(false)
   const [showVipModal, setShowVipModal] = useState(false)
   const [vipBlockedChar, setVipBlockedChar] = useState<Char | null>(null)
+
+  // ✅ DISMISSABLE: estado de visibilidad de los banners
+  const [vipBannerVisible, setVipBannerVisible] = useState(false)
+  const [inviteBannerVisible, setInviteBannerVisible] = useState(false)
+
+  // ✅ DISMISSABLE: cargar preferencias de localStorage al montar
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const vipDismissed = localStorage.getItem(LS_KEY_VIP_DISMISSED)
+      const inviteDismissed = localStorage.getItem(LS_KEY_INVITE_DISMISSED)
+      setVipBannerVisible(vipDismissed !== '1')
+      setInviteBannerVisible(inviteDismissed !== '1')
+    } catch {
+      // localStorage no disponible → mostrar por defecto
+      setVipBannerVisible(true)
+      setInviteBannerVisible(true)
+    }
+  }, [])
+
+  // ✅ DISMISSABLE: funciones para descartar
+  const dismissVipBanner = () => {
+    setVipBannerVisible(false)
+    try {
+      localStorage.setItem(LS_KEY_VIP_DISMISSED, '1')
+    } catch {}
+  }
+
+  const dismissInviteBanner = () => {
+    setInviteBannerVisible(false)
+    try {
+      localStorage.setItem(LS_KEY_INVITE_DISMISSED, '1')
+    } catch {}
+  }
 
   useEffect(() => {
     if (tabInitialized.current || !user) return
@@ -160,7 +198,6 @@ export default function HomePage() {
     const key = `${c.gender}_${c.archetype}`
     setCreating(key)
 
-    // ✅ PostHog: personaje seleccionado
     Analytics.characterSelected({
       archetype: c.archetype,
       gender: c.gender,
@@ -252,6 +289,10 @@ export default function HomePage() {
 
   const gems = user?.gems || 0
   const hookRemaining = user?.hook_messages_remaining || 0
+
+  // ✅ DISMISSABLE: decidir si mostrar el banner VIP
+  const shouldShowVipBanner = vipChecked && !isVip && vipBannerVisible
+  const shouldShowInviteBanner = !!user && inviteBannerVisible
 
   return (
     <div style={{ paddingBottom: 24 }}>
@@ -403,8 +444,9 @@ export default function HomePage() {
         </div>
       )}
 
-      {vipChecked && !isVip && (
-        <section style={{ padding: '12px 16px 0' }}>
+      {/* ✅ DISMISSABLE: Banner VIP con botón X */}
+      {shouldShowVipBanner && (
+        <section style={{ padding: '12px 16px 0', position: 'relative' }}>
           <button
             onClick={() => router.push('/shop')}
             style={{
@@ -413,6 +455,7 @@ export default function HomePage() {
               alignItems: 'center',
               gap: 12,
               padding: 14,
+              paddingRight: 44,
               borderRadius: 16,
               background:
                 'linear-gradient(135deg, rgba(251,191,36,0.15) 0%, rgba(217,119,6,0.08) 100%)',
@@ -476,12 +519,44 @@ export default function HomePage() {
                 }}
               >
                 {lang === 'es'
-                  ? 'Mensajes ilimitados · Imágenes gratis · 8 personajes exclusivos'
-                  : 'Unlimited messages · Free images · 8 exclusive characters'}
+                  ? 'Mensajes ilimitados · Imágenes gratis · 18 personajes exclusivos'
+                  : 'Unlimited messages · Free images · 18 exclusive characters'}
               </p>
             </div>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
               <path d="m9 6 6 6-6 6" stroke="#fbbf24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+
+          {/* ✅ DISMISSABLE: botón X del banner VIP */}
+          <button
+            onClick={dismissVipBanner}
+            aria-label="Cerrar"
+            style={{
+              position: 'absolute',
+              top: 20,
+              right: 26,
+              width: 26,
+              height: 26,
+              borderRadius: '50%',
+              background: 'rgba(0, 0, 0, 0.4)',
+              border: '1px solid rgba(251, 191, 36, 0.3)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              zIndex: 2,
+              color: '#fbbf24',
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M18 6 6 18M6 6l12 12"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
             </svg>
           </button>
         </section>
@@ -594,8 +669,9 @@ export default function HomePage() {
         </section>
       )}
 
-      {user && (
-        <section style={{ padding: '12px 16px 0' }}>
+      {/* ✅ DISMISSABLE: Banner Invite con botón X */}
+      {shouldShowInviteBanner && (
+        <section style={{ padding: '12px 16px 0', position: 'relative' }}>
           <button
             onClick={() => router.push('/invite')}
             style={{
@@ -604,6 +680,7 @@ export default function HomePage() {
               alignItems: 'center',
               gap: 12,
               padding: 12,
+              paddingRight: 44,
               borderRadius: 16,
               background:
                 'linear-gradient(90deg, rgba(34,197,94,0.12), rgba(34,197,94,0.04))',
@@ -663,6 +740,38 @@ export default function HomePage() {
               </svg>
               <span style={{ fontSize: 12, fontWeight: 700, color: '#22c55e' }}>+10</span>
             </div>
+          </button>
+
+          {/* ✅ DISMISSABLE: botón X del banner Invite */}
+          <button
+            onClick={dismissInviteBanner}
+            aria-label="Cerrar"
+            style={{
+              position: 'absolute',
+              top: 18,
+              right: 26,
+              width: 26,
+              height: 26,
+              borderRadius: '50%',
+              background: 'rgba(0, 0, 0, 0.4)',
+              border: '1px solid rgba(34, 197, 94, 0.3)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              zIndex: 2,
+              color: '#22c55e',
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M18 6 6 18M6 6l12 12"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
           </button>
         </section>
       )}
@@ -888,8 +997,8 @@ export default function HomePage() {
                   }}
                 >
                   {lang === 'es'
-                    ? `${vipBlockedChar.name} es parte de nuestra colección VIP exclusiva. Hazte VIP para desbloquear este y otros 7 personajes únicos.`
-                    : `${vipBlockedChar.name} is part of our exclusive VIP collection. Go VIP to unlock this and 7 other unique characters.`}
+                    ? `${vipBlockedChar.name} es parte de nuestra colección VIP exclusiva. Hazte VIP para desbloquear este y otros 17 personajes únicos.`
+                    : `${vipBlockedChar.name} is part of our exclusive VIP collection. Go VIP to unlock this and 17 other unique characters.`}
                 </p>
               </div>
 
@@ -907,7 +1016,7 @@ export default function HomePage() {
                 {[
                   lang === 'es' ? '💬 Mensajes ilimitados' : '💬 Unlimited messages',
                   lang === 'es' ? '📸 Imágenes gratis diarias' : '📸 Free daily images',
-                  lang === 'es' ? '👑 8 personajes exclusivos' : '👑 8 exclusive characters',
+                  lang === 'es' ? '👑 18 personajes exclusivos' : '👑 18 exclusive characters',
                   lang === 'es' ? '⚡ Sin esperas, sin límites' : '⚡ No waiting, no limits',
                 ].map((benefit, i) => (
                   <div
