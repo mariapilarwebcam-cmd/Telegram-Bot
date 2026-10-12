@@ -837,8 +837,6 @@ export const PROACTIVE_TEMPLATES: {
 
 export interface VipPlan {
   id: 'weekly' | 'monthly' | 'quarterly' | 'annual'
-  ...
-}
   stars: number
   days: number
   emoji: string
@@ -846,9 +844,9 @@ export interface VipPlan {
   bestValue?: boolean
   label: { es: string; en: string }
   price: { es: string; en: string }
-  crypto_price: number          // ✅ NUEVO: en USDT (ej. 6.79)
+  crypto_price: number
   savings?: { es: string; en: string }
-  crypto_savings: { es: string; en: string }  // ✅ NUEVO
+  crypto_savings: { es: string; en: string }
 }
 
 export const VIP_PLANS: VipPlan[] = [
