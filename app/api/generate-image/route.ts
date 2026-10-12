@@ -243,28 +243,111 @@ const AUTO_SCENES_MALE: Record<number, string> = {
   5: 'artistic intimate composition, cinematic dramatic lighting, elegant and tasteful, high-end boudoir editorial',
 }
 
+// ═══════════════════════════════════════════════════════════════
+// ✅ OPCIÓN A — extractMoodFromMessages AMPLIADO (18 moods)
+// ═══════════════════════════════════════════════════════════════
+// Prioridad (orden de matching):
+//   1-6  → Intimidad / emocional fuerte (siempre ganan)
+//   7-8  → Emociones intensas (discusión, tristeza)
+//   9-14 → Ubicación / ambiente (lluvia, playa, cama, ducha, cocina, fiesta)
+//   15-17→ Actividad / contexto (gym, auto, noche)
+//   18   → Alegría (prioridad baja — solo si nada más coincide)
+// ═══════════════════════════════════════════════════════════════
 function extractMoodFromMessages(messages: string[]): string {
   if (!messages || messages.length === 0) return ''
 
   const text = messages.join(' ').toLowerCase()
 
+  // ─── 1. Breathless passionate ───
   if (/\b(jadeo|jadea|respira|suspiro|temblor|tiembla|calor|fuego|húmedo|mojado|acelerado|entrecortad)\b/.test(text)) {
     return 'breathless passionate mood, disheveled, intense breathing'
   }
+
+  // ─── 2. Submission / surrender ───
   if (/\b(hazme|tuyo|tuya|obedec|pide|por favor|tómame|tomame|entrégate|entregate|soy tu)\b/.test(text)) {
     return 'submission and surrender mood, devoted gaze, yielding posture'
   }
+
+  // ─── 3. Dominant / commanding ───
   if (/\b(domin|manda|control|orden|obedece|rodillas|sumiso|sumisa|mía|mio)\b/.test(text)) {
     return 'dominant commanding mood, intense stare, powerful posture'
   }
+
+  // ─── 4. Sensual slow burn ───
   if (/\b(beso|lento|despacio|cerca|roza|toca|acaricia|susurr|muerde|labio)\b/.test(text)) {
     return 'sensual slow burn mood, intimate closeness, tender tension'
   }
+
+  // ─── 5. Playful teasing ───
   if (/\b(provoc|broma|jugueto|desaf|atrev|coqueto|pícara|picara|tentaci)\b/.test(text)) {
     return 'playful teasing mood, challenging gaze, mischievous energy'
   }
+
+  // ─── 6. Romantic tender ───
   if (/\b(amor|quiero|corazón|corazon|tierno|dulce|abrazo)\b/.test(text)) {
     return 'romantic tender mood, warm affectionate gaze'
+  }
+
+  // ✅ NUEVOS MOODS (Opción A)
+
+  // ─── 7. Discusión / tensión ───
+  if (/\b(enfadad|enojad|discutir|discusión|discusion|pelea|pelean|celos|celoso|reclama|grita|gritar|furia|furios)\b/.test(text)) {
+    return 'tense argument mood, flushed face, intense eye contact, raw emotion'
+  }
+
+  // ─── 8. Tristeza / consuelo ───
+  if (/\b(triste|llorar|llora|lágrimas|lagrimas|melancol|consuelo|consolar|vulnerab)\b/.test(text)) {
+    return 'emotional vulnerable mood, teary eyes, soft comfort, seeking warmth'
+  }
+
+  // ─── 9. Lluvia / tormenta ───
+  if (/\b(lluvia|llueve|tormenta|tempestad|chaparrón|chaparro|empapad)\b/.test(text)) {
+    return 'rainy intimate mood, wet hair, cozy warmth, close proximity, soft droplets'
+  }
+
+  // ─── 10. Playa / atardecer ───
+  if (/\b(playa|arena|olas|atardecer|surf|bikini|traje de baño|oceano|océano|costa|marea)\b/.test(text)) {
+    return 'sunset beach mood, golden hour lighting, ocean breeze, barefoot intimacy'
+  }
+
+  // ─── 11. Cama / descanso ───
+  if (/\b(cama|sábanas|sabanas|almohada|acostad|recostad|dormir|dormida|dormido|descansar|despierta)\b/.test(text)) {
+    return 'bedroom intimacy mood, tangled sheets, soft morning light, relaxed pose'
+  }
+
+  // ─── 12. Ducha / baño ───
+  if (/\b(ducha|bañera|banera|vapor|vaporoso|jabón|jabon|agua caliente|espuma|burbujas)\b/.test(text)) {
+    return 'bathroom steamy mood, water droplets, warm mist, intimate privacy'
+  }
+
+  // ─── 13. Cocina / comida ───
+  if (/\b(cocina|cocinar|cocinando|comida|cena|vino|bebida|desayuno|restaurante)\b/.test(text)) {
+    return 'kitchen intimacy mood, warm lighting, casual closeness, domestic atmosphere'
+  }
+
+  // ─── 14. Fiesta / baile ───
+  if (/\b(fiesta|baile|bailar|bailando|música|musica|club|discoteca|concierto)\b/.test(text)) {
+    return 'nightlife party mood, dancing lights, energetic intimacy, vibrant atmosphere'
+  }
+
+  // ─── 15. Gym / ejercicio ───
+  if (/\b(gym|gimnasio|entrenar|entrenando|deporte|sudor|sudando|ejercicio|pesas|cardio|correr)\b/.test(text)) {
+    return 'post-workout mood, athletic glow, sweat sheen, intense energy'
+  }
+
+  // ─── 16. Auto / viaje ───
+  if (/\b(auto|coche|carro|manejar|conducir|viaje|carretera|road trip)\b/.test(text)) {
+    return 'car ride intimacy mood, private space, cinematic road atmosphere'
+  }
+
+  // ─── 17. Noche / misterio ───
+  if (/\b(noche|luna|estrellas|oscuridad|medianoche|nocturno|misterio|velas)\b/.test(text)) {
+    return 'night mystery mood, moonlight, deep shadows, intimate darkness'
+  }
+
+  // ─── 18. Alegría / risa (prioridad baja) ───
+  if (/\b(risa|ríe|rie|reír|reir|divertid|juego|jugando|sonrisa|sonríe|sonrie|alegre)\b/.test(text)) {
+    return 'playful laughing mood, genuine smile, relaxed happy energy'
   }
 
   return ''
