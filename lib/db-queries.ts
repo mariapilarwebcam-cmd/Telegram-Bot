@@ -114,7 +114,7 @@ export async function ensureUser(
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ONBOARDING (gender + interested_in)
+// ONBOARDING
 // ═══════════════════════════════════════════════════════════════
 
 export async function setUserGender(telegram_id: string, gender: string) {
@@ -754,7 +754,7 @@ export async function updateLastActive(telegram_id: string) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// IMAGE HISTORY (rotación de imágenes por personaje)
+// IMAGE HISTORY
 // ═══════════════════════════════════════════════════════════════
 
 export async function getSeenImageCount(
@@ -888,7 +888,13 @@ export async function getSubscriptionByChargeId(charge_id: string) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ✅ POOL — Imágenes generadas compartidas entre usuarios
+// ✅ POOL v2 — Imágenes compartidas SIN repetir al mismo usuario
+// ═══════════════════════════════════════════════════════════════
+// Cambios v2:
+//  - Múltiples imágenes por tag_key (sin UNIQUE)
+//  - Tracking de vistas por usuario (pool_image_views)
+//  - Solo sirve imágenes NO vistas por ese usuario
+//  - Rotación justa: prioriza las menos usadas
 // ═══════════════════════════════════════════════════════════════
 
 export interface PoolImageRow {
@@ -908,34 +914,67 @@ export interface PoolImageRow {
 }
 
 /**
- * Busca una imagen del pool por su tag_key.
- * Devuelve null si no existe.
+ * ✅ v2: Busca UNA imagen del pool que el usuario NO haya visto todavía.
+ * Prioriza las menos usadas (rotación justa) y las más antiguas.
+ * Devuelve null si no hay ninguna disponible para este usuario.
  */
-export async function getPoolImageByTag(
-  tag_key: string
+export async function getAvailablePoolImage(
+  tag_key: string,
+  telegram_id: string
 ): Promise<PoolImageRow | null> {
   return queryOne<PoolImageRow>(
-    `SELECT * FROM generated_images
-     WHERE tag_key = ?
+    `SELECT gi.* FROM generated_images gi
+     WHERE gi.tag_key = ?
+       AND NOT EXISTS (
+         SELECT 1 FROM pool_image_views piv
+         WHERE piv.pool_image_id = gi.id
+           AND piv.telegram_id = ?
+       )
+     ORDER BY gi.times_used ASC, gi.created_at ASC
      LIMIT 1`,
-    [tag_key]
+    [tag_key, telegram_id]
   )
 }
 
 /**
- * Incrementa el contador de uso y actualiza last_used_at.
- * Fire-and-forget — no bloquea el flujo si falla.
+ * ✅ v2: Registra que un usuario vio una imagen del pool.
+ * UNIQUE(pool_image_id, telegram_id) previene duplicados.
+ * Fail-safe: nunca rompe el flujo.
+ */
+export async function markPoolImageViewed(
+  pool_image_id: number,
+  telegram_id: string,
+  character_id: number
+): Promise<void> {
+  try {
+    await execute(
+      `INSERT INTO pool_image_views
+        (pool_image_id, telegram_id, character_id)
+       VALUES (?, ?, ?)`,
+      [pool_image_id, telegram_id, character_id]
+    )
+  } catch (e: any) {
+    if (String(e?.message || '').includes('UNIQUE')) {
+      return
+    }
+    console.warn('[pool] markPoolImageViewed failed:', e)
+  }
+}
+
+/**
+ * ✅ v2: Incrementa el contador de uso de una imagen (por ID).
+ * Fire-and-forget.
  */
 export async function incrementPoolImageUse(
-  tag_key: string
+  pool_image_id: number
 ): Promise<void> {
   try {
     await execute(
       `UPDATE generated_images
        SET times_used = times_used + 1,
            last_used_at = datetime('now')
-       WHERE tag_key = ?`,
-      [tag_key]
+       WHERE id = ?`,
+      [pool_image_id]
     )
   } catch (e) {
     console.warn('[pool] incrementPoolImageUse failed:', e)
@@ -943,8 +982,9 @@ export async function incrementPoolImageUse(
 }
 
 /**
- * Inserta una nueva imagen en el pool.
- * Retorna true si se insertó, false si ya existía (UNIQUE).
+ * ✅ v2: Inserta una nueva imagen en el pool.
+ * Ya NO tiene UNIQUE — permite múltiples por tag_key.
+ * Retorna el ID de la nueva fila.
  */
 export async function insertPoolImage(data: {
   tag_key: string
@@ -956,43 +996,46 @@ export async function insertPoolImage(data: {
   r2_url: string
   prompt_used: string
   first_user_id: string | null
-}): Promise<boolean> {
-  try {
-    await execute(
-      `INSERT INTO generated_images
-        (tag_key, archetype, gender, mood, level_bucket,
-         r2_key, r2_url, prompt_used, first_user_id, times_used)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-      [
-        data.tag_key,
-        data.archetype,
-        data.gender,
-        data.mood,
-        data.level_bucket,
-        data.r2_key,
-        data.r2_url,
-        data.prompt_used,
-        data.first_user_id,
-      ]
-    )
-    return true
-  } catch (e: any) {
-    if (String(e?.message || '').includes('UNIQUE')) {
-      return false
-    }
-    throw e
-  }
+}): Promise<number> {
+  const r = await execute(
+    `INSERT INTO generated_images
+      (tag_key, archetype, gender, mood, level_bucket,
+       r2_key, r2_url, prompt_used, first_user_id, times_used)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+    [
+      data.tag_key,
+      data.archetype,
+      data.gender,
+      data.mood,
+      data.level_bucket,
+      data.r2_key,
+      data.r2_url,
+      data.prompt_used,
+      data.first_user_id,
+    ]
+  )
+  return Number(r.lastInsertRowid)
 }
 
 /**
- * Estadísticas del pool (para debug / admin).
+ * ✅ v2: Estadísticas del pool (para debug / admin).
  */
 export async function getPoolStats(): Promise<{
-  total: number
-  by_archetype: Array<{ archetype: string; count: number; avg_uses: number }>
+  total_images: number
+  total_views: number
+  by_archetype: Array<{
+    archetype: string
+    count: number
+    avg_uses: number
+  }>
 }> {
-  const total = await queryOne<{ c: number }>(
+  const totalImages = await queryOne<{ c: number }>(
     `SELECT COUNT(*) AS c FROM generated_images`,
+    []
+  )
+
+  const totalViews = await queryOne<{ c: number }>(
+    `SELECT COUNT(*) AS c FROM pool_image_views`,
     []
   )
 
@@ -1012,7 +1055,8 @@ export async function getPoolStats(): Promise<{
   )
 
   return {
-    total: total?.c ?? 0,
+    total_images: totalImages?.c ?? 0,
+    total_views: totalViews?.c ?? 0,
     by_archetype: byArchetype,
   }
 }
