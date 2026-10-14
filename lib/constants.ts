@@ -967,11 +967,42 @@ export const VIP_PLANS: VipPlan[] = [
 
 export type VipPlanId = 'weekly' | 'monthly' | 'quarterly' | 'annual'
 
-// Límites fair-use VIP
-export const VIP_DAILY_MESSAGE_LIMIT = 150
-export const VIP_DAILY_FREE_IMAGES = 2         // ← de 3 a 2 (más claro)
-export const VIP_DAILY_FREE_WIRO_IMAGES = 2    // ← de 1 a 2
-export const VIP_DAILY_FREE_AUDIOS = 2
+// ═══════════════════════════════════════════════════════════════
+// ✅ CUPOS VIP v2 — Límites internos (reset diario)
+// El copy al usuario SOLO menciona totales mensuales.
+// Los límites diarios se aplican internamente para proteger costos.
+//
+// Copy público (shop):
+//   📨 6.000 mensajes/mes
+//   📸 30 imágenes IA premium/mes (acumula hasta 5)
+//   🎨 Hasta 300 imágenes SFW/mes
+//   👑 18 personajes exclusivos
+// ═══════════════════════════════════════════════════════════════
+export const VIP_LIMITS = {
+  // Mensajes — 6.000/mes → 200/día soft
+  messages_daily: 200,
+  messages_monthly: 6000,
+
+  // Imágenes IA premium (Wiro) — 30/mes, 1/día, acumula hasta 5
+  wiro_daily: 1,
+  wiro_monthly: 30,
+  wiro_accumulate_cap: 5,
+
+  // Imágenes SFW (DeepInfra) — 300/mes, 10/día soft
+  sfw_daily: 10,
+  sfw_monthly: 300,
+
+  // Audios — 60/mes, 2/día soft (solo EN, no aparece en copy)
+  audio_daily: 2,
+  audio_monthly: 60,
+} as const
+
+// ─── Compatibilidad con código existente ───
+export const VIP_DAILY_MESSAGE_LIMIT = VIP_LIMITS.messages_daily
+export const VIP_DAILY_FREE_IMAGES = VIP_LIMITS.sfw_daily
+export const VIP_DAILY_FREE_WIRO_IMAGES = VIP_LIMITS.wiro_daily
+export const VIP_DAILY_FREE_AUDIOS = VIP_LIMITS.audio_daily
+export const VIP_WIRO_ACCUMULATE_CAP = VIP_LIMITS.wiro_accumulate_cap
 export const MAX_GENERATIONS_PER_CONTEXT_PER_USER = 10
 
 // VIP = todos los fantasy
