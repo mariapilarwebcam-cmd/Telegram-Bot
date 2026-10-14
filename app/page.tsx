@@ -1013,12 +1013,12 @@ export default function HomePage() {
                   gap: 8,
                 }}
               >
-                {[
-                  lang === 'es' ? '💬 Mensajes ilimitados' : '💬 Unlimited messages',
-                  lang === 'es' ? '📸 Imágenes gratis diarias' : '📸 Free daily images',
-                  lang === 'es' ? '👑 18 personajes exclusivos' : '👑 18 exclusive characters',
-                  lang === 'es' ? '⚡ Sin esperas, sin límites' : '⚡ No waiting, no limits',
-                ].map((benefit, i) => (
+               {[
+  lang === 'es' ? '📨 6.000 mensajes al mes' : '📨 6,000 messages/month',
+  lang === 'es' ? '📸 Imágenes gratis diarias' : '📸 Free daily images',
+  lang === 'es' ? '👑 18 personajes exclusivos' : '👑 18 exclusive characters',
+  lang === 'es' ? '⚡ Sin esperas molestas' : '⚡ No annoying waits',
+].map((benefit, i) => (
                   <div
                     key={i}
                     style={{
