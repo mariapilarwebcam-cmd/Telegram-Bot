@@ -52,7 +52,6 @@ export default function PrivacyPage() {
 
         {isES ? <PrivacyES /> : <PrivacyEN />}
 
-        {/* ─── Botón de eliminación de datos ─── */}
         <div
           style={{
             marginTop: 32,
@@ -107,7 +106,6 @@ export default function PrivacyPage() {
           </a>
         </div>
 
-        {/* ─── Link a Terms ─── */}
         <div
           style={{
             marginTop: 16,
@@ -366,7 +364,58 @@ function PrivacyES() {
         </p>
       </Section>
 
-      <Section title="12. Cambios en la Política">
+      {/* ✅ NUEVA — Datos de suscripción VIP y uso justo */}
+      <Section title="12. Datos de suscripción VIP y uso justo">
+        <p>
+          Si te suscribes a <strong>Taboo Realm VIP</strong>,
+          almacenamos información adicional necesaria para gestionar
+          tu plan y aplicar las reglas de uso justo:
+        </p>
+        <ul>
+          <li>
+            <strong>Plan activo</strong> (semanal, mensual, trimestral
+            o anual)
+          </li>
+          <li>
+            <strong>Fecha de inicio y expiración</strong> de la
+            suscripción
+          </li>
+          <li>
+            <strong>ID de transacción</strong> (charge_id) para
+            prevención de fraude y doble procesamiento
+          </li>
+          <li>
+            <strong>Contadores de uso de cupos:</strong> mensajes
+            enviados en la ventana vigente, imágenes generadas con IA
+            (modelo y contexto), y tokens premium acumulables
+          </li>
+          <li>
+            <strong>Estado del sistema de tokens premium:</strong>{' '}
+            tokens disponibles y fecha del último refill
+          </li>
+        </ul>
+        <p>
+          <strong>Finalidad:</strong> esta información se usa
+          exclusivamente para (1) gestionar tu suscripción y
+          renovaciones, (2) aplicar los cupos mensuales descritos en
+          los Términos de Servicio, y (3) prevenir fraude o abuso del
+          sistema de uso justo.
+        </p>
+        <p>
+          <strong>Retención:</strong> los datos de suscripción se
+          conservan mientras tu cuenta esté activa y hasta 5 años
+          después del último pago, por obligación fiscal. Los
+          contadores de uso se eliminan al cancelar tu cuenta.
+        </p>
+        <p>
+          <strong>No compartimos</strong> tu historial individual de
+          uso de cupos con terceros. Solo compartimos información
+          agregada y anonimizada con nuestros proveedores de IA
+          (DeepInfra, Wiro) para operar el servicio de generación.
+        </p>
+      </Section>
+
+      <Section title="13. Cambios en la Política">
         <p>
           Podemos actualizar esta Política. Los cambios relevantes se
           notificarán a través del bot. El uso continuado implica
@@ -374,7 +423,7 @@ function PrivacyES() {
         </p>
       </Section>
 
-      <Section title="13. Contacto">
+      <Section title="14. Contacto">
         <p>
           Para ejercer tus derechos o resolver dudas sobre privacidad:{' '}
           <strong>@TabooRealmSupport</strong> en Telegram.
@@ -601,14 +650,65 @@ function PrivacyEN() {
         </p>
       </Section>
 
-      <Section title="12. Policy Changes">
+      {/* ✅ NEW — VIP subscription data & fair use */}
+      <Section title="12. VIP Subscription Data and Fair Use">
+        <p>
+          If you subscribe to <strong>Taboo Realm VIP</strong>, we
+          store additional information necessary to manage your plan
+          and enforce fair use rules:
+        </p>
+        <ul>
+          <li>
+            <strong>Active plan</strong> (weekly, monthly, quarterly
+            or annual)
+          </li>
+          <li>
+            <strong>Start and expiration date</strong> of the
+            subscription
+          </li>
+          <li>
+            <strong>Transaction ID</strong> (charge_id) for fraud
+            prevention and duplicate processing protection
+          </li>
+          <li>
+            <strong>Quota usage counters:</strong> messages sent in
+            the current window, images generated with AI (model and
+            context), and accumulate-able premium tokens
+          </li>
+          <li>
+            <strong>Premium token system state:</strong> available
+            tokens and last refill timestamp
+          </li>
+        </ul>
+        <p>
+          <strong>Purpose:</strong> this information is used
+          exclusively to (1) manage your subscription and renewals,
+          (2) enforce the monthly quotas described in the Terms of
+          Service, and (3) prevent fraud or abuse of the fair use
+          system.
+        </p>
+        <p>
+          <strong>Retention:</strong> subscription data is retained
+          while your account is active and up to 5 years after the
+          last payment, per tax obligation. Usage counters are deleted
+          upon account cancellation.
+        </p>
+        <p>
+          <strong>We do not share</strong> your individual quota
+          usage history with third parties. We only share aggregated,
+          anonymized information with our AI providers (DeepInfra,
+          Wiro) to operate the generation service.
+        </p>
+      </Section>
+
+      <Section title="13. Policy Changes">
         <p>
           We may update this Policy. Material changes will be notified
           through the bot. Continued use implies acceptance.
         </p>
       </Section>
 
-      <Section title="13. Contact">
+      <Section title="14. Contact">
         <p>
           To exercise your rights or resolve privacy questions:{' '}
           <strong>@TabooRealmSupport</strong> on Telegram.
