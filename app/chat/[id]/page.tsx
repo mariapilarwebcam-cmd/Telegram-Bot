@@ -13,7 +13,7 @@ import {
 import { getLevelFromMessages, getImageCost, getAudioCost } from '@/lib/levels'
 import { getTranslations } from '@/lib/i18n'
 import { useUser } from '@/lib/UserContext'
-import { Analytics } from '@/lib/posthog'                       // ✅ PostHog
+import { Analytics } from '@/lib/posthog'
 
 interface Message {
   id?: number
@@ -345,7 +345,7 @@ export default function ChatPage() {
     }
 
     const text = input.trim()
-    const wasFirstMessage = totalUserMessages === 0                // ✅ PostHog
+    const wasFirstMessage = totalUserMessages === 0
     setInput('')
     setLoading(true)
     setMessages((p) => [...p, { role: 'user', content: text }])
@@ -393,7 +393,6 @@ export default function ChatPage() {
             })
           }
 
-          // ✅ PostHog: primer mensaje enviado
           if (wasFirstMessage && character) {
             Analytics.firstMessageSent({
               character_id: characterId,
@@ -408,7 +407,6 @@ export default function ChatPage() {
               badgeKey: data.new_level_badge,
             })
 
-            // ✅ PostHog: subida de nivel
             Analytics.levelUp({
               character_id: characterId,
               new_level: data.new_level,
@@ -461,7 +459,6 @@ export default function ChatPage() {
         setGems(data.remaining_gems)
         new Audio(`data:audio/wav;base64,${data.audio}`).play()
 
-        // ✅ PostHog: audio generado
         Analytics.audioGenerated({
           character_id: characterId,
           cost: data.cost || currentAudioCost,
@@ -531,7 +528,6 @@ export default function ChatPage() {
           setSeenImageCount((prev) => prev + 1)
         }
 
-        // ✅ PostHog: imagen generada
         Analytics.imageGenerated({
           character_id: characterId,
           source: data.source || 'r2',
@@ -730,7 +726,8 @@ export default function ChatPage() {
   const gradient = getGradient(character.archetype)
   const displayName = getDisplayName(character)
   const characterAvatar = getCharacterImageUrl(character.archetype, character.gender)
-  const characterDescription = getCharacterDescription(character.archetype, lang)
+  // ✅ FIX M/F: pasar gender para que las descripciones de arquetipos compartidos (M/F) usen la versión correcta
+  const characterDescription = getCharacterDescription(character.archetype, character.gender, lang)
 
   const isFirstImage = seenImageCount === 0
   const canAfford = gems >= currentImageCost || isFirstImage
