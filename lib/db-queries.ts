@@ -1276,3 +1276,60 @@ export async function getWiroTokens(
     return 1
   }
 }
+// ═══════════════════════════════════════════════════════════════
+// ✅ SEEN R2 INDICES — para lógica de progresión de fotos
+// ═══════════════════════════════════════════════════════════════
+// A diferencia de getSeenImageCount (que solo cuenta cuántas vio),
+// esta función devuelve QUÉ índices específicos vio el usuario.
+// Necesario para la lógica de progresión por nivel:
+//   Niveles 1-3: _1 (free), _2 (cost), luego generar
+//   Niveles 4-5: _1 (free), _3 (cost), _4 (cost), luego generar
+// ═══════════════════════════════════════════════════════════════
+
+export async function getSeenR2Indices(
+  telegram_id: string,
+  character_id: number
+): Promise<Set<number>> {
+  try {
+    const rows = await query<{ image_index: number }>(
+      `SELECT image_index FROM user_image_history
+       WHERE telegram_id = ?
+         AND character_id = ?
+         AND is_generated = 0`,
+      [telegram_id, character_id]
+    )
+    return new Set(rows.map((r) => Number(r.image_index)))
+  } catch (e) {
+    console.warn('[user_image_history] getSeenR2Indices failed:', e)
+    return new Set()
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ✅ SFW DAILY QUOTA — cupo diario VIP (nivel 1-3)
+// ═══════════════════════════════════════════════════════════════
+// Cuenta TODAS las imágenes entregadas al usuario en las últimas
+// 24h con nivel 1-3 (SFW). Incluye:
+//   - R2 static (_1, _2) → model='r2'
+//   - Pool hits → model='pool'
+//   - Generadas con IA → model='deepinfra'
+// Usado para el cupo VIP: 10 imágenes SFW/día gratis.
+// ═══════════════════════════════════════════════════════════════
+
+export async function countSfwImageGenerationsLast24h(
+  telegram_id: string
+): Promise<number> {
+  try {
+    const row = await queryOne<{ c: number }>(
+      `SELECT COUNT(*) AS c FROM image_generations
+       WHERE telegram_id = ?
+         AND level <= 3
+         AND created_at >= datetime('now', '-1 day')`,
+      [telegram_id]
+    )
+    return row?.c ?? 0
+  } catch (e) {
+    console.warn('[image_generations] countSfwImageGenerationsLast24h failed:', e)
+    return 0
+  }
+}
