@@ -461,7 +461,8 @@ export async function POST(request: Request) {
     const useR2Static = r2Index !== null && !!r2Base
 
     // ─── Determine source ───
-    let source: 'r2_static' | 'pool' | 'generated'
+    // ✅ FIX TS: inicializado a 'generated' para evitar "used before assigned"
+    let source: 'r2_static' | 'pool' | 'generated' = 'generated'
     let imageUrl: string = ''
     let modelUsed: string = ''
     let promptUsed = ''
