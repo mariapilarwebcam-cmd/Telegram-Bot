@@ -255,7 +255,7 @@ const AUTO_SCENES_MALE: Record<number, string> = {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// extractMoodFromMessages — 18 moods
+// extractMoodFromMessages — 18 moods (devuelve keys cortos)
 // ═══════════════════════════════════════════════════════════════
 function extractMoodFromMessages(messages: string[]): string {
   if (!messages || messages.length === 0) return ''
@@ -321,7 +321,7 @@ function extractMoodFromMessages(messages: string[]): string {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ✅ POOL: convierte mood key a fragmento de prompt largo
+// MOOD_FRAGMENTS — convierte keys a fragmentos de prompt
 // ═══════════════════════════════════════════════════════════════
 const MOOD_FRAGMENTS: Record<string, string> = {
   breathless_passionate: 'breathless passionate mood, disheveled, intense breathing',
@@ -463,10 +463,13 @@ export async function POST(request: Request) {
 
     // ═══════════════════════════════════════════════════════════════
     // OBTENER IMAGEN
+    // ✅ FIX TS: definite assignment assertions (!) para imageUrl, source, modelUsed
+    //    TypeScript no puede trazar todos los caminos de asignación con la
+    //    lógica compleja de pool + generación + upload.
     // ═══════════════════════════════════════════════════════════════
-    let imageUrl: string
-    let source: 'r2_static' | 'pool' | 'generated'
-    let modelUsed: string
+    let imageUrl!: string
+    let source!: 'r2_static' | 'pool' | 'generated'
+    let modelUsed!: string
     let promptUsed = ''
 
     if (useR2Static) {
@@ -502,7 +505,9 @@ export async function POST(request: Request) {
         try {
           const existing = await getPoolImageByTag(tagKey)
           if (existing) {
-            console.log(`[generate-image] ♻️ Pool HIT: ${tagKey} (used ${existing.times_used}x)`)
+            console.log(
+              `[generate-image] ♻️ Pool HIT: ${tagKey} (used ${existing.times_used}x)`
+            )
             imageUrl = existing.r2_url
             source = 'pool'
             modelUsed = 'pool'
@@ -676,10 +681,10 @@ export async function POST(request: Request) {
       level: level.level,
       cost: isFree ? 0 : imageCost,
       free: isFree,
-      source,                     // 'r2_static' | 'pool' | 'generated'
+      source,
       image_index: r2Index,
       face_visibility: faceVisibility,
-      model: modelUsed,           // 'r2' | 'pool' | 'deepinfra' | 'wiro-v4-5'
+      model: modelUsed,
     })
   } catch (error: any) {
     console.error('Error generando imagen:', error)
