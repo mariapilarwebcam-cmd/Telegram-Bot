@@ -8,7 +8,7 @@ import {
   VIP_PLANS,
   getFinalGems,
   getFinalCryptoGems,
-  type VipPlanId,                                              // ✅ FIX
+  type VipPlanId,
 } from '@/lib/constants'
 import { getTranslations } from '@/lib/i18n'
 import { useUser } from '@/lib/UserContext'
@@ -66,7 +66,7 @@ export default function ShopPage() {
   }
 
   // ⭐ Comprar plan VIP con STARS
-  const buyVipWithStars = async (planId: VipPlanId) => {          // ✅ FIX
+  const buyVipWithStars = async (planId: VipPlanId) => {
     if (!user || vipPurchasing) return
     setVipPurchasing(planId)
 
@@ -134,7 +134,7 @@ export default function ShopPage() {
   }
 
   // 💎 Comprar plan VIP con USDT
-  const buyVipWithCrypto = async (planId: VipPlanId) => {         // ✅ FIX
+  const buyVipWithCrypto = async (planId: VipPlanId) => {
     if (!user || vipPurchasing) return
     setVipPurchasing(planId)
 
@@ -200,7 +200,7 @@ export default function ShopPage() {
   }
 
   const startVipPolling = (
-    planId: VipPlanId,                                            // ✅ FIX
+    planId: VipPlanId,
     reference: string
   ) => {
     setVipPendingRef(reference)
@@ -779,18 +779,34 @@ export default function ShopPage() {
           </div>
         ) : (
           <>
-            <p
+            {/* ✅ CAMBIO 1: descripción con cupos reales */}
+            <div
               style={{
                 fontSize: 13,
-                color: '#a395c9',
-                margin: '0 0 14px 0',
-                lineHeight: 1.55,
+                color: '#c4b5fd',
+                margin: '0 0 16px 0',
+                lineHeight: 1.7,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 4,
               }}
             >
-              {lang === 'es'
-                ? 'Mensajes ilimitados · Imágenes gratis diarias · Personajes exclusivos'
-                : 'Unlimited messages · Free daily images · Exclusive characters'}
-            </p>
+              {lang === 'es' ? (
+                <>
+                  <div>📨 <strong style={{ color: '#f5f0ff' }}>6.000 mensajes/mes</strong></div>
+                  <div>📸 <strong style={{ color: '#f5f0ff' }}>30 imágenes IA premium/mes</strong> <span style={{ color: '#8b8b9e' }}>(acumula hasta 5)</span></div>
+                  <div>🎨 <strong style={{ color: '#f5f0ff' }}>Hasta 300 imágenes SFW/mes</strong></div>
+                  <div>👑 <strong style={{ color: '#f5f0ff' }}>18 personajes exclusivos</strong></div>
+                </>
+              ) : (
+                <>
+                  <div>📨 <strong style={{ color: '#f5f0ff' }}>6,000 messages/month</strong></div>
+                  <div>📸 <strong style={{ color: '#f5f0ff' }}>30 premium AI images/month</strong> <span style={{ color: '#8b8b9e' }}>(accumulate up to 5)</span></div>
+                  <div>🎨 <strong style={{ color: '#f5f0ff' }}>Up to 300 SFW images/month</strong></div>
+                  <div>👑 <strong style={{ color: '#f5f0ff' }}>18 exclusive characters</strong></div>
+                </>
+              )}
+            </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {VIP_PLANS.map((plan) => {
@@ -1336,19 +1352,37 @@ export default function ShopPage() {
             >
               {lang === 'es' ? '¡Bienvenido a VIP!' : 'Welcome to VIP!'}
             </h2>
-            <p
+
+            {/* ✅ CAMBIO 2: cupos reales en el modal de éxito */}
+            <div
               style={{
-                fontSize: 14,
+                fontSize: 13,
                 color: '#c4b5fd',
                 textAlign: 'center',
                 margin: '12px 0 20px 0',
-                lineHeight: 1.6,
+                lineHeight: 1.7,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 4,
               }}
             >
-              {lang === 'es'
-                ? 'Disfruta de mensajes ilimitados, imágenes gratis diarias y acceso a personajes exclusivos.'
-                : 'Enjoy unlimited messages, free daily images and access to exclusive characters.'}
-            </p>
+              {lang === 'es' ? (
+                <>
+                  <div>📨 6.000 mensajes/mes</div>
+                  <div>📸 30 imágenes IA premium/mes</div>
+                  <div>🎨 Hasta 300 imágenes SFW/mes</div>
+                  <div>👑 18 personajes exclusivos</div>
+                </>
+              ) : (
+                <>
+                  <div>📨 6,000 messages/month</div>
+                  <div>📸 30 premium AI images/month</div>
+                  <div>🎨 Up to 300 SFW images/month</div>
+                  <div>👑 18 exclusive characters</div>
+                </>
+              )}
+            </div>
+
             <button
               onClick={() => setShowVipSuccess(false)}
               className="modal-btn primary"
