@@ -9,13 +9,20 @@ import {
   insertGemTransaction,
   getSeenImageCount,
   markImageSeen,
-  getAvailablePoolImage,       // ✅ POOL v2
-  markPoolImageViewed,         // ✅ POOL v2
-  incrementPoolImageUse,       // ✅ POOL v2 (ahora recibe ID)
-  insertPoolImage,             // ✅ POOL v2 (ahora retorna ID)
+  getAvailablePoolImage,
+  markPoolImageViewed,
+  incrementPoolImageUse,
+  insertPoolImage,
   insertMessage,
+  getActiveSubscription,              // ★ NUEVO
+  insertImageGeneration,              // ★ NUEVO
+  countUserWiroLast30Days,            // ★ NUEVO
+  countUserGenerationsForTag,         // ★ NUEVO
+  ensureWiroTokensRefilled,           // ★ NUEVO
+  consumeWiroToken,                   // ★ NUEVO
 } from '@/lib/db-queries'
 import { getCharacterFace, getCharacterImageUrl } from '@/lib/constants'
+import { VIP_LIMITS, MAX_GENERATIONS_PER_CONTEXT_PER_USER } from '@/lib/constants'  // ★ NUEVO
 import { generateImage } from '@/lib/ai'
 import {
   getLevelFromMessages,
@@ -35,7 +42,7 @@ import {
 export const maxDuration = 60
 
 // ═══════════════════════════════════════════════════════════════
-// CHARACTER DNA — identidad visual mínima por arquetipo
+// CHARACTER DNA
 // ═══════════════════════════════════════════════════════════════
 const CHARACTER_DNA: Record<string, string> = {
   female_stepmom: "mature woman, long dark hair, green eyes, elegant",
@@ -256,7 +263,7 @@ const AUTO_SCENES_MALE: Record<number, string> = {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// extractMoodFromMessages — 18 moods (keys cortos)
+// extractMoodFromMessages
 // ═══════════════════════════════════════════════════════════════
 function extractMoodFromMessages(messages: string[]): string {
   if (!messages || messages.length === 0) return ''
@@ -360,6 +367,33 @@ function getLevelBucket(level: number): 'sfw' | 'nsfw' {
   return level <= 3 ? 'sfw' : 'nsfw'
 }
 
+// ═══════════════════════════════════════════════════════════════
+// ★ NUEVO — Mensajes de bloqueo de límites
+// ═══════════════════════════════════════════════════════════════
+function getContextLimitMessage(lang: 'es' | 'en', characterName: string): string {
+  if (lang === 'en') {
+    return `*${characterName} smirks and shakes her head*\n\n"Wow, you really love this moment, huh? I think we've already explored this scene enough... let's try something different. Change the mood or the place, and I'll surprise you again."`
+  }
+  return `*${characterName} sonríe de lado y niega con la cabeza*\n\n"Wow, veo que te encanta este momento, ¿eh? Creo que ya exploramos bastante esta escena... probemos algo diferente. Cambia el mood o el lugar, y te sorprendo otra vez."`
+}
+
+function getWiroTokensExhaustedMessage(lang: 'es' | 'en', characterName: string): string {
+  if (lang === 'en') {
+    return `*${characterName} bites her lip and looks at you apologetically*\n\n"I'm out of premium photos for today... but I'll have a new one tomorrow. Or come back later, I have something else to show you."`
+  }
+  return `*${characterName} se muerde el labio y te mira con disculpa*\n\n"Se me acabaron las fotos premium por hoy... pero mañana tendré una nueva. O vuelve más tarde, tengo algo más que mostrarte."`
+}
+
+function getWiroMonthlyLimitMessage(lang: 'es' | 'en', characterName: string): string {
+  if (lang === 'en') {
+    return `*${characterName} smiles warmly*\n\n"We've shared so many premium moments this month... I need to rest and recharge. Come back next month for more."`
+  }
+  return `*${characterName} sonríe con calidez*\n\n"Hemos compartido tantos momentos premium este mes... necesito descansar y recargarme. Vuelve el próximo mes para más."`
+}
+
+// ═══════════════════════════════════════════════════════════════
+// POST handler
+// ═══════════════════════════════════════════════════════════════
 export async function POST(request: Request) {
   try {
     const tid = request.headers.get('x-telegram-id-validated')
@@ -396,6 +430,8 @@ export async function POST(request: Request) {
         { status: 404 }
       )
     }
+
+    const lang: 'es' | 'en' = user.language === 'en' ? 'en' : 'es'
 
     const userMsgCount = await countUserMessages(tid, character_id)
     const level = getLevelFromMessages(userMsgCount || 0)
@@ -463,7 +499,6 @@ export async function POST(request: Request) {
 
     // ═══════════════════════════════════════════════════════════════
     // OBTENER IMAGEN
-    // ✅ FIX TS: definite assignment (!) para imageUrl, source, modelUsed
     // ═══════════════════════════════════════════════════════════════
     let imageUrl!: string
     let source!: 'r2_static' | 'pool' | 'generated'
@@ -487,15 +522,11 @@ export async function POST(request: Request) {
       )
     } else {
       // ═══════════════════════════════════════════════════════════════
-      // ✅ POOL v2: buscar UNA imagen que el user NO haya visto todavía
+      // POOL v2
       // ═══════════════════════════════════════════════════════════════
       const mood = extractMoodFromMessages(recent_messages)
       const levelBucket = getLevelBucket(level.level)
 
-      // Solo usamos pool si:
-      //   - no hay userHint (petición personalizada = generar nueva)
-      //   - hay mood detectado (tag válido)
-      //   - R2 está disponible (necesario para upload)
       const usePool = !userHint && !!mood && r2Available
 
       let poolHit = false
@@ -518,7 +549,6 @@ export async function POST(request: Request) {
             poolImageId = available.id
             poolHit = true
 
-            // Marcar como vista por este usuario + incrementar contador
             await markPoolImageViewed(available.id, tid, character_id)
             incrementPoolImageUse(available.id).catch(() => {})
           } else {
@@ -531,8 +561,86 @@ export async function POST(request: Request) {
         }
       }
 
-      // Si NO hubo pool hit → generar con IA
+      // ═══════════════════════════════════════════════════════════════
+      // ★ NUEVO — VALIDAR LÍMITES ANTES DE GENERAR CON IA
+      // ═══════════════════════════════════════════════════════════════
       if (!poolHit) {
+        // Detectar el modelo que se usará
+        const willUseWiro = level.level >= 4
+        const generationModel: 'deepinfra' | 'wiro' = willUseWiro ? 'wiro' : 'deepinfra'
+
+        // Tag key normalizada (aunque mood vacío, se cuenta como 'default')
+        const normalizedTagKey = buildTagKey(
+          character.archetype,
+          genderKey,
+          mood || 'default',
+          levelBucket
+        )
+
+        // ─── A. Límite por contexto (máx 10 por usuario/tag) ───
+        const tagCount = await countUserGenerationsForTag(tid, normalizedTagKey)
+        if (tagCount >= MAX_GENERATIONS_PER_CONTEXT_PER_USER) {
+          console.log(
+            `[generate-image] 🚫 Per-context limit reached: ${normalizedTagKey} (${tagCount}/${MAX_GENERATIONS_PER_CONTEXT_PER_USER})`
+          )
+          return NextResponse.json(
+            {
+              error: 'context_limit_reached',
+              message: getContextLimitMessage(lang, character.character_name),
+            },
+            { status: 429 }
+          )
+        }
+
+        // ─── B. Límites Wiro (solo niveles 4-5) ───
+        if (willUseWiro) {
+          const vipSub = await getActiveSubscription(tid)
+          const isVip = !!vipSub
+
+          if (isVip) {
+            // VIP → sistema de tokens + límite mensual
+            const tokens = await ensureWiroTokensRefilled(tid)
+
+            if (tokens <= 0) {
+              console.log(`[generate-image] 🚫 Wiro tokens exhausted for VIP ${tid}`)
+              return NextResponse.json(
+                {
+                  error: 'wiro_tokens_exhausted',
+                  message: getWiroTokensExhaustedMessage(lang, character.character_name),
+                  wiro_tokens: 0,
+                },
+                { status: 429 }
+              )
+            }
+
+            const wiroMonthly = await countUserWiroLast30Days(tid)
+            if (wiroMonthly >= VIP_LIMITS.wiro_monthly) {
+              console.log(
+                `[generate-image] 🚫 Wiro monthly limit for VIP ${tid}: ${wiroMonthly}/${VIP_LIMITS.wiro_monthly}`
+              )
+              return NextResponse.json(
+                {
+                  error: 'wiro_monthly_limit',
+                  message: getWiroMonthlyLimitMessage(lang, character.character_name),
+                },
+                { status: 429 }
+              )
+            }
+
+            // ✅ Pasa los límites → consumir 1 token
+            await consumeWiroToken(tid)
+            console.log(`[generate-image] 🎫 Wiro token consumed (remaining: ${tokens - 1})`)
+          } else {
+            // No-VIP intentando generar Wiro → solo si tiene purchased_gems (ya validado arriba)
+            // Se permite pero SIN tokens (paga con gemas como siempre). No aplicamos
+            // límite mensual a no-VIPs porque ya pagan por cada imagen.
+            console.log(`[generate-image] 💎 Non-VIP Wiro generation (paid with gems)`)
+          }
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // GENERAR CON IA
+        // ═══════════════════════════════════════════════════════════════
         const autoScenes =
           character.gender === 'male' ? AUTO_SCENES_MALE : AUTO_SCENES_FEMALE
         const sceneHint = userHint || autoScenes[level.level] || autoScenes[1]
@@ -610,8 +718,17 @@ export async function POST(request: Request) {
         modelUsed = level.level <= 3 ? 'deepinfra' : 'wiro-v4-5'
         imageUrl = rawUrl
 
+        // ★ NUEVO — Registrar generación para límites
+        await insertImageGeneration({
+          telegram_id: tid,
+          character_id,
+          tag_key: normalizedTagKey,
+          model: generationModel,
+          level: level.level,
+        })
+
         // ═══════════════════════════════════════════════════════════════
-        // ✅ POOL v2: subir a R2 + guardar en pool + marcar como vista
+        // Subir a R2 + guardar en pool
         // ═══════════════════════════════════════════════════════════════
         if (r2Available && !userHint && mood) {
           try {
@@ -621,9 +738,8 @@ export async function POST(request: Request) {
 
             imageUrl = permanentUrl
 
-            const tagKey = buildTagKey(character.archetype, genderKey, mood, levelBucket)
             const newImageId = await insertPoolImage({
-              tag_key: tagKey,
+              tag_key: normalizedTagKey,
               archetype: character.archetype,
               gender: genderKey,
               mood,
@@ -634,24 +750,21 @@ export async function POST(request: Request) {
               first_user_id: tid,
             })
 
-            // Marcar como vista por el creador (para que si vuelve a pedir
-            // el mismo contexto, no le sirva la misma)
             if (newImageId) {
               await markPoolImageViewed(newImageId, tid, character_id)
               poolImageId = newImageId
             }
 
-            console.log(`[generate-image] 📤 Subida a R2 + pool: ${tagKey} (id=${newImageId})`)
+            console.log(`[generate-image] 📤 Subida a R2 + pool: ${normalizedTagKey} (id=${newImageId})`)
           } catch (uploadErr) {
             console.warn('[generate-image] R2 upload failed (using temp URL):', uploadErr)
-            // Seguimos usando la URL temporal de la IA
           }
         }
       }
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // PERSISTENCIA: guardar el mensaje de imagen en el chat
+    // PERSISTENCIA
     // ═══════════════════════════════════════════════════════════════
     try {
       const imageMessageContent = `*${character.character_name} te envía una foto*\n\n![Selfie](${imageUrl})`
@@ -666,7 +779,7 @@ export async function POST(request: Request) {
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // COBRAR (solo si no es gratis)
+    // COBRAR
     // ═══════════════════════════════════════════════════════════════
     let newGems = user.gems || 0
     let newPurchasedGems = purchasedGems
