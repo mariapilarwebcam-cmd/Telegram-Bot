@@ -90,7 +90,6 @@ export async function createUser(data: {
     )
     return getUser(data.telegram_id)
   } catch (e: any) {
-    // Race condition: otro request lo creó entre SELECT e INSERT
     if (String(e?.message || '').includes('UNIQUE')) {
       return getUser(data.telegram_id)
     }
@@ -143,7 +142,7 @@ export async function completeOnboarding(telegram_id: string) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// GEM OPERATIONS (atómico, sin RPC)
+// GEM OPERATIONS
 // ═══════════════════════════════════════════════════════════════
 
 export async function incrementGems(
@@ -618,7 +617,7 @@ export async function getPurchaseByChargeId(charge_id: string) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// CHAT LIST (para la página /chats)
+// CHAT LIST
 // ═══════════════════════════════════════════════════════════════
 
 export async function getChatListData(telegram_id: string) {
@@ -681,16 +680,6 @@ export interface InactiveUserRow {
   character_archetype: string
 }
 
-/**
- * Devuelve usuarios inactivos elegibles para un mensaje proactivo.
- *
- * Reglas:
- * - Debe tener edad verificada
- * - No debe haber bloqueado el bot
- * - Debe tener un personaje activo
- * - Máx 3 mensajes proactivos por usuario (día 2, 5, 10)
- * - Mínimo 48h entre mensajes proactivos
- */
 export async function getInactiveUsers(
   limit = 200
 ): Promise<InactiveUserRow[]> {
@@ -716,22 +705,17 @@ export async function getInactiveUsers(
       AND COALESCE(u.bot_blocked, 0) = 0
       AND COALESCE(u.proactive_count, 0) < 3
       AND u.last_active IS NOT NULL
-      -- Mín 48h entre proactivos consecutivos
       AND (
         u.last_proactive_at IS NULL
         OR u.last_proactive_at < datetime('now', '-2 days')
       )
-      -- Regla por número de proactivo:
       AND (
-        -- 1er proactivo: 2 días sin entrar
         (COALESCE(u.proactive_count, 0) = 0
           AND u.last_active < datetime('now', '-2 days'))
         OR
-        -- 2do: 5 días sin entrar
         (COALESCE(u.proactive_count, 0) = 1
           AND u.last_active < datetime('now', '-5 days'))
         OR
-        -- 3ro: 10 días sin entrar
         (COALESCE(u.proactive_count, 0) = 2
           AND u.last_active < datetime('now', '-10 days'))
       )
@@ -742,9 +726,6 @@ export async function getInactiveUsers(
   )
 }
 
-/**
- * Marca que se envió un proactivo al usuario.
- */
 export async function markProactiveSent(telegram_id: string) {
   return execute(
     `UPDATE users
@@ -756,9 +737,6 @@ export async function markProactiveSent(telegram_id: string) {
   )
 }
 
-/**
- * Marca al usuario como bloqueador del bot (evita reintentos).
- */
 export async function markBotBlocked(telegram_id: string) {
   return execute(
     `UPDATE users
@@ -768,10 +746,6 @@ export async function markBotBlocked(telegram_id: string) {
   )
 }
 
-/**
- * Actualiza el timestamp de última actividad.
- * Llamado desde el bot de Python y desde /api/chat.
- */
 export async function updateLastActive(telegram_id: string) {
   return execute(
     `UPDATE users SET last_active = ? WHERE telegram_id = ?`,
@@ -783,11 +757,6 @@ export async function updateLastActive(telegram_id: string) {
 // IMAGE HISTORY (rotación de imágenes por personaje)
 // ═══════════════════════════════════════════════════════════════
 
-/**
- * Devuelve cuántas imágenes pre-generadas ha visto el usuario
- * para un personaje específico. Solo cuenta las que vienen de R2
- * (is_generated = 0). Máximo 4.
- */
 export async function getSeenImageCount(
   telegram_id: string,
   character_id: number
@@ -800,10 +769,6 @@ export async function getSeenImageCount(
   return row?.c ?? 0
 }
 
-/**
- * Registra que el usuario vio la imagen N del personaje.
- * Si ya existía (UNIQUE), no hace nada.
- */
 export async function markImageSeen(
   telegram_id: string,
   character_id: number,
@@ -818,7 +783,6 @@ export async function markImageSeen(
       [telegram_id, character_id, image_index, is_generated ? 1 : 0]
     )
   } catch (e: any) {
-    // UNIQUE constraint: ya existía, OK
     if (String(e?.message || '').includes('UNIQUE')) {
       return { rowsAffected: 0, lastInsertRowid: 0 }
     }
@@ -833,7 +797,7 @@ export async function markImageSeen(
 export interface SubscriptionRow {
   id: number
   telegram_id: string
-  plan: 'weekly' | 'monthly' | 'quarterly'
+  plan: 'weekly' | 'monthly' | 'quarterly' | 'annual'
   stars_paid: number
   telegram_charge_id: string
   started_at: string
@@ -843,10 +807,6 @@ export interface SubscriptionRow {
   created_at: string
 }
 
-/**
- * Devuelve la suscripción activa del usuario, o null si no tiene.
- * Una suscripción es activa si status='active' Y expires_at > ahora.
- */
 export async function getActiveSubscription(
   telegram_id: string
 ): Promise<SubscriptionRow | null> {
@@ -861,21 +821,14 @@ export async function getActiveSubscription(
   )
 }
 
-/**
- * Helper rápido: ¿es VIP ahora mismo?
- */
 export async function isUserVip(telegram_id: string): Promise<boolean> {
   const sub = await getActiveSubscription(telegram_id)
   return !!sub
 }
 
-/**
- * Crea una nueva suscripción.
- * Maneja UNIQUE del charge_id (idempotencia).
- */
 export async function createSubscription(data: {
   telegram_id: string
-  plan: 'weekly' | 'monthly' | 'quarterly'
+  plan: 'weekly' | 'monthly' | 'quarterly' | 'annual'
   stars_paid: number
   telegram_charge_id: string
   expires_at: string
@@ -900,9 +853,6 @@ export async function createSubscription(data: {
   }
 }
 
-/**
- * Cancela la suscripción activa (no elimina el acceso hasta que expire).
- */
 export async function cancelActiveSubscription(
   telegram_id: string
 ): Promise<boolean> {
@@ -918,10 +868,6 @@ export async function cancelActiveSubscription(
   return result.rowsAffected > 0
 }
 
-/**
- * Marca como expiradas todas las suscripciones vencidas.
- * Se llama desde el cron para mantener la DB limpia.
- */
 export async function expireOldSubscriptions(): Promise<number> {
   const result = await execute(
     `UPDATE subscriptions
@@ -933,13 +879,140 @@ export async function expireOldSubscriptions(): Promise<number> {
   return result.rowsAffected
 }
 
-/**
- * ¿Ya existe una suscripción con este charge_id? (idempotencia)
- */
 export async function getSubscriptionByChargeId(charge_id: string) {
   return queryOne<SubscriptionRow>(
     `SELECT * FROM subscriptions
      WHERE telegram_charge_id = ? LIMIT 1`,
     [charge_id]
   )
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ✅ POOL — Imágenes generadas compartidas entre usuarios
+// ═══════════════════════════════════════════════════════════════
+
+export interface PoolImageRow {
+  id: number
+  tag_key: string
+  archetype: string
+  gender: string
+  mood: string
+  level_bucket: string
+  r2_key: string
+  r2_url: string
+  prompt_used: string
+  times_used: number
+  first_user_id: string | null
+  created_at: string
+  last_used_at: string
+}
+
+/**
+ * Busca una imagen del pool por su tag_key.
+ * Devuelve null si no existe.
+ */
+export async function getPoolImageByTag(
+  tag_key: string
+): Promise<PoolImageRow | null> {
+  return queryOne<PoolImageRow>(
+    `SELECT * FROM generated_images
+     WHERE tag_key = ?
+     LIMIT 1`,
+    [tag_key]
+  )
+}
+
+/**
+ * Incrementa el contador de uso y actualiza last_used_at.
+ * Fire-and-forget — no bloquea el flujo si falla.
+ */
+export async function incrementPoolImageUse(
+  tag_key: string
+): Promise<void> {
+  try {
+    await execute(
+      `UPDATE generated_images
+       SET times_used = times_used + 1,
+           last_used_at = datetime('now')
+       WHERE tag_key = ?`,
+      [tag_key]
+    )
+  } catch (e) {
+    console.warn('[pool] incrementPoolImageUse failed:', e)
+  }
+}
+
+/**
+ * Inserta una nueva imagen en el pool.
+ * Retorna true si se insertó, false si ya existía (UNIQUE).
+ */
+export async function insertPoolImage(data: {
+  tag_key: string
+  archetype: string
+  gender: string
+  mood: string
+  level_bucket: string
+  r2_key: string
+  r2_url: string
+  prompt_used: string
+  first_user_id: string | null
+}): Promise<boolean> {
+  try {
+    await execute(
+      `INSERT INTO generated_images
+        (tag_key, archetype, gender, mood, level_bucket,
+         r2_key, r2_url, prompt_used, first_user_id, times_used)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      [
+        data.tag_key,
+        data.archetype,
+        data.gender,
+        data.mood,
+        data.level_bucket,
+        data.r2_key,
+        data.r2_url,
+        data.prompt_used,
+        data.first_user_id,
+      ]
+    )
+    return true
+  } catch (e: any) {
+    if (String(e?.message || '').includes('UNIQUE')) {
+      return false
+    }
+    throw e
+  }
+}
+
+/**
+ * Estadísticas del pool (para debug / admin).
+ */
+export async function getPoolStats(): Promise<{
+  total: number
+  by_archetype: Array<{ archetype: string; count: number; avg_uses: number }>
+}> {
+  const total = await queryOne<{ c: number }>(
+    `SELECT COUNT(*) AS c FROM generated_images`,
+    []
+  )
+
+  const byArchetype = await query<{
+    archetype: string
+    count: number
+    avg_uses: number
+  }>(
+    `SELECT
+       archetype,
+       COUNT(*) AS count,
+       AVG(times_used) AS avg_uses
+     FROM generated_images
+     GROUP BY archetype
+     ORDER BY count DESC`,
+    []
+  )
+
+  return {
+    total: total?.c ?? 0,
+    by_archetype: byArchetype,
+  }
 }
