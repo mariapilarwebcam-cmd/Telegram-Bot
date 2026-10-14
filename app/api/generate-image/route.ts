@@ -9,6 +9,10 @@ import {
   insertGemTransaction,
   getSeenImageCount,
   markImageSeen,
+  getPoolImageByTag,
+  incrementPoolImageUse,
+  insertPoolImage,
+  insertMessage,
 } from '@/lib/db-queries'
 import { getCharacterFace, getCharacterImageUrl } from '@/lib/constants'
 import { generateImage } from '@/lib/ai'
@@ -19,6 +23,13 @@ import {
   getFaceVisibility,
   type FaceVisibility,
 } from '@/lib/levels'
+import {
+  r2Available,
+  uploadToR2,
+  downloadImage,
+  buildR2Key,
+  buildTagKey,
+} from '@/lib/r2-upload'
 
 export const maxDuration = 60
 
@@ -244,113 +255,93 @@ const AUTO_SCENES_MALE: Record<number, string> = {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ✅ OPCIÓN A — extractMoodFromMessages AMPLIADO (18 moods)
-// ═══════════════════════════════════════════════════════════════
-// Prioridad (orden de matching):
-//   1-6  → Intimidad / emocional fuerte (siempre ganan)
-//   7-8  → Emociones intensas (discusión, tristeza)
-//   9-14 → Ubicación / ambiente (lluvia, playa, cama, ducha, cocina, fiesta)
-//   15-17→ Actividad / contexto (gym, auto, noche)
-//   18   → Alegría (prioridad baja — solo si nada más coincide)
+// extractMoodFromMessages — 18 moods
 // ═══════════════════════════════════════════════════════════════
 function extractMoodFromMessages(messages: string[]): string {
   if (!messages || messages.length === 0) return ''
 
   const text = messages.join(' ').toLowerCase()
 
-  // ─── 1. Breathless passionate ───
   if (/\b(jadeo|jadea|respira|suspiro|temblor|tiembla|calor|fuego|húmedo|mojado|acelerado|entrecortad)\b/.test(text)) {
-    return 'breathless passionate mood, disheveled, intense breathing'
+    return 'breathless_passionate'
   }
-
-  // ─── 2. Submission / surrender ───
   if (/\b(hazme|tuyo|tuya|obedec|pide|por favor|tómame|tomame|entrégate|entregate|soy tu)\b/.test(text)) {
-    return 'submission and surrender mood, devoted gaze, yielding posture'
+    return 'submission_surrender'
   }
-
-  // ─── 3. Dominant / commanding ───
   if (/\b(domin|manda|control|orden|obedece|rodillas|sumiso|sumisa|mía|mio)\b/.test(text)) {
-    return 'dominant commanding mood, intense stare, powerful posture'
+    return 'dominant_commanding'
   }
-
-  // ─── 4. Sensual slow burn ───
   if (/\b(beso|lento|despacio|cerca|roza|toca|acaricia|susurr|muerde|labio)\b/.test(text)) {
-    return 'sensual slow burn mood, intimate closeness, tender tension'
+    return 'sensual_slow_burn'
   }
-
-  // ─── 5. Playful teasing ───
   if (/\b(provoc|broma|jugueto|desaf|atrev|coqueto|pícara|picara|tentaci)\b/.test(text)) {
-    return 'playful teasing mood, challenging gaze, mischievous energy'
+    return 'playful_teasing'
   }
-
-  // ─── 6. Romantic tender ───
   if (/\b(amor|quiero|corazón|corazon|tierno|dulce|abrazo)\b/.test(text)) {
-    return 'romantic tender mood, warm affectionate gaze'
+    return 'romantic_tender'
   }
-
-  // ✅ NUEVOS MOODS (Opción A)
-
-  // ─── 7. Discusión / tensión ───
   if (/\b(enfadad|enojad|discutir|discusión|discusion|pelea|pelean|celos|celoso|reclama|grita|gritar|furia|furios)\b/.test(text)) {
-    return 'tense argument mood, flushed face, intense eye contact, raw emotion'
+    return 'tense_argument'
   }
-
-  // ─── 8. Tristeza / consuelo ───
   if (/\b(triste|llorar|llora|lágrimas|lagrimas|melancol|consuelo|consolar|vulnerab)\b/.test(text)) {
-    return 'emotional vulnerable mood, teary eyes, soft comfort, seeking warmth'
+    return 'emotional_vulnerable'
   }
-
-  // ─── 9. Lluvia / tormenta ───
   if (/\b(lluvia|llueve|tormenta|tempestad|chaparrón|chaparro|empapad)\b/.test(text)) {
-    return 'rainy intimate mood, wet hair, cozy warmth, close proximity, soft droplets'
+    return 'rainy_intimate'
   }
-
-  // ─── 10. Playa / atardecer ───
   if (/\b(playa|arena|olas|atardecer|surf|bikini|traje de baño|oceano|océano|costa|marea)\b/.test(text)) {
-    return 'sunset beach mood, golden hour lighting, ocean breeze, barefoot intimacy'
+    return 'sunset_beach'
   }
-
-  // ─── 11. Cama / descanso ───
   if (/\b(cama|sábanas|sabanas|almohada|acostad|recostad|dormir|dormida|dormido|descansar|despierta)\b/.test(text)) {
-    return 'bedroom intimacy mood, tangled sheets, soft morning light, relaxed pose'
+    return 'bedroom_intimacy'
   }
-
-  // ─── 12. Ducha / baño ───
   if (/\b(ducha|bañera|banera|vapor|vaporoso|jabón|jabon|agua caliente|espuma|burbujas)\b/.test(text)) {
-    return 'bathroom steamy mood, water droplets, warm mist, intimate privacy'
+    return 'bathroom_steamy'
   }
-
-  // ─── 13. Cocina / comida ───
   if (/\b(cocina|cocinar|cocinando|comida|cena|vino|bebida|desayuno|restaurante)\b/.test(text)) {
-    return 'kitchen intimacy mood, warm lighting, casual closeness, domestic atmosphere'
+    return 'kitchen_intimacy'
   }
-
-  // ─── 14. Fiesta / baile ───
   if (/\b(fiesta|baile|bailar|bailando|música|musica|club|discoteca|concierto)\b/.test(text)) {
-    return 'nightlife party mood, dancing lights, energetic intimacy, vibrant atmosphere'
+    return 'nightlife_party'
   }
-
-  // ─── 15. Gym / ejercicio ───
   if (/\b(gym|gimnasio|entrenar|entrenando|deporte|sudor|sudando|ejercicio|pesas|cardio|correr)\b/.test(text)) {
-    return 'post-workout mood, athletic glow, sweat sheen, intense energy'
+    return 'post_workout'
   }
-
-  // ─── 16. Auto / viaje ───
   if (/\b(auto|coche|carro|manejar|conducir|viaje|carretera|road trip)\b/.test(text)) {
-    return 'car ride intimacy mood, private space, cinematic road atmosphere'
+    return 'car_ride'
   }
-
-  // ─── 17. Noche / misterio ───
   if (/\b(noche|luna|estrellas|oscuridad|medianoche|nocturno|misterio|velas)\b/.test(text)) {
-    return 'night mystery mood, moonlight, deep shadows, intimate darkness'
+    return 'night_mystery'
   }
-
-  // ─── 18. Alegría / risa (prioridad baja) ───
   if (/\b(risa|ríe|rie|reír|reir|divertid|juego|jugando|sonrisa|sonríe|sonrie|alegre)\b/.test(text)) {
-    return 'playful laughing mood, genuine smile, relaxed happy energy'
+    return 'playful_laughing'
   }
 
   return ''
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ✅ POOL: convierte mood key a fragmento de prompt largo
+// ═══════════════════════════════════════════════════════════════
+const MOOD_FRAGMENTS: Record<string, string> = {
+  breathless_passionate: 'breathless passionate mood, disheveled, intense breathing',
+  submission_surrender: 'submission and surrender mood, devoted gaze, yielding posture',
+  dominant_commanding: 'dominant commanding mood, intense stare, powerful posture',
+  sensual_slow_burn: 'sensual slow burn mood, intimate closeness, tender tension',
+  playful_teasing: 'playful teasing mood, challenging gaze, mischievous energy',
+  romantic_tender: 'romantic tender mood, warm affectionate gaze',
+  tense_argument: 'tense argument mood, flushed face, intense eye contact, raw emotion',
+  emotional_vulnerable: 'emotional vulnerable mood, teary eyes, soft comfort, seeking warmth',
+  rainy_intimate: 'rainy intimate mood, wet hair, cozy warmth, close proximity, soft droplets',
+  sunset_beach: 'sunset beach mood, golden hour lighting, ocean breeze, barefoot intimacy',
+  bedroom_intimacy: 'bedroom intimacy mood, tangled sheets, soft morning light, relaxed pose',
+  bathroom_steamy: 'bathroom steamy mood, water droplets, warm mist, intimate privacy',
+  kitchen_intimacy: 'kitchen intimacy mood, warm lighting, casual closeness, domestic atmosphere',
+  nightlife_party: 'nightlife party mood, dancing lights, energetic intimacy, vibrant atmosphere',
+  post_workout: 'post-workout mood, athletic glow, sweat sheen, intense energy',
+  car_ride: 'car ride intimacy mood, private space, cinematic road atmosphere',
+  night_mystery: 'night mystery mood, moonlight, deep shadows, intimate darkness',
+  playful_laughing: 'playful laughing mood, genuine smile, relaxed happy energy',
 }
 
 function buildR2VariantUrl(
@@ -362,6 +353,11 @@ function buildR2VariantUrl(
   if (!base) return ''
   const clean = base.replace(/\/$/, '')
   return `${clean}/${gender}_${archetype}_${index}.jpg?v=8`
+}
+
+// ✅ Helper: nivel → bucket
+function getLevelBucket(level: number): 'sfw' | 'nsfw' {
+  return level <= 3 ? 'sfw' : 'nsfw'
 }
 
 export async function POST(request: Request) {
@@ -406,16 +402,14 @@ export async function POST(request: Request) {
     const imageCost = getImageCost(level.level)
     const faceVisibility = getFaceVisibility(level.level)
 
-    // ═══════════════════════════════════════════════════════════════
-    // ✅ LÓGICA DE ROTACIÓN
-    // - Nivel 1-3: _1 (gratis), _2 (costo), resto genera IA (DeepInfra)
-    // - Nivel 4-5: _1 (gratis), _2 (costo), _3 (costo), _4 (costo), resto IA (Wiro)
-    // ═══════════════════════════════════════════════════════════════
     const seenCount = await getSeenImageCount(tid, character_id)
 
     const genderKey = character.gender === 'male' ? 'male' : 'female'
     const r2Base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL
 
+    // ═══════════════════════════════════════════════════════════════
+    // ROTACIÓN R2 ESTÁTICA
+    // ═══════════════════════════════════════════════════════════════
     let r2Index: number | null = null
     let isFree = false
 
@@ -430,12 +424,10 @@ export async function POST(request: Request) {
       r2Index = 4
     }
 
-    const useR2 = r2Index !== null && !!r2Base
+    const useR2Static = r2Index !== null && !!r2Base
 
     // ═══════════════════════════════════════════════════════════════
-    // ✅ PREMIUM CHECK — solo si NO es gratis
-    // La primera foto (_1) es gratis para TODOS sin premium.
-    // A partir de la 2ª, se requiere premium + gemas.
+    // PREMIUM CHECK — solo si NO es gratis
     // ═══════════════════════════════════════════════════════════════
     const purchasedGems = user.purchased_gems || 0
 
@@ -473,12 +465,14 @@ export async function POST(request: Request) {
     // OBTENER IMAGEN
     // ═══════════════════════════════════════════════════════════════
     let imageUrl: string
-    let source: 'r2' | 'generated'
+    let source: 'r2_static' | 'pool' | 'generated'
     let modelUsed: string
+    let promptUsed = ''
 
-    if (useR2) {
+    if (useR2Static) {
+      // ─── ROTACIÓN R2 ESTÁTICA ───
       imageUrl = buildR2VariantUrl(genderKey, character.archetype, r2Index!)
-      source = 'r2'
+      source = 'r2_static'
       modelUsed = 'r2'
 
       try {
@@ -488,79 +482,167 @@ export async function POST(request: Request) {
       }
 
       console.log(
-        `[generate-image] ✅ R2 hit: _${r2Index} (${isFree ? 'FREE' : `${imageCost}g`})`
+        `[generate-image] ✅ R2 static: _${r2Index} (${isFree ? 'FREE' : `${imageCost}g`})`
       )
     } else {
-      const autoScenes =
-        character.gender === 'male' ? AUTO_SCENES_MALE : AUTO_SCENES_FEMALE
-      const sceneHint = userHint || autoScenes[level.level] || autoScenes[1]
+      // ═══════════════════════════════════════════════════════════════
+      // ✅ POOL: intentar reutilizar imagen existente
+      // ═══════════════════════════════════════════════════════════════
+      const mood = extractMoodFromMessages(recent_messages)
+      const levelBucket = getLevelBucket(level.level)
 
-      const NO_GENITALIA =
-        'tasteful artistic composition, no explicit genitalia, no nudity visible below waist, strategic coverage, high-end boudoir photography aesthetic, safe for platform'
+      // Si hay userHint, NO usamos pool (es una petición personalizada)
+      const usePool = !userHint && !!mood && r2Available
 
-      let imagePrompt: string
-      let referenceUrl: string | undefined
+      let poolHit = false
 
-      if (level.level <= 3) {
-        const dna =
-          CHARACTER_DNA[`${character.gender}_${character.archetype}`] ||
-          'anime character'
-        const scene = SFW_SCENE_PROMPTS[level.level] || SFW_SCENE_PROMPTS[1]
+      if (usePool) {
+        const tagKey = buildTagKey(character.archetype, genderKey, mood, levelBucket)
 
-        let faceRule = ''
-        if (faceVisibility === 'hidden') {
-          faceRule = FACE_HIDDEN_FRAGMENT
-        } else if (faceVisibility === 'partial') {
-          faceRule = FACE_PARTIAL_FRAGMENT
+        try {
+          const existing = await getPoolImageByTag(tagKey)
+          if (existing) {
+            console.log(`[generate-image] ♻️ Pool HIT: ${tagKey} (used ${existing.times_used}x)`)
+            imageUrl = existing.r2_url
+            source = 'pool'
+            modelUsed = 'pool'
+            promptUsed = existing.prompt_used
+            poolHit = true
+
+            // Incrementar contador (fire-and-forget)
+            incrementPoolImageUse(tagKey).catch(() => {})
+          }
+        } catch (poolErr) {
+          console.warn('[generate-image] Pool lookup failed (continuing):', poolErr)
+        }
+      }
+
+      // Si NO hubo pool hit → generar
+      if (!poolHit) {
+        const autoScenes =
+          character.gender === 'male' ? AUTO_SCENES_MALE : AUTO_SCENES_FEMALE
+        const sceneHint = userHint || autoScenes[level.level] || autoScenes[1]
+
+        const NO_GENITALIA =
+          'tasteful artistic composition, no explicit genitalia, no nudity visible below waist, strategic coverage, high-end boudoir photography aesthetic, safe for platform'
+
+        let imagePrompt: string
+        let referenceUrl: string | undefined
+
+        if (level.level <= 3) {
+          const dna =
+            CHARACTER_DNA[`${character.gender}_${character.archetype}`] ||
+            'anime character'
+          const scene = SFW_SCENE_PROMPTS[level.level] || SFW_SCENE_PROMPTS[1]
+
+          let faceRule = ''
+          if (faceVisibility === 'hidden') {
+            faceRule = FACE_HIDDEN_FRAGMENT
+          } else if (faceVisibility === 'partial') {
+            faceRule = FACE_PARTIAL_FRAGMENT
+          }
+
+          const layers = [
+            `[CHARACTER: ${dna}]`,
+            'highly detailed anime illustration, cel shading, soft cinematic lighting',
+            scene,
+            sceneHint,
+            faceRule,
+            'muted color palette, elegant composition, best quality, masterpiece',
+            'safe for work, no nudity, no explicit content',
+          ].filter((s) => s && s.length > 0)
+
+          imagePrompt = layers.join(', ')
+          referenceUrl = undefined
+        } else {
+          const facePrompt = getCharacterFace(character.archetype, character.gender)
+          const clothing = getClothingLevel(level.level)
+          const scene = NSFW_SCENE_PROMPTS[level.level] || NSFW_SCENE_PROMPTS[4]
+          const archetypeHint =
+            ARCHETYPE_IMAGE_HINTS[`${character.gender}_${character.archetype}`] || ''
+          const moodFragment = mood ? MOOD_FRAGMENTS[mood] || '' : ''
+
+          const layers = [
+            facePrompt,
+            'anime style, cel shading, moody atmospheric lighting, deep shadows, muted color palette, cinematic dark tones, detailed anime eyes',
+            clothing,
+            scene,
+            archetypeHint,
+            moodFragment,
+            sceneHint,
+            NO_GENITALIA,
+            'beautiful cinematic lighting, 2D illustration, best quality',
+          ].filter((s) => s && s.length > 0)
+
+          imagePrompt = layers.join(', ')
+          referenceUrl = getCharacterImageUrl(character.archetype, character.gender)
         }
 
-        const layers = [
-          `[CHARACTER: ${dna}]`,
-          'highly detailed anime illustration, cel shading, soft cinematic lighting',
-          scene,
-          sceneHint,
-          faceRule,
-          'muted color palette, elegant composition, best quality, masterpiece',
-          'safe for work, no nudity, no explicit content',
-        ].filter((s) => s && s.length > 0)
+        promptUsed = imagePrompt
 
-        imagePrompt = layers.join(', ')
-        referenceUrl = undefined
-      } else {
-        const facePrompt = getCharacterFace(character.archetype, character.gender)
-        const clothing = getClothingLevel(level.level)
-        const scene = NSFW_SCENE_PROMPTS[level.level] || NSFW_SCENE_PROMPTS[4]
-        const archetypeHint =
-          ARCHETYPE_IMAGE_HINTS[`${character.gender}_${character.archetype}`] || ''
-        const moodHint = extractMoodFromMessages(recent_messages)
+        // Generar con IA
+        let rawUrl: string
+        try {
+          rawUrl = await generateImage(imagePrompt, referenceUrl, level.level)
+        } catch (imgError) {
+          console.error('Image generation error:', imgError)
+          return NextResponse.json(
+            { error: 'Error al generar la imagen' },
+            { status: 500 }
+          )
+        }
 
-        const layers = [
-          facePrompt,
-          'anime style, cel shading, moody atmospheric lighting, deep shadows, muted color palette, cinematic dark tones, detailed anime eyes',
-          clothing,
-          scene,
-          archetypeHint,
-          moodHint,
-          sceneHint,
-          NO_GENITALIA,
-          'beautiful cinematic lighting, 2D illustration, best quality',
-        ].filter((s) => s && s.length > 0)
-
-        imagePrompt = layers.join(', ')
-        referenceUrl = getCharacterImageUrl(character.archetype, character.gender)
-      }
-
-      try {
-        imageUrl = await generateImage(imagePrompt, referenceUrl, level.level)
         source = 'generated'
         modelUsed = level.level <= 3 ? 'deepinfra' : 'wiro-v4-5'
-      } catch (imgError) {
-        console.error('Image generation error:', imgError)
-        return NextResponse.json(
-          { error: 'Error al generar la imagen' },
-          { status: 500 }
-        )
+        imageUrl = rawUrl
+
+        // ═══════════════════════════════════════════════════════════════
+        // ✅ POOL: subir a R2 y guardar en pool (best-effort)
+        // ═══════════════════════════════════════════════════════════════
+        if (r2Available && !userHint && mood) {
+          try {
+            const { buffer, contentType } = await downloadImage(rawUrl)
+            const r2Key = buildR2Key(character.archetype, genderKey, mood, levelBucket)
+            const permanentUrl = await uploadToR2(r2Key, buffer, contentType)
+
+            imageUrl = permanentUrl
+
+            const tagKey = buildTagKey(character.archetype, genderKey, mood, levelBucket)
+            await insertPoolImage({
+              tag_key: tagKey,
+              archetype: character.archetype,
+              gender: genderKey,
+              mood,
+              level_bucket: levelBucket,
+              r2_key: r2Key,
+              r2_url: permanentUrl,
+              prompt_used: imagePrompt,
+              first_user_id: tid,
+            })
+
+            console.log(`[generate-image] 📤 Subida a R2 + pool: ${tagKey}`)
+          } catch (uploadErr) {
+            console.warn('[generate-image] R2 upload failed (using temp URL):', uploadErr)
+            // Seguimos usando la URL temporal de la IA
+          }
+        }
       }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // ✅ FIX PERSISTENCIA: guardar el mensaje de imagen en el chat
+    // ═══════════════════════════════════════════════════════════════
+    try {
+      const imageMessageContent = `*${character.character_name} te envía una foto*\n\n![Selfie](${imageUrl})`
+      await insertMessage({
+        telegram_id: tid,
+        character_id,
+        role: 'assistant',
+        content: imageMessageContent,
+      })
+    } catch (persistErr) {
+      console.warn('[generate-image] Error guardando mensaje en historial:', persistErr)
+      // No bloqueamos la respuesta si falla el guardado
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -579,8 +661,10 @@ export async function POST(request: Request) {
         amount: -imageCost,
         transaction_type: 'image',
         description:
-          source === 'r2'
+          source === 'r2_static'
             ? `Imagen R2 _${r2Index} nivel ${level.level}`
+            : source === 'pool'
+            ? `Imagen pool nivel ${level.level}`
             : `Imagen generada nivel ${level.level}`,
       })
     }
@@ -592,10 +676,10 @@ export async function POST(request: Request) {
       level: level.level,
       cost: isFree ? 0 : imageCost,
       free: isFree,
-      source,
+      source,                     // 'r2_static' | 'pool' | 'generated'
       image_index: r2Index,
       face_visibility: faceVisibility,
-      model: modelUsed,
+      model: modelUsed,           // 'r2' | 'pool' | 'deepinfra' | 'wiro-v4-5'
     })
   } catch (error: any) {
     console.error('Error generando imagen:', error)
