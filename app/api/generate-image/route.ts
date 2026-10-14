@@ -9,9 +9,10 @@ import {
   insertGemTransaction,
   getSeenImageCount,
   markImageSeen,
-  getPoolImageByTag,
-  incrementPoolImageUse,
-  insertPoolImage,
+  getAvailablePoolImage,       // ✅ POOL v2
+  markPoolImageViewed,         // ✅ POOL v2
+  incrementPoolImageUse,       // ✅ POOL v2 (ahora recibe ID)
+  insertPoolImage,             // ✅ POOL v2 (ahora retorna ID)
   insertMessage,
 } from '@/lib/db-queries'
 import { getCharacterFace, getCharacterImageUrl } from '@/lib/constants'
@@ -255,7 +256,7 @@ const AUTO_SCENES_MALE: Record<number, string> = {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// extractMoodFromMessages — 18 moods (devuelve keys cortos)
+// extractMoodFromMessages — 18 moods (keys cortos)
 // ═══════════════════════════════════════════════════════════════
 function extractMoodFromMessages(messages: string[]): string {
   if (!messages || messages.length === 0) return ''
@@ -321,7 +322,7 @@ function extractMoodFromMessages(messages: string[]): string {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// MOOD_FRAGMENTS — convierte keys a fragmentos de prompt
+// MOOD_FRAGMENTS
 // ═══════════════════════════════════════════════════════════════
 const MOOD_FRAGMENTS: Record<string, string> = {
   breathless_passionate: 'breathless passionate mood, disheveled, intense breathing',
@@ -355,7 +356,6 @@ function buildR2VariantUrl(
   return `${clean}/${gender}_${archetype}_${index}.jpg?v=8`
 }
 
-// ✅ Helper: nivel → bucket
 function getLevelBucket(level: number): 'sfw' | 'nsfw' {
   return level <= 3 ? 'sfw' : 'nsfw'
 }
@@ -463,9 +463,7 @@ export async function POST(request: Request) {
 
     // ═══════════════════════════════════════════════════════════════
     // OBTENER IMAGEN
-    // ✅ FIX TS: definite assignment assertions (!) para imageUrl, source, modelUsed
-    //    TypeScript no puede trazar todos los caminos de asignación con la
-    //    lógica compleja de pool + generación + upload.
+    // ✅ FIX TS: definite assignment (!) para imageUrl, source, modelUsed
     // ═══════════════════════════════════════════════════════════════
     let imageUrl!: string
     let source!: 'r2_static' | 'pool' | 'generated'
@@ -489,40 +487,51 @@ export async function POST(request: Request) {
       )
     } else {
       // ═══════════════════════════════════════════════════════════════
-      // ✅ POOL: intentar reutilizar imagen existente
+      // ✅ POOL v2: buscar UNA imagen que el user NO haya visto todavía
       // ═══════════════════════════════════════════════════════════════
       const mood = extractMoodFromMessages(recent_messages)
       const levelBucket = getLevelBucket(level.level)
 
-      // Si hay userHint, NO usamos pool (es una petición personalizada)
+      // Solo usamos pool si:
+      //   - no hay userHint (petición personalizada = generar nueva)
+      //   - hay mood detectado (tag válido)
+      //   - R2 está disponible (necesario para upload)
       const usePool = !userHint && !!mood && r2Available
 
       let poolHit = false
+      let poolImageId: number | null = null
 
       if (usePool) {
         const tagKey = buildTagKey(character.archetype, genderKey, mood, levelBucket)
 
         try {
-          const existing = await getPoolImageByTag(tagKey)
-          if (existing) {
+          const available = await getAvailablePoolImage(tagKey, tid)
+
+          if (available) {
             console.log(
-              `[generate-image] ♻️ Pool HIT: ${tagKey} (used ${existing.times_used}x)`
+              `[generate-image] ♻️ Pool HIT: ${tagKey} (id=${available.id}, used ${available.times_used}x)`
             )
-            imageUrl = existing.r2_url
+            imageUrl = available.r2_url
             source = 'pool'
             modelUsed = 'pool'
-            promptUsed = existing.prompt_used
+            promptUsed = available.prompt_used
+            poolImageId = available.id
             poolHit = true
 
-            // Incrementar contador (fire-and-forget)
-            incrementPoolImageUse(tagKey).catch(() => {})
+            // Marcar como vista por este usuario + incrementar contador
+            await markPoolImageViewed(available.id, tid, character_id)
+            incrementPoolImageUse(available.id).catch(() => {})
+          } else {
+            console.log(
+              `[generate-image] Pool MISS: ${tagKey} (no images available for user ${tid})`
+            )
           }
         } catch (poolErr) {
           console.warn('[generate-image] Pool lookup failed (continuing):', poolErr)
         }
       }
 
-      // Si NO hubo pool hit → generar
+      // Si NO hubo pool hit → generar con IA
       if (!poolHit) {
         const autoScenes =
           character.gender === 'male' ? AUTO_SCENES_MALE : AUTO_SCENES_FEMALE
@@ -602,7 +611,7 @@ export async function POST(request: Request) {
         imageUrl = rawUrl
 
         // ═══════════════════════════════════════════════════════════════
-        // ✅ POOL: subir a R2 y guardar en pool (best-effort)
+        // ✅ POOL v2: subir a R2 + guardar en pool + marcar como vista
         // ═══════════════════════════════════════════════════════════════
         if (r2Available && !userHint && mood) {
           try {
@@ -613,7 +622,7 @@ export async function POST(request: Request) {
             imageUrl = permanentUrl
 
             const tagKey = buildTagKey(character.archetype, genderKey, mood, levelBucket)
-            await insertPoolImage({
+            const newImageId = await insertPoolImage({
               tag_key: tagKey,
               archetype: character.archetype,
               gender: genderKey,
@@ -625,7 +634,14 @@ export async function POST(request: Request) {
               first_user_id: tid,
             })
 
-            console.log(`[generate-image] 📤 Subida a R2 + pool: ${tagKey}`)
+            // Marcar como vista por el creador (para que si vuelve a pedir
+            // el mismo contexto, no le sirva la misma)
+            if (newImageId) {
+              await markPoolImageViewed(newImageId, tid, character_id)
+              poolImageId = newImageId
+            }
+
+            console.log(`[generate-image] 📤 Subida a R2 + pool: ${tagKey} (id=${newImageId})`)
           } catch (uploadErr) {
             console.warn('[generate-image] R2 upload failed (using temp URL):', uploadErr)
             // Seguimos usando la URL temporal de la IA
@@ -635,7 +651,7 @@ export async function POST(request: Request) {
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // ✅ FIX PERSISTENCIA: guardar el mensaje de imagen en el chat
+    // PERSISTENCIA: guardar el mensaje de imagen en el chat
     // ═══════════════════════════════════════════════════════════════
     try {
       const imageMessageContent = `*${character.character_name} te envía una foto*\n\n![Selfie](${imageUrl})`
@@ -647,7 +663,6 @@ export async function POST(request: Request) {
       })
     } catch (persistErr) {
       console.warn('[generate-image] Error guardando mensaje en historial:', persistErr)
-      // No bloqueamos la respuesta si falla el guardado
     }
 
     // ═══════════════════════════════════════════════════════════════
