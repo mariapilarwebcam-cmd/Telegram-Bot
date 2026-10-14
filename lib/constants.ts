@@ -969,9 +969,10 @@ export type VipPlanId = 'weekly' | 'monthly' | 'quarterly' | 'annual'
 
 // Límites fair-use VIP
 export const VIP_DAILY_MESSAGE_LIMIT = 150
-export const VIP_DAILY_FREE_IMAGES = 3
-export const VIP_DAILY_FREE_WIRO_IMAGES = 1
+export const VIP_DAILY_FREE_IMAGES = 2         // ← de 3 a 2 (más claro)
+export const VIP_DAILY_FREE_WIRO_IMAGES = 2    // ← de 1 a 2
 export const VIP_DAILY_FREE_AUDIOS = 2
+export const MAX_GENERATIONS_PER_CONTEXT_PER_USER = 10
 
 // VIP = todos los fantasy
 export const VIP_ARCHETYPES: string[] = [
