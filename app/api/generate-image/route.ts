@@ -7,22 +7,27 @@ import {
   countUserMessages,
   decrementGemsAndPurchased,
   insertGemTransaction,
-  getSeenImageCount,
+  getSeenR2Indices,
   markImageSeen,
   getAvailablePoolImage,
   markPoolImageViewed,
   incrementPoolImageUse,
   insertPoolImage,
   insertMessage,
-  getActiveSubscription,              // ★ NUEVO
-  insertImageGeneration,              // ★ NUEVO
-  countUserWiroLast30Days,            // ★ NUEVO
-  countUserGenerationsForTag,         // ★ NUEVO
-  ensureWiroTokensRefilled,           // ★ NUEVO
-  consumeWiroToken,                   // ★ NUEVO
+  getActiveSubscription,
+  insertImageGeneration,
+  countUserWiroLast30Days,
+  countUserGenerationsForTag,
+  ensureWiroTokensRefilled,
+  consumeWiroToken,
+  countSfwImageGenerationsLast24h,
 } from '@/lib/db-queries'
-import { getCharacterFace, getCharacterImageUrl } from '@/lib/constants'
-import { VIP_LIMITS, MAX_GENERATIONS_PER_CONTEXT_PER_USER } from '@/lib/constants'  // ★ NUEVO
+import {
+  getCharacterFace,
+  getCharacterImageUrl,
+  VIP_LIMITS,
+  MAX_GENERATIONS_PER_CONTEXT_PER_USER,
+} from '@/lib/constants'
 import { generateImage } from '@/lib/ai'
 import {
   getLevelFromMessages,
@@ -368,7 +373,7 @@ function getLevelBucket(level: number): 'sfw' | 'nsfw' {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ★ NUEVO — Mensajes de bloqueo de límites
+// Mensajes de bloqueo
 // ═══════════════════════════════════════════════════════════════
 function getContextLimitMessage(lang: 'es' | 'en', characterName: string): string {
   if (lang === 'en') {
@@ -417,18 +422,12 @@ export async function POST(request: Request) {
 
     const user = await ensureUser(tid)
     if (!user) {
-      return NextResponse.json(
-        { error: 'Error cargando tu cuenta' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: 'Error cargando tu cuenta' }, { status: 500 })
     }
 
     const character = await getCharacter(character_id, tid)
     if (!character) {
-      return NextResponse.json(
-        { error: 'Personaje no encontrado' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: 'Personaje no encontrado' }, { status: 404 })
     }
 
     const lang: 'es' | 'en' = user.language === 'en' ? 'en' : 'es'
@@ -438,77 +437,54 @@ export async function POST(request: Request) {
     const imageCost = getImageCost(level.level)
     const faceVisibility = getFaceVisibility(level.level)
 
-    const seenCount = await getSeenImageCount(tid, character_id)
+    // ─── VIP status ───
+    const vipSub = await getActiveSubscription(tid)
+    const isVip = !!vipSub
+
+    // ─── Seen R2 indices ───
+    const seenIndices = await getSeenR2Indices(tid, character_id)
+
+    // ─── Determine next R2 static index based on level ───
+    // Levels 1-3: _1 → _2 → (pool/generate)
+    // Levels 4-5: _1 → _3 → _4 → (pool/generate)
+    let r2Index: number | null = null
+    const candidateIndices = level.level <= 3 ? [1, 2] : [1, 3, 4]
+    for (const idx of candidateIndices) {
+      if (!seenIndices.has(idx)) {
+        r2Index = idx
+        break
+      }
+    }
 
     const genderKey = character.gender === 'male' ? 'male' : 'female'
     const r2Base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL
-
-    // ═══════════════════════════════════════════════════════════════
-    // ROTACIÓN R2 ESTÁTICA
-    // ═══════════════════════════════════════════════════════════════
-    let r2Index: number | null = null
-    let isFree = false
-
-    if (seenCount === 0) {
-      r2Index = 1
-      isFree = true
-    } else if (seenCount === 1) {
-      r2Index = 2
-    } else if (seenCount === 2 && level.level >= 4) {
-      r2Index = 3
-    } else if (seenCount === 3 && level.level >= 4) {
-      r2Index = 4
-    }
-
     const useR2Static = r2Index !== null && !!r2Base
 
-    // ═══════════════════════════════════════════════════════════════
-    // PREMIUM CHECK — solo si NO es gratis
-    // ═══════════════════════════════════════════════════════════════
-    const purchasedGems = user.purchased_gems || 0
-
-    if (!isFree) {
-      if (purchasedGems <= 0) {
-        return NextResponse.json(
-          {
-            error: 'premium_required',
-            message:
-              user.language === 'en'
-                ? 'Image generation is a Premium feature. Buy gems with Stars to unlock it.'
-                : 'La generación de imágenes es Premium. Compra gemas con Stars para desbloquearla.',
-          },
-          { status: 403 }
-        )
-      }
-
-      if (purchasedGems < imageCost) {
-        return NextResponse.json(
-          {
-            error: 'insufficient_gems',
-            message:
-              user.language === 'en'
-                ? `You need ${imageCost} purchased gems`
-                : `Necesitas ${imageCost} gemas compradas`,
-            required: imageCost,
-            available: purchasedGems,
-          },
-          { status: 402 }
-        )
-      }
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // OBTENER IMAGEN
-    // ═══════════════════════════════════════════════════════════════
-    let imageUrl!: string
-    let source!: 'r2_static' | 'pool' | 'generated'
-    let modelUsed!: string
+    // ─── Determine source ───
+    let source: 'r2_static' | 'pool' | 'generated'
+    let imageUrl: string = ''
+    let modelUsed: string = ''
     let promptUsed = ''
 
+    // Free rule: only index 1 is free (once per character)
+    const isFree = useR2Static && r2Index === 1
+
+    // ─── Compute mood and tag_key early (needed for pool check) ───
+    const mood = extractMoodFromMessages(recent_messages)
+    const levelBucket = getLevelBucket(level.level)
+    const normalizedTagKey = buildTagKey(
+      character.archetype,
+      genderKey,
+      mood || 'default',
+      levelBucket
+    )
+
     if (useR2Static) {
-      // ─── ROTACIÓN R2 ESTÁTICA ───
-      imageUrl = buildR2VariantUrl(genderKey, character.archetype, r2Index!)
+      // ═══════════════════════════════════════════════════════
+      // R2 STATIC SERVE
+      // ═══════════════════════════════════════════════════════
       source = 'r2_static'
+      imageUrl = buildR2VariantUrl(genderKey, character.archetype, r2Index!)
       modelUsed = 'r2'
 
       try {
@@ -518,42 +494,35 @@ export async function POST(request: Request) {
       }
 
       console.log(
-        `[generate-image] ✅ R2 static: _${r2Index} (${isFree ? 'FREE' : `${imageCost}g`})`
+        `[generate-image] ✅ R2 static _${r2Index} (${isFree ? 'FREE' : `${imageCost}g`})`
       )
     } else {
-      // ═══════════════════════════════════════════════════════════════
-      // POOL v2
-      // ═══════════════════════════════════════════════════════════════
-      const mood = extractMoodFromMessages(recent_messages)
-      const levelBucket = getLevelBucket(level.level)
+      // ═══════════════════════════════════════════════════════
+      // POOL CHECK FIRST (before generating)
+      // ═══════════════════════════════════════════════════════
+      let poolHit = false
 
       const usePool = !userHint && !!mood && r2Available
 
-      let poolHit = false
-      let poolImageId: number | null = null
-
       if (usePool) {
-        const tagKey = buildTagKey(character.archetype, genderKey, mood, levelBucket)
-
         try {
-          const available = await getAvailablePoolImage(tagKey, tid)
+          const available = await getAvailablePoolImage(normalizedTagKey, tid)
 
           if (available) {
             console.log(
-              `[generate-image] ♻️ Pool HIT: ${tagKey} (id=${available.id}, used ${available.times_used}x)`
+              `[generate-image] ♻️ Pool HIT: ${normalizedTagKey} (id=${available.id}, used ${available.times_used}x)`
             )
             imageUrl = available.r2_url
             source = 'pool'
             modelUsed = 'pool'
             promptUsed = available.prompt_used
-            poolImageId = available.id
             poolHit = true
 
             await markPoolImageViewed(available.id, tid, character_id)
             incrementPoolImageUse(available.id).catch(() => {})
           } else {
             console.log(
-              `[generate-image] Pool MISS: ${tagKey} (no images available for user ${tid})`
+              `[generate-image] Pool MISS: ${normalizedTagKey} (no available images for user ${tid})`
             )
           }
         } catch (poolErr) {
@@ -561,27 +530,17 @@ export async function POST(request: Request) {
         }
       }
 
-      // ═══════════════════════════════════════════════════════════════
-      // ★ NUEVO — VALIDAR LÍMITES ANTES DE GENERAR CON IA
-      // ═══════════════════════════════════════════════════════════════
       if (!poolHit) {
-        // Detectar el modelo que se usará
-        const willUseWiro = level.level >= 4
-        const generationModel: 'deepinfra' | 'wiro' = willUseWiro ? 'wiro' : 'deepinfra'
+        // ═══════════════════════════════════════════════════════
+        // GENERATE WITH IA
+        // ═══════════════════════════════════════════════════════
+        source = 'generated'
 
-        // Tag key normalizada (aunque mood vacío, se cuenta como 'default')
-        const normalizedTagKey = buildTagKey(
-          character.archetype,
-          genderKey,
-          mood || 'default',
-          levelBucket
-        )
-
-        // ─── A. Límite por contexto (máx 10 por usuario/tag) ───
+        // ─── A. Per-context limit (10) ───
         const tagCount = await countUserGenerationsForTag(tid, normalizedTagKey)
         if (tagCount >= MAX_GENERATIONS_PER_CONTEXT_PER_USER) {
           console.log(
-            `[generate-image] 🚫 Per-context limit reached: ${normalizedTagKey} (${tagCount}/${MAX_GENERATIONS_PER_CONTEXT_PER_USER})`
+            `[generate-image] 🚫 Per-context limit: ${normalizedTagKey} (${tagCount}/${MAX_GENERATIONS_PER_CONTEXT_PER_USER})`
           )
           return NextResponse.json(
             {
@@ -592,55 +551,42 @@ export async function POST(request: Request) {
           )
         }
 
-        // ─── B. Límites Wiro (solo niveles 4-5) ───
-        if (willUseWiro) {
-          const vipSub = await getActiveSubscription(tid)
-          const isVip = !!vipSub
+        // ─── B. Wiro limits (levels 4-5 only) ───
+        const willUseWiro = level.level >= 4
 
-          if (isVip) {
-            // VIP → sistema de tokens + límite mensual
-            const tokens = await ensureWiroTokensRefilled(tid)
-
-            if (tokens <= 0) {
-              console.log(`[generate-image] 🚫 Wiro tokens exhausted for VIP ${tid}`)
-              return NextResponse.json(
-                {
-                  error: 'wiro_tokens_exhausted',
-                  message: getWiroTokensExhaustedMessage(lang, character.character_name),
-                  wiro_tokens: 0,
-                },
-                { status: 429 }
-              )
-            }
-
-            const wiroMonthly = await countUserWiroLast30Days(tid)
-            if (wiroMonthly >= VIP_LIMITS.wiro_monthly) {
-              console.log(
-                `[generate-image] 🚫 Wiro monthly limit for VIP ${tid}: ${wiroMonthly}/${VIP_LIMITS.wiro_monthly}`
-              )
-              return NextResponse.json(
-                {
-                  error: 'wiro_monthly_limit',
-                  message: getWiroMonthlyLimitMessage(lang, character.character_name),
-                },
-                { status: 429 }
-              )
-            }
-
-            // ✅ Pasa los límites → consumir 1 token
-            await consumeWiroToken(tid)
-            console.log(`[generate-image] 🎫 Wiro token consumed (remaining: ${tokens - 1})`)
-          } else {
-            // No-VIP intentando generar Wiro → solo si tiene purchased_gems (ya validado arriba)
-            // Se permite pero SIN tokens (paga con gemas como siempre). No aplicamos
-            // límite mensual a no-VIPs porque ya pagan por cada imagen.
-            console.log(`[generate-image] 💎 Non-VIP Wiro generation (paid with gems)`)
+        if (willUseWiro && isVip) {
+          const tokens = await ensureWiroTokensRefilled(tid)
+          if (tokens <= 0) {
+            console.log(`[generate-image] 🚫 Wiro tokens exhausted: VIP ${tid}`)
+            return NextResponse.json(
+              {
+                error: 'wiro_tokens_exhausted',
+                message: getWiroTokensExhaustedMessage(lang, character.character_name),
+                wiro_tokens: 0,
+              },
+              { status: 429 }
+            )
           }
+
+          const wiroMonthly = await countUserWiroLast30Days(tid)
+          if (wiroMonthly >= VIP_LIMITS.wiro_monthly) {
+            console.log(
+              `[generate-image] 🚫 Wiro monthly limit: VIP ${tid} (${wiroMonthly}/${VIP_LIMITS.wiro_monthly})`
+            )
+            return NextResponse.json(
+              {
+                error: 'wiro_monthly_limit',
+                message: getWiroMonthlyLimitMessage(lang, character.character_name),
+              },
+              { status: 429 }
+            )
+          }
+
+          await consumeWiroToken(tid)
+          console.log(`[generate-image] 🎫 Wiro token consumed (remaining: ${tokens - 1})`)
         }
 
-        // ═══════════════════════════════════════════════════════════════
-        // GENERAR CON IA
-        // ═══════════════════════════════════════════════════════════════
+        // ─── C. Build prompt + generate ───
         const autoScenes =
           character.gender === 'male' ? AUTO_SCENES_MALE : AUTO_SCENES_FEMALE
         const sceneHint = userHint || autoScenes[level.level] || autoScenes[1]
@@ -658,13 +604,10 @@ export async function POST(request: Request) {
           const scene = SFW_SCENE_PROMPTS[level.level] || SFW_SCENE_PROMPTS[1]
 
           let faceRule = ''
-          if (faceVisibility === 'hidden') {
-            faceRule = FACE_HIDDEN_FRAGMENT
-          } else if (faceVisibility === 'partial') {
-            faceRule = FACE_PARTIAL_FRAGMENT
-          }
+          if (faceVisibility === 'hidden') faceRule = FACE_HIDDEN_FRAGMENT
+          else if (faceVisibility === 'partial') faceRule = FACE_PARTIAL_FRAGMENT
 
-          const layers = [
+          imagePrompt = [
             `[CHARACTER: ${dna}]`,
             'highly detailed anime illustration, cel shading, soft cinematic lighting',
             scene,
@@ -672,9 +615,7 @@ export async function POST(request: Request) {
             faceRule,
             'muted color palette, elegant composition, best quality, masterpiece',
             'safe for work, no nudity, no explicit content',
-          ].filter((s) => s && s.length > 0)
-
-          imagePrompt = layers.join(', ')
+          ].filter((s) => s && s.length > 0).join(', ')
           referenceUrl = undefined
         } else {
           const facePrompt = getCharacterFace(character.archetype, character.gender)
@@ -684,7 +625,7 @@ export async function POST(request: Request) {
             ARCHETYPE_IMAGE_HINTS[`${character.gender}_${character.archetype}`] || ''
           const moodFragment = mood ? MOOD_FRAGMENTS[mood] || '' : ''
 
-          const layers = [
+          imagePrompt = [
             facePrompt,
             'anime style, cel shading, moody atmospheric lighting, deep shadows, muted color palette, cinematic dark tones, detailed anime eyes',
             clothing,
@@ -694,15 +635,12 @@ export async function POST(request: Request) {
             sceneHint,
             NO_GENITALIA,
             'beautiful cinematic lighting, 2D illustration, best quality',
-          ].filter((s) => s && s.length > 0)
-
-          imagePrompt = layers.join(', ')
+          ].filter((s) => s && s.length > 0).join(', ')
           referenceUrl = getCharacterImageUrl(character.archetype, character.gender)
         }
 
         promptUsed = imagePrompt
 
-        // Generar con IA
         let rawUrl: string
         try {
           rawUrl = await generateImage(imagePrompt, referenceUrl, level.level)
@@ -714,22 +652,19 @@ export async function POST(request: Request) {
           )
         }
 
-        source = 'generated'
         modelUsed = level.level <= 3 ? 'deepinfra' : 'wiro-v4-5'
         imageUrl = rawUrl
 
-        // ★ NUEVO — Registrar generación para límites
+        // ─── D. Log generation ───
         await insertImageGeneration({
           telegram_id: tid,
           character_id,
           tag_key: normalizedTagKey,
-          model: generationModel,
+          model: willUseWiro ? 'wiro' : 'deepinfra',
           level: level.level,
         })
 
-        // ═══════════════════════════════════════════════════════════════
-        // Subir a R2 + guardar en pool
-        // ═══════════════════════════════════════════════════════════════
+        // ─── E. Upload to R2 + save to pool ───
         if (r2Available && !userHint && mood) {
           try {
             const { buffer, contentType } = await downloadImage(rawUrl)
@@ -752,10 +687,11 @@ export async function POST(request: Request) {
 
             if (newImageId) {
               await markPoolImageViewed(newImageId, tid, character_id)
-              poolImageId = newImageId
             }
 
-            console.log(`[generate-image] 📤 Subida a R2 + pool: ${normalizedTagKey} (id=${newImageId})`)
+            console.log(
+              `[generate-image] 📤 Saved to R2 + pool: ${normalizedTagKey} (id=${newImageId})`
+            )
           } catch (uploadErr) {
             console.warn('[generate-image] R2 upload failed (using temp URL):', uploadErr)
           }
@@ -763,9 +699,104 @@ export async function POST(request: Request) {
       }
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // PERSISTENCIA
-    // ═══════════════════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════════
+    // VIP QUOTA CHECK
+    // ═══════════════════════════════════════════════════════════
+    let useVipQuota = false
+
+    if (!isFree && isVip) {
+      if (level.level <= 3) {
+        // SFW quota (10/day)
+        const sfwToday = await countSfwImageGenerationsLast24h(tid)
+        if (sfwToday < VIP_LIMITS.sfw_daily) {
+          useVipQuota = true
+        }
+        console.log(`[generate-image] 🎨 VIP SFW quota: ${sfwToday}/${VIP_LIMITS.sfw_daily}`)
+      } else {
+        // Wiro territory
+        if (source === 'r2_static' || source === 'pool') {
+          // Generated already consumed token above
+          const wiroMonthly = await countUserWiroLast30Days(tid)
+          if (wiroMonthly < VIP_LIMITS.wiro_monthly) {
+            const tokens = await ensureWiroTokensRefilled(tid)
+            if (tokens > 0) {
+              useVipQuota = true
+              await consumeWiroToken(tid)
+              console.log(`[generate-image] 🎫 VIP Wiro quota (R2/pool): token consumed`)
+            }
+          }
+        } else {
+          // Was generated → token already consumed
+          useVipQuota = true
+        }
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // CHARGE (if not free and not VIP quota)
+    // ═══════════════════════════════════════════════════════════
+    let newGems = user.gems || 0
+    let newPurchasedGems = user.purchased_gems || 0
+
+    if (!isFree && !useVipQuota) {
+      const purchasedGems = user.purchased_gems || 0
+
+      if (purchasedGems <= 0) {
+        return NextResponse.json(
+          {
+            error: 'premium_required',
+            message:
+              lang === 'en'
+                ? 'Image generation is a Premium feature. Buy gems with Stars to unlock it.'
+                : 'La generación de imágenes es Premium. Compra gemas con Stars para desbloquearla.',
+          },
+          { status: 403 }
+        )
+      }
+
+      if (purchasedGems < imageCost) {
+        return NextResponse.json(
+          {
+            error: 'insufficient_gems',
+            message:
+              lang === 'en'
+                ? `You need ${imageCost} purchased gems`
+                : `Necesitas ${imageCost} gemas compradas`,
+            required: imageCost,
+            available: purchasedGems,
+          },
+          { status: 402 }
+        )
+      }
+
+      const rpcData = await decrementGemsAndPurchased(tid, imageCost)
+      newGems = rpcData.new_gems
+      newPurchasedGems = rpcData.new_purchased
+
+      await insertGemTransaction({
+        telegram_id: tid,
+        amount: -imageCost,
+        transaction_type: 'image',
+        description: `Imagen ${source} nivel ${level.level}`,
+      })
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // LOG non-generated deliveries (for SFW quota tracking)
+    // ═══════════════════════════════════════════════════════════
+    if (!isFree && source !== 'generated') {
+      await insertImageGeneration({
+        telegram_id: tid,
+        character_id,
+        tag_key: normalizedTagKey,
+        model: source === 'r2_static' ? 'r2' : 'pool',
+        level: level.level,
+      })
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // PERSIST message in history
+    // ═══════════════════════════════════════════════════════════
     try {
       const imageMessageContent = `*${character.character_name} te envía una foto*\n\n![Selfie](${imageUrl})`
       await insertMessage({
@@ -775,40 +806,20 @@ export async function POST(request: Request) {
         content: imageMessageContent,
       })
     } catch (persistErr) {
-      console.warn('[generate-image] Error guardando mensaje en historial:', persistErr)
+      console.warn('[generate-image] Error guardando mensaje:', persistErr)
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // COBRAR
-    // ═══════════════════════════════════════════════════════════════
-    let newGems = user.gems || 0
-    let newPurchasedGems = purchasedGems
-
-    if (!isFree) {
-      const rpcData = await decrementGemsAndPurchased(tid, imageCost)
-      newGems = rpcData.new_gems
-      newPurchasedGems = rpcData.new_purchased
-
-      await insertGemTransaction({
-        telegram_id: tid,
-        amount: -imageCost,
-        transaction_type: 'image',
-        description:
-          source === 'r2_static'
-            ? `Imagen R2 _${r2Index} nivel ${level.level}`
-            : source === 'pool'
-            ? `Imagen pool nivel ${level.level}`
-            : `Imagen generada nivel ${level.level}`,
-      })
-    }
-
+    // ═══════════════════════════════════════════════════════════
+    // RESPONSE
+    // ═══════════════════════════════════════════════════════════
     return NextResponse.json({
       image_url: imageUrl,
       remaining_gems: newGems,
       remaining_purchased_gems: newPurchasedGems,
       level: level.level,
-      cost: isFree ? 0 : imageCost,
+      cost: isFree ? 0 : useVipQuota ? 0 : imageCost,
       free: isFree,
+      vip_quota: useVipQuota,
       source,
       image_index: r2Index,
       face_visibility: faceVisibility,
