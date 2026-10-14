@@ -1060,3 +1060,219 @@ export async function getPoolStats(): Promise<{
     by_archetype: byArchetype,
   }
 }
+// ═══════════════════════════════════════════════════════════════
+// ✅ IMAGE GENERATIONS TRACKING (para límites Wiro + por contexto)
+// ═══════════════════════════════════════════════════════════════
+// Registra cada generación de IA (DeepInfra o Wiro) para:
+//   1. Contar Wiro generadas por usuario en los últimos 30 días
+//   2. Contar generaciones por tag_key por usuario (máx 10)
+// ═══════════════════════════════════════════════════════════════
+
+export async function insertImageGeneration(data: {
+  telegram_id: string
+  character_id: number
+  tag_key: string
+  model: 'deepinfra' | 'wiro' | 'r2' | 'pool'
+  level: number
+}): Promise<void> {
+  try {
+    await execute(
+      `INSERT INTO image_generations
+        (telegram_id, character_id, tag_key, model, level)
+       VALUES (?, ?, ?, ?, ?)`,
+      [data.telegram_id, data.character_id, data.tag_key, data.model, data.level]
+    )
+  } catch (e) {
+    // Fail-safe: nunca rompe el flujo de generación de imágenes
+    console.warn('[image_generations] insert failed:', e)
+  }
+}
+
+/**
+ * Cuenta cuántas imágenes Wiro generó el usuario en los últimos 30 días.
+ * Usado para el límite VIP mensual (30/mes = 1/día promedio).
+ */
+export async function countUserWiroLast30Days(
+  telegram_id: string
+): Promise<number> {
+  try {
+    const row = await queryOne<{ c: number }>(
+      `SELECT COUNT(*) AS c FROM image_generations
+       WHERE telegram_id = ?
+         AND model = 'wiro'
+         AND created_at >= datetime('now', '-30 days')`,
+      [telegram_id]
+    )
+    return row?.c ?? 0
+  } catch (e) {
+    console.warn('[image_generations] countUserWiroLast30Days failed:', e)
+    return 0
+  }
+}
+
+/**
+ * Cuenta cuántas veces el usuario generó (IA o pool-save) con un tag_key.
+ * Bloquea si supera MAX_GENERATIONS_PER_CONTEXT_PER_USER (10).
+ * Ventana: últimos 30 días.
+ */
+export async function countUserGenerationsForTag(
+  telegram_id: string,
+  tag_key: string
+): Promise<number> {
+  try {
+    const row = await queryOne<{ c: number }>(
+      `SELECT COUNT(*) AS c FROM image_generations
+       WHERE telegram_id = ?
+         AND tag_key = ?
+         AND created_at >= datetime('now', '-30 days')`,
+      [telegram_id, tag_key]
+    )
+    return row?.c ?? 0
+  } catch (e) {
+    console.warn('[image_generations] countUserGenerationsForTag failed:', e)
+    return 0
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ✅ WIRO TOKENS — Sistema de acumulación (1/día, cap 5)
+// ═══════════════════════════════════════════════════════════════
+// Cada VIP recibe 1 token Wiro al día.
+// Los tokens no usados se acumulan hasta un máximo de 5.
+// Si supera 5, se pierde el excedente (como Candy.AI).
+//
+// Se hace refill lazy (on-demand): cada vez que el usuario intenta
+// generar una imagen Wiro, primero se calculan los tokens acumulados
+// desde el último refill.
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Refill lazy de tokens Wiro. Calcula días transcurridos desde el
+ * último refill, añade 1 por día (cap 5) y actualiza el timestamp.
+ * Devuelve los tokens disponibles DESPUÉS del refill.
+ *
+ * Fail-safe: si falla la query (columna no existe), devuelve 1.
+ */
+export async function ensureWiroTokensRefilled(
+  telegram_id: string
+): Promise<number> {
+  try {
+    // 1. Leer estado actual
+    const user = await queryOne<{
+      wiro_tokens: number | null
+      wiro_last_refill_at: string | null
+    }>(
+      `SELECT
+         wiro_tokens,
+         wiro_last_refill_at
+       FROM users
+       WHERE telegram_id = ?
+       LIMIT 1`,
+      [telegram_id]
+    )
+
+    if (!user) return 0
+
+    const currentTokens = user.wiro_tokens
+    const lastRefill = user.wiro_last_refill_at
+
+    // ─── Primera vez (columna recién añadida o user nuevo) ───
+    if (lastRefill == null || currentTokens == null) {
+      try {
+        await execute(
+          `UPDATE users
+           SET wiro_tokens = 1,
+               wiro_last_refill_at = datetime('now')
+           WHERE telegram_id = ?`,
+          [telegram_id]
+        )
+      } catch (e) {
+        console.warn('[wiro_tokens] init failed:', e)
+      }
+      return 1
+    }
+
+    // ─── Calcular días completos desde el último refill ───
+    const row = await queryOne<{ days: number }>(
+      `SELECT CAST(julianday('now') - julianday(?) AS INTEGER) AS days`,
+      [lastRefill]
+    )
+    const daysPassed = Math.max(0, row?.days ?? 0)
+
+    // Sin días completos → no hay refill
+    if (daysPassed === 0) {
+      return currentTokens
+    }
+
+    // ─── Aplicar refill con cap ───
+    const WiroCap = 5
+    const newTokens = Math.min(currentTokens + daysPassed, WiroCap)
+
+    if (newTokens >= WiroCap) {
+      // Toca el cap → sincronizar last_refill_at al presente.
+      // Así evitamos que "acumule tiempo" mientras está al máximo.
+      await execute(
+        `UPDATE users
+         SET wiro_tokens = ?,
+             wiro_last_refill_at = datetime('now')
+         WHERE telegram_id = ?`,
+        [WiroCap, telegram_id]
+      )
+    } else {
+      // Avanzar last_refill_at por los días aplicados (conserva residuo)
+      await execute(
+        `UPDATE users
+         SET wiro_tokens = ?,
+             wiro_last_refill_at = datetime(wiro_last_refill_at, '+' || ? || ' days')
+         WHERE telegram_id = ?`,
+        [newTokens, daysPassed, telegram_id]
+      )
+    }
+
+    return newTokens
+  } catch (e) {
+    // Fallback conservador: si la columna no existe, permitir 1 token
+    console.warn('[wiro_tokens] ensureWiroTokensRefilled failed:', e)
+    return 1
+  }
+}
+
+/**
+ * Consume 1 token Wiro. Devuelve los tokens restantes.
+ * Fail-safe: nunca deja el contador en negativo.
+ */
+export async function consumeWiroToken(
+  telegram_id: string
+): Promise<number> {
+  try {
+    const row = await queryOne<{ wiro_tokens: number }>(
+      `UPDATE users
+       SET wiro_tokens = MAX(COALESCE(wiro_tokens, 0) - 1, 0)
+       WHERE telegram_id = ?
+       RETURNING wiro_tokens`,
+      [telegram_id]
+    )
+    return row?.wiro_tokens ?? 0
+  } catch (e) {
+    console.warn('[wiro_tokens] consumeWiroToken failed:', e)
+    return 0
+  }
+}
+
+/**
+ * Lee los tokens Wiro actuales SIN hacer refill.
+ * Útil para mostrar en UI (settings / shop).
+ */
+export async function getWiroTokens(
+  telegram_id: string
+): Promise<number> {
+  try {
+    const row = await queryOne<{ wiro_tokens: number | null }>(
+      `SELECT wiro_tokens FROM users WHERE telegram_id = ? LIMIT 1`,
+      [telegram_id]
+    )
+    return row?.wiro_tokens ?? 1
+  } catch {
+    return 1
+  }
+}
