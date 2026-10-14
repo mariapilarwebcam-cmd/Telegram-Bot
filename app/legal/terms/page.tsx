@@ -257,7 +257,75 @@ function TermsES() {
         </p>
       </Section>
 
-      <Section title="12. Contacto">
+      <Section title="12. Propiedad intelectual">
+        <p>
+          Todo el contenido del Servicio —incluyendo pero no limitado a
+          personajes, arquetipos, textos, imágenes generadas, interfaz,
+          código fuente, logotipos y elementos visuales— es propiedad
+          de Taboo Realm o se utiliza bajo licencia.
+        </p>
+        <p>
+          No está permitido copiar, reproducir, distribuir, modificar,
+          vender, revender o explotar comercialmente cualquier parte
+          del Servicio sin autorización previa por escrito.
+        </p>
+      </Section>
+
+      <Section title="13. Uso Justo y Cupos VIP">
+        <p>
+          La suscripción VIP incluye los siguientes cupos mensuales,
+          sujetos a las reglas de uso justo descritas a continuación:
+        </p>
+        <ul>
+          <li>
+            <strong>6.000 mensajes al mes</strong> (hasta 200/día,
+            reset diario a las 00:00 UTC)
+          </li>
+          <li>
+            <strong>30 imágenes IA premium al mes</strong> (hasta 1/día,
+            acumulable hasta un máximo de 5 en reserva)
+          </li>
+          <li>
+            <strong>Hasta 300 imágenes SFW al mes</strong> desde
+            nuestra biblioteca compartida
+          </li>
+          <li>
+            <strong>18 personajes exclusivos</strong> con contenido
+            y arquetipos únicos
+          </li>
+        </ul>
+        <p>
+          <strong>Reglas de acumulación:</strong> los mensajes no se
+          acumulan más allá del cupo diario. Las imágenes IA premium
+          sí se acumulan hasta un máximo de <strong>5 en reserva</strong>;
+          las que superen ese límite se pierden al sexto día sin uso.
+        </p>
+        <p>
+          <strong>Uso justo:</strong> los cupos son personales e
+          intransferibles. Está prohibido usar bots, scripts,
+          automatizaciones o herramientas externas para eludir los
+          límites, compartir credenciales, o hacer scraping y
+          extracción masiva del contenido.
+        </p>
+        <p>
+          <strong>Consecuencias del abuso:</strong> en caso de abuso
+          comprobado, nos reservamos el derecho de suspender o
+          cancelar la cuenta sin reembolso.
+        </p>
+        <p>
+          <strong>Imágenes generadas por IA:</strong> son únicas y
+          pueden variar según el contexto. No garantizamos una imagen
+          específica, solo el acceso al sistema de generación dentro
+          de los cupos indicados.
+        </p>
+        <p>
+          <strong>Modificaciones:</strong> los cupos pueden ajustarse
+          con 30 días de aviso previo a través del bot. El uso
+          continuado tras la modificación implica aceptación.
+        </p>
+      </Section>
+
+      <Section title="14. Contacto">
         <p>
           Para cualquier duda, soporte o reclamo:{' '}
           <strong>@TabooRealmSupport</strong> en Telegram.
@@ -420,7 +488,75 @@ function TermsEN() {
         </p>
       </Section>
 
-      <Section title="12. Contact">
+      <Section title="12. Intellectual Property">
+        <p>
+          All content within the Service —including but not limited to
+          characters, archetypes, text, generated images, interface,
+          source code, logos and visual elements— is property of Taboo
+          Realm or used under license.
+        </p>
+        <p>
+          Copying, reproducing, distributing, modifying, selling,
+          reselling, or commercially exploiting any part of the Service
+          without prior written authorization is prohibited.
+        </p>
+      </Section>
+
+      <Section title="13. Fair Use and VIP Quotas">
+        <p>
+          The VIP subscription includes the following monthly quotas,
+          subject to the fair use rules described below:
+        </p>
+        <ul>
+          <li>
+            <strong>6,000 messages per month</strong> (up to 200/day,
+            daily reset at 00:00 UTC)
+          </li>
+          <li>
+            <strong>30 premium AI images per month</strong> (up to 1/day,
+            accumulate up to a maximum of 5 in reserve)
+          </li>
+          <li>
+            <strong>Up to 300 SFW images per month</strong> from our
+            shared library
+          </li>
+          <li>
+            <strong>18 exclusive characters</strong> with unique content
+            and archetypes
+          </li>
+        </ul>
+        <p>
+          <strong>Accumulation rules:</strong> messages do not
+          accumulate beyond the daily quota. Premium AI images do
+          accumulate up to a maximum of <strong>5 in reserve</strong>;
+          those exceeding this limit are lost after the sixth day of
+          non-use.
+        </p>
+        <p>
+          <strong>Fair use:</strong> quotas are personal and
+          non-transferable. It is prohibited to use bots, scripts,
+          automation, or external tools to bypass the limits, share
+          credentials, or scrape and mass-extract content.
+        </p>
+        <p>
+          <strong>Consequences of abuse:</strong> in case of proven
+          abuse, we reserve the right to suspend or cancel the
+          account without refund.
+        </p>
+        <p>
+          <strong>AI-generated images:</strong> they are unique and
+          may vary depending on context. We do not guarantee a
+          specific image, only access to the generation system
+          within the indicated quotas.
+        </p>
+        <p>
+          <strong>Modifications:</strong> quotas may be adjusted
+          with 30 days' prior notice through the bot. Continued use
+          after the modification implies acceptance.
+        </p>
+      </Section>
+
+      <Section title="14. Contact">
         <p>
           For any questions, support or claims: <strong>@TabooRealmSupport</strong>{' '}
           on Telegram.
