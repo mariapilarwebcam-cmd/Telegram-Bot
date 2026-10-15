@@ -118,9 +118,6 @@ const SYSTEM_PROMPTS: Record<'es' | 'en', Record<Intensity, string>> = {
 - REGLA: cuando la escena amenace con volverse explícita, CÓRTALA con un gesto, un silencio, o "el resto se pierde en la oscuridad"
 - CERO contenido explícito.`,
 
-    // ═══════════════════════════════════════════════════════════
-    // ✅ NIVEL 4 — MAXIMUM (mejorado, más intenso, aún no explícito)
-    // ═══════════════════════════════════════════════════════════
     MAXIMUM: `MODO ÍNTIMO (nivel 4): máxima tensión sexual SIN NARRAR EL ACTO. Sensación NSFW total sin serlo.
 
 FILOSOFÍA DEL NIVEL 4:
@@ -192,9 +189,6 @@ PROHIBIDO ABSOLUTO:
 
 El usuario debe sentir que tuvo una experiencia NSFW completa — pero al releer, se da cuenta de que NADA fue literalmente explícito. Esa es la magia del nivel 4.`,
 
-    // ═══════════════════════════════════════════════════════════
-    // ✅ NIVEL 5 — ULTRA (mejorado, máximo sin cruzar)
-    // ═══════════════════════════════════════════════════════════
     ULTRA: `MODO ENTREGA (nivel 5): máxima intensidad emocional y sensorial. El personaje se rinde absolutamente. Sensación NSFW total sin NUNCA ser explícito.
 
 FILOSOFÍA DEL NIVEL 5:
@@ -298,9 +292,6 @@ El usuario debe sentir que tuvo una experiencia NSFW completa — la más intens
 - RULE: when the scene threatens to become explicit, CUT it with a gesture, a silence, or "the rest is lost in the dark"
 - ZERO explicit content.`,
 
-    // ═══════════════════════════════════════════════════════════
-    // ✅ LEVEL 4 — MAXIMUM (enhanced, more intense, still not explicit)
-    // ═══════════════════════════════════════════════════════════
     MAXIMUM: `INTIMATE MODE (level 4): maximum sexual tension WITHOUT NARRATING THE ACT. NSFW sensation without being it.
 
 PHILOSOPHY OF LEVEL 4:
@@ -372,9 +363,6 @@ ABSOLUTELY FORBIDDEN:
 
 The user must feel they had a complete NSFW experience — but on rereading, realizes NOTHING was literally explicit. That's the magic of level 4.`,
 
-    // ═══════════════════════════════════════════════════════════
-    // ✅ LEVEL 5 — ULTRA (enhanced, maximum without crossing)
-    // ═══════════════════════════════════════════════════════════
     ULTRA: `SURRENDER MODE (level 5): maximum emotional and sensory intensity. The character surrenders absolutely. NSFW sensation total without EVER being explicit.
 
 PHILOSOPHY OF LEVEL 5:
@@ -487,9 +475,6 @@ const MODEL_CHAIN = [
   'deepseek/deepseek-chat-v3-0324',
 ]
 
-// ✅ FIX: subido de 400 a 650 para dar espacio al reasoning + respuesta
-// Los modelos con razonamiento interno necesitan más margen. Si el reasoning
-// agota los tokens, content queda vacío y el usuario ve basura.
 const MAX_TOKENS = 650
 
 interface ModelResult {
@@ -547,14 +532,9 @@ async function tryGenerateWithModel(
     const reasoningField = message?.reasoning_content || message?.reasoning
     const hadReasoning = !!reasoningField
 
-    // ✅ FIX CRÍTICO: SOLO aceptamos `content` como respuesta visible.
-    // El `reasoning` es el pensamiento interno del modelo y NUNCA debe
-    // mostrarse al usuario. Si `content` está vacío, tratamos como fallo
-    // y pasamos al siguiente modelo del chain.
     const text = typeof contentField === 'string' ? contentField.trim() : ''
 
     if (!text) {
-      // Diagnóstico claro: ¿fue por length?
       const isLengthCut = finishReason === 'length'
       const reasonDetail = isLengthCut
         ? 'reasoning agotó tokens sin producir respuesta (finish_reason=length)'
@@ -665,7 +645,7 @@ export async function generateImage(
   } else {
     try {
       return await runSeedreamSync(prompt, referenceImageUrl, {
-        resolution: '2k', // ✅ minúscula — Wiro solo acepta "auto", "2k", "3k"
+        resolution: '2k',
         aspectRatio: '3:4',
         maxImages: 1,
       })
@@ -696,33 +676,65 @@ async function generateImageDeepInfra(prompt: string): Promise<string> {
   return data.images?.[0]?.url || data.image
 }
 
+// ═══════════════════════════════════════════════════════════════
+// ✅ AUDIO GENERATION — Chatterbox Multilingual (ResembleAI)
+// ═══════════════════════════════════════════════════════════════
+// Modelo: ResembleAI/chatterbox-multilingual
+// Precio: $1.00 / 1M caracteres
+// Idiomas: 23 (incluye español es + es-mx)
+// Ventajas vs Kokoro:
+//   - Voces más naturales y expresivas
+//   - Control de emoción (exaggeration)
+//   - Benchmarkeado contra ElevenLabs
+// ═══════════════════════════════════════════════════════════════
+
 export async function generateAudio(
   text: string,
   gender: 'male' | 'female' = 'female',
   language: 'es' | 'en' = 'en'
 ): Promise<string> {
-  let voice: string
-  if (language === 'es') {
-    voice = gender === 'male' ? 'em_alex' : 'ef_dora'
-  } else {
-    voice = gender === 'male' ? 'am_michael' : 'af_bella'
-  }
+  // Chatterbox acepta 'language' como código ISO.
+  // Para español, usamos 'es' (que internamente soporta acentos regionales).
+  const langCode = language === 'es' ? 'es' : 'en'
+
+  // Nivel de exageración: 0.0 = neutral, 1.0 = muy expresivo.
+  // 0.5 da un balance natural para roleplay.
+  const exaggeration = 0.5
 
   const response = await fetch(
-    'https://api.deepinfra.com/v1/inference/hexgrad/Kokoro-82M',
+    'https://api.deepinfra.com/v1/inference/ResembleAI/chatterbox-multilingual',
     {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${process.env.DEEPINFRA_TOKEN}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ text, voice }),
+      body: JSON.stringify({
+        text,
+        language: langCode,
+        exaggeration,
+      }),
     }
   )
+
   if (!response.ok) {
     const err = await response.json().catch(() => ({}))
-    throw new Error(err.error || 'Error DeepInfra Audio')
+    console.error('[ai] Chatterbox error:', err)
+    throw new Error(err.error || 'Error DeepInfra Audio (Chatterbox)')
   }
+
   const data = await response.json()
-  return data.audio || data.result?.audio
+
+  // La respuesta puede venir como:
+  //   - data.audio (base64 string)
+  //   - data.result.audio
+  //   - data.output.audio
+  const audio = data.audio || data.result?.audio || data.output?.audio
+
+  if (!audio) {
+    console.error('[ai] Chatterbox respuesta sin audio:', JSON.stringify(data).slice(0, 500))
+    throw new Error('Chatterbox no devolvió audio')
+  }
+
+  return audio
 }
