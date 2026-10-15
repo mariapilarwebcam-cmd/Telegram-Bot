@@ -290,15 +290,20 @@ function TermsES() {
             nuestra biblioteca compartida
           </li>
           <li>
+            <strong>30 audios al mes</strong> (hasta 1/día,
+            acumulable hasta un máximo de 5 en reserva)
+          </li>
+          <li>
             <strong>18 personajes exclusivos</strong> con contenido
             y arquetipos únicos
           </li>
         </ul>
         <p>
           <strong>Reglas de acumulación:</strong> los mensajes no se
-          acumulan más allá del cupo diario. Las imágenes IA premium
-          sí se acumulan hasta un máximo de <strong>5 en reserva</strong>;
-          las que superen ese límite se pierden al sexto día sin uso.
+          acumulan más allá del cupo diario. Las imágenes IA premium y
+          los audios sí se acumulan hasta un máximo de{' '}
+          <strong>5 en reserva</strong> cada uno; los que superen ese
+          límite se pierden al sexto día sin uso.
         </p>
         <p>
           <strong>Uso justo:</strong> los cupos son personales e
@@ -313,10 +318,10 @@ function TermsES() {
           cancelar la cuenta sin reembolso.
         </p>
         <p>
-          <strong>Imágenes generadas por IA:</strong> son únicas y
-          pueden variar según el contexto. No garantizamos una imagen
-          específica, solo el acceso al sistema de generación dentro
-          de los cupos indicados.
+          <strong>Imágenes y audios generados por IA:</strong> son
+          únicos y pueden variar según el contexto. No garantizamos
+          una imagen o audio específico, solo el acceso al sistema
+          de generación dentro de los cupos indicados.
         </p>
         <p>
           <strong>Modificaciones:</strong> los cupos pueden ajustarse
@@ -521,16 +526,20 @@ function TermsEN() {
             shared library
           </li>
           <li>
+            <strong>30 audios per month</strong> (up to 1/day,
+            accumulate up to a maximum of 5 in reserve)
+          </li>
+          <li>
             <strong>18 exclusive characters</strong> with unique content
             and archetypes
           </li>
         </ul>
         <p>
           <strong>Accumulation rules:</strong> messages do not
-          accumulate beyond the daily quota. Premium AI images do
-          accumulate up to a maximum of <strong>5 in reserve</strong>;
-          those exceeding this limit are lost after the sixth day of
-          non-use.
+          accumulate beyond the daily quota. Premium AI images and
+          audios do accumulate up to a maximum of{' '}
+          <strong>5 in reserve</strong> each; those exceeding this limit
+          are lost after the sixth day of non-use.
         </p>
         <p>
           <strong>Fair use:</strong> quotas are personal and
@@ -544,10 +553,10 @@ function TermsEN() {
           account without refund.
         </p>
         <p>
-          <strong>AI-generated images:</strong> they are unique and
-          may vary depending on context. We do not guarantee a
-          specific image, only access to the generation system
-          within the indicated quotas.
+          <strong>AI-generated images and audios:</strong> they are
+          unique and may vary depending on context. We do not
+          guarantee a specific image or audio, only access to the
+          generation system within the indicated quotas.
         </p>
         <p>
           <strong>Modifications:</strong> quotas may be adjusted
