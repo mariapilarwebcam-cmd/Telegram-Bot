@@ -890,12 +890,6 @@ export async function getSubscriptionByChargeId(charge_id: string) {
 // ═══════════════════════════════════════════════════════════════
 // ✅ POOL v2 — Imágenes compartidas SIN repetir al mismo usuario
 // ═══════════════════════════════════════════════════════════════
-// Cambios v2:
-//  - Múltiples imágenes por tag_key (sin UNIQUE)
-//  - Tracking de vistas por usuario (pool_image_views)
-//  - Solo sirve imágenes NO vistas por ese usuario
-//  - Rotación justa: prioriza las menos usadas
-// ═══════════════════════════════════════════════════════════════
 
 export interface PoolImageRow {
   id: number
@@ -913,11 +907,6 @@ export interface PoolImageRow {
   last_used_at: string
 }
 
-/**
- * ✅ v2: Busca UNA imagen del pool que el usuario NO haya visto todavía.
- * Prioriza las menos usadas (rotación justa) y las más antiguas.
- * Devuelve null si no hay ninguna disponible para este usuario.
- */
 export async function getAvailablePoolImage(
   tag_key: string,
   telegram_id: string
@@ -936,11 +925,6 @@ export async function getAvailablePoolImage(
   )
 }
 
-/**
- * ✅ v2: Registra que un usuario vio una imagen del pool.
- * UNIQUE(pool_image_id, telegram_id) previene duplicados.
- * Fail-safe: nunca rompe el flujo.
- */
 export async function markPoolImageViewed(
   pool_image_id: number,
   telegram_id: string,
@@ -961,10 +945,6 @@ export async function markPoolImageViewed(
   }
 }
 
-/**
- * ✅ v2: Incrementa el contador de uso de una imagen (por ID).
- * Fire-and-forget.
- */
 export async function incrementPoolImageUse(
   pool_image_id: number
 ): Promise<void> {
@@ -981,11 +961,6 @@ export async function incrementPoolImageUse(
   }
 }
 
-/**
- * ✅ v2: Inserta una nueva imagen en el pool.
- * Ya NO tiene UNIQUE — permite múltiples por tag_key.
- * Retorna el ID de la nueva fila.
- */
 export async function insertPoolImage(data: {
   tag_key: string
   archetype: string
@@ -1017,9 +992,6 @@ export async function insertPoolImage(data: {
   return Number(r.lastInsertRowid)
 }
 
-/**
- * ✅ v2: Estadísticas del pool (para debug / admin).
- */
 export async function getPoolStats(): Promise<{
   total_images: number
   total_views: number
@@ -1060,12 +1032,9 @@ export async function getPoolStats(): Promise<{
     by_archetype: byArchetype,
   }
 }
+
 // ═══════════════════════════════════════════════════════════════
-// ✅ IMAGE GENERATIONS TRACKING (para límites Wiro + por contexto)
-// ═══════════════════════════════════════════════════════════════
-// Registra cada generación de IA (DeepInfra o Wiro) para:
-//   1. Contar Wiro generadas por usuario en los últimos 30 días
-//   2. Contar generaciones por tag_key por usuario (máx 10)
+// ✅ IMAGE GENERATIONS TRACKING
 // ═══════════════════════════════════════════════════════════════
 
 export async function insertImageGeneration(data: {
@@ -1083,15 +1052,10 @@ export async function insertImageGeneration(data: {
       [data.telegram_id, data.character_id, data.tag_key, data.model, data.level]
     )
   } catch (e) {
-    // Fail-safe: nunca rompe el flujo de generación de imágenes
     console.warn('[image_generations] insert failed:', e)
   }
 }
 
-/**
- * Cuenta cuántas imágenes Wiro generó el usuario en los últimos 30 días.
- * Usado para el límite VIP mensual (30/mes = 1/día promedio).
- */
 export async function countUserWiroLast30Days(
   telegram_id: string
 ): Promise<number> {
@@ -1110,11 +1074,6 @@ export async function countUserWiroLast30Days(
   }
 }
 
-/**
- * Cuenta cuántas veces el usuario generó (IA o pool-save) con un tag_key.
- * Bloquea si supera MAX_GENERATIONS_PER_CONTEXT_PER_USER (10).
- * Ventana: últimos 30 días.
- */
 export async function countUserGenerationsForTag(
   telegram_id: string,
   tag_key: string
@@ -1137,27 +1096,11 @@ export async function countUserGenerationsForTag(
 // ═══════════════════════════════════════════════════════════════
 // ✅ WIRO TOKENS — Sistema de acumulación (1/día, cap 5)
 // ═══════════════════════════════════════════════════════════════
-// Cada VIP recibe 1 token Wiro al día.
-// Los tokens no usados se acumulan hasta un máximo de 5.
-// Si supera 5, se pierde el excedente (como Candy.AI).
-//
-// Se hace refill lazy (on-demand): cada vez que el usuario intenta
-// generar una imagen Wiro, primero se calculan los tokens acumulados
-// desde el último refill.
-// ═══════════════════════════════════════════════════════════════
 
-/**
- * Refill lazy de tokens Wiro. Calcula días transcurridos desde el
- * último refill, añade 1 por día (cap 5) y actualiza el timestamp.
- * Devuelve los tokens disponibles DESPUÉS del refill.
- *
- * Fail-safe: si falla la query (columna no existe), devuelve 1.
- */
 export async function ensureWiroTokensRefilled(
   telegram_id: string
 ): Promise<number> {
   try {
-    // 1. Leer estado actual
     const user = await queryOne<{
       wiro_tokens: number | null
       wiro_last_refill_at: string | null
@@ -1176,7 +1119,6 @@ export async function ensureWiroTokensRefilled(
     const currentTokens = user.wiro_tokens
     const lastRefill = user.wiro_last_refill_at
 
-    // ─── Primera vez (columna recién añadida o user nuevo) ───
     if (lastRefill == null || currentTokens == null) {
       try {
         await execute(
@@ -1192,25 +1134,20 @@ export async function ensureWiroTokensRefilled(
       return 1
     }
 
-    // ─── Calcular días completos desde el último refill ───
     const row = await queryOne<{ days: number }>(
       `SELECT CAST(julianday('now') - julianday(?) AS INTEGER) AS days`,
       [lastRefill]
     )
     const daysPassed = Math.max(0, row?.days ?? 0)
 
-    // Sin días completos → no hay refill
     if (daysPassed === 0) {
       return currentTokens
     }
 
-    // ─── Aplicar refill con cap ───
     const WiroCap = 5
     const newTokens = Math.min(currentTokens + daysPassed, WiroCap)
 
     if (newTokens >= WiroCap) {
-      // Toca el cap → sincronizar last_refill_at al presente.
-      // Así evitamos que "acumule tiempo" mientras está al máximo.
       await execute(
         `UPDATE users
          SET wiro_tokens = ?,
@@ -1219,7 +1156,6 @@ export async function ensureWiroTokensRefilled(
         [WiroCap, telegram_id]
       )
     } else {
-      // Avanzar last_refill_at por los días aplicados (conserva residuo)
       await execute(
         `UPDATE users
          SET wiro_tokens = ?,
@@ -1231,16 +1167,11 @@ export async function ensureWiroTokensRefilled(
 
     return newTokens
   } catch (e) {
-    // Fallback conservador: si la columna no existe, permitir 1 token
     console.warn('[wiro_tokens] ensureWiroTokensRefilled failed:', e)
     return 1
   }
 }
 
-/**
- * Consume 1 token Wiro. Devuelve los tokens restantes.
- * Fail-safe: nunca deja el contador en negativo.
- */
 export async function consumeWiroToken(
   telegram_id: string
 ): Promise<number> {
@@ -1259,10 +1190,6 @@ export async function consumeWiroToken(
   }
 }
 
-/**
- * Lee los tokens Wiro actuales SIN hacer refill.
- * Útil para mostrar en UI (settings / shop).
- */
 export async function getWiroTokens(
   telegram_id: string
 ): Promise<number> {
@@ -1276,14 +1203,9 @@ export async function getWiroTokens(
     return 1
   }
 }
+
 // ═══════════════════════════════════════════════════════════════
-// ✅ SEEN R2 INDICES — para lógica de progresión de fotos
-// ═══════════════════════════════════════════════════════════════
-// A diferencia de getSeenImageCount (que solo cuenta cuántas vio),
-// esta función devuelve QUÉ índices específicos vio el usuario.
-// Necesario para la lógica de progresión por nivel:
-//   Niveles 1-3: _1 (free), _2 (cost), luego generar
-//   Niveles 4-5: _1 (free), _3 (cost), _4 (cost), luego generar
+// ✅ SEEN R2 INDICES
 // ═══════════════════════════════════════════════════════════════
 
 export async function getSeenR2Indices(
@@ -1306,14 +1228,7 @@ export async function getSeenR2Indices(
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ✅ SFW DAILY QUOTA — cupo diario VIP (nivel 1-3)
-// ═══════════════════════════════════════════════════════════════
-// Cuenta TODAS las imágenes entregadas al usuario en las últimas
-// 24h con nivel 1-3 (SFW). Incluye:
-//   - R2 static (_1, _2) → model='r2'
-//   - Pool hits → model='pool'
-//   - Generadas con IA → model='deepinfra'
-// Usado para el cupo VIP: 10 imágenes SFW/día gratis.
+// ✅ SFW DAILY QUOTA
 // ═══════════════════════════════════════════════════════════════
 
 export async function countSfwImageGenerationsLast24h(
@@ -1331,5 +1246,123 @@ export async function countSfwImageGenerationsLast24h(
   } catch (e) {
     console.warn('[image_generations] countSfwImageGenerationsLast24h failed:', e)
     return 0
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ✅ AUDIO TOKENS — Sistema de acumulación (1/día, cap 5)
+// ═══════════════════════════════════════════════════════════════
+// Cada VIP recibe 1 token de audio al día.
+// Los tokens no usados se acumulan hasta un máximo de 5.
+// Se aplica lazy refill (on-demand) igual que Wiro.
+// Chatterbox Multilingual (ResembleAI) — $1/1M chars.
+// ═══════════════════════════════════════════════════════════════
+
+export async function ensureAudioTokensRefilled(
+  telegram_id: string
+): Promise<number> {
+  try {
+    const user = await queryOne<{
+      audio_tokens: number | null
+      audio_last_refill_at: string | null
+    }>(
+      `SELECT
+         audio_tokens,
+         audio_last_refill_at
+       FROM users
+       WHERE telegram_id = ?
+       LIMIT 1`,
+      [telegram_id]
+    )
+
+    if (!user) return 0
+
+    const currentTokens = user.audio_tokens
+    const lastRefill = user.audio_last_refill_at
+
+    // Primera vez
+    if (lastRefill == null || currentTokens == null) {
+      try {
+        await execute(
+          `UPDATE users
+           SET audio_tokens = 1,
+               audio_last_refill_at = datetime('now')
+           WHERE telegram_id = ?`,
+          [telegram_id]
+        )
+      } catch (e) {
+        console.warn('[audio_tokens] init failed:', e)
+      }
+      return 1
+    }
+
+    // Días completos desde el último refill
+    const row = await queryOne<{ days: number }>(
+      `SELECT CAST(julianday('now') - julianday(?) AS INTEGER) AS days`,
+      [lastRefill]
+    )
+    const daysPassed = Math.max(0, row?.days ?? 0)
+
+    if (daysPassed === 0) {
+      return currentTokens
+    }
+
+    const AudioCap = 5
+    const newTokens = Math.min(currentTokens + daysPassed, AudioCap)
+
+    if (newTokens >= AudioCap) {
+      await execute(
+        `UPDATE users
+         SET audio_tokens = ?,
+             audio_last_refill_at = datetime('now')
+         WHERE telegram_id = ?`,
+        [AudioCap, telegram_id]
+      )
+    } else {
+      await execute(
+        `UPDATE users
+         SET audio_tokens = ?,
+             audio_last_refill_at = datetime(audio_last_refill_at, '+' || ? || ' days')
+         WHERE telegram_id = ?`,
+        [newTokens, daysPassed, telegram_id]
+      )
+    }
+
+    return newTokens
+  } catch (e) {
+    console.warn('[audio_tokens] ensureAudioTokensRefilled failed:', e)
+    return 1
+  }
+}
+
+export async function consumeAudioToken(
+  telegram_id: string
+): Promise<number> {
+  try {
+    const row = await queryOne<{ audio_tokens: number }>(
+      `UPDATE users
+       SET audio_tokens = MAX(COALESCE(audio_tokens, 0) - 1, 0)
+       WHERE telegram_id = ?
+       RETURNING audio_tokens`,
+      [telegram_id]
+    )
+    return row?.audio_tokens ?? 0
+  } catch (e) {
+    console.warn('[audio_tokens] consumeAudioToken failed:', e)
+    return 0
+  }
+}
+
+export async function getAudioTokens(
+  telegram_id: string
+): Promise<number> {
+  try {
+    const row = await queryOne<{ audio_tokens: number | null }>(
+      `SELECT audio_tokens FROM users WHERE telegram_id = ? LIMIT 1`,
+      [telegram_id]
+    )
+    return row?.audio_tokens ?? 1
+  } catch {
+    return 1
   }
 }
