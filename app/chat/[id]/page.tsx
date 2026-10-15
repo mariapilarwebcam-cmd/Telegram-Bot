@@ -432,6 +432,10 @@ export default function ChatPage() {
     }
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  // ✅ NUEVO: playAudio envía últimos 3 mensajes como contexto
+  // Backend genera frase nueva + audio con emoción
+  // ═══════════════════════════════════════════════════════════════
   const playAudio = async () => {
     if (!user) return
     if (!isPremium) {
@@ -439,20 +443,47 @@ export default function ChatPage() {
       setShowPremiumModal(true)
       return
     }
-    const last = [...messages].reverse().find((m) => m.role === 'assistant')
-    if (!last) return alert('No hay mensaje')
+
+    // Al menos un mensaje del asistente en el chat
+    const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant')
+    if (!lastAssistant) return alert(lang === 'es' ? 'No hay mensaje' : 'No message')
 
     const currentAudioCost = getAudioCost(currentLevel.level)
-    if ((user.gems || 0) < currentAudioCost) {
-      return alert(`Necesitas ${currentAudioCost} gemas`)
+
+    // Para no-VIPs: verificar gemas antes de llamar (early UX)
+    // Para VIPs: el backend valida tokens + gemas
+    if (!isVip && (user.gems || 0) < currentAudioCost) {
+      return alert(
+        lang === 'es'
+          ? `Necesitas ${currentAudioCost} gemas`
+          : `You need ${currentAudioCost} gems`
+      )
     }
+
+    // Construir contexto: últimos 3 mensajes, limpios
+    const recentContext = messages
+      .slice(-3)
+      .map((m) => ({
+        role: m.role,
+        content: m.content
+          .replace(/!\[[^\]]*\]\([^)]+\)/g, '')  // quitar imágenes
+          .replace(/\*+/g, '')                    // quitar asteriscos
+          .replace(/\s+/g, ' ')                   // normalizar espacios
+          .trim(),
+      }))
+      .filter((m) => m.content.length > 0)
 
     setGeneratingAudio(true)
     try {
       const res = await tgFetch('/api/generate-audio', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ character_id: characterId, text: last.content }),
+        body: JSON.stringify({
+          character_id: characterId,
+          recent_messages: recentContext,
+          // Fallback: si el backend no encuentra contexto, usa el último
+          text: lastAssistant.content,
+        }),
       })
       const data = await res.json()
       if (res.ok) {
@@ -471,7 +502,7 @@ export default function ChatPage() {
         alert(data.message || data.error || 'Error')
       }
     } catch {
-      alert('Error de conexión')
+      alert(lang === 'es' ? 'Error de conexión' : 'Connection error')
     } finally {
       setGeneratingAudio(false)
     }
@@ -726,7 +757,6 @@ export default function ChatPage() {
   const gradient = getGradient(character.archetype)
   const displayName = getDisplayName(character)
   const characterAvatar = getCharacterImageUrl(character.archetype, character.gender)
-  // ✅ FIX M/F: pasar gender para que las descripciones de arquetipos compartidos (M/F) usen la versión correcta
   const characterDescription = getCharacterDescription(character.archetype, character.gender, lang)
 
   const isFirstImage = seenImageCount === 0
