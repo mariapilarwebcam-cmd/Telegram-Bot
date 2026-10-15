@@ -5,7 +5,6 @@ import { getIntensityFromLevel, getLevelFromMessages, type Intensity } from './l
 
 // ═══════════════════════════════════════════════════════════════
 // ✅ LÍMITE DE CARACTERES POR NIVEL (como Polybuzz)
-// A mayor nivel, mensajes más ricos y largos.
 // ═══════════════════════════════════════════════════════════════
 const CHAR_LIMITS: Record<number, number> = {
   1: 180,
@@ -632,8 +631,6 @@ function sanitizeAsterisks(text: string): string {
 
 // ═══════════════════════════════════════════════════════════════
 // IMAGE GENERATION
-// Niveles 1-3 → DeepInfra (FLUX-1-schnell) — sin watermark
-// Niveles 4-5 → Wiro (seedream-v4-5-uncensored) — sin watermark
 // ═══════════════════════════════════════════════════════════════
 export async function generateImage(
   prompt: string,
@@ -677,29 +674,165 @@ async function generateImageDeepInfra(prompt: string): Promise<string> {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ✅ AUDIO GENERATION — Chatterbox Multilingual (ResembleAI)
-// ═══════════════════════════════════════════════════════════════
-// Modelo: ResembleAI/chatterbox-multilingual
-// Precio: $1.00 / 1M caracteres
-// Idiomas: 23 (incluye español es + es-mx)
-// Ventajas vs Kokoro:
-//   - Voces más naturales y expresivas
-//   - Control de emoción (exaggeration)
-//   - Benchmarkeado contra ElevenLabs
+// ✅ AUDIO — Detección de emoción + Chatterbox Multilingual
 // ═══════════════════════════════════════════════════════════════
 
+/**
+ * Detecta la emoción predominante del texto para ajustar la voz.
+ * Devuelve un level de "exaggeration" (0.0-1.0) y una etiqueta.
+ */
+function detectEmotion(text: string): {
+  emotion: string
+  exaggeration: number
+} {
+  const lower = text.toLowerCase()
+
+  // Seductora / sensual
+  if (/\b(gemir|susurr|ven aquí|ven aqui|tócame|tocame|muerde|despacio|caliente|deseo|pasión|pasion|piel|beso|provoc|seductor|suave)\b/i.test(lower)) {
+    return { emotion: 'seductive', exaggeration: 0.7 }
+  }
+
+  // Feliz / risueña
+  if (/\b(jaja|jeje|risa|ríe|rie|reír|reir|divertid|encanta|genial|increíble|increible|qué bien|que bien|emoción|emocion)\b/i.test(lower)) {
+    return { emotion: 'happy', exaggeration: 0.85 }
+  }
+
+  // Triste / melancólica
+  if (/\b(lágrima|lagrima|triste|llor|perdón|perdon|soledad|duele|echo de menos|extraño|extraño|melancol|nostalg)\b/i.test(lower)) {
+    return { emotion: 'sad', exaggeration: 0.3 }
+  }
+
+  // Enojada / intensa
+  if (/\b(furia|basta|estúpid|estupid|odio|celos|grita|enfadad|enojad|no quiero|hart)\b/i.test(lower)) {
+    return { emotion: 'angry', exaggeration: 0.9 }
+  }
+
+  // Tierna / cariñosa
+  if (/\b(amor|corazón|corazon|cariño|carino|abrazo|dulce|quiero|te extraño|te extraño|mi vida|mi amor)\b/i.test(lower)) {
+    return { emotion: 'tender', exaggeration: 0.55 }
+  }
+
+  // Neutral
+  return { emotion: 'neutral', exaggeration: 0.5 }
+}
+
+/**
+ * Genera una frase CORTA (para audio) usando DeepSeek.
+ * Duración objetivo: 10s (niveles 1-3) o 15s (niveles 4-5).
+ *
+ * @param recentMessages - Últimos 3 mensajes del chat (contexto)
+ * @param characterPrompt - Personalidad del personaje
+ * @param lang - Idioma ('es' | 'en')
+ * @param level - Nivel actual del personaje (1-5)
+ * @returns Frase corta + emoción detectada
+ */
+export async function generateShortAudioLine(
+  recentMessages: Array<{ role: string; content: string }>,
+  characterPrompt: string,
+  lang: 'es' | 'en',
+  level: number
+): Promise<{ text: string; emotion: string; exaggeration: number }> {
+  // Duración objetivo según nivel
+  const targetWords = level >= 4 ? '38-45' : '25-30'
+  const targetDuration = level >= 4 ? '15 segundos' : '10 segundos'
+
+  const systemPrompt = lang === 'es'
+    ? `Eres el personaje. ${characterPrompt}
+
+CONTEXTO: Estás grabando un AUDIO BREVE de voz (${targetDuration}) para enviar por chat.
+NO estás narrando — estás HABLANDO directamente, como si fuera un audio de WhatsApp.
+
+REGLA CRÍTICA:
+- SOLO texto hablado. Sin asteriscos, sin acciones, sin descripciones.
+- ${targetWords} palabras EXACTAS (no menos, no más).
+- Tono natural, hablado, humano. Como si de verdad estuvieras grabando un audio.
+- Puede incluir pausas naturales (comas, puntos suspensivos), risas suaves ("jaja", "mmm"), suspiros ("ay..."), pero NO acotaciones tipo "(ríe)".
+- NUNCA menciones el hecho de que es un audio. Es una conversación natural.
+- NUNCA termines con "fin" ni nada similar.
+- Adapta el tono al nivel ${level}/5: ${level <= 2 ? 'casual y amistoso' : level === 3 ? 'coqueto y cercano' : level === 4 ? 'íntimo y sugerente' : 'muy íntimo y entregado'}.
+- Genera contenido RELACIONADO con los últimos mensajes del chat.
+- Español natural, sin tecnicismos.
+
+Responde SOLO con la frase, nada más.`
+    : `You are the character. ${characterPrompt}
+
+CONTEXT: You are recording a SHORT voice AUDIO (${targetDuration}) to send via chat.
+You are NOT narrating — you are TALKING directly, like a WhatsApp voice message.
+
+CRITICAL RULE:
+- ONLY spoken text. No asterisks, no actions, no descriptions.
+- EXACTLY ${targetWords} words (no less, no more).
+- Natural, spoken, human tone. As if you were actually recording a message.
+- Can include natural pauses (commas, ellipsis), soft laughs ("haha", "mmm"), sighs ("oh..."), but NO stage directions like "(laughs)".
+- NEVER mention that this is an audio. It's a natural conversation.
+- NEVER end with "end" or similar.
+- Match tone to level ${level}/5: ${level <= 2 ? 'casual and friendly' : level === 3 ? 'flirty and close' : level === 4 ? 'intimate and suggestive' : 'very intimate and surrendered'}.
+- Generate content RELATED to the last chat messages.
+- Natural English.
+
+Respond ONLY with the line, nothing else.`
+
+  // Usar DeepSeek para generar la frase
+  const temperature = level >= 4 ? 0.9 : 0.85
+
+  for (const model of MODEL_CHAIN) {
+    const result = await tryGenerateWithModel(
+      model,
+      recentMessages,
+      systemPrompt,
+      temperature
+    )
+
+    if (result.ok && result.text) {
+      let cleanText = result.text
+        .replace(/\*[^*]*\*/g, '')   // quitar asteriscos residuales
+        .replace(/^["']|["']$/g, '')  // quitar comillas
+        .trim()
+
+      // Limitar a longitud segura (evita audios de 30s)
+      const maxChars = level >= 4 ? 320 : 240
+      if (cleanText.length > maxChars) {
+        cleanText = cleanText.slice(0, maxChars).trim()
+        // cortar en la última puntuación
+        const lastPunct = Math.max(
+          cleanText.lastIndexOf('.'),
+          cleanText.lastIndexOf('!'),
+          cleanText.lastIndexOf('?'),
+          cleanText.lastIndexOf('…')
+        )
+        if (lastPunct > maxChars * 0.6) {
+          cleanText = cleanText.slice(0, lastPunct + 1)
+        }
+      }
+
+      const { emotion, exaggeration } = detectEmotion(cleanText)
+
+      console.log(`[audio-line] ✅ Generated`, {
+        level,
+        chars: cleanText.length,
+        emotion,
+        exaggeration,
+        model: result.model,
+      })
+
+      return { text: cleanText, emotion, exaggeration }
+    }
+  }
+
+  throw new Error('No se pudo generar la frase de audio')
+}
+
+/**
+ * Genera audio con Chatterbox Multilingual.
+ * Acepta exaggeration opcional para ajustar la emoción.
+ */
 export async function generateAudio(
   text: string,
   gender: 'male' | 'female' = 'female',
-  language: 'es' | 'en' = 'en'
+  language: 'es' | 'en' = 'en',
+  exaggeration: number = 0.5
 ): Promise<string> {
-  // Chatterbox acepta 'language' como código ISO.
-  // Para español, usamos 'es' (que internamente soporta acentos regionales).
   const langCode = language === 'es' ? 'es' : 'en'
-
-  // Nivel de exageración: 0.0 = neutral, 1.0 = muy expresivo.
-  // 0.5 da un balance natural para roleplay.
-  const exaggeration = 0.5
 
   const response = await fetch(
     'https://api.deepinfra.com/v1/inference/ResembleAI/chatterbox-multilingual',
@@ -725,10 +858,6 @@ export async function generateAudio(
 
   const data = await response.json()
 
-  // La respuesta puede venir como:
-  //   - data.audio (base64 string)
-  //   - data.result.audio
-  //   - data.output.audio
   const audio = data.audio || data.result?.audio || data.output?.audio
 
   if (!audio) {
