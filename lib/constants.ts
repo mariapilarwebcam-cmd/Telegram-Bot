@@ -992,9 +992,11 @@ export const VIP_LIMITS = {
   sfw_daily: 10,
   sfw_monthly: 300,
 
-  // Audios — 60/mes, 2/día soft (solo EN, no aparece en copy)
-  audio_daily: 2,
-  audio_monthly: 60,
+  // Audios — 30/mes, 1/día, acumula hasta 5
+  // Chatterbox Multilingual (ResembleAI, $1/1M chars)
+  audio_daily: 1,
+  audio_monthly: 30,
+  audio_accumulate_cap: 5,
 } as const
 
 // ─── Compatibilidad con código existente ───
