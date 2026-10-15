@@ -65,7 +65,6 @@ export default function ShopPage() {
     }
   }
 
-  // ⭐ Comprar plan VIP con STARS
   const buyVipWithStars = async (planId: VipPlanId) => {
     if (!user || vipPurchasing) return
     setVipPurchasing(planId)
@@ -133,7 +132,6 @@ export default function ShopPage() {
     }
   }
 
-  // 💎 Comprar plan VIP con USDT
   const buyVipWithCrypto = async (planId: VipPlanId) => {
     if (!user || vipPurchasing) return
     setVipPurchasing(planId)
@@ -303,7 +301,6 @@ export default function ShopPage() {
     }
   }
 
-  // Packs de gemas
   useEffect(() => {
     if (!user?.telegram_id) {
       if (!userLoading) setChecking(false)
@@ -779,7 +776,7 @@ export default function ShopPage() {
           </div>
         ) : (
           <>
-            {/* ✅ CAMBIO 1: descripción con cupos reales */}
+            {/* ✅ CAMBIO 1: descripción con cupos reales (incluye audio) */}
             <div
               style={{
                 fontSize: 13,
@@ -796,6 +793,7 @@ export default function ShopPage() {
                   <div>📨 <strong style={{ color: '#f5f0ff' }}>6.000 mensajes/mes</strong></div>
                   <div>📸 <strong style={{ color: '#f5f0ff' }}>30 imágenes IA premium/mes</strong> <span style={{ color: '#8b8b9e' }}>(acumula hasta 5)</span></div>
                   <div>🎨 <strong style={{ color: '#f5f0ff' }}>Hasta 300 imágenes SFW/mes</strong></div>
+                  <div>🎧 <strong style={{ color: '#f5f0ff' }}>1 audio gratis/día</strong> <span style={{ color: '#8b8b9e' }}>(acumula hasta 5)</span></div>
                   <div>👑 <strong style={{ color: '#f5f0ff' }}>18 personajes exclusivos</strong></div>
                 </>
               ) : (
@@ -803,6 +801,7 @@ export default function ShopPage() {
                   <div>📨 <strong style={{ color: '#f5f0ff' }}>6,000 messages/month</strong></div>
                   <div>📸 <strong style={{ color: '#f5f0ff' }}>30 premium AI images/month</strong> <span style={{ color: '#8b8b9e' }}>(accumulate up to 5)</span></div>
                   <div>🎨 <strong style={{ color: '#f5f0ff' }}>Up to 300 SFW images/month</strong></div>
+                  <div>🎧 <strong style={{ color: '#f5f0ff' }}>1 free audio/day</strong> <span style={{ color: '#8b8b9e' }}>(accumulate up to 5)</span></div>
                   <div>👑 <strong style={{ color: '#f5f0ff' }}>18 exclusive characters</strong></div>
                 </>
               )}
@@ -1353,7 +1352,7 @@ export default function ShopPage() {
               {lang === 'es' ? '¡Bienvenido a VIP!' : 'Welcome to VIP!'}
             </h2>
 
-            {/* ✅ CAMBIO 2: cupos reales en el modal de éxito */}
+            {/* ✅ CAMBIO 2: cupos reales en el modal (incluye audio) */}
             <div
               style={{
                 fontSize: 13,
@@ -1371,6 +1370,7 @@ export default function ShopPage() {
                   <div>📨 6.000 mensajes/mes</div>
                   <div>📸 30 imágenes IA premium/mes</div>
                   <div>🎨 Hasta 300 imágenes SFW/mes</div>
+                  <div>🎧 1 audio gratis/día (acumula 5)</div>
                   <div>👑 18 personajes exclusivos</div>
                 </>
               ) : (
@@ -1378,6 +1378,7 @@ export default function ShopPage() {
                   <div>📨 6,000 messages/month</div>
                   <div>📸 30 premium AI images/month</div>
                   <div>🎨 Up to 300 SFW images/month</div>
+                  <div>🎧 1 free audio/day (accumulate 5)</div>
                   <div>👑 18 exclusive characters</div>
                 </>
               )}
