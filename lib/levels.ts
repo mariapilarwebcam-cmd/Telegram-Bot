@@ -22,9 +22,9 @@ export const LEVELS: LevelConfig[] = [
   {
     level: 1,
     minMessages: 0,
-    maxMessages: 13,     // ✅ Cambio: antes era 14
+    maxMessages: 13,
     imageCost: 15,
-    audioCost: 5,
+    audioCost: 10,        // ✅ CAMBIO: era 5
     intensity: 'NORMAL',
     badgeKey: 'levelStranger',
     color: '#8b8b9e',
@@ -34,10 +34,10 @@ export const LEVELS: LevelConfig[] = [
   },
   {
     level: 2,
-    minMessages: 14,     // ✅ Cambio: antes era 15
+    minMessages: 14,
     maxMessages: 39,
     imageCost: 20,
-    audioCost: 10,
+    audioCost: 10,        // ✅ CAMBIO: era 10 (mismo valor)
     intensity: 'HIGH',
     badgeKey: 'levelFriend',
     color: '#22c55e',
@@ -50,7 +50,7 @@ export const LEVELS: LevelConfig[] = [
     minMessages: 40,
     maxMessages: 89,
     imageCost: 30,
-    audioCost: 15,
+    audioCost: 10,        // ✅ CAMBIO: era 15
     intensity: 'VERY_HIGH',
     badgeKey: 'levelClose',
     color: '#7c5cff',
@@ -63,7 +63,7 @@ export const LEVELS: LevelConfig[] = [
     minMessages: 90,
     maxMessages: 179,
     imageCost: 75,
-    audioCost: 20,
+    audioCost: 15,        // ✅ CAMBIO: era 20
     intensity: 'MAXIMUM',
     badgeKey: 'levelIntimate',
     color: '#a855f7',
@@ -76,7 +76,7 @@ export const LEVELS: LevelConfig[] = [
     minMessages: 180,
     maxMessages: null,
     imageCost: 120,
-    audioCost: 25,
+    audioCost: 20,        // ✅ CAMBIO: era 25
     intensity: 'ULTRA',
     badgeKey: 'levelSpecial',
     color: '#ec4899',
