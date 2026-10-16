@@ -70,7 +70,39 @@ export async function createUser(data: {
 }) {
   const referral_code = generateReferralCode()
 
+  // ═══════════════════════════════════════════════════════════════
+  // ✅ ANTI-ABUSE: telegram_ids_seen
+  // Si este telegram_id ya existió antes (aunque su cuenta haya
+  // sido eliminada), NO recibe gemas free otra vez.
+  // ═══════════════════════════════════════════════════════════════
+  const DEFAULT_STARTING_GEMS = 10
+  let startingGems = data.gems ?? DEFAULT_STARTING_GEMS
+
   try {
+    // ¿Ya lo vimos antes?
+    const alreadySeen = await queryOne<{ telegram_id: string }>(
+      `SELECT telegram_id FROM telegram_ids_seen WHERE telegram_id = ? LIMIT 1`,
+      [data.telegram_id]
+    )
+
+    if (alreadySeen) {
+      // Cuenta recreada → 0 gemas free
+      startingGems = 0
+      console.log(
+        `[createUser] 🛡️ Recreated account for ${data.telegram_id} → 0 free gems`
+      )
+    } else {
+      // Primera vez → marcar como visto (idempotente)
+      try {
+        await execute(
+          `INSERT OR IGNORE INTO telegram_ids_seen (telegram_id) VALUES (?)`,
+          [data.telegram_id]
+        )
+      } catch (seenErr) {
+        console.warn('[createUser] telegram_ids_seen insert failed:', seenErr)
+      }
+    }
+
     await execute(
       `INSERT INTO users
         (telegram_id, first_name, username, language, gems, purchased_gems,
@@ -83,7 +115,7 @@ export async function createUser(data: {
         data.first_name || 'User',
         data.username || null,
         data.language || 'es',
-        data.gems ?? 10,
+        startingGems,
         referral_code,
         data.pending_referral_code || null,
       ]
