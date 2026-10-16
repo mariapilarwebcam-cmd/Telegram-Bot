@@ -116,6 +116,38 @@ async def create_user_immediately(
     """Crea el usuario. Maneja duplicados (fix race con Mini App)."""
     referral_code = generate_referral_code()
 
+    # ═══════════════════════════════════════════════════════════════
+    # ✅ ANTI-ABUSE: telegram_ids_seen
+    # Si este telegram_id ya existió antes, NO recibe gemas free
+    # ═══════════════════════════════════════════════════════════════
+    starting_gems = STARTING_GEMS
+
+    try:
+        already_seen = turso_query_one(
+            "SELECT telegram_id FROM telegram_ids_seen WHERE telegram_id = ? LIMIT 1",
+            [str(telegram_id)]
+        )
+
+        if already_seen:
+            starting_gems = 0
+            logger.info(
+                f"🛡️ Recreated account for {telegram_id} → 0 free gems"
+            )
+        else:
+            # Marcar como visto (idempotente)
+            try:
+                turso_execute(
+                    "INSERT OR IGNORE INTO telegram_ids_seen (telegram_id) VALUES (?)",
+                    [str(telegram_id)]
+                )
+            except Exception as seen_err:
+                logger.warning(
+                    f"telegram_ids_seen insert failed for {telegram_id}: {seen_err}"
+                )
+    except Exception as e:
+        logger.warning(f"telegram_ids_seen check failed for {telegram_id}: {e}")
+        # Fallback: continuar con gemas default (no rompe el flujo)
+
     try:
         turso_execute(
             """INSERT INTO users
@@ -129,7 +161,7 @@ async def create_user_immediately(
                 username or None,
                 first_name or 'User',
                 language,
-                STARTING_GEMS,
+                starting_gems,
                 referral_code,
                 pending_referral_code,
             ]
