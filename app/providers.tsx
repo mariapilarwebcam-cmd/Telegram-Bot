@@ -37,14 +37,14 @@ export function PostHogProvider({ children }: { children: ReactNode }) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// TON Connect Provider (corregido)
+// TON Connect Provider
 // ═══════════════════════════════════════════════════════════════
 export function TonConnectProvider({ children }: { children: ReactNode }) {
   return (
     <TonConnectUIProvider
       manifestUrl="https://telegram-bot-five-beryl.vercel.app/tonconnect-manifest.json"
-      // ✅ 'restoreConnection' sí es válido en las props del proveedor
-      restoreConnection={false} 
+      // ✅ FIX: Evita que la app recuerde sesiones rotas o bloqueadas
+      restoreConnection={false}
     >
       {children}
     </TonConnectUIProvider>
