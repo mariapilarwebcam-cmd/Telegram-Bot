@@ -43,6 +43,10 @@ export function TonConnectProvider({ children }: { children: ReactNode }) {
   return (
     <TonConnectUIProvider
       manifestUrl="https://telegram-bot-five-beryl.vercel.app/tonconnect-manifest.json"
+      // ✅ NUEVO: Forzar un Bridge estable para evitar el "Failed to fetch"
+      bridgeUrl="https://bridge.tonapi.io/bridge"
+      // ✅ NUEVO: Desactivar el autoconectar para forzar la limpieza de sesiones viejas
+      restoreConnection={false} 
     >
       {children}
     </TonConnectUIProvider>
