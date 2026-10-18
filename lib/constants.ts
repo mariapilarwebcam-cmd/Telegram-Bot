@@ -1123,3 +1123,36 @@ export function isVipArchetype(archetype: string): boolean {
 export function usdtToUnits(usd: number): number {
   return Math.round(usd * 1_000_000)
 }
+// ============================================================
+// ✅ ORDEN DE POPULARIDAD (Top personajes buscados)
+// ============================================================
+// Los que están primero en esta lista, aparecen primero en la app.
+export const POPULAR_ORDER: string[] = [
+  // 👩 TOP MUJERES (Prohibido, Autoridad, Fetiches)
+  'best_friends_gf', 'stepmom', 'stepsister', 'best_friends_sister', 'succubus',
+  'boss', 'yandere', 'nurse', 'teacher', 'maid', 'vampire_lady', 'foot_fetish_girl',
+  'tsundere', 'secretary', 'schoolmate', 'trainer', 'neighbor', 'model', 'chef', 
+  'kitsune', 'elf', 'demon_girl', 'witch', 'werewolf_f', 'fallen_angel', 'nun_fantasy', 
+  'musician', 'actor', 'doctor', 'yoga_instructor', 'surfer_f', 'hairdresser', 
+  'goth_dom', 'model_student', 'singer',
+
+  // 👨 TOP HOMBRES (Prohibido, Autoridad, Fantasía)
+  'best_friends_bf', 'stepdad', 'stepbrother', 'best_friends_brother', 'ceo',
+  'boss', 'vampire_lord', 'demon_lord', 'bodyguard', 'doctor', 'trainer',
+  'childhood_friend', 'neighbor', 'teacher', 'firefighter', 'basketball_player',
+  'barber', 'tattoo_artist', 'mma_fighter', 'musician', 'rapper', 'chef', 'actor',
+  'artist', 'writer', 'schoolmate', 'surfer_m', 'werewolf_m', 'dragon_lord',
+  'dark_hunter', 'elf_prince', 'knight', 'angel_m', 'oni_male'
+]
+
+// Función auxiliar para ordenar
+export function sortByPopularity(a: { archetype: string }, b: { archetype: string }) {
+  const indexA = POPULAR_ORDER.indexOf(a.archetype)
+  const indexB = POPULAR_ORDER.indexOf(b.archetype)
+  
+  // Si no está en la lista, se va al final
+  const posA = indexA === -1 ? 999 : indexA
+  const posB = indexB === -1 ? 999 : indexB
+  
+  return posA - posB
+}
