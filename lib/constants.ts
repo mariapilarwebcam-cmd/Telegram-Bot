@@ -308,7 +308,7 @@ export const CHARACTER_FACES: Record<string, string> = {
   
   // ✅ NUEVOS FEMENINOS
   female_best_friends_gf: "anime woman, 24 years old, long wavy brunette hair, seductive brown eyes, wearing a tight summer dress, guilty but alluring smile, cel shading, detailed anime eyes",
-  female_best_friends_sister: "anime girl, 19 years old, cute face, long straight black hair, big innocent eyes, wearing an oversized hoodie, shy but hopeful look, cel shading",
+ female_best_friends_sister: "anime woman, 22 years old, beautiful face, long straight black hair, expressive brown eyes, wearing a fitted sweater, adult elegant look, cel shading, detailed anime eyes",
   female_foot_fetish_girl: "anime woman, 22 years old, elegant long hair, beautiful face, sitting down with bare feet in clear view, red painted toenails, elegant high heels discarded nearby, showing off smooth legs, seductive teasing smile, cel shading",
 
   male_stepdad: "anime man, 40 years old, salt and pepper stubble, broad shoulders, unbuttoned dress shirt, dominant aura, cel shading, detailed anime eyes",
