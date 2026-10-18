@@ -84,7 +84,7 @@ const CHARACTER_DNA: Record<string, string> = {
   female_demon_girl: "playful demon girl, short red hair with black tips, amber eyes, demon horns",
   // ✅ NUEVOS FEMENINOS
   female_best_friends_gf: "young woman, long wavy brunette hair, brown eyes, tight summer dress",
-  female_best_friends_sister: "young girl, long straight black hair, innocent eyes, oversized hoodie",
+  female_best_friends_sister: "adult young woman, long straight black hair, expressive brown eyes, fitted sweater", // ✅ FIX EDAD
   female_foot_fetish_girl: "beautiful woman, long elegant hair, stunning bare feet, red toenails, elegant legs",
 
   male_stepdad: "mature man, salt and pepper hair, broad shoulders, dress shirt",
@@ -162,9 +162,8 @@ const ARCHETYPE_IMAGE_HINTS: Record<string, string> = {
   female_demon_girl: 'hellish flame, playful teasing, chaotic energy, red glow',
   // ✅ NUEVOS FEMENINOS
   female_best_friends_gf: 'guilty pleasure, forbidden tension, looking over shoulder, intimate home setting',
-  female_best_friends_sister: 'shy but eager, blushing, innocent seduction, sitting on a bed',
-  female_foot_fetish_girl: 'focus on bare feet, high arches, painted toes, dangling heels, legs crossed, foot fetish aesthetic',
-
+  female_best_friends_sister: 'confident and slightly playful smile, adult elegant look, sitting gracefully on a couch', // ✅ FIX EDAD Y FILTRO
+  female_foot_fetish_girl: 'focus on foreground bare feet, perfect foot anatomy, five distinct toes, clean smooth soles, high arches, perfectly placed painted toenails on toes, delicate gold anklets, dangling heels, elegant legs crossed, foot fetish aesthetic',
   male_stepdad: 'mature authority, whiskey glass, dark study, dominant presence',
   male_stepbrother: 'athletic casual, home setting, playful dominance',
   male_boss: 'executive power, dark office after hours, commanding presence',
