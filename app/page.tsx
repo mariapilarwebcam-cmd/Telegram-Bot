@@ -10,6 +10,7 @@ import {
   FANTASY_ARCHETYPES,
   isVipArchetype,
   VIP_PLANS,
+  sortByPopularity, // ✅ NUEVO: Importado
 } from '@/lib/constants'
 import { getTranslations } from '@/lib/i18n'
 import { useUser } from '@/lib/UserContext'
@@ -181,6 +182,7 @@ export default function HomePage() {
         c.name.toLowerCase().includes(search.toLowerCase()) ||
         c.role.toLowerCase().includes(search.toLowerCase())
     )
+    .sort(sortByPopularity) // ✅ NUEVO: Ordena por popularidad
 
   const pick = async (c: Char) => {
     if (!user) {
