@@ -7,27 +7,18 @@ import posthog from 'posthog-js'
 import { PostHogProvider as PHProvider } from 'posthog-js/react'
 import { initPostHog, capturePageView } from '@/lib/posthog'
 
-// ═══════════════════════════════════════════════════════════════
-// PageView tracker — captura cada cambio de ruta
-// ═══════════════════════════════════════════════════════════════
 function PageViewTracker() {
   const pathname = usePathname()
-
   useEffect(() => {
     if (pathname) capturePageView()
   }, [pathname])
-
   return null
 }
 
-// ═══════════════════════════════════════════════════════════════
-// PostHog Provider
-// ═══════════════════════════════════════════════════════════════
 export function PostHogProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     initPostHog()
   }, [])
-
   return (
     <PHProvider client={posthog}>
       <PageViewTracker />
@@ -36,15 +27,10 @@ export function PostHogProvider({ children }: { children: ReactNode }) {
   )
 }
 
-// ═══════════════════════════════════════════════════════════════
-// TON Connect Provider
-// ═══════════════════════════════════════════════════════════════
 export function TonConnectProvider({ children }: { children: ReactNode }) {
   return (
     <TonConnectUIProvider
       manifestUrl="https://telegram-bot-five-beryl.vercel.app/tonconnect-manifest.json"
-      // ✅ FIX: Evita que la app recuerde sesiones rotas o bloqueadas
-      restoreConnection={false}
     >
       {children}
     </TonConnectUIProvider>
