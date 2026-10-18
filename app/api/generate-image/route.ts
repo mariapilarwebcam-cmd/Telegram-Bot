@@ -82,6 +82,11 @@ const CHARACTER_DNA: Record<string, string> = {
   female_witch: "mysterious witch, long midnight-black hair with purple streaks, violet eyes",
   female_nun_fantasy: "devoted fantasy nun, dark brown hair under white coif, blue eyes",
   female_demon_girl: "playful demon girl, short red hair with black tips, amber eyes, demon horns",
+  // ✅ NUEVOS FEMENINOS
+  female_best_friends_gf: "young woman, long wavy brunette hair, brown eyes, tight summer dress",
+  female_best_friends_sister: "young girl, long straight black hair, innocent eyes, oversized hoodie",
+  female_foot_fetish_girl: "beautiful woman, long elegant hair, stunning bare feet, red toenails, elegant legs",
+
   male_stepdad: "mature man, salt and pepper hair, broad shoulders, dress shirt",
   male_ceo: "man, sharp haircut, steel-blue eyes, tailored suit, expensive watch",
   male_stepbrother: "young man, buzz cut, strong jawline, muscular",
@@ -114,6 +119,9 @@ const CHARACTER_DNA: Record<string, string> = {
   male_oni_male: "powerful oni warrior, muscular imposing build, dark red hair, black horns",
   male_knight: "noble knight, wavy shoulder-length chestnut hair, blue-grey eyes, silver armor",
   male_angel_m: "celestial angel, long golden-blonde hair, pale blue eyes, white feathered wings",
+  // ✅ NUEVOS MASCULINOS
+  male_best_friends_bf: "athletic man, short dark hair, blue eyes, confident smirk",
+  male_best_friends_brother: "tall muscular man, messy hair, dark eyes, protective",
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -152,6 +160,11 @@ const ARCHETYPE_IMAGE_HINTS: Record<string, string> = {
   female_witch: 'candlelit coven, magical runes floating, mystical seduction',
   female_nun_fantasy: 'dim chapel, candlelight, sacred and forbidden conflict',
   female_demon_girl: 'hellish flame, playful teasing, chaotic energy, red glow',
+  // ✅ NUEVOS FEMENINOS
+  female_best_friends_gf: 'guilty pleasure, forbidden tension, looking over shoulder, intimate home setting',
+  female_best_friends_sister: 'shy but eager, blushing, innocent seduction, sitting on a bed',
+  female_foot_fetish_girl: 'focus on bare feet, high arches, painted toes, dangling heels, legs crossed, foot fetish aesthetic',
+
   male_stepdad: 'mature authority, whiskey glass, dark study, dominant presence',
   male_stepbrother: 'athletic casual, home setting, playful dominance',
   male_boss: 'executive power, dark office after hours, commanding presence',
@@ -184,6 +197,9 @@ const ARCHETYPE_IMAGE_HINTS: Record<string, string> = {
   male_oni_male: 'mountain shrine, red lanterns, primal demonic strength',
   male_knight: 'castle chamber, armor removed, honor and heat',
   male_angel_m: 'celestial clouds, divine golden light, sacred intimacy',
+  // ✅ NUEVOS MASCULINOS
+  male_best_friends_bf: 'arrogant smirk, leaning against a wall, dominant energy, expensive clothes',
+  male_best_friends_brother: 'protective older brother vibe, intense stare, muscular arms crossed',
 }
 
 const FACE_HIDDEN_FRAGMENT =
