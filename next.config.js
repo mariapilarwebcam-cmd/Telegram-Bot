@@ -6,15 +6,13 @@ const { withSentryConfig } = require('@sentry/nextjs')
 const nextConfig = {
   images: {
     remotePatterns: [
-      // ✅ Restringido: solo los hosts que realmente usas.
-      // Si añades otro CDN para imágenes, agrégalo aquí.
       {
         protocol: 'https',
         hostname: 'images.goddessgridhq.com',
       },
       {
         protocol: 'https',
-        hostname: '**.r2.dev',        // Cloudflare R2
+        hostname: '**.r2.dev',
       },
       {
         protocol: 'https',
@@ -22,13 +20,26 @@ const nextConfig = {
       },
       {
         protocol: 'https',
-        hostname: '**.wiro.ai',        // Wiro outputs
+        hostname: '**.wiro.ai',
       },
       {
         protocol: 'https',
-        hostname: '**.deepinfra.com',  // DeepInfra outputs
+        hostname: '**.deepinfra.com',
       },
     ],
+  },
+  // ✅ NUEVO: Cabeceras CORS para que las wallets puedan leer el manifest
+  async headers() {
+    return [
+      {
+        source: '/tonconnect-manifest.json',
+        headers: [
+          { key: 'Access-Control-Allow-Origin', value: '*' },
+          { key: 'Access-Control-Allow-Methods', value: 'GET, OPTIONS' },
+          { key: 'Access-Control-Allow-Headers', value: 'X-Requested-With, content-type, Authorization' },
+        ],
+      },
+    ]
   },
 }
 
