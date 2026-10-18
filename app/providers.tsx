@@ -37,15 +37,13 @@ export function PostHogProvider({ children }: { children: ReactNode }) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// TON Connect Provider (existente)
+// TON Connect Provider (corregido)
 // ═══════════════════════════════════════════════════════════════
 export function TonConnectProvider({ children }: { children: ReactNode }) {
   return (
     <TonConnectUIProvider
       manifestUrl="https://telegram-bot-five-beryl.vercel.app/tonconnect-manifest.json"
-      // ✅ NUEVO: Forzar un Bridge estable para evitar el "Failed to fetch"
-      bridgeUrl="https://bridge.tonapi.io/bridge"
-      // ✅ NUEVO: Desactivar el autoconectar para forzar la limpieza de sesiones viejas
+      // ✅ 'restoreConnection' sí es válido en las props del proveedor
       restoreConnection={false} 
     >
       {children}
