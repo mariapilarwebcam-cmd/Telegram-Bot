@@ -13,10 +13,6 @@ import { useRouter, usePathname } from 'next/navigation'
 //   /shop       → /
 //   /invite     → /
 //   /           → cerrar Mini App
-//
-// ✅ Los listeners touchmove/touchend se registran SOLO durante un
-//    swipe activo (arrancado desde el borde). Esto evita que se
-//    bloqueen scrolls verticales normales.
 // ═══════════════════════════════════════════════════════════════
 
 const EDGE_ZONE_PX = 50
@@ -85,7 +81,7 @@ export default function SwipeBack() {
   }, [pathname, router])
 
   // ═══════════════════════════════════════════════════════════════
-  // ✅ Gesture handling — solo touchstart se registra al montar
+  // ✅ Gesture handling
   // ═══════════════════════════════════════════════════════════════
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -93,10 +89,6 @@ export default function SwipeBack() {
     const tg = (window as any).Telegram?.WebApp
     if (!tg) return
 
-    const path = window.location.pathname
-    if (DISABLED_ROUTES.some((p) => path.startsWith(p))) return
-
-    // ✅ Referencias a los handlers (para poder removerlos)
     let moveHandler: ((e: TouchEvent) => void) | null = null
     let endHandler: ((e: TouchEvent) => void) | null = null
 
@@ -121,6 +113,10 @@ export default function SwipeBack() {
     }
 
     const handleTouchStart = (e: TouchEvent) => {
+      // ✅ FIX CRÍTICO: Evaluamos la ruta en el momento exacto del toque
+      const currentPath = window.location.pathname
+      if (DISABLED_ROUTES.some((p) => currentPath.startsWith(p))) return
+
       const touch = e.touches[0]
       if (!touch) return
 
@@ -145,7 +141,6 @@ export default function SwipeBack() {
       setDragging(true)
       setOffset(0)
 
-      // ✅ Registrar move/end SOLO ahora (durante el swipe)
       moveHandler = (ev: TouchEvent) => {
         if (!isActive.current) return
 
@@ -155,18 +150,15 @@ export default function SwipeBack() {
         const dx = t.clientX - startX.current
         const dy = Math.abs(t.clientY - startY.current)
 
-        // Bloquear gesto nativo de Telegram
         if (dx > 5 && dy < MAX_VERTICAL_DRIFT) {
           if (ev.cancelable) ev.preventDefault()
         }
 
-        // Cancelar si el movimiento es más vertical
         if (dy > MAX_VERTICAL_DRIFT && Math.abs(dx) < dy * 1.2) {
           reset()
           return
         }
 
-        // Solo hacia la derecha
         if (dx < 0) {
           offsetRef.current = 0
           setOffset(0)
@@ -191,17 +183,16 @@ export default function SwipeBack() {
         reset()
 
         if (finalOffset > SWIPE_THRESHOLD_PX || wasFlick) {
-          const currentPath = window.location.pathname
-          const dest = getBackDestination(currentPath)
+          const currentDest = getBackDestination(window.location.pathname)
 
-          if (dest === 'close') {
+          if (currentDest === 'close') {
             try {
               tg.close()
             } catch (err) {
               console.warn('[SwipeBack] close failed:', err)
             }
           } else {
-            router.push(dest)
+            router.push(currentDest)
           }
         }
       }
@@ -211,7 +202,6 @@ export default function SwipeBack() {
       document.addEventListener('touchcancel', endHandler, { passive: true })
     }
 
-    // ✅ Solo touchstart se registra al montar (passive, no bloquea nada)
     document.addEventListener('touchstart', handleTouchStart, { passive: true })
 
     return () => {
