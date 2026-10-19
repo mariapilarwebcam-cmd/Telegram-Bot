@@ -1,13 +1,17 @@
+// app/api/tonconnect-manifest/route.ts
+
 import { NextResponse } from 'next/server'
 
 export async function GET() {
+  // ✅ Usamos variable de entorno o fallback a Vercel
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://telegram-bot-five-beryl.vercel.app'
+  
   const manifest = {
-    url: 'https://telegram-bot-five-beryl.vercel.app',
+    url: appUrl,
     name: 'Taboo Realm',
-    iconUrl: 'https://telegram-bot-five-beryl.vercel.app/icon.png',
+    iconUrl: `${appUrl}/icon.png`,
   }
 
-  // ✅ Devolvemos el JSON con los headers CORS habilitados
   return NextResponse.json(manifest, {
     headers: {
       'Access-Control-Allow-Origin': '*',
@@ -18,7 +22,6 @@ export async function GET() {
   })
 }
 
-// ✅ Manejamos la petición OPTIONS (Preflight de CORS)
 export async function OPTIONS() {
   return new NextResponse(null, {
     status: 204,
