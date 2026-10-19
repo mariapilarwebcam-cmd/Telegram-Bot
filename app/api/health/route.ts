@@ -39,41 +39,12 @@ export async function GET(request: Request) {
   }
 
   try {
+    // ✅ FIX: Solo lectura. No insertamos ni borramos nada en producción.
     const users = await query<{ telegram_id: string }>(
       'SELECT telegram_id FROM users LIMIT 1'
     )
     result.select_test = { status: 'ok', rowCount: users.length }
-
-    const testId = `test_${Date.now()}`
-    try {
-      const insertResult = await query<{ id: number }>(
-        `INSERT INTO user_characters
-          (telegram_id, character_name, gender, archetype, personality, is_active)
-         VALUES (?, ?, ?, ?, ?, 0)
-         RETURNING id`,
-        [testId, 'TEST_DELETE_ME', 'female', 'stepmom', 'test']
-      )
-
-      const insertedId = insertResult[0]?.id
-
-      if (insertedId) {
-        await query('DELETE FROM user_characters WHERE id = ?', [insertedId])
-        result.write_test = { status: 'ok', insertedId, cleaned: true }
-      } else {
-        result.write_test = { status: 'error', message: 'No id returned' }
-      }
-    } catch (writeErr: any) {
-      result.write_test = {
-        status: 'error',
-        message: writeErr?.message || String(writeErr),
-      }
-    }
-
-    const allOk =
-      result.select_test?.status === 'ok' &&
-      result.write_test?.status === 'ok'
-
-    result.overall = allOk ? 'ok' : 'has_errors'
+    result.overall = 'ok'
   } catch (e: any) {
     result.fatal = e?.message || String(e)
     result.overall = 'fatal'
