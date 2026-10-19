@@ -2,8 +2,8 @@
 
 import { ReactNode } from 'react'
 import dynamic from 'next/dynamic'
-import { TonPayProvider } from '@ton-pay/ui-react'
 
+// ✅ Forzamos que se cargue SOLO en el navegador
 const TonConnectUIProvider = dynamic(
   () => import('@tonconnect/ui-react').then((m) => m.TonConnectUIProvider),
   { ssr: false }
@@ -14,9 +14,7 @@ export function TonProviderClient({ children }: { children: ReactNode }) {
 
   return (
     <TonConnectUIProvider manifestUrl={`${appUrl}/api/tonconnect-manifest`}>
-      <TonPayProvider>
-        {children}
-      </TonPayProvider>
+      {children}
     </TonConnectUIProvider>
   )
 }
