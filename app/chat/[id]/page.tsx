@@ -432,10 +432,6 @@ export default function ChatPage() {
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════
-  // ✅ NUEVO: playAudio envía últimos 3 mensajes como contexto
-  // Backend genera frase nueva + audio con emoción
-  // ═══════════════════════════════════════════════════════════════
   const playAudio = async () => {
     if (!user) return
     if (!isPremium) {
@@ -444,31 +440,29 @@ export default function ChatPage() {
       return
     }
 
-    // Al menos un mensaje del asistente en el chat
     const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant')
     if (!lastAssistant) return alert(lang === 'es' ? 'No hay mensaje' : 'No message')
 
     const currentAudioCost = getAudioCost(currentLevel.level)
 
-    // Para no-VIPs: verificar gemas antes de llamar (early UX)
-    // Para VIPs: el backend valida tokens + gemas
-    if (!isVip && (user.gems || 0) < currentAudioCost) {
+    // ✅ FIX: Revisar purchased_gems (gemas compradas), no el total
+    const purchasedGems = user.purchased_gems || 0
+    if (!isVip && purchasedGems < currentAudioCost) {
       return alert(
         lang === 'es'
-          ? `Necesitas ${currentAudioCost} gemas`
-          : `You need ${currentAudioCost} gems`
+          ? `Necesitas ${currentAudioCost} gemas compradas`
+          : `You need ${currentAudioCost} purchased gems`
       )
     }
 
-    // Construir contexto: últimos 3 mensajes, limpios
     const recentContext = messages
       .slice(-3)
       .map((m) => ({
         role: m.role,
         content: m.content
-          .replace(/!\[[^\]]*\]\([^)]+\)/g, '')  // quitar imágenes
-          .replace(/\*+/g, '')                    // quitar asteriscos
-          .replace(/\s+/g, ' ')                   // normalizar espacios
+          .replace(/!\[[^\]]*\]\([^)]+\)/g, '')
+          .replace(/\*+/g, '')
+          .replace(/\s+/g, ' ')
           .trim(),
       }))
       .filter((m) => m.content.length > 0)
@@ -481,13 +475,17 @@ export default function ChatPage() {
         body: JSON.stringify({
           character_id: characterId,
           recent_messages: recentContext,
-          // Fallback: si el backend no encuentra contexto, usa el último
           text: lastAssistant.content,
         }),
       })
       const data = await res.json()
       if (res.ok) {
         setGems(data.remaining_gems)
+        // Actualizamos localmente las gemas compradas (decrementamos)
+        if (data.remaining_purchased_gems !== undefined) {
+           user.purchased_gems = data.remaining_purchased_gems
+        }
+        
         new Audio(`data:audio/wav;base64,${data.audio}`).play()
 
         Analytics.audioGenerated({
@@ -519,8 +517,10 @@ export default function ChatPage() {
       return
     }
 
-    if (!isFirstImage && (user.gems || 0) < currentImageCost) {
-      return alert(`Necesitas ${currentImageCost} gemas`)
+    // ✅ FIX: Revisar purchased_gems para imágenes
+    const purchasedGems = user.purchased_gems || 0
+    if (!isFirstImage && purchasedGems < currentImageCost) {
+      return alert(`Necesitas ${currentImageCost} gemas compradas`)
     }
 
     setGeneratingImage(true)
@@ -554,6 +554,10 @@ export default function ChatPage() {
           },
         ])
         setGems(data.remaining_gems)
+        if (data.remaining_purchased_gems !== undefined) {
+           user.purchased_gems = data.remaining_purchased_gems
+        }
+        
         setPhotoOfferActive(false)
         if (data.source === 'r2') {
           setSeenImageCount((prev) => prev + 1)
@@ -571,7 +575,7 @@ export default function ChatPage() {
         setPremiumModalReason('image')
         setShowPremiumModal(true)
       } else if (data.error === 'insufficient_gems') {
-        alert(data.message || `Necesitas ${data.required || currentImageCost} gemas`)
+        alert(data.message || `Necesitas ${data.required || currentImageCost} gemas compradas`)
       } else {
         alert(data.message || data.error || 'Error')
       }
@@ -584,13 +588,14 @@ export default function ChatPage() {
 
   const handleBannerTap = () => {
     const isFirstImage = seenImageCount === 0
+    const purchasedGems = user?.purchased_gems || 0
 
     if (!isFirstImage && !isPremium) {
       setPremiumModalReason('image')
       setShowPremiumModal(true)
       return
     }
-    if (!isFirstImage && (user?.gems || 0) < currentImageCost) {
+    if (!isFirstImage && purchasedGems < currentImageCost) {
       router.push('/shop')
       return
     }
@@ -740,6 +745,7 @@ export default function ChatPage() {
 
   const t = getTranslations(lang)
   const gems = user?.gems || 0
+  const purchasedGems = user?.purchased_gems || 0
   const hookRemaining = user?.hook_messages_remaining || 0
 
   const currentLevel = getLevelFromMessages(totalUserMessages)
@@ -760,8 +766,9 @@ export default function ChatPage() {
   const characterDescription = getCharacterDescription(character.archetype, character.gender, lang)
 
   const isFirstImage = seenImageCount === 0
-  const canAfford = gems >= currentImageCost || isFirstImage
-  const missingGems = isFirstImage ? 0 : Math.max(0, currentImageCost - gems)
+  // ✅ FIX: canAfford ahora usa purchasedGems
+  const canAfford = purchasedGems >= currentImageCost || isFirstImage
+  const missingGems = isFirstImage ? 0 : Math.max(0, currentImageCost - purchasedGems)
 
   let headerBadgeText = ''
   let headerBadgeVariant: 'hook' | 'low-gems' | null = null
@@ -1094,7 +1101,7 @@ export default function ChatPage() {
                   ? (lang === 'es' ? 'Compra gemas para verla' : 'Buy gems to see it')
                   : canAfford
                   ? `📸 ${currentImageCost} — ${lang === 'es' ? 'reclamar ahora' : 'claim now'}`
-                  : `⚠️ ${lang === 'es' ? 'Te faltan' : "You're missing"} ${missingGems} gemas`}
+                  : `⚠️ ${lang === 'es' ? 'Te faltan' : "You're missing"} ${missingGems} gemas compradas`}
               </p>
             </div>
 
@@ -1105,14 +1112,14 @@ export default function ChatPage() {
         )}
 
         <div className="chat-input-row">
-          <button onClick={playAudio} disabled={generatingAudio || (!isVip && isPremium && gems < currentAudioCost)} className="chat-icon-btn" title={`${t.audioTooltip} (${currentAudioCost} gemas)`} style={{ opacity: !isVip && isPremium && gems < currentAudioCost ? 0.3 : 1 }}>
+          <button onClick={playAudio} disabled={generatingAudio || (!isVip && isPremium && purchasedGems < currentAudioCost)} className="chat-icon-btn" title={`${t.audioTooltip} (${currentAudioCost} gemas)`} style={{ opacity: !isVip && isPremium && purchasedGems < currentAudioCost ? 0.3 : 1 }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
               <path d="M11 5 6 9H2v6h4l5 4V5z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
               <path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
             </svg>
           </button>
 
-          <button onClick={handleBannerTap} disabled={generatingImage} className="chat-icon-btn" title={`${t.imageTooltip} (${currentImageCost} gemas)`} style={{ opacity: !isFirstImage && !isVip && isPremium && gems < currentImageCost ? 0.4 : 1, boxShadow: photoOfferActive ? '0 0 20px rgba(236,72,153,0.9), 0 0 30px rgba(168,85,247,0.6)' : undefined, borderColor: photoOfferActive ? '#ec4899' : undefined }}>
+          <button onClick={handleBannerTap} disabled={generatingImage} className="chat-icon-btn" title={`${t.imageTooltip} (${currentImageCost} gemas)`} style={{ opacity: !isFirstImage && !isVip && isPremium && purchasedGems < currentImageCost ? 0.4 : 1, boxShadow: photoOfferActive ? '0 0 20px rgba(236,72,153,0.9), 0 0 30px rgba(168,85,247,0.6)' : undefined, borderColor: photoOfferActive ? '#ec4899' : undefined }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
               <rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="2" />
               <circle cx="9" cy="10" r="2" stroke="currentColor" strokeWidth="2" />
