@@ -34,7 +34,6 @@ import {
   getImageCost,
   getClothingLevel,
   getFaceVisibility,
-  type FaceVisibility,
 } from '@/lib/levels'
 import {
   r2Available,
@@ -82,10 +81,10 @@ const CHARACTER_DNA: Record<string, string> = {
   female_witch: "mysterious witch, long midnight-black hair with purple streaks, violet eyes",
   female_nun_fantasy: "devoted fantasy nun, dark brown hair under white coif, blue eyes",
   female_demon_girl: "playful demon girl, short red hair with black tips, amber eyes, demon horns",
-  // ✅ NUEVOS FEMENINOS
   female_best_friends_gf: "young woman, long wavy brunette hair, brown eyes, tight summer dress",
-  female_best_friends_sister: "adult young woman, long straight black hair, expressive brown eyes, fitted sweater", // ✅ FIX EDAD
+  female_best_friends_sister: "adult young woman, long straight black hair, expressive brown eyes, fitted sweater",
   female_foot_fetish_girl: "beautiful woman, long elegant hair, stunning bare feet, red toenails, elegant legs",
+  female_psycho: "unsettling beautiful woman, long straight black hair, wide empty dead eyes, innocent creepy smile, elegant white dress", // ✅ NUEVO
 
   male_stepdad: "mature man, salt and pepper hair, broad shoulders, dress shirt",
   male_ceo: "man, sharp haircut, steel-blue eyes, tailored suit, expensive watch",
@@ -119,9 +118,9 @@ const CHARACTER_DNA: Record<string, string> = {
   male_oni_male: "powerful oni warrior, muscular imposing build, dark red hair, black horns",
   male_knight: "noble knight, wavy shoulder-length chestnut hair, blue-grey eyes, silver armor",
   male_angel_m: "celestial angel, long golden-blonde hair, pale blue eyes, white feathered wings",
-  // ✅ NUEVOS MASCULINOS
   male_best_friends_bf: "athletic man, short dark hair, blue eyes, confident smirk",
   male_best_friends_brother: "tall muscular man, messy hair, dark eyes, protective",
+  male_psycho: "dangerously handsome man, elegant dark suit, cold piercing dark eyes, terrifying smirk, black leather gloves", // ✅ NUEVO
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -160,10 +159,11 @@ const ARCHETYPE_IMAGE_HINTS: Record<string, string> = {
   female_witch: 'candlelit coven, magical runes floating, mystical seduction',
   female_nun_fantasy: 'dim chapel, candlelight, sacred and forbidden conflict',
   female_demon_girl: 'hellish flame, playful teasing, chaotic energy, red glow',
-  // ✅ NUEVOS FEMENINOS
   female_best_friends_gf: 'guilty pleasure, forbidden tension, looking over shoulder, intimate home setting',
-  female_best_friends_sister: 'confident and slightly playful smile, adult elegant look, sitting gracefully on a couch', // ✅ FIX EDAD Y FILTRO
+  female_best_friends_sister: 'confident and slightly playful smile, adult elegant look, sitting gracefully on a couch',
   female_foot_fetish_girl: 'focus on foreground bare feet, perfect foot anatomy, five distinct toes, clean smooth soles, high arches, perfectly placed painted toenails on toes, delicate gold anklets, dangling heels, elegant legs crossed, foot fetish aesthetic',
+  female_psycho: 'obsessive empty stare, innocent creepy smile, holding a smartphone, dimly lit bedroom, eerie tension, dark psychological atmosphere', // ✅ NUEVO
+
   male_stepdad: 'mature authority, whiskey glass, dark study, dominant presence',
   male_stepbrother: 'athletic casual, home setting, playful dominance',
   male_boss: 'executive power, dark office after hours, commanding presence',
@@ -196,9 +196,9 @@ const ARCHETYPE_IMAGE_HINTS: Record<string, string> = {
   male_oni_male: 'mountain shrine, red lanterns, primal demonic strength',
   male_knight: 'castle chamber, armor removed, honor and heat',
   male_angel_m: 'celestial clouds, divine golden light, sacred intimacy',
-  // ✅ NUEVOS MASCULINOS
   male_best_friends_bf: 'arrogant smirk, leaning against a wall, dominant energy, expensive clothes',
   male_best_friends_brother: 'protective older brother vibe, intense stare, muscular arms crossed',
+  male_psycho: 'dark luxury penthouse, shadowy lighting, possessive controlling aura, elegant suit, black leather gloves, terrifying calmness', // ✅ NUEVO
 }
 
 const FACE_HIDDEN_FRAGMENT =
@@ -476,7 +476,6 @@ export async function POST(request: Request) {
     const useR2Static = r2Index !== null && !!r2Base
 
     // ─── Determine source ───
-    // ✅ FIX TS: inicializado a 'generated' para evitar "used before assigned"
     let source: 'r2_static' | 'pool' | 'generated' = 'generated'
     let imageUrl: string = ''
     let modelUsed: string = ''
