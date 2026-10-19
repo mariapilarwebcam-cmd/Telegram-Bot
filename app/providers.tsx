@@ -2,7 +2,6 @@
 
 import { ReactNode, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
-import { TonConnectUIProvider } from '@tonconnect/ui-react'
 import posthog from 'posthog-js'
 import { PostHogProvider as PHProvider } from 'posthog-js/react'
 import { initPostHog, capturePageView } from '@/lib/posthog'
@@ -24,15 +23,5 @@ export function PostHogProvider({ children }: { children: ReactNode }) {
       <PageViewTracker />
       {children}
     </PHProvider>
-  )
-}
-
-export function TonConnectProvider({ children }: { children: ReactNode }) {
-  return (
-    <TonConnectUIProvider
-      manifestUrl="https://telegram-bot-five-beryl.vercel.app/tonconnect-manifest.json"
-    >
-      {children}
-    </TonConnectUIProvider>
   )
 }
