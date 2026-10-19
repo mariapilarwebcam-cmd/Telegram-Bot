@@ -92,11 +92,7 @@ async def get_user_by_username(username: str):
     )
 
 
-# ✅ NUEVO: actualiza el timestamp de última actividad del usuario.
-# Se llama en cada interacción con el bot para que el cron proactivo
-# sepa quién realmente está inactivo.
 async def update_last_active(telegram_id: int):
-    """Actualiza last_active del usuario. Fail-safe: nunca rompe el flujo."""
     try:
         turso_execute(
             "UPDATE users SET last_active = datetime('now') WHERE telegram_id = ?",
@@ -113,13 +109,7 @@ async def create_user_immediately(
     language: str,
     pending_referral_code: Optional[str] = None,
 ):
-    """Crea el usuario. Maneja duplicados (fix race con Mini App)."""
     referral_code = generate_referral_code()
-
-    # ═══════════════════════════════════════════════════════════════
-    # ✅ ANTI-ABUSE: telegram_ids_seen
-    # Si este telegram_id ya existió antes, NO recibe gemas free
-    # ═══════════════════════════════════════════════════════════════
     starting_gems = STARTING_GEMS
 
     try:
@@ -130,23 +120,17 @@ async def create_user_immediately(
 
         if already_seen:
             starting_gems = 0
-            logger.info(
-                f"🛡️ Recreated account for {telegram_id} → 0 free gems"
-            )
+            logger.info(f"🛡️ Recreated account for {telegram_id} → 0 free gems")
         else:
-            # Marcar como visto (idempotente)
             try:
                 turso_execute(
                     "INSERT OR IGNORE INTO telegram_ids_seen (telegram_id) VALUES (?)",
                     [str(telegram_id)]
                 )
             except Exception as seen_err:
-                logger.warning(
-                    f"telegram_ids_seen insert failed for {telegram_id}: {seen_err}"
-                )
+                logger.warning(f"telegram_ids_seen insert failed for {telegram_id}: {seen_err}")
     except Exception as e:
         logger.warning(f"telegram_ids_seen check failed for {telegram_id}: {e}")
-        # Fallback: continuar con gemas default (no rompe el flujo)
 
     try:
         turso_execute(
@@ -178,7 +162,6 @@ async def create_user_immediately(
 
 
 async def add_gems(telegram_id: int, amount: int, transaction_type: str, description: str = ''):
-    """Suma gemas SOLO a 'gems' (no a purchased_gems)."""
     try:
         turso_query_one(
             """UPDATE users
@@ -208,7 +191,6 @@ async def pay_referral_commission(
     source: str,
     reference: str,
 ):
-    """Paga comisión al referidor. Tiers: 1-4→5%, 5-19→7%, 20+→10%."""
     try:
         buyer = await get_user(buyer_id)
         if not buyer:
@@ -324,7 +306,6 @@ async def pay_referral_commission(
 # ==================== PURCHASE HELPERS ====================
 
 async def record_star_purchase(telegram_id: int, stars: int, gems: int, is_first_purchase: bool, charge_id: str):
-    """Acredita la compra. Suma a gems Y purchased_gems atómicamente."""
     try:
         turso_execute(
             """INSERT INTO star_purchases
@@ -483,28 +464,20 @@ async def send_interest_question(message: Message, language: str):
 # ==================== ONBOARDING ROUTER ====================
 
 async def route_onboarding_state(message: Message, user: dict, language: str):
-    """
-    Determina qué paso del onboarding mostrar al usuario.
-    Orden: age_verified → gender → interested_in → done
-    """
     lang = user.get('language', language) or language
 
-    # 1. Verificación de edad
     if not user.get('age_verified'):
         await send_age_warning(message, lang)
         return
 
-    # 2. Género
     if not user.get('gender'):
         await send_gender_question(message, lang)
         return
 
-    # 3. Interés
     if not user.get('interested_in'):
         await send_interest_question(message, lang)
         return
 
-    # 4. Todo listo
     await send_mini_app_message(message, lang, is_new_user=True)
 
 
@@ -645,7 +618,6 @@ async def cmd_start(message: Message, command: CommandObject = None):
     first_name = message.from_user.first_name or ""
     language = detect_language(message.from_user.language_code)
 
-    # ✅ NUEVO: marcar actividad
     await update_last_active(telegram_id)
 
     ref_code: Optional[str] = None
@@ -672,7 +644,6 @@ async def cmd_start(message: Message, command: CommandObject = None):
             )
             return
 
-    # Usuario existente con ref_code pendiente
     if ref_code and not user.get('age_verified'):
         try:
             turso_execute(
@@ -683,15 +654,12 @@ async def cmd_start(message: Message, command: CommandObject = None):
         except Exception as e:
             logger.error(f"Error updating pending_referral: {e}")
 
-    # Enrutar al paso correcto del onboarding
     await route_onboarding_state(message, user, language)
 
 
 @router.callback_query(F.data == "age_confirm")
 async def on_age_confirm(callback: CallbackQuery):
     telegram_id = callback.from_user.id
-
-    # ✅ NUEVO: marcar actividad
     await update_last_active(telegram_id)
 
     user = await get_user(telegram_id)
@@ -728,7 +696,6 @@ async def on_age_confirm(callback: CallbackQuery):
         await callback.answer("⚠️ Error guardando. Intenta de nuevo", show_alert=True)
         return
 
-    # Aplicar referral pendiente
     pending_ref = user.get('pending_referral_code')
     if pending_ref:
         await apply_pending_referral(telegram_id, pending_ref)
@@ -741,7 +708,6 @@ async def on_age_confirm(callback: CallbackQuery):
 
     await callback.answer("✅")
 
-    # Continuar con género
     await send_gender_question(callback.message, lang)
 
 
@@ -774,8 +740,6 @@ async def on_age_decline(callback: CallbackQuery):
 @router.callback_query(F.data.in_({"gender_male", "gender_female"}))
 async def on_gender_select(callback: CallbackQuery):
     telegram_id = callback.from_user.id
-
-    # ✅ NUEVO: marcar actividad
     await update_last_active(telegram_id)
 
     user = await get_user(telegram_id)
@@ -807,15 +771,12 @@ async def on_gender_select(callback: CallbackQuery):
 
     await callback.answer("✅")
 
-    # Continuar con interés
     await send_interest_question(callback.message, lang)
 
 
 @router.callback_query(F.data.in_({"interest_male", "interest_female", "interest_both"}))
 async def on_interest_select(callback: CallbackQuery):
     telegram_id = callback.from_user.id
-
-    # ✅ NUEVO: marcar actividad
     await update_last_active(telegram_id)
 
     user = await get_user(telegram_id)
@@ -854,14 +815,12 @@ async def on_interest_select(callback: CallbackQuery):
 
     await callback.answer("✅")
 
-    # Completar onboarding → mini app
     await send_mini_app_message(callback.message, lang, is_new_user=True)
 
 
 @router.message(Command("balance", "saldo", "gems"))
 @router.message(F.text.in_({"💎 Balance", "💎 Saldo"}))
 async def cmd_balance(message: Message):
-    # ✅ NUEVO: marcar actividad
     await update_last_active(message.from_user.id)
 
     user = await get_user(message.from_user.id)
@@ -878,7 +837,6 @@ async def cmd_balance(message: Message):
 @router.message(Command("shop", "tienda", "store"))
 @router.message(F.text.in_({"🛒 Tienda", "🛒 Shop"}))
 async def cmd_shop(message: Message):
-    # ✅ NUEVO: marcar actividad
     await update_last_active(message.from_user.id)
 
     user = await get_user(message.from_user.id)
@@ -957,7 +915,58 @@ async def process_pre_checkout(pre_checkout_query: PreCheckoutQuery):
 @router.message(F.successful_payment)
 async def process_successful_payment(message: Message):
     telegram_id = message.from_user.id
-    pkg_idx = int(message.successful_payment.invoice_payload.split('_')[-1])
+    payload = message.successful_payment.invoice_payload
+    charge_id = message.successful_payment.telegram_payment_charge_id
+
+    # ✅ FIX CRÍTICO: Manejo de suscripciones VIP (Evita el crash y activa el VIP server-side)
+    if payload.startswith("vip_sub_"):
+        parts = payload.split("_")
+        if len(parts) >= 3:
+            plan_id = parts[2]
+            
+            days = 7
+            if plan_id == "monthly": days = 30
+            elif plan_id == "quarterly": days = 90
+            elif plan_id == "annual": days = 365
+            
+            try:
+                # Verificar si ya tiene una activa para extenderla
+                current_sub = turso_query_one(
+                    "SELECT expires_at FROM subscriptions WHERE telegram_id = ? AND status = 'active' AND expires_at > datetime('now') ORDER BY expires_at DESC LIMIT 1",
+                    [str(telegram_id)]
+                )
+                
+                if current_sub:
+                    turso_execute(
+                        """UPDATE subscriptions 
+                           SET expires_at = datetime(expires_at, '+' || ? || ' days'),
+                               telegram_charge_id = ?
+                           WHERE telegram_id = ? AND status = 'active'""",
+                        [days, charge_id, str(telegram_id)]
+                    )
+                else:
+                    turso_execute(
+                        """INSERT INTO subscriptions
+                          (telegram_id, plan, stars_paid, telegram_charge_id, expires_at, status)
+                         VALUES (?, ?, ?, ?, datetime('now', '+' || ? || ' days'), 'active')""",
+                        [str(telegram_id), plan_id, message.successful_payment.total_amount, charge_id, days]
+                    )
+                
+                user = await get_user(telegram_id)
+                lang = user.get('language', 'es') if user else 'es'
+                text = "✅ ¡Suscripción VIP activada! Gracias por tu apoyo." if lang == 'es' else "✅ VIP Subscription activated! Thanks for your support."
+                await message.answer(text, reply_markup=get_main_keyboard(lang))
+                return
+            except Exception as e:
+                logger.error(f"Error activando VIP por stars: {e}")
+                await message.answer("⚠️ Pago recibido pero hubo un error activando VIP. Contacta a soporte.")
+                return
+
+    # ─── Lógica original para GEMAS ───
+    try:
+        pkg_idx = int(payload.split('_')[-1])
+    except ValueError:
+        return await message.answer("⚠️ Error al procesar la compra.")
 
     if pkg_idx >= len(STAR_PACKAGES):
         return await message.answer("⚠️ Error al procesar la compra.")
@@ -968,7 +977,7 @@ async def process_successful_payment(message: Message):
     await record_star_purchase(
         telegram_id, pkg['stars'], gems,
         pkg.get('first_time', False),
-        message.successful_payment.telegram_payment_charge_id
+        charge_id
     )
 
     user = await get_user(telegram_id)
@@ -984,7 +993,6 @@ async def process_successful_payment(message: Message):
 @router.message(Command("invite", "invitar", "referral", "ref"))
 @router.message(F.text.in_({"🎁 Invitar", "🎁 Invite"}))
 async def cmd_invite(message: Message):
-    # ✅ NUEVO: marcar actividad
     await update_last_active(message.from_user.id)
 
     user = await get_user(message.from_user.id)
@@ -1031,7 +1039,6 @@ async def cmd_invite(message: Message):
 @router.message(Command("help", "ayuda", "start_help"))
 @router.message(F.text.in_({"❓ Ayuda", "❓ Help"}))
 async def cmd_help(message: Message):
-    # ✅ NUEVO: marcar actividad
     await update_last_active(message.from_user.id)
 
     user = await get_user(message.from_user.id)
