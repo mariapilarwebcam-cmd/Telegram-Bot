@@ -1,26 +1,4 @@
 // app/api/subscription/route.ts
-// Endpoint para gestionar suscripciones VIP.
-//
-// GET  → devuelve el estado actual de la suscripción
-// POST → acciones:
-//   - create_invoice       (⭐ Stars)
-//   - confirm              (⭐ después de pagar)
-//   - create_crypto_invoice (💎 USDT) ← ✅ NUEVO
-//   - confirm_crypto       (💎 polling on-chain) ← ✅ NUEVO
-//   - cancel
-//
-// Flujo Stars:
-//   1. Cliente POST { action: 'create_invoice', plan }
-//      → recibe { invoice_link, reference }
-//   2. Cliente abre invoice_link con WebApp.openInvoice
-//   3. Si status === 'paid' → POST { action: 'confirm', plan, reference }
-//
-// Flujo Crypto:
-//   1. Cliente POST { action: 'create_crypto_invoice', plan }
-//      → recibe { amount, recipientAddr, reference }
-//   2. Cliente firma y envía la tx USDT con el reference como comentario
-//   3. Cliente hace polling POST { action: 'confirm_crypto', plan, reference }
-//      cada 4s hasta que devuelva { status: 'paid' }
 
 import { NextResponse } from 'next/server'
 import {
@@ -30,11 +8,10 @@ import {
   createSubscription,
   cancelActiveSubscription,
 } from '@/lib/db-queries'
-import { VIP_PLANS, usdtToUnits } from '@/lib/constants'  // ✅ usdtToUnits nuevo
+import { VIP_PLANS, usdtToUnits } from '@/lib/constants'
 
 export const dynamic = 'force-dynamic'
 
-// ✅ NUEVO: config TON
 const TONAPI_KEY = process.env.TONAPI_KEY || ''
 const RECIPIENT_WALLET =
   process.env.TON_RECIPIENT_WALLET ||
@@ -43,15 +20,10 @@ const RECIPIENT_WALLET =
 
 const USDT_MASTER = 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs'
 
-// ═══════════════════════════════════════════════════════════════
-// Helpers
-// ═══════════════════════════════════════════════════════════════
-
 function toSqliteDate(date: Date): string {
   return date.toISOString().slice(0, 19).replace('T', ' ')
 }
 
-// ✅ NUEVO: verifica una transacción USDT on-chain contra un reference
 async function verifyCryptoPayment(
   reference: string,
   expectedUnits: number
@@ -79,12 +51,8 @@ async function verifyCryptoPayment(
         if (jt.jetton?.address !== USDT_MASTER) continue
 
         const receivedUnits = parseInt(jt.amount || '0', 10)
-        // Tolerancia de 1000 unidades (0.001 USDT) por redondeo
         if (receivedUnits < expectedUnits - 1000) {
-          console.warn('[subscription] Amount mismatch:', {
-            expectedUnits,
-            receivedUnits,
-          })
+          console.warn('[subscription] Amount mismatch:', { expectedUnits, receivedUnits })
           return { ok: false, reason: 'amount_mismatch' }
         }
 
@@ -99,9 +67,6 @@ async function verifyCryptoPayment(
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// GET — Estado actual de la suscripción
-// ═══════════════════════════════════════════════════════════════
 export async function GET(request: Request) {
   try {
     const tid = request.headers.get('x-telegram-id-validated')
@@ -111,27 +76,18 @@ export async function GET(request: Request) {
 
     const user = await ensureUser(tid)
     if (!user) {
-      return NextResponse.json(
-        { error: 'Error cargando tu cuenta' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: 'Error cargando tu cuenta' }, { status: 500 })
     }
 
     const sub = await getActiveSubscription(tid)
 
     if (!sub) {
-      return NextResponse.json({
-        active: false,
-        subscription: null,
-      })
+      return NextResponse.json({ active: false, subscription: null })
     }
 
     const daysRemaining = Math.max(
       0,
-      Math.ceil(
-        (new Date(sub.expires_at.replace(' ', 'T') + 'Z').getTime() - Date.now()) /
-          (1000 * 60 * 60 * 24)
-      )
+      Math.ceil((new Date(sub.expires_at.replace(' ', 'T') + 'Z').getTime() - Date.now()) / (1000 * 60 * 60 * 24))
     )
 
     return NextResponse.json({
@@ -146,16 +102,10 @@ export async function GET(request: Request) {
     })
   } catch (e: any) {
     console.error('[subscription GET] error:', e)
-    return NextResponse.json(
-      { error: 'Error interno', detail: e?.message || String(e) },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Error interno', detail: e?.message || String(e) }, { status: 500 })
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// POST — Acciones
-// ═══════════════════════════════════════════════════════════════
 export async function POST(request: Request) {
   try {
     const tid = request.headers.get('x-telegram-id-validated')
@@ -168,75 +118,44 @@ export async function POST(request: Request) {
 
     const user = await ensureUser(tid)
     if (!user) {
-      return NextResponse.json(
-        { error: 'Error cargando tu cuenta' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: 'Error cargando tu cuenta' }, { status: 500 })
     }
 
     switch (action) {
       case 'create_invoice':
         return await handleCreateInvoice(tid, body, user)
-
       case 'confirm':
         return await handleConfirm(tid, body)
-
-      // ✅ NUEVO: acciones crypto
       case 'create_crypto_invoice':
         return await handleCreateCryptoInvoice(tid, body, user)
-
       case 'confirm_crypto':
         return await handleConfirmCrypto(tid, body)
-
       case 'cancel':
         return await handleCancel(tid)
-
       default:
-        return NextResponse.json(
-          {
-            error:
-              'Acción inválida. Usa: create_invoice, confirm, create_crypto_invoice, confirm_crypto o cancel',
-          },
-          { status: 400 }
-        )
+        return NextResponse.json({ error: 'Acción inválida' }, { status: 400 })
     }
   } catch (e: any) {
     console.error('[subscription POST] error:', e)
-    return NextResponse.json(
-      { error: 'Error interno', detail: e?.message || String(e) },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Error interno', detail: e?.message || String(e) }, { status: 500 })
   }
 }
-
-// ═══════════════════════════════════════════════════════════════
-// HANDLERS — STARS
-// ═══════════════════════════════════════════════════════════════
 
 async function handleCreateInvoice(tid: string, body: any, user: any) {
   const planId = String(body?.plan || '')
   const plan = VIP_PLANS.find((p) => p.id === planId)
 
-  if (!plan) {
-    return NextResponse.json({ error: 'Plan inválido' }, { status: 400 })
-  }
+  if (!plan) return NextResponse.json({ error: 'Plan inválido' }, { status: 400 })
 
   const reference = `vip_sub_${planId}_${tid}_${Date.now()}`
   const lang = user.language === 'en' ? 'en' : 'es'
 
-  const title =
-    lang === 'en'
-      ? `Taboo Realm VIP — ${plan.label.en}`
-      : `Taboo Realm VIP — ${plan.label.es}`
+  const title = lang === 'en' ? `Taboo Realm VIP — ${plan.label.en}` : `Taboo Realm VIP — ${plan.label.es}`
+  const description = lang === 'en'
+      ? `VIP subscription for ${plan.days} days.`
+      : `Suscripción VIP por ${plan.days} días.`
 
-  const description =
-    lang === 'en'
-      ? `VIP subscription for ${plan.days} days. Unlimited messages, free images, exclusive characters.`
-      : `Suscripción VIP por ${plan.days} días. Mensajes ilimitados, imágenes gratis, personajes exclusivos.`
-
-  const res = await fetch(
-    `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/createInvoiceLink`,
-    {
+  const res = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/createInvoiceLink`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -253,96 +172,57 @@ async function handleCreateInvoice(tid: string, body: any, user: any) {
 
   if (!data.ok) {
     console.error('[subscription create_invoice] Telegram error:', data)
-    return NextResponse.json(
-      { error: 'Error creando factura' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Error creando factura' }, { status: 500 })
   }
-
-  console.log('[subscription] 📝 Invoice Stars created:', {
-    tid,
-    plan: planId,
-    reference,
-  })
 
   return NextResponse.json({
     invoice_link: data.result,
     reference,
-    plan: {
-      id: plan.id,
-      label: plan.label,
-      stars: plan.stars,
-      days: plan.days,
-    },
+    plan: { id: plan.id, label: plan.label, stars: plan.stars, days: plan.days },
   })
 }
 
 async function handleConfirm(tid: string, body: any) {
-  const planId = String(body?.plan || '')
   const reference = String(body?.reference || '')
 
-  if (!planId || !reference) {
-    return NextResponse.json(
-      { error: 'Faltan datos: plan y reference' },
-      { status: 400 }
-    )
+  if (!reference) {
+    return NextResponse.json({ error: 'Faltan datos: reference' }, { status: 400 })
   }
 
-  const plan = VIP_PLANS.find((p) => p.id === planId)
-  if (!plan) {
-    return NextResponse.json({ error: 'Plan inválido' }, { status: 400 })
+  // ✅ FIX DE SEGURIDAD: Ya NO activamos la suscripción aquí. 
+  // Solo comprobamos si el webhook de Python ya lo hizo en la base de datos.
+  // Esto evita que cualquiera se haga VIP gratis sin pagar.
+  const existing = await getSubscriptionByChargeId(reference)
+  if (existing) {
+    return NextResponse.json({
+      ok: true,
+      already: true,
+      subscription: { plan: existing.plan, expires_at: existing.expires_at, status: existing.status },
+    })
   }
 
-  return await activateSubscription(tid, plan, reference)
+  // Si no está en la DB, es porque el webhook aún no ha llegado
+  return NextResponse.json({ ok: false, status: 'pending', message: 'Esperando confirmación de Telegram...' })
 }
-
-// ═══════════════════════════════════════════════════════════════
-// ✅ NUEVO — HANDLERS CRYPTO
-// ═══════════════════════════════════════════════════════════════
 
 async function handleCreateCryptoInvoice(tid: string, body: any, user: any) {
   const planId = String(body?.plan || '')
   const plan = VIP_PLANS.find((p) => p.id === planId)
 
-  if (!plan) {
-    return NextResponse.json({ error: 'Plan inválido' }, { status: 400 })
-  }
+  if (!plan) return NextResponse.json({ error: 'Plan inválido' }, { status: 400 })
+  if (!RECIPIENT_WALLET || RECIPIENT_WALLET.length < 40) return NextResponse.json({ error: 'Configuración incompleta: falta wallet de destino' }, { status: 500 })
 
-  if (!RECIPIENT_WALLET || RECIPIENT_WALLET.length < 40) {
-    console.error('[subscription crypto] RECIPIENT_WALLET no configurada')
-    return NextResponse.json(
-      { error: 'Configuración incompleta: falta wallet de destino' },
-      { status: 500 }
-    )
-  }
-
-  // Reference único con prefijo VIP
-  // Formato: VIP_<plan>_<telegram_id>_<timestamp>
   const reference = `VIP_${planId}_${tid}_${Date.now()}`
-
   const units = usdtToUnits(plan.crypto_price)
-
-  console.log('[subscription] 💎 Crypto invoice created:', {
-    tid,
-    plan: planId,
-    reference,
-    usd: plan.crypto_price,
-    units,
-  })
 
   return NextResponse.json({
     payment_data: {
-      amount: plan.crypto_price,      // USD visible
-      amountUnits: units,              // unidades on-chain (6 decimales)
+      amount: plan.crypto_price,
+      amountUnits: units, // ✅ Enviamos las unidades exactas para la blockchain
       recipientAddr: RECIPIENT_WALLET,
       reference,
     },
-    plan: {
-      id: plan.id,
-      label: plan.label,
-      crypto_price: plan.crypto_price,
-      days: plan.days,
-    },
+    plan: { id: plan.id, label: plan.label, crypto_price: plan.crypto_price, days: plan.days },
   })
 }
 
@@ -350,158 +230,73 @@ async function handleConfirmCrypto(tid: string, body: any) {
   const planId = String(body?.plan || '')
   const reference = String(body?.reference || '')
 
-  if (!planId || !reference) {
-    return NextResponse.json(
-      { error: 'Faltan datos: plan y reference' },
-      { status: 400 }
-    )
-  }
+  if (!planId || !reference) return NextResponse.json({ error: 'Faltan datos: plan y reference' }, { status: 400 })
 
   const plan = VIP_PLANS.find((p) => p.id === planId)
-  if (!plan) {
-    return NextResponse.json({ error: 'Plan inválido' }, { status: 400 })
-  }
+  if (!plan) return NextResponse.json({ error: 'Plan inválido' }, { status: 400 })
 
-  // ─── Idempotencia: ¿ya está activada? ───
   const existing = await getSubscriptionByChargeId(reference)
   if (existing) {
     return NextResponse.json({
       status: 'paid',
       already: true,
-      subscription: {
-        plan: existing.plan,
-        expires_at: existing.expires_at,
-        status: existing.status,
-      },
+      subscription: { plan: existing.plan, expires_at: existing.expires_at, status: existing.status },
     })
   }
 
-  // ─── Verificar on-chain ───
   const expectedUnits = usdtToUnits(plan.crypto_price)
   const verification = await verifyCryptoPayment(reference, expectedUnits)
 
   if (!verification.ok) {
-    // Pending normal — sigue esperando
-    if (verification.reason === 'not_found') {
-      return NextResponse.json({ status: 'pending' })
-    }
-    // Errores de amount o tonapi → pending con razón
-    return NextResponse.json({
-      status: 'pending',
-      reason: verification.reason,
-    })
+    if (verification.reason === 'not_found') return NextResponse.json({ status: 'pending' })
+    return NextResponse.json({ status: 'pending', reason: verification.reason })
   }
 
-  // ─── Verificado → activar suscripción ───
   const activation = await activateSubscription(tid, plan, reference)
-
-  // Reformatear la respuesta de activateSubscription para el flujo crypto
   const activationData = await activation.json()
 
-  if (!activationData.ok) {
-    return NextResponse.json(activationData, { status: activation.status })
-  }
+  if (!activationData.ok) return NextResponse.json(activationData, { status: activation.status })
 
-  return NextResponse.json({
-    status: 'paid',
-    subscription: activationData.subscription,
-  })
+  return NextResponse.json({ status: 'paid', subscription: activationData.subscription })
 }
 
-// ═══════════════════════════════════════════════════════════════
-// Lógica compartida: activar suscripción (Stars o Crypto)
-// ═══════════════════════════════════════════════════════════════
-
 async function activateSubscription(tid: string, plan: any, reference: string) {
-  // Idempotencia
   const existing = await getSubscriptionByChargeId(reference)
   if (existing) {
-    console.log('[subscription] ⚠️ Already confirmed:', reference)
-    return NextResponse.json({
-      ok: true,
-      already: true,
-      subscription: {
-        plan: existing.plan,
-        expires_at: existing.expires_at,
-        status: existing.status,
-      },
-    })
+    return NextResponse.json({ ok: true, already: true, subscription: { plan: existing.plan, expires_at: existing.expires_at, status: existing.status } })
   }
 
-  // Calcular expiración (extiende si ya tiene activa)
   const currentSub = await getActiveSubscription(tid)
-
   let baseDate = new Date()
   if (currentSub) {
-    const currentExpiry = new Date(
-      currentSub.expires_at.replace(' ', 'T') + 'Z'
-    )
-    if (currentExpiry > baseDate) {
-      baseDate = currentExpiry
-    }
+    const currentExpiry = new Date(currentSub.expires_at.replace(' ', 'T') + 'Z')
+    if (currentExpiry > baseDate) baseDate = currentExpiry
   }
 
-  const expiresAt = new Date(
-    baseDate.getTime() + plan.days * 24 * 60 * 60 * 1000
-  )
+  const expiresAt = new Date(baseDate.getTime() + plan.days * 24 * 60 * 60 * 1000)
 
-  // Crear suscripción
   const created = await createSubscription({
     telegram_id: tid,
     plan: plan.id,
-    stars_paid: plan.stars,             // Guardamos stars equivalentes siempre
+    stars_paid: plan.stars,
     telegram_charge_id: reference,
     expires_at: toSqliteDate(expiresAt),
   })
 
   if (!created) {
-    // Race condition
     const existing2 = await getSubscriptionByChargeId(reference)
     return NextResponse.json({
-      ok: true,
-      already: true,
-      subscription: existing2
-        ? { plan: existing2.plan, expires_at: existing2.expires_at }
-        : null,
+      ok: true, already: true, subscription: existing2 ? { plan: existing2.plan, expires_at: existing2.expires_at } : null,
     })
   }
 
-  console.log('[subscription] ✅ VIP activated:', {
-    tid,
-    plan: plan.id,
-    reference,
-    expires_at: toSqliteDate(expiresAt),
-  })
-
   return NextResponse.json({
-    ok: true,
-    subscription: {
-      plan: plan.id,
-      expires_at: toSqliteDate(expiresAt),
-      days: plan.days,
-    },
+    ok: true, subscription: { plan: plan.id, expires_at: toSqliteDate(expiresAt), days: plan.days },
   })
 }
 
-// ═══════════════════════════════════════════════════════════════
-// HANDLER — CANCEL
-// ═══════════════════════════════════════════════════════════════
-
 async function handleCancel(tid: string) {
   const cancelled = await cancelActiveSubscription(tid)
-
-  if (!cancelled) {
-    return NextResponse.json(
-      { error: 'No tienes suscripción activa para cancelar' },
-      { status: 404 }
-    )
-  }
-
-  console.log('[subscription] ❌ VIP cancelled:', tid)
-
-  return NextResponse.json({
-    ok: true,
-    message:
-      'Suscripción cancelada. Mantendrás acceso VIP hasta la fecha de expiración.',
-  })
+  if (!cancelled) return NextResponse.json({ error: 'No tienes suscripción activa para cancelar' }, { status: 404 })
+  return NextResponse.json({ ok: true, message: 'Suscripción cancelada. Mantendrás acceso VIP hasta la fecha de expiración.' })
 }
