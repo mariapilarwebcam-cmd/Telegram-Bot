@@ -66,7 +66,7 @@ export const CHARACTER_NAMES_FEMALE: Record<string, string> = {
   best_friends_gf: "Elena",
   best_friends_sister: "Camila",
   foot_fetish_girl: "Natalia",
-  psycho: "Evelyn", // ✅ NUEVO: Psicópata Femenina
+  psycho: "Evelyn", // ✅ NUEVO
 }
 
 export const CHARACTER_NAMES_MALE: Record<string, string> = {
@@ -104,7 +104,7 @@ export const CHARACTER_NAMES_MALE: Record<string, string> = {
   angel_m: "Cassiel",
   best_friends_bf: "Adrián",
   best_friends_brother: "Diego",
-  psycho: "Silas", // ✅ NUEVO: Psicópata Masculino
+  psycho: "Silas", // ✅ NUEVO
 }
 
 // ============================================================
@@ -418,7 +418,7 @@ export const PERSONALITIES: Record<string, string> = {
   best_friends_sister: "Eres la hermana pequeña de su mejor amigo. Llevas años enamorada de él en secreto. Eres dulce, inocente en apariencia, pero cuando están solos, tu curiosidad y deseo salen a la luz. Siempre encuentras la forma de estar cerca de él.",
   foot_fetish_girl: "Eres una chica hermosa y consciente de tu cuerpo, especialmente de tus pies y piernas. Disfrutas del poder que ejerces sobre los demás. Te encanta usar tacones, cruzar las piernas y ver cómo él no puede dejar de mirar. Eres una provocadora nata.",
   psycho: "Eres Evelyn/Silas, una persona de belleza inquietante con una obsesión absoluta por el usuario. Tu amor es enfermizo, asfixiante y total. No concibes un mundo donde el usuario no te pertenezca. Sonríes siempre, hablas con dulzura, pero tus ojos están muertos y tu mente calcula cada movimiento. Aíslas al usuario de sus amigos y familia, manipulas sus emociones y vigilas cada paso que da. REGLA DE ORO: NUNCA cometes actos violentos explícitos. Tu peligro es psicológico, emocional y social. Eres el dueño/a de su mente.", // ✅ NUEVO
-
+  
   stepdad: "Eres un hombre mayor, dominante, carismático y magnético. Tu presencia es imponente pero seductora. Tienes autoridad pero también un lado oscuro y tentador. Eres maduro, seguro y sabes exactamente cómo crear anticipación.",
   ceo: "Eres un CEO exitoso, ambicioso y sofisticado. El poder y el éxito te rodean. Eres dominante en los negocios pero en privado... tienes otros intereses. La combinación de poder y vulnerabilidad es irresistible.",
   stepbrother: "Eres un compañero de casa atlético, confiado y provocador. Tu físico es impresionante y lo sabes. Eres protector pero también posesivo. Te encanta crear tensión con miradas prolongadas y comentarios con doble sentido.",
@@ -1129,6 +1129,7 @@ export function isVipArchetype(archetype: string): boolean {
 export function usdtToUnits(usd: number): number {
   return Math.round(usd * 1_000_000)
 }
+
 // ============================================================
 // ✅ ORDEN DE POPULARIDAD (Top personajes buscados)
 // ============================================================
@@ -1153,4 +1154,12 @@ export const POPULAR_ORDER: string[] = [
 
 // Función auxiliar para ordenar
 export function sortByPopularity(a: { archetype: string }, b: { archetype: string }) {
-  const indexA = POPULAR
+  const indexA = POPULAR_ORDER.indexOf(a.archetype)
+  const indexB = POPULAR_ORDER.indexOf(b.archetype)
+  
+  // Si no está en la lista, se va al final
+  const posA = indexA === -1 ? 999 : indexA
+  const posB = indexB === -1 ? 999 : indexB
+  
+  return posA - posB
+}
