@@ -4,7 +4,7 @@ import BottomNav from '@/components/BottomNav'
 import SwipeBack from '@/components/SwipeBack'
 import { UserProvider } from '@/lib/UserContext'
 import { PostHogProvider } from './providers'
-import { TonProviderClient } from './TonProviderClient' // ✅ NUEVO: Importamos el componente client-side
+import { TonProviderClient } from './TonProviderClient'
 
 export const metadata: Metadata = {
   title: 'Taboo Realm',
@@ -25,11 +25,10 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="es">
+    <html lang="es" suppressHydrationWarning>
       <body className="antialiased">
         <PostHogProvider>
           <UserProvider>
-            {/* ✅ NUEVO: Usamos el componente dinámico que evita el error de SSR */}
             <TonProviderClient>
               <SwipeBack />
               <div className="app-shell">
