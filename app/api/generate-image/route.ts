@@ -198,7 +198,8 @@ const ARCHETYPE_IMAGE_HINTS: Record<string, string> = {
   male_angel_m: 'celestial clouds, divine golden light, sacred intimacy',
   male_best_friends_bf: 'arrogant smirk, leaning against a wall, dominant energy, expensive clothes',
   male_best_friends_brother: 'protective older brother vibe, intense stare, muscular arms crossed',
-  male_psycho: 'dark luxury penthouse, shadowy lighting, possessive controlling aura, elegant suit, black leather gloves, terrifying calmness', // ✅ NUEVO
+  // ✅ FIX: Ajuste dominante sin tocar la cámara para no romper la anatomía
+  male_psycho: 'dominant vibe, slowly loosening his tie or adjusting his black leather gloves, looking down at the viewer with a terrifying calmness, dark luxury penthouse, shadowy lighting, possessive controlling aura', 
 }
 
 const FACE_HIDDEN_FRAGMENT =
@@ -612,6 +613,10 @@ export async function POST(request: Request) {
         let imagePrompt: string
         let referenceUrl: string | undefined
 
+        // ✅ NUEVO: Filtro Global Anti-Errores (Anatomía, Clones y Manos Gigantes)
+        const genderTag = character.gender === 'male' ? '1boy, male' : '1girl, female'
+        const QUALITY_CONTROL_PROMPT = `(masterpiece, best quality, highres:1.2), solo, single character, ${genderTag}, only one person in frame, perfect anatomy, perfect hands, five fingers, correct proportions, no mutations, no extra limbs, no missing limbs, no multiple people, no deformed hands, no extra fingers, perfectly sized hands, correct hand size, hand in mid-ground, no giant hands touching the lens, natural pose`
+
         if (level.level <= 3) {
           const dna =
             CHARACTER_DNA[`${character.gender}_${character.archetype}`] ||
@@ -623,6 +628,7 @@ export async function POST(request: Request) {
           else if (faceVisibility === 'partial') faceRule = FACE_PARTIAL_FRAGMENT
 
           imagePrompt = [
+            QUALITY_CONTROL_PROMPT, // ✅ FILTRO INYECTADO
             `[CHARACTER: ${dna}]`,
             'highly detailed anime illustration, cel shading, soft cinematic lighting',
             scene,
@@ -641,6 +647,7 @@ export async function POST(request: Request) {
           const moodFragment = mood ? MOOD_FRAGMENTS[mood] || '' : ''
 
           imagePrompt = [
+            QUALITY_CONTROL_PROMPT, // ✅ FILTRO INYECTADO
             facePrompt,
             'anime style, cel shading, moody atmospheric lighting, deep shadows, muted color palette, cinematic dark tones, detailed anime eyes',
             clothing,
