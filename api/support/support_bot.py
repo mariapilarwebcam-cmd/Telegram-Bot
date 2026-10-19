@@ -58,13 +58,13 @@ async def handle_user_message(message: Message):
         f"--- MENSAJE ---\n"
     )
 
-    # Reenviamos el mensaje original al grupo de admin
-   admin_notice = await message.bot.send_message(
-    chat_id=ADMIN_CHAT_ID,
-    text=header
-)
+    # ✅ FIX: Indentación corregida. Ahora todo está dentro de la función.
+    admin_notice = await message.bot.send_message(
+        chat_id=ADMIN_CHAT_ID,
+        text=header
+    )
 
-forwarded_msg = await message.forward(chat_id=ADMIN_CHAT_ID)
+    forwarded_msg = await message.forward(chat_id=ADMIN_CHAT_ID)
 
     # Guardamos la relación en la base de datos para poder responder
     save_conversation_state(user.id, admin_notice.message_id, forwarded_msg.message_id)
