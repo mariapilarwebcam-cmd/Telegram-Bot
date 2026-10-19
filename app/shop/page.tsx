@@ -55,7 +55,6 @@ export default function ShopPage() {
       if (res.ok) {
         const data = await res.json()
         setVipSub(data)
-
         Analytics.vipPageViewed({ is_vip: !!data.active })
       }
     } catch (e) {
@@ -88,43 +87,22 @@ export default function ShopPage() {
 
       WebApp.openInvoice(data.invoice_link, async (status: string) => {
         if (status === 'paid') {
-          try {
-            const confirmRes = await tgFetch('/api/subscription', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                action: 'confirm',
-                plan: planId,
-                reference: data.reference,
-              }),
-            })
-            const confirmData = await confirmRes.json()
-
-            if (confirmRes.ok && confirmData.ok) {
-              setShowVipSuccess(true)
-              await loadVipStatus()
-              await refresh()
-              setTimeout(() => setShowVipSuccess(false), 5000)
-
-              const plan = VIP_PLANS.find((p) => p.id === planId)
-              if (plan) {
-                Analytics.vipPurchased({
-                  plan: planId,
-                  method: 'stars',
-                  price_usd: parseFloat(plan.price.es.replace('$', '')),
-                  stars: plan.stars,
-                })
-              }
-            } else {
-              alert(confirmData.error || 'Error activando suscripción')
-            }
-          } catch (e: any) {
-            alert('Error activando: ' + (e?.message || 'desconocido'))
-          }
+          // Polling esperando al webhook de Python
+          let attempts = 0;
+          const checkSub = setInterval(async () => {
+             attempts++;
+             await loadVipStatus();
+             if (attempts >= 4) {
+               clearInterval(checkSub);
+               setVipPurchasing(null);
+             }
+          }, 2000);
         } else if (status === 'failed') {
           alert(lang === 'es' ? 'Pago fallido' : 'Payment failed')
+          setVipPurchasing(null)
+        } else {
+          setVipPurchasing(null)
         }
-        setVipPurchasing(null)
       })
     } catch (e: any) {
       alert('Error: ' + (e?.message || 'desconocido'))
@@ -156,7 +134,7 @@ export default function ShopPage() {
         const result = await pay(async (senderAddr: string) => {
           const transfer = await createTonPayTransfer(
             {
-              amount: payment_data.amount,
+              amount: payment_data.amountUnits, // ✅ FIX: Usar amountUnits
               asset: USDT,
               recipientAddr: payment_data.recipientAddr,
               senderAddr,
@@ -176,17 +154,8 @@ export default function ShopPage() {
         startVipPolling(planId, payment_data.reference)
       } catch (cryptoErr: any) {
         const msg = cryptoErr?.message || String(cryptoErr)
-        if (
-          msg.toLowerCase().includes('user rejected') ||
-          msg.toLowerCase().includes('cancel')
-        ) {
-          // cancelado
-        } else {
-          alert(
-            lang === 'es'
-              ? 'No se pudo enviar la transacción: ' + msg
-              : 'Could not send transaction: ' + msg
-          )
+        if (!msg.toLowerCase().includes('user rejected') && !msg.toLowerCase().includes('cancel')) {
+          alert(lang === 'es' ? 'No se pudo enviar la transacción: ' + msg : 'Could not send: ' + msg)
         }
       } finally {
         setVipPurchasing(null)
@@ -197,14 +166,9 @@ export default function ShopPage() {
     }
   }
 
-  const startVipPolling = (
-    planId: VipPlanId,
-    reference: string
-  ) => {
+  const startVipPolling = (planId: VipPlanId, reference: string) => {
     setVipPendingRef(reference)
-    setVipPendingStatus(
-      lang === 'es' ? 'Verificando pago VIP…' : 'Verifying VIP payment…'
-    )
+    setVipPendingStatus(lang === 'es' ? 'Verificando pago VIP…' : 'Verifying VIP payment…')
 
     let attempts = 0
     const MAX_ATTEMPTS = 25
@@ -213,11 +177,7 @@ export default function ShopPage() {
       attempts++
       if (attempts > MAX_ATTEMPTS) {
         stopVipPolling()
-        alert(
-          lang === 'es'
-            ? 'No hemos detectado el pago todavía. Si ya pagaste, contacta soporte.'
-            : "We haven't detected the payment yet. If you already paid, contact support."
-        )
+        alert(lang === 'es' ? 'No hemos detectado el pago todavía. Si ya pagaste, contacta soporte.' : "We haven't detected the payment yet. If you already paid, contact support.")
         return
       }
 
@@ -225,11 +185,7 @@ export default function ShopPage() {
         const res = await tgFetch('/api/subscription', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'confirm_crypto',
-            plan: planId,
-            reference,
-          }),
+          body: JSON.stringify({ action: 'confirm_crypto', plan: planId, reference }),
         })
         const data = await res.json()
 
@@ -250,11 +206,7 @@ export default function ShopPage() {
             })
           }
         } else {
-          setVipPendingStatus(
-            lang === 'es'
-              ? `Confirmando en la blockchain… (${attempts}/${MAX_ATTEMPTS})`
-              : `Confirming on-chain… (${attempts}/${MAX_ATTEMPTS})`
-          )
+          setVipPendingStatus(lang === 'es' ? `Confirmando en la blockchain… (${attempts}/${MAX_ATTEMPTS})` : `Confirming on-chain… (${attempts}/${MAX_ATTEMPTS})`)
         }
       } catch (e) {
         console.error('[shop] vip poll error:', e)
@@ -272,11 +224,7 @@ export default function ShopPage() {
   }
 
   const cancelVip = async () => {
-    const confirmed = confirm(
-      lang === 'es'
-        ? '¿Cancelar tu suscripción VIP? Mantendrás acceso hasta la fecha de expiración.'
-        : 'Cancel your VIP subscription? You will keep access until the expiration date.'
-    )
+    const confirmed = confirm(lang === 'es' ? '¿Cancelar tu suscripción VIP? Mantendrás acceso hasta la fecha de expiración.' : 'Cancel your VIP subscription? You will keep access until the expiration date.')
     if (!confirmed) return
 
     try {
@@ -287,11 +235,7 @@ export default function ShopPage() {
       })
       const data = await res.json()
       if (res.ok) {
-        alert(
-          lang === 'es'
-            ? '✅ Suscripción cancelada. Mantienes acceso VIP hasta que expire.'
-            : '✅ Subscription cancelled. You keep VIP access until it expires.'
-        )
+        alert(lang === 'es' ? '✅ Suscripción cancelada. Mantienes acceso VIP hasta que expire.' : '✅ Subscription cancelled. You keep VIP access until it expires.')
         await loadVipStatus()
       } else {
         alert(data.error || 'Error')
@@ -415,11 +359,7 @@ export default function ShopPage() {
       attempts++
       if (attempts > MAX_ATTEMPTS) {
         stopPolling()
-        alert(
-          lang === 'es'
-            ? 'No hemos detectado el pago todavía. Si ya pagaste, contacta soporte.'
-            : "We haven't detected the payment yet. If you already paid, contact support."
-        )
+        alert(lang === 'es' ? 'No hemos detectado el pago todavía. Si ya pagaste, contacta soporte.' : "We haven't detected the payment yet. If you already paid, contact support.")
         return
       }
 
@@ -447,17 +387,9 @@ export default function ShopPage() {
             })
           }
 
-          alert(
-            lang === 'es'
-              ? `✅ Pago confirmado. +${data.gems_added} gemas acreditadas.`
-              : `✅ Payment confirmed. +${data.gems_added} gems credited.`
-          )
+          alert(lang === 'es' ? `✅ Pago confirmado. +${data.gems_added} gemas acreditadas.` : `✅ Payment confirmed. +${data.gems_added} gems credited.`)
         } else {
-          setPendingStatus(
-            lang === 'es'
-              ? `Confirmando en la blockchain… (${attempts}/${MAX_ATTEMPTS})`
-              : `Confirming on-chain… (${attempts}/${MAX_ATTEMPTS})`
-          )
+          setPendingStatus(lang === 'es' ? `Confirmando en la blockchain… (${attempts}/${MAX_ATTEMPTS})` : `Confirming on-chain… (${attempts}/${MAX_ATTEMPTS})`)
         }
       } catch (e) {
         console.error('[shop] poll error:', e)
@@ -486,7 +418,7 @@ export default function ShopPage() {
       const result = await pay(async (senderAddr: string) => {
         const transfer = await createTonPayTransfer(
           {
-            amount: payment_data.amount,
+            amount: payment_data.amountUnits, // ✅ FIX: Usar amountUnits
             asset: USDT,
             recipientAddr: payment_data.recipientAddr,
             senderAddr,
@@ -510,11 +442,7 @@ export default function ShopPage() {
       if (msg.toLowerCase().includes('user rejected') || msg.toLowerCase().includes('cancel')) {
         // cancelado
       } else {
-        alert(
-          lang === 'es'
-            ? 'No se pudo enviar la transacción: ' + msg
-            : 'Could not send transaction: ' + msg
-        )
+        alert(lang === 'es' ? 'No se pudo enviar la transacción: ' + msg : 'Could not send transaction: ' + msg)
       }
     } finally {
       setPurchasing(null)
@@ -585,8 +513,7 @@ export default function ShopPage() {
               marginBottom: 12,
               padding: 14,
               borderRadius: 14,
-              background:
-                'linear-gradient(135deg, rgba(251,191,36,0.15), rgba(251,191,36,0.05))',
+              background: 'linear-gradient(135deg, rgba(251,191,36,0.15), rgba(251,191,36,0.05))',
               border: '1px solid rgba(251, 191, 36, 0.4)',
               display: 'flex',
               alignItems: 'center',
@@ -609,8 +536,7 @@ export default function ShopPage() {
             style={{
               padding: 20,
               borderRadius: 20,
-              background:
-                'linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #d97706 100%)',
+              background: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #d97706 100%)',
               boxShadow: '0 12px 40px rgba(251, 191, 36, 0.4)',
               position: 'relative',
               overflow: 'hidden',
@@ -776,7 +702,6 @@ export default function ShopPage() {
           </div>
         ) : (
           <>
-            {/* ✅ CAMBIO 1: descripción con cupos reales (incluye audio) */}
             <div
               style={{
                 fontSize: 13,
@@ -1352,7 +1277,6 @@ export default function ShopPage() {
               {lang === 'es' ? '¡Bienvenido a VIP!' : 'Welcome to VIP!'}
             </h2>
 
-            {/* ✅ CAMBIO 2: cupos reales en el modal (incluye audio) */}
             <div
               style={{
                 fontSize: 13,
