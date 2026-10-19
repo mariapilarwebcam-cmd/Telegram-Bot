@@ -70,29 +70,21 @@ export async function createUser(data: {
 }) {
   const referral_code = generateReferralCode()
 
-  // ═══════════════════════════════════════════════════════════════
-  // ✅ ANTI-ABUSE: telegram_ids_seen
-  // Si este telegram_id ya existió antes (aunque su cuenta haya
-  // sido eliminada), NO recibe gemas free otra vez.
-  // ═══════════════════════════════════════════════════════════════
   const DEFAULT_STARTING_GEMS = 10
   let startingGems = data.gems ?? DEFAULT_STARTING_GEMS
 
   try {
-    // ¿Ya lo vimos antes?
     const alreadySeen = await queryOne<{ telegram_id: string }>(
       `SELECT telegram_id FROM telegram_ids_seen WHERE telegram_id = ? LIMIT 1`,
       [data.telegram_id]
     )
 
     if (alreadySeen) {
-      // Cuenta recreada → 0 gemas free
       startingGems = 0
       console.log(
         `[createUser] 🛡️ Recreated account for ${data.telegram_id} → 0 free gems`
       )
     } else {
-      // Primera vez → marcar como visto (idempotente)
       try {
         await execute(
           `INSERT OR IGNORE INTO telegram_ids_seen (telegram_id) VALUES (?)`,
@@ -654,33 +646,35 @@ export async function getPurchaseByChargeId(charge_id: string) {
 
 export async function getChatListData(telegram_id: string) {
   const chars = await getAllUserCharacters(telegram_id)
-  const history = await query<{
+
+  // ✅ FIX DE RENDIMIENTO: Hacemos la agrupación en SQL en lugar de en memoria.
+  // Solo trae el conteo y el último mensaje por personaje.
+  const historySummary = await query<{
     character_id: number
-    content: string
-    created_at: string
-    role: string
+    lastMessage: string
+    lastAt: string
+    count: number
   }>(
-    `SELECT character_id, content, created_at, role
-     FROM conversation_history
-     WHERE telegram_id = ?
-     ORDER BY created_at DESC`,
+    `SELECT
+       c.character_id,
+       (SELECT content FROM conversation_history
+        WHERE character_id = c.character_id AND telegram_id = c.telegram_id
+        ORDER BY created_at DESC, id DESC LIMIT 1) AS lastMessage,
+       MAX(c.created_at) AS lastAt,
+       SUM(CASE WHEN c.role = 'user' THEN 1 ELSE 0 END) AS count
+     FROM conversation_history c
+     WHERE c.telegram_id = ?
+     GROUP BY c.character_id`,
     [telegram_id]
   )
 
-  const byChar: Record<
-    number,
-    { lastMessage: string; lastAt: string; count: number }
-  > = {}
-
-  for (const h of history) {
-    if (!byChar[h.character_id]) {
-      byChar[h.character_id] = {
-        lastMessage: h.content,
-        lastAt: h.created_at,
-        count: 0,
-      }
+  const byChar: Record<number, { lastMessage: string; lastAt: string; count: number }> = {}
+  for (const h of historySummary) {
+    byChar[h.character_id] = {
+      lastMessage: h.lastMessage,
+      lastAt: h.lastAt,
+      count: h.count,
     }
-    if (h.role === 'user') byChar[h.character_id].count++
   }
 
   return chars.map((c: any) => ({
@@ -1284,11 +1278,6 @@ export async function countSfwImageGenerationsLast24h(
 // ═══════════════════════════════════════════════════════════════
 // ✅ AUDIO TOKENS — Sistema de acumulación (1/día, cap 5)
 // ═══════════════════════════════════════════════════════════════
-// Cada VIP recibe 1 token de audio al día.
-// Los tokens no usados se acumulan hasta un máximo de 5.
-// Se aplica lazy refill (on-demand) igual que Wiro.
-// Chatterbox Multilingual (ResembleAI) — $1/1M chars.
-// ═══════════════════════════════════════════════════════════════
 
 export async function ensureAudioTokensRefilled(
   telegram_id: string
@@ -1312,7 +1301,6 @@ export async function ensureAudioTokensRefilled(
     const currentTokens = user.audio_tokens
     const lastRefill = user.audio_last_refill_at
 
-    // Primera vez
     if (lastRefill == null || currentTokens == null) {
       try {
         await execute(
@@ -1328,7 +1316,6 @@ export async function ensureAudioTokensRefilled(
       return 1
     }
 
-    // Días completos desde el último refill
     const row = await queryOne<{ days: number }>(
       `SELECT CAST(julianday('now') - julianday(?) AS INTEGER) AS days`,
       [lastRefill]
