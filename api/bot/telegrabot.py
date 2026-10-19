@@ -463,7 +463,8 @@ async def send_interest_question(message: Message, language: str):
 
 # ==================== ONBOARDING ROUTER ====================
 
-async def route_onboarding_state(message: Message, user: dict, language: str):
+# ✅ FIX: Ahora recibe el parámetro is_new_user
+async def route_onboarding_state(message: Message, user: dict, language: str, is_new_user: bool = False):
     lang = user.get('language', language) or language
 
     if not user.get('age_verified'):
@@ -478,7 +479,8 @@ async def route_onboarding_state(message: Message, user: dict, language: str):
         await send_interest_question(message, lang)
         return
 
-    await send_mini_app_message(message, lang, is_new_user=True)
+    # ✅ FIX: Pasa el parámetro dinámicamente en lugar de forzar True
+    await send_mini_app_message(message, lang, is_new_user=is_new_user)
 
 
 # ==================== REFERRAL APPLICATION ====================
@@ -627,8 +629,10 @@ async def cmd_start(message: Message, command: CommandObject = None):
             ref_code = arg
 
     user = await get_user(telegram_id)
+    is_new_user = False # ✅ FIX: Bandera para saber si es nuevo
 
     if not user:
+        is_new_user = True
         user = await create_user_immediately(
             telegram_id, username, first_name, language,
             pending_referral_code=ref_code
@@ -654,7 +658,8 @@ async def cmd_start(message: Message, command: CommandObject = None):
         except Exception as e:
             logger.error(f"Error updating pending_referral: {e}")
 
-    await route_onboarding_state(message, user, language)
+    # ✅ FIX: Le pasamos la bandera de si es nuevo o no
+    await route_onboarding_state(message, user, language, is_new_user=is_new_user)
 
 
 @router.callback_query(F.data == "age_confirm")
@@ -815,6 +820,7 @@ async def on_interest_select(callback: CallbackQuery):
 
     await callback.answer("✅")
 
+    # Aquí sí es True porque acaba de terminar el onboarding
     await send_mini_app_message(callback.message, lang, is_new_user=True)
 
 
@@ -918,7 +924,6 @@ async def process_successful_payment(message: Message):
     payload = message.successful_payment.invoice_payload
     charge_id = message.successful_payment.telegram_payment_charge_id
 
-    # ✅ FIX CRÍTICO: Manejo de suscripciones VIP (Evita el crash y activa el VIP server-side)
     if payload.startswith("vip_sub_"):
         parts = payload.split("_")
         if len(parts) >= 3:
@@ -930,7 +935,6 @@ async def process_successful_payment(message: Message):
             elif plan_id == "annual": days = 365
             
             try:
-                # Verificar si ya tiene una activa para extenderla
                 current_sub = turso_query_one(
                     "SELECT expires_at FROM subscriptions WHERE telegram_id = ? AND status = 'active' AND expires_at > datetime('now') ORDER BY expires_at DESC LIMIT 1",
                     [str(telegram_id)]
@@ -962,7 +966,6 @@ async def process_successful_payment(message: Message):
                 await message.answer("⚠️ Pago recibido pero hubo un error activando VIP. Contacta a soporte.")
                 return
 
-    # ─── Lógica original para GEMAS ───
     try:
         pkg_idx = int(payload.split('_')[-1])
     except ValueError:
