@@ -12,7 +12,7 @@ import {
 } from '@/lib/constants'
 import { getTranslations } from '@/lib/i18n'
 import { useUser } from '@/lib/UserContext'
-import { useTonPay } from '@ton-pay/ui-react'
+import { useTonConnectUI } from '@tonconnect/ui-react' // ✅ CAMBIO CLAVE
 import { Analytics } from '@/lib/posthog'
 import { AnimatedNumber } from '@/components/AnimatedNumber'
 
@@ -37,7 +37,7 @@ export default function ShopPage() {
   const [vipPendingStatus, setVipPendingStatus] = useState<string>('')
   const vipPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const { pay } = useTonPay()
+  const [tonConnectUI] = useTonConnectUI() // ✅ Usamos TonConnectUI
   const t = getTranslations(lang)
 
   useEffect(() => {
@@ -129,47 +129,49 @@ export default function ShopPage() {
 
       const { payment_data } = data
 
-      try {
-        const result = await pay(async (senderAddr: string) => {
-          // ✅ FIX: Llamamos a nuestra API route en el backend
-          const transferRes = await tgFetch('/api/ton-pay/create-transfer', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              amount: payment_data.amount,
-              recipientAddr: payment_data.recipientAddr,
-              reference: payment_data.reference,
-              senderAddr,
-            }),
-          })
-
-          const transferData = await transferRes.json()
-
-          if (!transferRes.ok) {
-            throw new Error(transferData.error || 'Error creando transferencia TON Pay')
-          }
-
-          return {
-            message: transferData.message,
-            reference: transferData.reference,
-            bodyBase64Hash: transferData.bodyBase64Hash,
-          }
-        })
-
-        console.log('[shop] vip crypto sent:', result)
-        startVipPolling(planId, payment_data.reference)
-      } catch (cryptoErr: any) {
-        console.error('[shop] vip crypto error:', cryptoErr)
-        const msg = cryptoErr?.message || cryptoErr?.toString() || String(cryptoErr)
-        
-        if (!msg.toLowerCase().includes('user rejected') && !msg.toLowerCase().includes('cancel')) {
-          alert(`ERROR TON PAY VIP:\n\n${msg}`)
-        }
-      } finally {
-        setVipPurchasing(null)
+      if (!tonConnectUI.connected) {
+        await tonConnectUI.connectWallet()
       }
-    } catch (e: any) {
-      alert('Error: ' + (e?.message || 'desconocido'))
+      
+      const senderAddr = tonConnectUI.account?.address
+      if (!senderAddr) throw new Error('Billetera no conectada')
+
+      // 1. Pedir al backend la transacción manual
+      const transferRes = await tgFetch('/api/ton-pay/create-transfer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: payment_data.amount,
+          recipientAddr: payment_data.recipientAddr,
+          reference: payment_data.reference,
+          senderAddr,
+        }),
+      })
+
+      const transferData = await transferRes.json()
+      if (!transferRes.ok) throw new Error(transferData.error || 'Error backend')
+
+      // 2. Enviar transacción a la billetera (Keeper / Telegram)
+      await tonConnectUI.sendTransaction({
+        validUntil: Math.floor(Date.now() / 1000) + 600, // 10 min
+        messages: [
+          {
+            address: transferData.address, 
+            amount: transferData.amount, 
+            payload: transferData.payload,
+          },
+        ],
+      })
+
+      console.log('[shop] vip crypto sent')
+      startVipPolling(planId, payment_data.reference)
+    } catch (cryptoErr: any) {
+      console.error('[shop] vip crypto error:', cryptoErr)
+      const msg = cryptoErr?.message || cryptoErr?.toString() || String(cryptoErr)
+      if (!msg.toLowerCase().includes('user rejected') && !msg.toLowerCase().includes('cancel')) {
+        alert(`ERROR TON PAY VIP:\n\n${msg}`)
+      }
+    } finally {
       setVipPurchasing(null)
     }
   }
@@ -433,33 +435,41 @@ export default function ShopPage() {
 
       const { payment_data } = data
 
-      const result = await pay(async (senderAddr: string) => {
-        // ✅ FIX: Llamamos a nuestra API route en el backend
-        const transferRes = await tgFetch('/api/ton-pay/create-transfer', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            amount: payment_data.amount,
-            recipientAddr: payment_data.recipientAddr,
-            reference: payment_data.reference,
-            senderAddr,
-          }),
-        })
+      if (!tonConnectUI.connected) {
+        await tonConnectUI.connectWallet()
+      }
+      
+      const senderAddr = tonConnectUI.account?.address
+      if (!senderAddr) throw new Error('Billetera no conectada')
 
-        const transferData = await transferRes.json()
-
-        if (!transferRes.ok) {
-          throw new Error(transferData.error || 'Error creando transferencia TON Pay')
-        }
-
-        return {
-          message: transferData.message,
-          reference: transferData.reference,
-          bodyBase64Hash: transferData.bodyBase64Hash,
-        }
+      // 1. Pedir al backend la transacción manual
+      const transferRes = await tgFetch('/api/ton-pay/create-transfer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: payment_data.amount,
+          recipientAddr: payment_data.recipientAddr,
+          reference: payment_data.reference,
+          senderAddr,
+        }),
       })
 
-      console.log('[shop] crypto payment sent:', result)
+      const transferData = await transferRes.json()
+      if (!transferRes.ok) throw new Error(transferData.error || 'Error backend')
+
+      // 2. Enviar transacción a la billetera (Keeper / Telegram)
+      await tonConnectUI.sendTransaction({
+        validUntil: Math.floor(Date.now() / 1000) + 600,
+        messages: [
+          {
+            address: transferData.address, 
+            amount: transferData.amount, 
+            payload: transferData.payload,
+          },
+        ],
+      })
+
+      console.log('[shop] crypto payment sent')
       startPolling(payment_data.reference, idx)
     } catch (e: any) {
       console.error('[shop] crypto error:', e)
