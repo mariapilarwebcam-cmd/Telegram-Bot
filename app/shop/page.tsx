@@ -134,7 +134,7 @@ export default function ShopPage() {
         const result = await pay(async (senderAddr: string) => {
           const transfer = await createTonPayTransfer(
             {
-              amount: payment_data.amountUnits,
+              amount: payment_data.amount, // ✅ FIX: Usar amount (8.49), no amountUnits (8490000)
               asset: USDT,
               recipientAddr: payment_data.recipientAddr,
               senderAddr,
@@ -156,7 +156,6 @@ export default function ShopPage() {
         console.error('[shop] vip crypto error:', cryptoErr)
         const msg = cryptoErr?.message || cryptoErr?.toString() || String(cryptoErr)
         
-        // ✅ FIX: Mostrar el error real para saber qué falla
         if (!msg.toLowerCase().includes('user rejected') && !msg.toLowerCase().includes('cancel')) {
           alert(`ERROR TON PAY VIP:\n\n${msg}`)
         }
@@ -431,7 +430,7 @@ export default function ShopPage() {
       const result = await pay(async (senderAddr: string) => {
         const transfer = await createTonPayTransfer(
           {
-            amount: payment_data.amountUnits,
+            amount: payment_data.amount, // ✅ FIX: Usar amount (8.49), no amountUnits (8490000)
             asset: USDT,
             recipientAddr: payment_data.recipientAddr,
             senderAddr,
@@ -453,7 +452,6 @@ export default function ShopPage() {
       console.error('[shop] crypto error:', e)
       const msg = e?.message || e?.toString() || String(e)
       
-      // ✅ FIX: Mostrar el error real
       if (msg.toLowerCase().includes('user rejected') || msg.toLowerCase().includes('cancel')) {
         // cancelado
       } else {
