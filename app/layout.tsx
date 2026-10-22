@@ -1,5 +1,4 @@
 import { Metadata, Viewport } from 'next'
-import Script from 'next/script' // ✅ IMPORTACIÓN AÑADIDA
 import './globals.css'
 import BottomNav from '@/components/BottomNav'
 import SwipeBack from '@/components/SwipeBack'
@@ -28,15 +27,6 @@ export default function RootLayout({
   return (
     <html lang="es" suppressHydrationWarning>
       <body className="antialiased">
-        {/* ✅ ERUDA: Consola de desarrollo en pantalla para móviles */}
-        <Script 
-          src="https://cdn.jsdelivr.net/npm/eruda" 
-          strategy="beforeInteractive"
-        />
-        <Script id="eruda-init" strategy="afterInteractive">
-          {`if (typeof window !== 'undefined' && !window.Eruda) { window.eruda.init(); }`}
-        </Script>
-
         <PostHogProvider>
           <UserProvider>
             <TonProviderClient>
