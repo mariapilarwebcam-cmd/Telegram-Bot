@@ -12,7 +12,7 @@ import {
 } from '@/lib/constants'
 import { getTranslations } from '@/lib/i18n'
 import { useUser } from '@/lib/UserContext'
-import { useTonConnectUI } from '@tonconnect/ui-react' // ✅ CAMBIO CLAVE
+import { useTonConnectUI } from '@tonconnect/ui-react'
 import { Analytics } from '@/lib/posthog'
 import { AnimatedNumber } from '@/components/AnimatedNumber'
 
@@ -37,7 +37,7 @@ export default function ShopPage() {
   const [vipPendingStatus, setVipPendingStatus] = useState<string>('')
   const vipPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const [tonConnectUI] = useTonConnectUI() // ✅ Usamos TonConnectUI
+  const [tonConnectUI] = useTonConnectUI()
   const t = getTranslations(lang)
 
   useEffect(() => {
@@ -136,7 +136,6 @@ export default function ShopPage() {
       const senderAddr = tonConnectUI.account?.address
       if (!senderAddr) throw new Error('Billetera no conectada')
 
-      // 1. Pedir al backend la transacción manual
       const transferRes = await tgFetch('/api/ton-pay/create-transfer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -151,9 +150,8 @@ export default function ShopPage() {
       const transferData = await transferRes.json()
       if (!transferRes.ok) throw new Error(transferData.error || 'Error backend')
 
-      // 2. Enviar transacción a la billetera (Keeper / Telegram)
       await tonConnectUI.sendTransaction({
-        validUntil: Math.floor(Date.now() / 1000) + 600, // 10 min
+        validUntil: Math.floor(Date.now() / 1000) + 600,
         messages: [
           {
             address: transferData.address, 
@@ -168,7 +166,15 @@ export default function ShopPage() {
     } catch (cryptoErr: any) {
       console.error('[shop] vip crypto error:', cryptoErr)
       const msg = cryptoErr?.message || cryptoErr?.toString() || String(cryptoErr)
-      if (!msg.toLowerCase().includes('user rejected') && !msg.toLowerCase().includes('cancel')) {
+      
+      if (msg.toLowerCase().includes('user rejected') || msg.toLowerCase().includes('cancel')) {
+        // cancelado
+      } else if (msg.toLowerCase().includes('no enough funds') || msg.toLowerCase().includes('funds')) {
+        // ✅ Alerta amigable para falta de TON en Cuenta DeFi
+        alert(lang === 'es' 
+          ? '⚠️ Falta saldo para la comisión de red.\n\nPara pagar con cripto, necesitas tener un poco de TON (GRAM) en tu Cuenta DeFi. Abre tu billetera, mueve al menos 0.1 TON a tu Cuenta DeFi y vuelve a intentarlo.'
+          : '⚠️ Insufficient balance for network fee.\n\nTo pay with crypto, you need some TON (GRAM) in your DeFi Account. Open your wallet, move at least 0.1 TON to your DeFi Account, and try again.')
+      } else {
         alert(`ERROR TON PAY VIP:\n\n${msg}`)
       }
     } finally {
@@ -442,7 +448,6 @@ export default function ShopPage() {
       const senderAddr = tonConnectUI.account?.address
       if (!senderAddr) throw new Error('Billetera no conectada')
 
-      // 1. Pedir al backend la transacción manual
       const transferRes = await tgFetch('/api/ton-pay/create-transfer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -457,7 +462,6 @@ export default function ShopPage() {
       const transferData = await transferRes.json()
       if (!transferRes.ok) throw new Error(transferData.error || 'Error backend')
 
-      // 2. Enviar transacción a la billetera (Keeper / Telegram)
       await tonConnectUI.sendTransaction({
         validUntil: Math.floor(Date.now() / 1000) + 600,
         messages: [
@@ -477,6 +481,11 @@ export default function ShopPage() {
       
       if (msg.toLowerCase().includes('user rejected') || msg.toLowerCase().includes('cancel')) {
         // cancelado
+      } else if (msg.toLowerCase().includes('no enough funds') || msg.toLowerCase().includes('funds')) {
+        // ✅ Alerta amigable para falta de TON en Cuenta DeFi
+        alert(lang === 'es' 
+          ? '⚠️ Falta saldo para la comisión de red.\n\nPara pagar con cripto, necesitas tener un poco de TON (GRAM) en tu Cuenta DeFi. Abre tu billetera, mueve al menos 0.1 TON a tu Cuenta DeFi y vuelve a intentarlo.'
+          : '⚠️ Insufficient balance for network fee.\n\nTo pay with crypto, you need some TON (GRAM) in your DeFi Account. Open your wallet, move at least 0.1 TON to your DeFi Account, and try again.')
       } else {
         alert(`ERROR TON PAY GEMAS:\n\n${msg}`)
       }
