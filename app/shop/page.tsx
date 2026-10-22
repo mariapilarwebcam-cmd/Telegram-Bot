@@ -15,7 +15,7 @@ import { useUser } from '@/lib/UserContext'
 import { useTonPay } from '@ton-pay/ui-react'
 import { createTonPayTransfer, USDT } from '@ton-pay/api'
 import { Analytics } from '@/lib/posthog'
-import { AnimatedNumber } from '@/components/AnimatedNumber' // ✅ IMPORTACIÓN AÑADIDA
+import { AnimatedNumber } from '@/components/AnimatedNumber'
 
 const purchaseCache: Record<string, boolean> = {}
 
@@ -88,7 +88,6 @@ export default function ShopPage() {
 
       WebApp.openInvoice(data.invoice_link, async (status: string) => {
         if (status === 'paid') {
-          // Polling esperando al webhook de Python
           let attempts = 0;
           const checkSub = setInterval(async () => {
              attempts++;
@@ -135,7 +134,7 @@ export default function ShopPage() {
         const result = await pay(async (senderAddr: string) => {
           const transfer = await createTonPayTransfer(
             {
-              amount: payment_data.amountUnits, // ✅ Usar amountUnits
+              amount: payment_data.amountUnits,
               asset: USDT,
               recipientAddr: payment_data.recipientAddr,
               senderAddr,
@@ -154,9 +153,12 @@ export default function ShopPage() {
         console.log('[shop] vip crypto sent:', result)
         startVipPolling(planId, payment_data.reference)
       } catch (cryptoErr: any) {
-        const msg = cryptoErr?.message || String(cryptoErr)
+        console.error('[shop] vip crypto error:', cryptoErr)
+        const msg = cryptoErr?.message || cryptoErr?.toString() || String(cryptoErr)
+        
+        // ✅ FIX: Mostrar el error real para saber qué falla
         if (!msg.toLowerCase().includes('user rejected') && !msg.toLowerCase().includes('cancel')) {
-          alert(lang === 'es' ? 'No se pudo enviar la transacción: ' + msg : 'Could not send: ' + msg)
+          alert(`ERROR TON PAY VIP:\n\n${msg}`)
         }
       } finally {
         setVipPurchasing(null)
@@ -313,15 +315,13 @@ export default function ShopPage() {
           const WebApp = mod.default
           WebApp.openInvoice(data.invoice_link, async (status: string) => {
             if (status === 'paid') {
-              // ✅ POLLING: Esperamos 1.5s para que el bot de Python procese el pago
-              // y consultamos la DB hasta 3 veces.
               let attempts = 0;
               const checkBalance = setInterval(async () => {
                 attempts++;
-                await refresh(); // Actualiza el contexto del usuario
+                await refresh();
                 if (attempts >= 3) {
                   clearInterval(checkBalance);
-                  setPurchasing(null); // Liberamos el botón
+                  setPurchasing(null);
                 }
               }, 1500);
 
@@ -431,7 +431,7 @@ export default function ShopPage() {
       const result = await pay(async (senderAddr: string) => {
         const transfer = await createTonPayTransfer(
           {
-            amount: payment_data.amountUnits, // ✅ Usar amountUnits
+            amount: payment_data.amountUnits,
             asset: USDT,
             recipientAddr: payment_data.recipientAddr,
             senderAddr,
@@ -451,11 +451,13 @@ export default function ShopPage() {
       startPolling(payment_data.reference, idx)
     } catch (e: any) {
       console.error('[shop] crypto error:', e)
-      const msg = e?.message || String(e)
+      const msg = e?.message || e?.toString() || String(e)
+      
+      // ✅ FIX: Mostrar el error real
       if (msg.toLowerCase().includes('user rejected') || msg.toLowerCase().includes('cancel')) {
         // cancelado
       } else {
-        alert(lang === 'es' ? 'No se pudo enviar la transacción: ' + msg : 'Could not send transaction: ' + msg)
+        alert(`ERROR TON PAY GEMAS:\n\n${msg}`)
       }
     } finally {
       setPurchasing(null)
@@ -508,7 +510,6 @@ export default function ShopPage() {
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
             <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" fill="#a78bfa" />
           </svg>
-          {/* ✅ ANIMACIÓN DE GEMAS APLICADA AQUÍ */}
           <span style={{ fontSize: 14, fontWeight: 600 }}>
             <AnimatedNumber value={gems} />
           </span>
