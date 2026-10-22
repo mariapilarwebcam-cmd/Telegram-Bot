@@ -5,7 +5,6 @@ import { createTonPayTransfer, USDT } from '@ton-pay/api'
 
 export async function POST(request: Request) {
   try {
-    // 1. Validar que el usuario esté autenticado (el middleware ya inyecta este header)
     const tid = request.headers.get('x-telegram-id-validated')
     if (!tid) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
@@ -21,27 +20,39 @@ export async function POST(request: Request) {
       )
     }
 
-    // 2. Crear la transferencia en el servidor
+    // ✅ Aseguramos que el monto sea un número
+    const numericAmount = Number(amount)
+    if (isNaN(numericAmount)) {
+      return NextResponse.json({ error: 'El monto debe ser un número válido' }, { status: 400 })
+    }
+
+    // ✅ Intentamos crear la transferencia
     const transfer = await createTonPayTransfer(
       {
-        amount: Number(amount), // Usamos el monto legible (ej. 8.49), no amountUnits
+        amount: numericAmount,
         asset: USDT,
         recipientAddr: recipientAddr,
         senderAddr: senderAddr,
         commentToRecipient: reference,
-        commentToSender: `Taboo Realm — ${amount} USDT`,
+        commentToSender: `Taboo Realm — ${numericAmount} USDT`,
       },
-      { chain: 'mainnet' }
+      { 
+        chain: 'mainnet',
+        // Si tienes una API Key de TON Pay, agrégala aquí. Si no, déjalo así.
+        // apiKey: process.env.TON_PAY_API_KEY, 
+      }
     )
 
-    // 3. Devolver el mensaje construido al frontend
     return NextResponse.json({
       message: transfer.message,
       reference: transfer.reference,
       bodyBase64Hash: transfer.bodyBase64Hash,
     })
   } catch (error: any) {
-    console.error('[ton-pay] create-transfer error:', error)
+    // ✅ Logueamos el error completo para verlo en los logs de Vercel
+    console.error('[ton-pay] create-transfer FATAL:', error)
+    
+    // ✅ Devolvemos el mensaje de error exacto de TON Pay al frontend
     return NextResponse.json(
       { error: error.message || 'Error interno de TON Pay' },
       { status: 500 }
