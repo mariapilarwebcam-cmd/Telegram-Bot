@@ -3,7 +3,6 @@
 import { ReactNode } from 'react'
 import dynamic from 'next/dynamic'
 
-// ✅ Forzamos que se cargue SOLO en el navegador
 const TonConnectUIProvider = dynamic(
   () => import('@tonconnect/ui-react').then((m) => m.TonConnectUIProvider),
   { ssr: false }
