@@ -13,7 +13,6 @@ import {
 import { getTranslations } from '@/lib/i18n'
 import { useUser } from '@/lib/UserContext'
 import { useTonPay } from '@ton-pay/ui-react'
-import { createTonPayTransfer, USDT } from '@ton-pay/api'
 import { Analytics } from '@/lib/posthog'
 import { AnimatedNumber } from '@/components/AnimatedNumber'
 
@@ -132,21 +131,28 @@ export default function ShopPage() {
 
       try {
         const result = await pay(async (senderAddr: string) => {
-          const transfer = await createTonPayTransfer(
-            {
-              amount: payment_data.amount, // ✅ FIX: Usar amount (8.49), no amountUnits (8490000)
-              asset: USDT,
+          // ✅ FIX: Llamamos a nuestra API route en el backend
+          const transferRes = await tgFetch('/api/ton-pay/create-transfer', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              amount: payment_data.amount,
               recipientAddr: payment_data.recipientAddr,
+              reference: payment_data.reference,
               senderAddr,
-              commentToRecipient: payment_data.reference,
-              commentToSender: `Taboo Realm VIP — ${payment_data.amount} USDT`,
-            },
-            { chain: 'mainnet' }
-          )
+            }),
+          })
+
+          const transferData = await transferRes.json()
+
+          if (!transferRes.ok) {
+            throw new Error(transferData.error || 'Error creando transferencia TON Pay')
+          }
+
           return {
-            message: transfer.message,
-            reference: transfer.reference,
-            bodyBase64Hash: transfer.bodyBase64Hash,
+            message: transferData.message,
+            reference: transferData.reference,
+            bodyBase64Hash: transferData.bodyBase64Hash,
           }
         })
 
@@ -428,21 +434,28 @@ export default function ShopPage() {
       const { payment_data } = data
 
       const result = await pay(async (senderAddr: string) => {
-        const transfer = await createTonPayTransfer(
-          {
-            amount: payment_data.amount, // ✅ FIX: Usar amount (8.49), no amountUnits (8490000)
-            asset: USDT,
+        // ✅ FIX: Llamamos a nuestra API route en el backend
+        const transferRes = await tgFetch('/api/ton-pay/create-transfer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            amount: payment_data.amount,
             recipientAddr: payment_data.recipientAddr,
+            reference: payment_data.reference,
             senderAddr,
-            commentToRecipient: payment_data.reference,
-            commentToSender: `Taboo Realm — ${payment_data.amount} USDT`,
-          },
-          { chain: 'mainnet' }
-        )
+          }),
+        })
+
+        const transferData = await transferRes.json()
+
+        if (!transferRes.ok) {
+          throw new Error(transferData.error || 'Error creando transferencia TON Pay')
+        }
+
         return {
-          message: transfer.message,
-          reference: transfer.reference,
-          bodyBase64Hash: transfer.bodyBase64Hash,
+          message: transferData.message,
+          reference: transferData.reference,
+          bodyBase64Hash: transferData.bodyBase64Hash,
         }
       })
 
