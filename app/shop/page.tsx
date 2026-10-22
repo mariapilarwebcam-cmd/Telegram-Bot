@@ -15,6 +15,7 @@ import { useUser } from '@/lib/UserContext'
 import { useTonPay } from '@ton-pay/ui-react'
 import { createTonPayTransfer, USDT } from '@ton-pay/api'
 import { Analytics } from '@/lib/posthog'
+import { AnimatedNumber } from '@/components/AnimatedNumber' // ✅ IMPORTACIÓN AÑADIDA
 
 const purchaseCache: Record<string, boolean> = {}
 
@@ -134,7 +135,7 @@ export default function ShopPage() {
         const result = await pay(async (senderAddr: string) => {
           const transfer = await createTonPayTransfer(
             {
-              amount: payment_data.amountUnits, // ✅ FIX: Usar amountUnits
+              amount: payment_data.amountUnits, // ✅ Usar amountUnits
               asset: USDT,
               recipientAddr: payment_data.recipientAddr,
               senderAddr,
@@ -312,7 +313,18 @@ export default function ShopPage() {
           const WebApp = mod.default
           WebApp.openInvoice(data.invoice_link, async (status: string) => {
             if (status === 'paid') {
-              await refresh()
+              // ✅ POLLING: Esperamos 1.5s para que el bot de Python procese el pago
+              // y consultamos la DB hasta 3 veces.
+              let attempts = 0;
+              const checkBalance = setInterval(async () => {
+                attempts++;
+                await refresh(); // Actualiza el contexto del usuario
+                if (attempts >= 3) {
+                  clearInterval(checkBalance);
+                  setPurchasing(null); // Liberamos el botón
+                }
+              }, 1500);
+
               if (user.telegram_id) purchaseCache[user.telegram_id] = true
               setHasPurchased(true)
 
@@ -325,8 +337,9 @@ export default function ShopPage() {
                   amount: pkg.stars,
                 })
               }
+            } else {
+              setPurchasing(null)
             }
-            setPurchasing(null)
           })
         })
       } else {
@@ -418,7 +431,7 @@ export default function ShopPage() {
       const result = await pay(async (senderAddr: string) => {
         const transfer = await createTonPayTransfer(
           {
-            amount: payment_data.amountUnits, // ✅ FIX: Usar amountUnits
+            amount: payment_data.amountUnits, // ✅ Usar amountUnits
             asset: USDT,
             recipientAddr: payment_data.recipientAddr,
             senderAddr,
@@ -495,7 +508,10 @@ export default function ShopPage() {
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
             <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" fill="#a78bfa" />
           </svg>
-          <span style={{ fontSize: 14, fontWeight: 600 }}>{gems}</span>
+          {/* ✅ ANIMACIÓN DE GEMAS APLICADA AQUÍ */}
+          <span style={{ fontSize: 14, fontWeight: 600 }}>
+            <AnimatedNumber value={gems} />
+          </span>
         </div>
       </header>
 
