@@ -54,8 +54,8 @@ export async function POST(request: Request) {
     return NextResponse.json({
       // La dirección a la que se enviará el mensaje es la Jetton Wallet del usuario
       address: userJettonWalletAddress.toString({ bounceable: true, testOnly: false }),
-      // Gas en TON para cubrir la transacción (0.1 TON es suficiente)
-      amount: toNano('0.1').toString(), 
+      // ✅ FIX: Gas en TON reducido a 0.06 para mayor comodidad del usuario
+      amount: toNano('0.06').toString(), 
       payload: payload.toBoc().toString('base64'),
     })
   } catch (error: any) {
