@@ -1,7 +1,11 @@
 // app/api/ton-pay/create-transfer/route.ts
 
 import { NextResponse } from 'next/server'
-import { createTonPayTransfer, USDT } from '@ton-pay/api'
+import { beginCell, toNano, Address } from '@ton/core'
+import { TonClient, JettonMaster } from '@ton/ton'
+
+const USDT_MASTER_ADDRESS = 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs'
+const client = new TonClient({ endpoint: 'https://toncenter.com/api/v2/jsonRPC' })
 
 export async function POST(request: Request) {
   try {
@@ -20,41 +24,44 @@ export async function POST(request: Request) {
       )
     }
 
-    // ✅ Aseguramos que el monto sea un número
     const numericAmount = Number(amount)
     if (isNaN(numericAmount)) {
       return NextResponse.json({ error: 'El monto debe ser un número válido' }, { status: 400 })
     }
 
-    // ✅ Intentamos crear la transferencia
-    const transfer = await createTonPayTransfer(
-      {
-        amount: numericAmount,
-        asset: USDT,
-        recipientAddr: recipientAddr,
-        senderAddr: senderAddr,
-        commentToRecipient: reference,
-        commentToSender: `Taboo Realm — ${numericAmount} USDT`,
-      },
-      { 
-        chain: 'mainnet',
-        // Si tienes una API Key de TON Pay, agrégala aquí. Si no, déjalo así.
-        // apiKey: process.env.TON_PAY_API_KEY, 
-      }
-    )
+    // 1. Obtener la dirección de la billetera de USDT (Jetton Wallet) del usuario
+    const jettonMaster = client.open(JettonMaster.create(Address.parse(USDT_MASTER_ADDRESS)))
+    const userJettonWalletAddress = await jettonMaster.getWalletAddress(Address.parse(senderAddr))
+
+    // 2. Construir el cuerpo del mensaje (Payload de transferencia USDT)
+    const forwardPayload = beginCell()
+      .storeUint(0, 32) // 0 indica que es un comentario de texto
+      .storeStringTail(reference) // El reference para identificar el pago
+      .endCell()
+
+    const payload = beginCell()
+      .storeUint(0xf8a7ea5, 32) // Opcode para transferencia de Jetton
+      .storeUint(0, 64) // query_id
+      .storeCoins(toNano(numericAmount.toString())) // Cantidad en unidades mínimas (6 decimales)
+      .storeAddress(Address.parse(recipientAddr)) // Destinatario
+      .storeAddress(Address.parse(senderAddr)) // Dirección de respuesta (quien envía)
+      .storeBit(0) // custom_payload (null)
+      .storeCoins(toNano('0.05')) // forward_ton_amount (gas para el forward)
+      .storeBit(1) // forward_payload (inline)
+      .storeRef(forwardPayload) // El comentario
+      .endCell()
 
     return NextResponse.json({
-      message: transfer.message,
-      reference: transfer.reference,
-      bodyBase64Hash: transfer.bodyBase64Hash,
+      // La dirección a la que se enviará el mensaje es la Jetton Wallet del usuario
+      address: userJettonWalletAddress.toString({ bounceable: true, testOnly: false }),
+      // Gas en TON para cubrir la transacción (0.1 TON es suficiente)
+      amount: toNano('0.1').toString(), 
+      payload: payload.toBoc().toString('base64'),
     })
   } catch (error: any) {
-    // ✅ Logueamos el error completo para verlo en los logs de Vercel
     console.error('[ton-pay] create-transfer FATAL:', error)
-    
-    // ✅ Devolvemos el mensaje de error exacto de TON Pay al frontend
     return NextResponse.json(
-      { error: error.message || 'Error interno de TON Pay' },
+      { error: error.message || 'Error construyendo transferencia USDT' },
       { status: 500 }
     )
   }
