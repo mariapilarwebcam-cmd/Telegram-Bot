@@ -14,6 +14,7 @@ import { getLevelFromMessages, getImageCost, getAudioCost } from '@/lib/levels'
 import { getTranslations } from '@/lib/i18n'
 import { useUser } from '@/lib/UserContext'
 import { Analytics } from '@/lib/posthog'
+import { AnimatedNumber } from '@/components/AnimatedNumber' // ✅ IMPORTACIÓN AÑADIDA
 
 interface Message {
   id?: number
@@ -445,7 +446,6 @@ export default function ChatPage() {
 
     const currentAudioCost = getAudioCost(currentLevel.level)
 
-    // ✅ FIX: Revisar purchased_gems (gemas compradas), no el total
     const purchasedGems = user.purchased_gems || 0
     if (!isVip && purchasedGems < currentAudioCost) {
       return alert(
@@ -481,7 +481,6 @@ export default function ChatPage() {
       const data = await res.json()
       if (res.ok) {
         setGems(data.remaining_gems)
-        // Actualizamos localmente las gemas compradas (decrementamos)
         if (data.remaining_purchased_gems !== undefined) {
            user.purchased_gems = data.remaining_purchased_gems
         }
@@ -517,7 +516,6 @@ export default function ChatPage() {
       return
     }
 
-    // ✅ FIX: Revisar purchased_gems para imágenes
     const purchasedGems = user.purchased_gems || 0
     if (!isFirstImage && purchasedGems < currentImageCost) {
       return alert(`Necesitas ${currentImageCost} gemas compradas`)
@@ -766,7 +764,6 @@ export default function ChatPage() {
   const characterDescription = getCharacterDescription(character.archetype, character.gender, lang)
 
   const isFirstImage = seenImageCount === 0
-  // ✅ FIX: canAfford ahora usa purchasedGems
   const canAfford = purchasedGems >= currentImageCost || isFirstImage
   const missingGems = isFirstImage ? 0 : Math.max(0, currentImageCost - purchasedGems)
 
@@ -980,7 +977,10 @@ export default function ChatPage() {
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
             <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" fill="#a78bfa" />
           </svg>
-          <span style={{ fontSize: 12, fontWeight: 600 }}>{gems}</span>
+          {/* ✅ ANIMACIÓN DE GEMAS APLICADA AQUÍ */}
+          <span style={{ fontSize: 12, fontWeight: 600 }}>
+            <AnimatedNumber value={gems} />
+          </span>
         </div>
       </header>
 
