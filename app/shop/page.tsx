@@ -40,6 +40,33 @@ export default function ShopPage() {
   const [tonConnectUI] = useTonConnectUI()
   const t = getTranslations(lang)
 
+  // ✅ FUNCIÓN MAESTRA PARA MANEJAR ERRORES DE CRIPTO
+  const handleCryptoError = (error: any) => {
+    const msg = error?.message || error?.toString() || String(error)
+    const lowerMsg = msg.toLowerCase()
+
+    // 1. Usuario canceló la transacción
+    if (lowerMsg.includes('reject') || lowerMsg.includes('decline') || lowerMsg.includes('cancel')) {
+      alert(lang === 'es'
+        ? '❌ Has cancelado la transacción en tu billetera.\n\nSi no fue intencional, puedes intentarlo de nuevo.'
+        : '❌ You cancelled the transaction in your wallet.\n\nIf this wasn\'t intentional, you can try again.')
+      return
+    }
+
+    // 2. Fondos insuficientes (Falta TON para el gas o USDT)
+    if (lowerMsg.includes('no enough funds') || lowerMsg.includes('insufficient') || lowerMsg.includes('funds')) {
+      alert(lang === 'es'
+        ? '⚠️ Fondos insuficientes.\n\nPara pagar con cripto, asegúrate de tener USDT y al menos 0.1 TON (GRAM) en tu Cuenta DeFi para cubrir la comisión de red (gas).'
+        : '⚠️ Insufficient funds.\n\nTo pay with crypto, make sure you have USDT and at least 0.1 TON (GRAM) in your DeFi Account to cover the network fee (gas).')
+      return
+    }
+
+    // 3. Error genérico de red o de billetera
+    alert(lang === 'es'
+      ? `❌ Error de billetera:\n\nHubo un problema al procesar el pago. Por favor, intenta de nuevo o contacta a soporte.`
+      : `❌ Wallet error:\n\nThere was a problem processing the payment. Please try again or contact support.`)
+  }
+
   useEffect(() => {
     if (!user?.telegram_id) {
       if (!userLoading) setVipLoading(false)
@@ -164,19 +191,7 @@ export default function ShopPage() {
       console.log('[shop] vip crypto sent')
       startVipPolling(planId, payment_data.reference)
     } catch (cryptoErr: any) {
-      console.error('[shop] vip crypto error:', cryptoErr)
-      const msg = cryptoErr?.message || cryptoErr?.toString() || String(cryptoErr)
-      
-      if (msg.toLowerCase().includes('user rejected') || msg.toLowerCase().includes('cancel')) {
-        // cancelado
-      } else if (msg.toLowerCase().includes('no enough funds') || msg.toLowerCase().includes('funds')) {
-        // ✅ Alerta amigable para falta de TON en Cuenta DeFi
-        alert(lang === 'es' 
-          ? '⚠️ Falta saldo para la comisión de red.\n\nPara pagar con cripto, necesitas tener un poco de TON (GRAM) en tu Cuenta DeFi. Abre tu billetera, mueve al menos 0.1 TON a tu Cuenta DeFi y vuelve a intentarlo.'
-          : '⚠️ Insufficient balance for network fee.\n\nTo pay with crypto, you need some TON (GRAM) in your DeFi Account. Open your wallet, move at least 0.1 TON to your DeFi Account, and try again.')
-      } else {
-        alert(`ERROR TON PAY VIP:\n\n${msg}`)
-      }
+      handleCryptoError(cryptoErr) // ✅ Usamos el manejador
     } finally {
       setVipPurchasing(null)
     }
@@ -476,19 +491,7 @@ export default function ShopPage() {
       console.log('[shop] crypto payment sent')
       startPolling(payment_data.reference, idx)
     } catch (e: any) {
-      console.error('[shop] crypto error:', e)
-      const msg = e?.message || e?.toString() || String(e)
-      
-      if (msg.toLowerCase().includes('user rejected') || msg.toLowerCase().includes('cancel')) {
-        // cancelado
-      } else if (msg.toLowerCase().includes('no enough funds') || msg.toLowerCase().includes('funds')) {
-        // ✅ Alerta amigable para falta de TON en Cuenta DeFi
-        alert(lang === 'es' 
-          ? '⚠️ Falta saldo para la comisión de red.\n\nPara pagar con cripto, necesitas tener un poco de TON (GRAM) en tu Cuenta DeFi. Abre tu billetera, mueve al menos 0.1 TON a tu Cuenta DeFi y vuelve a intentarlo.'
-          : '⚠️ Insufficient balance for network fee.\n\nTo pay with crypto, you need some TON (GRAM) in your DeFi Account. Open your wallet, move at least 0.1 TON to your DeFi Account, and try again.')
-      } else {
-        alert(`ERROR TON PAY GEMAS:\n\n${msg}`)
-      }
+      handleCryptoError(e) // ✅ Usamos el manejador
     } finally {
       setPurchasing(null)
     }
