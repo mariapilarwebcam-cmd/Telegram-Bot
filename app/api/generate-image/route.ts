@@ -28,7 +28,7 @@ import {
   VIP_LIMITS,
   MAX_GENERATIONS_PER_CONTEXT_PER_USER,
 } from '@/lib/constants'
-import { generateImage } from '@/lib/ai'
+import { generateRunwareImage } from '@/lib/runware' // ✅ IMPORTAMOS RUNWARE
 import {
   getLevelFromMessages,
   getImageCost,
@@ -84,7 +84,7 @@ const CHARACTER_DNA: Record<string, string> = {
   female_best_friends_gf: "young woman, long wavy brunette hair, brown eyes, tight summer dress",
   female_best_friends_sister: "adult young woman, long straight black hair, expressive brown eyes, fitted sweater",
   female_foot_fetish_girl: "beautiful woman, long elegant hair, stunning bare feet, red toenails, elegant legs",
-  female_psycho: "unsettling beautiful woman, long straight black hair, wide empty dead eyes, innocent creepy smile, elegant white dress", // ✅ NUEVO
+  female_psycho: "unsettling beautiful woman, long straight black hair, wide empty dead eyes, innocent creepy smile, elegant white dress",
 
   male_stepdad: "mature man, salt and pepper hair, broad shoulders, dress shirt",
   male_ceo: "man, sharp haircut, steel-blue eyes, tailored suit, expensive watch",
@@ -120,7 +120,7 @@ const CHARACTER_DNA: Record<string, string> = {
   male_angel_m: "celestial angel, long golden-blonde hair, pale blue eyes, white feathered wings",
   male_best_friends_bf: "athletic man, short dark hair, blue eyes, confident smirk",
   male_best_friends_brother: "tall muscular man, messy hair, dark eyes, protective",
-  male_psycho: "dangerously handsome man, elegant dark suit, cold piercing dark eyes, terrifying smirk, black leather gloves", // ✅ NUEVO
+  male_psycho: "dangerously handsome man, elegant dark suit, cold piercing dark eyes, terrifying smirk, black leather gloves",
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -162,7 +162,7 @@ const ARCHETYPE_IMAGE_HINTS: Record<string, string> = {
   female_best_friends_gf: 'guilty pleasure, forbidden tension, looking over shoulder, intimate home setting',
   female_best_friends_sister: 'confident and slightly playful smile, adult elegant look, sitting gracefully on a couch',
   female_foot_fetish_girl: 'focus on foreground bare feet, perfect foot anatomy, five distinct toes, clean smooth soles, high arches, perfectly placed painted toenails on toes, delicate gold anklets, dangling heels, elegant legs crossed, foot fetish aesthetic',
-  female_psycho: 'obsessive empty stare, innocent creepy smile, holding a smartphone, dimly lit bedroom, eerie tension, dark psychological atmosphere', // ✅ NUEVO
+  female_psycho: 'obsessive empty stare, innocent creepy smile, holding a smartphone, dimly lit bedroom, eerie tension, dark psychological atmosphere',
 
   male_stepdad: 'mature authority, whiskey glass, dark study, dominant presence',
   male_stepbrother: 'athletic casual, home setting, playful dominance',
@@ -198,8 +198,7 @@ const ARCHETYPE_IMAGE_HINTS: Record<string, string> = {
   male_angel_m: 'celestial clouds, divine golden light, sacred intimacy',
   male_best_friends_bf: 'arrogant smirk, leaning against a wall, dominant energy, expensive clothes',
   male_best_friends_brother: 'protective older brother vibe, intense stare, muscular arms crossed',
-  // ✅ FIX: Ajuste dominante sin tocar la cámara para no romper la anatomía
-  male_psycho: 'dominant vibe, slowly loosening his tie or adjusting his black leather gloves, looking down at the viewer with a terrifying calmness, dark luxury penthouse, shadowy lighting, possessive controlling aura', 
+  male_psycho: 'dominant vibe, slowly loosening his tie or adjusting his black leather gloves, looking down at the viewer with a terrifying calmness, dark luxury penthouse, shadowy lighting, possessive controlling aura',
 }
 
 const FACE_HIDDEN_FRAGMENT =
@@ -548,7 +547,7 @@ export async function POST(request: Request) {
 
       if (!poolHit) {
         // ═══════════════════════════════════════════════════════
-        // GENERATE WITH IA
+        // GENERATE WITH IA (RUNWARE)
         // ═══════════════════════════════════════════════════════
         source = 'generated'
 
@@ -611,7 +610,6 @@ export async function POST(request: Request) {
           'tasteful artistic composition, no explicit genitalia, no nudity visible below waist, strategic coverage, high-end boudoir photography aesthetic, safe for platform'
 
         let imagePrompt: string
-        let referenceUrl: string | undefined
 
         // ✅ NUEVO: Filtro Global Anti-Errores (Anatomía, Clones y Manos Gigantes)
         const genderTag = character.gender === 'male' ? '1boy, male' : '1girl, female'
@@ -637,7 +635,6 @@ export async function POST(request: Request) {
             'muted color palette, elegant composition, best quality, masterpiece',
             'safe for work, no nudity, no explicit content',
           ].filter((s) => s && s.length > 0).join(', ')
-          referenceUrl = undefined
         } else {
           const facePrompt = getCharacterFace(character.archetype, character.gender)
           const clothing = getClothingLevel(level.level)
@@ -658,14 +655,17 @@ export async function POST(request: Request) {
             NO_GENITALIA,
             'beautiful cinematic lighting, 2D illustration, best quality',
           ].filter((s) => s && s.length > 0).join(', ')
-          referenceUrl = getCharacterImageUrl(character.archetype, character.gender)
         }
 
         promptUsed = imagePrompt
 
+        // ✅ OBTENEMOS LA IMAGEN SEMILLA (LA PORTADA DEL PERSONAJE)
+        const seedUrl = getCharacterImageUrl(character.archetype, character.gender)
+
         let rawUrl: string
         try {
-          rawUrl = await generateImage(imagePrompt, referenceUrl, level.level)
+          // ✅ LLAMAMOS A RUNWARE (con el prompt, la imagen semilla y el nivel)
+          rawUrl = await generateRunwareImage(imagePrompt, seedUrl, level.level)
         } catch (imgError) {
           console.error('Image generation error:', imgError)
           return NextResponse.json(
@@ -674,7 +674,8 @@ export async function POST(request: Request) {
           )
         }
 
-        modelUsed = level.level <= 3 ? 'deepinfra' : 'wiro-v4-5'
+        // ✅ ACTUALIZAMOS EL MODELO USADO
+        modelUsed = 'runware-z-image-turbo'
         imageUrl = rawUrl
 
         // ─── D. Log generation ───
@@ -682,7 +683,7 @@ export async function POST(request: Request) {
           telegram_id: tid,
           character_id,
           tag_key: normalizedTagKey,
-          model: willUseWiro ? 'wiro' : 'deepinfra',
+          model: willUseWiro ? 'wiro' : 'deepinfra', // Mantenemos la métrica antigua para no romper la DB, pero el modelo real es Runware
           level: level.level,
         })
 
