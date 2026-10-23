@@ -714,9 +714,28 @@ export default function ChatPage() {
           .replace(/</g, '&lt;')
           .replace(/>/g, '&gt;')
         
-        // ✅ PROTECCIÓN: draggable false, user-select none y oncontextmenu bloqueado
+        // ✅ FIX: Usamos un <div> con background-image en lugar de <img>
+        // Esto evita que el navegador muestre el menú de descarga al mantener presionado
         images.push(
-          `<img src="${url}" alt="${safeAlt}" draggable="false" oncontextmenu="return false;" style="border-radius:16px;max-width:100%;margin-top:8px;box-shadow:0 8px 24px rgba(168,85,247,0.3); -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;" />`
+          `<div 
+            data-image-url="${url}"
+            role="img" 
+            aria-label="${safeAlt}" 
+            style="
+              width: 100%; 
+              aspect-ratio: 832 / 1216; 
+              background-image: url('${url}'); 
+              background-size: cover; 
+              background-position: center; 
+              border-radius: 16px; 
+              margin-top: 8px; 
+              box-shadow: 0 8px 24px rgba(168,85,247,0.3);
+              -webkit-touch-callout: none;
+              -webkit-user-select: none;
+              user-select: none;
+              cursor: pointer;
+            "
+          ></div>`
         )
         return `@@IMG${idx}@@`
       }
@@ -987,12 +1006,13 @@ export default function ChatPage() {
         </div>
       </header>
 
+      {/* ✅ FIX: Buscamos el div con data-image-url en lugar de una etiqueta img */}
       <div 
         className="chat-messages"
         onClick={(e) => {
-          const target = e.target as HTMLElement
-          if (target.tagName === 'IMG') {
-            setSelectedImage(target.getAttribute('src'))
+          const target = (e.target as HTMLElement).closest('[data-image-url]')
+          if (target) {
+            setSelectedImage(target.getAttribute('data-image-url'))
           }
         }}
       >
@@ -1453,7 +1473,7 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* ✅ LIGHTBOX PROTEGIDO */}
+      {/* ✅ LIGHTBOX CON MARCA DE AGUA VISUAL */}
       {selectedImage && (
         <div 
           className="modal-backdrop" 
@@ -1469,22 +1489,36 @@ export default function ChatPage() {
           onClick={() => setSelectedImage(null)}
           onContextMenu={(e) => e.preventDefault()}
         >
-          <img 
-            src={selectedImage} 
-            alt="Preview" 
-            draggable={false}
-            onContextMenu={(e) => e.preventDefault()}
-            style={{ 
-              maxWidth: '100%', 
-              maxHeight: '100%', 
-              objectFit: 'contain',
-              animation: 'fadeIn 0.2s ease-out',
-              WebkitTouchCallout: 'none',
-              WebkitUserSelect: 'none',
-              userSelect: 'none',
-              pointerEvents: 'none'
-            }} 
-          />
+          <div style={{
+            width: '100%',
+            height: '100%',
+            backgroundImage: `url('${selectedImage}')`,
+            backgroundSize: 'contain',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat',
+            position: 'relative',
+            pointerEvents: 'none', // Permite que el clic cierre el modal
+            WebkitTouchCallout: 'none',
+            WebkitUserSelect: 'none',
+            userSelect: 'none',
+          }}>
+            {/* Marca de Agua */}
+            <div style={{
+              position: 'absolute',
+              bottom: '10%',
+              left: 0,
+              right: 0,
+              textAlign: 'center',
+              color: 'rgba(255, 255, 255, 0.3)', // Sutil pero visible
+              fontSize: 24,
+              fontWeight: 900,
+              letterSpacing: '0.2em',
+              textShadow: '0 2px 6px rgba(0,0,0,0.9)',
+              pointerEvents: 'none',
+            }}>
+              TABOO REALM
+            </div>
+          </div>
         </div>
       )}
     </div>
