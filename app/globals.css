@@ -1127,3 +1127,20 @@ body:has(.chat-page) {
   background: linear-gradient(180deg, #a855f7 0%, #ec4899 100%);
   border-radius: 3px;
 }
+/* =========================================
+   ✅ PROTECCIÓN DE IMÁGENES
+   ========================================= */
+img {
+  -webkit-touch-callout: none !important; /* Desactiva el menú en iOS */
+  -webkit-user-select: none !important;   /* Desactiva la selección de texto */
+  -khtml-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+  user-select: none !important;
+  pointer-events: auto; /* Mantiene los clics funcionales */
+}
+
+/* Para el contenedor de mensajes del chat */
+.chat-messages {
+  -webkit-touch-callout: none !important;
+}
