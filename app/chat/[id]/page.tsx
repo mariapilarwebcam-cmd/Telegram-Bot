@@ -714,8 +714,6 @@ export default function ChatPage() {
           .replace(/</g, '&lt;')
           .replace(/>/g, '&gt;')
         
-        // ✅ FIX: Usamos un <div> con background-image en lugar de <img>
-        // Esto evita que el navegador muestre el menú de descarga al mantener presionado
         images.push(
           `<div 
             data-image-url="${url}"
@@ -1006,7 +1004,6 @@ export default function ChatPage() {
         </div>
       </header>
 
-      {/* ✅ FIX: Buscamos el div con data-image-url en lugar de una etiqueta img */}
       <div 
         className="chat-messages"
         onClick={(e) => {
@@ -1473,7 +1470,7 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* ✅ LIGHTBOX CON MARCA DE AGUA VISUAL */}
+      {/* ✅ LIGHTBOX CON PATRÓN ANTI-RECORTE */}
       {selectedImage && (
         <div 
           className="modal-backdrop" 
@@ -1497,27 +1494,20 @@ export default function ChatPage() {
             backgroundPosition: 'center',
             backgroundRepeat: 'no-repeat',
             position: 'relative',
-            pointerEvents: 'none', // Permite que el clic cierre el modal
+            pointerEvents: 'none',
             WebkitTouchCallout: 'none',
             WebkitUserSelect: 'none',
             userSelect: 'none',
           }}>
-            {/* Marca de Agua */}
+            {/* Patrón de marca de agua repetido usando SVG */}
             <div style={{
               position: 'absolute',
-              bottom: '10%',
-              left: 0,
-              right: 0,
-              textAlign: 'center',
-              color: 'rgba(255, 255, 255, 0.3)', // Sutil pero visible
-              fontSize: 24,
-              fontWeight: 900,
-              letterSpacing: '0.2em',
-              textShadow: '0 2px 6px rgba(0,0,0,0.9)',
+              inset: 0,
               pointerEvents: 'none',
-            }}>
-              TABOO REALM
-            </div>
+              opacity: 0.12, // Muy sutil, no tapa la imagen
+              backgroundImage: `url("data:image/svg+xml,%3Csvg width='250' height='250' xmlns='http://www.w3.org/2000/svg'%3E%3Ctext x='50%25' y='50%25' font-size='24' font-family='sans-serif' font-weight='900' fill='%23ffffff' text-anchor='middle' dominant-baseline='middle' transform='rotate(-45 125 125)'%3ETABOO REALM%3C/text%3E%3C/svg%3E")`,
+              backgroundRepeat: 'repeat',
+            }} />
           </div>
         </div>
       )}
