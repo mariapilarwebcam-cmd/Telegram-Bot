@@ -22,8 +22,9 @@ export async function generateRunwareImage(
     model: "z-image-turbo",
     positivePrompt: prompt,
     negativePrompt: "ugly, deformed, bad anatomy, bad hands, missing fingers, extra digits, text, watermark, low quality, multiple people, worst quality, jpeg artifacts",
-    width: 1024,
-    height: 1024,
+    // ✅ CAMBIO CLAVE: Formato vertical (Retrato) 832x1216
+    width: 832,
+    height: 1216,
     lora: [
       {
         model: "taboorealm:elusarca@1", // ✅ Tu LoRA blindado
