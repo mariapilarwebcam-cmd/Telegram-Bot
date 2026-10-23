@@ -1499,13 +1499,13 @@ export default function ChatPage() {
             WebkitUserSelect: 'none',
             userSelect: 'none',
           }}>
-            {/* Patrón de marca de agua repetido usando SVG — versión más discreta */}
+                      {/* Patrón de marca de agua repetido usando SVG — punto medio */}
             <div style={{
               position: 'absolute',
               inset: 0,
               pointerEvents: 'none',
-              opacity: 0.07, // Más sutil, apenas perceptible pero sigue protegiendo
-              backgroundImage: `url("data:image/svg+xml,%3Csvg width='320' height='320' xmlns='http://www.w3.org/2000/svg'%3E%3Ctext x='50%25' y='50%25' font-size='20' font-family='sans-serif' font-weight='600' fill='%23ffffff' text-anchor='middle' dominant-baseline='middle' transform='rotate(-45 160 160)'%3ETABOO REALM%3C/text%3E%3C/svg%3E")`,
+              opacity: 0.09, // Punto medio: visible pero discreto
+              backgroundImage: `url("data:image/svg+xml,%3Csvg width='280' height='280' xmlns='http://www.w3.org/2000/svg'%3E%3Ctext x='50%25' y='50%25' font-size='22' font-family='sans-serif' font-weight='700' fill='%23ffffff' text-anchor='middle' dominant-baseline='middle' transform='rotate(-45 140 140)'%3ETABOO REALM%3C/text%3E%3C/svg%3E")`,
               backgroundRepeat: 'repeat',
             }} />
           </div>
