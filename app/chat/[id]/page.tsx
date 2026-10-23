@@ -154,7 +154,6 @@ export default function ChatPage() {
   const [historyLoaded, setHistoryLoaded] = useState(false)
   const [autoStartAttempted, setAutoStartAttempted] = useState(false)
 
-  // ✅ NUEVO: Estado para la imagen ampliada (Lightbox)
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
 
   const endRef = useRef<HTMLDivElement>(null)
@@ -714,8 +713,10 @@ export default function ChatPage() {
           .replace(/"/g, '&quot;')
           .replace(/</g, '&lt;')
           .replace(/>/g, '&gt;')
+        
+        // ✅ PROTECCIÓN: draggable false, user-select none y oncontextmenu bloqueado
         images.push(
-          `<img src="${url}" alt="${safeAlt}" style="border-radius:16px;max-width:100%;margin-top:8px;box-shadow:0 8px 24px rgba(168,85,247,0.3);" />`
+          `<img src="${url}" alt="${safeAlt}" draggable="false" oncontextmenu="return false;" style="border-radius:16px;max-width:100%;margin-top:8px;box-shadow:0 8px 24px rgba(168,85,247,0.3); -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;" />`
         )
         return `@@IMG${idx}@@`
       }
@@ -986,7 +987,6 @@ export default function ChatPage() {
         </div>
       </header>
 
-      {/* ✅ MODIFICADO: onClick añadido al contenedor de mensajes */}
       <div 
         className="chat-messages"
         onClick={(e) => {
@@ -1453,7 +1453,7 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* ✅ NUEVO: LIGHTBOX PARA AMPLIAR IMÁGENES */}
+      {/* ✅ LIGHTBOX PROTEGIDO */}
       {selectedImage && (
         <div 
           className="modal-backdrop" 
@@ -1467,15 +1467,22 @@ export default function ChatPage() {
             cursor: 'zoom-out'
           }}
           onClick={() => setSelectedImage(null)}
+          onContextMenu={(e) => e.preventDefault()}
         >
           <img 
             src={selectedImage} 
             alt="Preview" 
+            draggable={false}
+            onContextMenu={(e) => e.preventDefault()}
             style={{ 
               maxWidth: '100%', 
               maxHeight: '100%', 
               objectFit: 'contain',
-              animation: 'fadeIn 0.2s ease-out'
+              animation: 'fadeIn 0.2s ease-out',
+              WebkitTouchCallout: 'none',
+              WebkitUserSelect: 'none',
+              userSelect: 'none',
+              pointerEvents: 'none'
             }} 
           />
         </div>
