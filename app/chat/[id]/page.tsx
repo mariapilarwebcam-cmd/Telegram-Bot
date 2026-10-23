@@ -14,7 +14,7 @@ import { getLevelFromMessages, getImageCost, getAudioCost } from '@/lib/levels'
 import { getTranslations } from '@/lib/i18n'
 import { useUser } from '@/lib/UserContext'
 import { Analytics } from '@/lib/posthog'
-import { AnimatedNumber } from '@/components/AnimatedNumber' // ✅ IMPORTACIÓN AÑADIDA
+import { AnimatedNumber } from '@/components/AnimatedNumber'
 
 interface Message {
   id?: number
@@ -153,6 +153,9 @@ export default function ChatPage() {
   const [characterLoading, setCharacterLoading] = useState(true)
   const [historyLoaded, setHistoryLoaded] = useState(false)
   const [autoStartAttempted, setAutoStartAttempted] = useState(false)
+
+  // ✅ NUEVO: Estado para la imagen ampliada (Lightbox)
+  const [selectedImage, setSelectedImage] = useState<string | null>(null)
 
   const endRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -977,14 +980,22 @@ export default function ChatPage() {
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
             <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" fill="#a78bfa" />
           </svg>
-          {/* ✅ ANIMACIÓN DE GEMAS APLICADA AQUÍ */}
           <span style={{ fontSize: 12, fontWeight: 600 }}>
             <AnimatedNumber value={gems} />
           </span>
         </div>
       </header>
 
-      <div className="chat-messages">
+      {/* ✅ MODIFICADO: onClick añadido al contenedor de mensajes */}
+      <div 
+        className="chat-messages"
+        onClick={(e) => {
+          const target = e.target as HTMLElement
+          if (target.tagName === 'IMG') {
+            setSelectedImage(target.getAttribute('src'))
+          }
+        }}
+      >
         {characterDescription && (
           <div className="character-intro">
             <div className="character-intro-header">
@@ -1439,6 +1450,34 @@ export default function ChatPage() {
             <button onClick={() => router.push('/')} className="modal-btn secondary" style={{ width: '100%', background: 'rgba(255,255,255,0.05)', color: '#fff', marginBottom: 8 }}>{t.inviteFriend}</button>
             <button onClick={() => setBlocked(false)} style={{ width: '100%', background: 'transparent', border: 'none', color: '#8b8b9e', padding: 8, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>{t.close}</button>
           </div>
+        </div>
+      )}
+
+      {/* ✅ NUEVO: LIGHTBOX PARA AMPLIAR IMÁGENES */}
+      {selectedImage && (
+        <div 
+          className="modal-backdrop" 
+          style={{ 
+            zIndex: 9999, 
+            padding: 0, 
+            background: 'rgba(0, 0, 0, 0.95)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'zoom-out'
+          }}
+          onClick={() => setSelectedImage(null)}
+        >
+          <img 
+            src={selectedImage} 
+            alt="Preview" 
+            style={{ 
+              maxWidth: '100%', 
+              maxHeight: '100%', 
+              objectFit: 'contain',
+              animation: 'fadeIn 0.2s ease-out'
+            }} 
+          />
         </div>
       )}
     </div>
