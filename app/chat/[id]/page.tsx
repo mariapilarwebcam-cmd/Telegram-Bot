@@ -1470,7 +1470,7 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* ✅ LIGHTBOX CON PATRÓN ANTI-RECORTE */}
+      {/* ✅ LIGHTBOX CON PATRÓN ANTI-RECORTE (versión sutil) */}
       {selectedImage && (
         <div 
           className="modal-backdrop" 
@@ -1499,13 +1499,13 @@ export default function ChatPage() {
             WebkitUserSelect: 'none',
             userSelect: 'none',
           }}>
-            {/* Patrón de marca de agua repetido usando SVG */}
+            {/* Patrón de marca de agua repetido usando SVG — versión más discreta */}
             <div style={{
               position: 'absolute',
               inset: 0,
               pointerEvents: 'none',
-              opacity: 0.12, // Muy sutil, no tapa la imagen
-              backgroundImage: `url("data:image/svg+xml,%3Csvg width='250' height='250' xmlns='http://www.w3.org/2000/svg'%3E%3Ctext x='50%25' y='50%25' font-size='24' font-family='sans-serif' font-weight='900' fill='%23ffffff' text-anchor='middle' dominant-baseline='middle' transform='rotate(-45 125 125)'%3ETABOO REALM%3C/text%3E%3C/svg%3E")`,
+              opacity: 0.07, // Más sutil, apenas perceptible pero sigue protegiendo
+              backgroundImage: `url("data:image/svg+xml,%3Csvg width='320' height='320' xmlns='http://www.w3.org/2000/svg'%3E%3Ctext x='50%25' y='50%25' font-size='20' font-family='sans-serif' font-weight='600' fill='%23ffffff' text-anchor='middle' dominant-baseline='middle' transform='rotate(-45 160 160)'%3ETABOO REALM%3C/text%3E%3C/svg%3E")`,
               backgroundRepeat: 'repeat',
             }} />
           </div>
