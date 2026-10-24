@@ -5,10 +5,10 @@ import {
   ensureUser,
   getCharacter,
   hasAnyMessage,
-  incrementGems,
   insertMessage,
   insertGemTransaction,
 } from '@/lib/db-queries'
+import { queryOne } from '@/lib/turso' // ✅ Importamos queryOne para el UPDATE atómico
 import { OPENING_LINES, GEM_COSTS } from '@/lib/constants'
 
 export async function POST(request: Request) {
@@ -23,38 +23,43 @@ export async function POST(request: Request) {
 
     const user = await ensureUser(tid)
     if (!user) {
-      return NextResponse.json(
-        { error: 'Error cargando tu cuenta' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: 'Error cargando tu cuenta' }, { status: 500 })
     }
 
     const character = await getCharacter(character_id, tid)
     if (!character) {
-      return NextResponse.json(
-        { error: 'Personaje no encontrado' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: 'Personaje no encontrado' }, { status: 404 })
     }
 
-    // ¿Ya existe historial? => no cobrar de nuevo
-    const alreadyStarted = await hasAnyMessage(tid, character_id)
-    if (alreadyStarted) {
-      return NextResponse.json({ already_started: true })
-    }
+    // 🛡️ FIX CRÍTICO: COBRO ATÓMICO Y VERIFICACIÓN EN UN SOLO PASO
+    // Solo resta 1 gema SI el usuario tiene saldo Y NO tiene historial previo.
+    const charged = await queryOne<{ gems: number }>(
+      `UPDATE users
+       SET gems = gems - ?
+       WHERE telegram_id = ?
+         AND gems >= ?
+         AND NOT EXISTS (
+           SELECT 1 FROM conversation_history WHERE telegram_id = ? AND character_id = ?
+         )
+       RETURNING gems`,
+      [GEM_COSTS.message, tid, GEM_COSTS.message, tid, character_id]
+    )
 
-    const gems = user.gems || 0
-    if (gems < GEM_COSTS.message) {
+    if (!charged) {
+      // Si falló el UPDATE, verificamos por qué para dar el mensaje correcto
+      const alreadyStarted = await hasAnyMessage(tid, character_id)
+      if (alreadyStarted) {
+        return NextResponse.json({ already_started: true })
+      }
+      // Si no ha empezado, es porque no tiene gemas
       return NextResponse.json({
         blocked: true,
         response: '',
-        remaining_gems: gems,
+        remaining_gems: user.gems || 0,
       })
     }
 
-    // RPC atómica: descuenta 1 gema
-    const newGems = await incrementGems(tid, -GEM_COSTS.message)
-
+    // El usuario ya fue cobrado exitosamente de forma segura
     await insertGemTransaction({
       telegram_id: tid,
       amount: -GEM_COSTS.message,
@@ -80,8 +85,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       response: openingMessage,
-      remaining_gems:
-        typeof newGems === 'number' ? newGems : gems - GEM_COSTS.message,
+      remaining_gems: charged.gems, // Usamos las gemas devueltas por la DB
     })
   } catch (e: any) {
     console.error('Error en start-chat:', e)
