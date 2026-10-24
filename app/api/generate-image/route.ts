@@ -5,7 +5,7 @@ import {
   ensureUser, getCharacter, countUserMessages, insertGemTransaction,
   getSeenR2Indices, markImageSeen, getAvailablePoolImage, markPoolImageViewed,
   incrementPoolImageUse, insertPoolImage, insertMessage, getActiveSubscription,
-  insertImageGeneration, countUserWiroLast30Days, countUserGenerationsForTag,
+  insertImageGeneration, countUserWiroLast30Days, 
   ensureWiroTokensRefilled, consumeWiroToken, countSfwImageGenerationsLast24h,
 } from '@/lib/db-queries'
 import {
@@ -96,9 +96,6 @@ const CHARACTER_DNA: Record<string, string> = {
   male_psycho: "dangerously handsome man, elegant dark suit, cold piercing dark eyes, terrifying smirk, black leather gloves",
 }
 
-// ═══════════════════════════════════════════════════════════════
-// ARCHETYPE_IMAGE_HINTS
-// ═══════════════════════════════════════════════════════════════
 const ARCHETYPE_IMAGE_HINTS: Record<string, string> = {
   female_stepmom: 'luxurious silk robe, mature elegance, wine glass, sophisticated boudoir',
   female_tsundere: 'proud expression with blush, red ribbon still in hair, school uniform displaced',
@@ -266,25 +263,20 @@ async function calculateDynamicHeatScore(messages: string[]): Promise<number> {
   let score = 0
   const text = messages.join(' ').toLowerCase()
   
-  // 1. Reglas Estáticas Base
   const baseHotKeywords = /\b(fuego|caliente|excitad|duro|mojado|húmedo|quiero|dame|toca|beso|cama|pasión|pasion|amor|hermosa|preciosa|ahora|ya|rápido|rapido|por favor|más|mas)\b/g
   const matches = text.match(baseHotKeywords)
   if (matches) score += matches.length * 10
 
-  // 2. Signos de exclamación y suspenso
   score += (text.match(/!/g) || []).length * 5
   score += (text.match(/\?/g) || []).length * 5
   
-  // 3. Longitud
   if (text.length > 50) score += 5
   if (text.length > 150) score += 15
 
-  // 4. 🧠 INTELIGENCIA ARTIFICIAL: Consultamos ambos cerebros
   try {
     const words = text.replace(/[^\w\sáéíóúñ]/g, '').split(/\s+/).filter(w => w.length > 2)
     if (words.length > 0) {
       const placeholders = words.map(() => '?').join(',')
-      // Buscamos tanto 'heat' como 'purchase' (el sistema aprende de ambos)
       const triggers = await query<{ weight: number }>(
         `SELECT weight FROM learned_triggers WHERE word IN (${placeholders})`,
         words
@@ -292,15 +284,12 @@ async function calculateDynamicHeatScore(messages: string[]): Promise<number> {
       
       const learnedScore = triggers.reduce((acc, t) => acc + t.weight, 0)
       if (learnedScore > 0) {
-        score += learnedScore * 5 // Multiplicador de aprendizaje
+        score += learnedScore * 5
         console.log(`[AI Heat] 🧠 Se detectaron palabras aprendidas: +${learnedScore * 5} pts`)
       }
     }
-  } catch (e) {
-    console.warn('[AI Heat] Error consultando learned_triggers:', e)
-  }
+  } catch (e) {}
 
-  // 5. Emojis
   const hotEmojis = /[🥵😈💦🍆💋❤️🔥]/g
   const emojiMatches = text.match(hotEmojis)
   if (emojiMatches) score += emojiMatches.length * 5
@@ -321,15 +310,9 @@ async function learnHeatTriggers(messages: string[]) {
         [word]
       )
     }
-    console.log(`[AI Learn] 🔥 El sistema aprendió nuevas palabras de calentura: ${uniqueWords.join(', ')}`)
-  } catch (e) {
-    console.warn('[AI Learn] Error guardando heat triggers:', e)
-  }
+  } catch (e) {}
 }
 
-// ═══════════════════════════════════════════════════════════════
-// extractMoodFromMessages
-// ═══════════════════════════════════════════════════════════════
 function extractMoodFromMessages(messages: string[], heat: number): string {
   if (!messages || messages.length === 0) return ''
   const text = messages.join(' ').toLowerCase()
@@ -358,9 +341,6 @@ function extractMoodFromMessages(messages: string[], heat: number): string {
   return ''
 }
 
-// ═══════════════════════════════════════════════════════════════
-// MOOD_FRAGMENTS
-// ═══════════════════════════════════════════════════════════════
 const MOOD_FRAGMENTS: Record<string, string> = {
   breathless_passionate: 'breathless passionate mood, disheveled, intense breathing',
   submission_surrender: 'submission and surrender mood, devoted gaze, yielding posture',
@@ -408,9 +388,6 @@ function getWiroMonthlyLimitMessage(lang: 'es' | 'en', characterName: string): s
   return `*${characterName} sonríe con calidez*\n\n"Hemos compartido tantos momentos premium este mes... necesito descansar y recargarme. Vuelve el próximo mes para más."`
 }
 
-// ═══════════════════════════════════════════════════════════════
-// POST handler
-// ═══════════════════════════════════════════════════════════════
 export async function POST(request: Request) {
   try {
     const tid = request.headers.get('x-telegram-id-validated')
@@ -463,10 +440,8 @@ export async function POST(request: Request) {
     )
     const totalImagesSent = imgCountRow?.c || 0
 
-    // ✅ CALCULAMOS EL HEAT SCORE INTELIGENTE
     const heatScore = await calculateDynamicHeatScore(recent_messages)
     
-    // ✅ SI ESTÁ CALIENTE, EL SISTEMA APRENDE SUS PALABRAS
     if (heatScore > 65 && recent_messages.length > 0) {
       await learnHeatTriggers(recent_messages)
     }
@@ -508,17 +483,37 @@ export async function POST(request: Request) {
 
       if (!poolHit) {
         source = 'generated'
-        const tagCount = await countUserGenerationsForTag(tid, normalizedTagKey)
-        if (tagCount >= MAX_GENERATIONS_PER_CONTEXT_PER_USER) {
+        
+        // 🛡️ FIX CRÍTICO: RESERVA ATÓMICA (Evita el Race Condition)
+        // Solo inserta el registro SI el conteo actual es menor al límite.
+        const reservation = await execute(
+          `INSERT INTO image_generations (telegram_id, character_id, tag_key, model, level)
+           SELECT ?, ?, ?, ?, ?
+           WHERE (
+             SELECT COUNT(*) FROM image_generations
+             WHERE telegram_id = ? AND tag_key = ? AND created_at >= datetime('now', '-30 days')
+           ) < ?`,
+          [tid, character_id, normalizedTagKey, 'deepinfra', level.level, tid, normalizedTagKey, MAX_GENERATIONS_PER_CONTEXT_PER_USER]
+        )
+
+        if (reservation.rowsAffected === 0) {
           return NextResponse.json({ error: 'context_limit_reached', message: getContextLimitMessage(lang, character.character_name) }, { status: 429 })
         }
+
+        const generationId = Number(reservation.lastInsertRowid)
 
         const willUseWiro = level.level >= 4
         if (willUseWiro && isVip) {
           const tokens = await ensureWiroTokensRefilled(tid)
-          if (tokens <= 0) return NextResponse.json({ error: 'wiro_tokens_exhausted', message: getWiroTokensExhaustedMessage(lang, character.character_name) }, { status: 429 })
+          if (tokens <= 0) {
+            await execute(`DELETE FROM image_generations WHERE id = ?`, [generationId]) // Rollback
+            return NextResponse.json({ error: 'wiro_tokens_exhausted', message: getWiroTokensExhaustedMessage(lang, character.character_name) }, { status: 429 })
+          }
           const wiroMonthly = await countUserWiroLast30Days(tid)
-          if (wiroMonthly >= VIP_LIMITS.wiro_monthly) return NextResponse.json({ error: 'wiro_monthly_limit', message: getWiroMonthlyLimitMessage(lang, character.character_name) }, { status: 429 })
+          if (wiroMonthly >= VIP_LIMITS.wiro_monthly) {
+            await execute(`DELETE FROM image_generations WHERE id = ?`, [generationId]) // Rollback
+            return NextResponse.json({ error: 'wiro_monthly_limit', message: getWiroMonthlyLimitMessage(lang, character.character_name) }, { status: 429 })
+          }
           await consumeWiroToken(tid)
         }
 
@@ -552,13 +547,15 @@ export async function POST(request: Request) {
         try {
           rawUrl = await generateRunwareImage(imagePrompt, seedUrl, level.level)
         } catch (imgError) {
+          // 🛡️ ROLLBACK: Si Runware falla, borramos la reserva para no gastar la oportunidad del usuario.
+          await execute(`DELETE FROM image_generations WHERE id = ?`, [generationId])
           return NextResponse.json({ error: 'Error al generar la imagen' }, { status: 500 })
         }
 
         modelUsed = 'runware-z-image-turbo'
         imageUrl = rawUrl
 
-        await insertImageGeneration({ telegram_id: tid, character_id, tag_key: normalizedTagKey, model: willUseWiro ? 'wiro' : 'deepinfra', level: level.level })
+        // Nota: Ya no llamamos a insertImageGeneration aquí porque lo hicimos arriba atómicamente.
 
         if (r2Available && !userHint && mood) {
           try {
