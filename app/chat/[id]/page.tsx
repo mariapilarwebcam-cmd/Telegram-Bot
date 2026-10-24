@@ -138,7 +138,7 @@ export default function ChatPage() {
   const [generatingImage, setGeneratingImage] = useState(false)
   const [generatingAudio, setGeneratingAudio] = useState(false)
   
-  // ✅ NUEVOS ESTADOS PARA LAS MEJORAS
+  // ✅ ESTADOS PARA MEJORAS
   const [unlockingPhoto, setUnlockingPhoto] = useState<number | null>(null)
   const [recentlyUnlocked, setRecentlyUnlocked] = useState<string | null>(null)
   const [activeReactionMsg, setActiveReactionMsg] = useState<number | null>(null)
@@ -166,6 +166,7 @@ export default function ChatPage() {
   const menuRef = useRef<HTMLDivElement>(null)
   const sendingRef = useRef(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const longPressTimer = useRef<NodeJS.Timeout | null>(null) // ✅ REF PARA EL LONG PRESS
 
   useEffect(() => {
     const interval = setInterval(() => setRotationIndex((p) => p + 1), 5000)
@@ -694,9 +695,23 @@ export default function ChatPage() {
           reaction: emoji
         }),
       })
-      // Opcional: podrías mostrar una pequeña animación de que se guardó la reacción
     } catch (e) {
       console.warn('Error enviando reacción:', e)
+    }
+  }
+
+  // ✅ Funciones para detectar mantener presionado (Long Press)
+  const startPress = (index: number) => {
+    longPressTimer.current = setTimeout(() => {
+      setActiveReactionMsg(index)
+      if (window.navigator.vibrate) window.navigator.vibrate(50) // Vibración sutil en móviles
+    }, 400) // 400ms de presión
+  }
+
+  const cancelPress = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current)
+      longPressTimer.current = null
     }
   }
 
@@ -1228,58 +1243,77 @@ export default function ChatPage() {
         )}
 
         {messages.map((m, i) => (
-          <div key={m.id || i} style={{ display: 'flex', flexDirection: 'column', alignItems: m.role === 'user' ? 'flex-end' : 'flex-start', position: 'relative' }}>
+          <div 
+            key={m.id || i} 
+            style={{ 
+              display: 'flex', 
+              flexDirection: 'column', 
+              alignItems: m.role === 'user' ? 'flex-end' : 'flex-start', 
+              position: 'relative',
+              marginBottom: 8
+            }}
+            // ✅ EVENTOS PARA MANTENER PRESIONADO (LONG PRESS)
+            onTouchStart={() => startPress(i)}
+            onTouchEnd={cancelPress}
+            onTouchMove={cancelPress}
+            onMouseDown={() => startPress(i)}
+            onMouseUp={cancelPress}
+            onMouseLeave={cancelPress}
+            onContextMenu={(e) => e.preventDefault()} // Evita el menú de copiar/pegar nativo
+          >
             <div
               className={m.role === 'user' ? 'bubble-user' : 'bubble-ai'}
               dangerouslySetInnerHTML={{ __html: formatMessage(m.content) }}
             />
-            {/* ✅ BOTÓN DE REACCIÓN FLOTANTE */}
-            <button
-              className={`reaction-btn ${activeReactionMsg === i ? 'active' : ''}`}
-              onClick={() => setActiveReactionMsg(activeReactionMsg === i ? null : i)}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: '#8b8b9e',
-                cursor: 'pointer',
-                padding: '4px 8px',
-                fontSize: 16,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              😀
-            </button>
 
-            {/* ✅ MENÚ DE REACCIONES */}
+            {/* ✅ MENÚ DE REACCIONES FLOTANTE (Aparece al mantener presionado) */}
             {activeReactionMsg === i && (
-              <div style={{
-                position: 'absolute',
-                bottom: '100%',
-                [m.role === 'user' ? 'right' : 'left']: 0,
-                marginBottom: 4,
-                background: '#1f1733',
-                borderRadius: 20,
-                padding: '6px 12px',
-                display: 'flex',
-                gap: 8,
-                boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
-                border: '1px solid rgba(168,85,247,0.3)',
-                zIndex: 20,
-              }}>
-                {['❤️', '🔥', '😂', '😮', '😢', '👍'].map(emoji => (
-                  <span
-                    key={emoji}
-                    onClick={() => handleReaction(emoji, m.content)}
-                    style={{ cursor: 'pointer', fontSize: 20, transition: 'transform 0.1s' }}
-                    onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.2)'}
-                    onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-                  >
-                    {emoji}
-                  </span>
-                ))}
-              </div>
+              <>
+                {/* Fondo invisible para cerrar el menú si se toca fuera */}
+                <div 
+                  onClick={() => setActiveReactionMsg(null)} 
+                  style={{ position: 'fixed', inset: 0, zIndex: 10 }} 
+                />
+                
+                <div 
+                  className="reaction-menu-popup"
+                  style={{
+                    position: 'absolute',
+                    bottom: '100%',
+                    [m.role === 'user' ? 'right' : 'left']: 0,
+                    marginBottom: 8,
+                    background: '#1f1733',
+                    borderRadius: 30,
+                    padding: '8px 12px',
+                    display: 'flex',
+                    gap: 12,
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.6), 0 0 0 1px rgba(168,85,247,0.3)',
+                    zIndex: 20,
+                  }}
+                >
+                  {['❤️', '🔥', '😂', '😮', '😢', '👍'].map(emoji => (
+                    <span
+                      key={emoji}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleReaction(emoji, m.content)
+                      }}
+                      style={{ 
+                        cursor: 'pointer', 
+                        fontSize: 22, 
+                        transition: 'transform 0.1s',
+                        WebkitTapHighlightColor: 'transparent'
+                      }}
+                      onTouchStart={(e) => e.currentTarget.style.transform = 'scale(1.3)'}
+                      onTouchEnd={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                      onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.2)'}
+                      onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                    >
+                      {emoji}
+                    </span>
+                  ))}
+                </div>
+              </>
             )}
           </div>
         ))}
