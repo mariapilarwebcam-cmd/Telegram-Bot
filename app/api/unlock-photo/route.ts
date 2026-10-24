@@ -1,6 +1,7 @@
 // app/api/unlock-photo/route.ts
 import { NextResponse } from 'next/server'
-import { queryOne, execute, decrementGemsAndPurchased, insertGemTransaction } from '@/lib/db-queries'
+import { queryOne, execute } from '@/lib/turso' // ✅ CORREGIDO: Se importan desde turso
+import { decrementGemsAndPurchased, insertGemTransaction } from '@/lib/db-queries' // ✅ CORREGIDO
 
 export async function POST(request: Request) {
   try {
@@ -14,7 +15,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Falta photo_id' }, { status: 400 })
     }
 
-    // 1. Buscar la foto
+    // 1. Buscar la foto bloqueada
     const photo = await queryOne<{
       id: number
       telegram_id: string
@@ -57,7 +58,7 @@ export async function POST(request: Request) {
       )
     }
 
-    // 3. Cobrar y desbloquear (Transacción atómica)
+    // 3. Cobrar y desbloquear (Transacción)
     await decrementGemsAndPurchased(tid, photo.unlock_price)
     
     await execute(
