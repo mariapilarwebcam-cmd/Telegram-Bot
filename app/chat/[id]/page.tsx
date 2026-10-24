@@ -137,6 +137,9 @@ export default function ChatPage() {
 
   const [generatingImage, setGeneratingImage] = useState(false)
   const [generatingAudio, setGeneratingAudio] = useState(false)
+  
+  // ✅ NUEVO: Estado para el desbloqueo de fotos PPV
+  const [unlockingPhoto, setUnlockingPhoto] = useState<number | null>(null)
 
   const [menuOpen, setMenuOpen] = useState(false)
   const [showRename, setShowRename] = useState(false)
@@ -413,7 +416,7 @@ export default function ChatPage() {
             Analytics.levelUp({
               character_id: characterId,
               new_level: data.new_level,
-              total_messages: data.total_user_messages || 0,
+              total_user_messages: data.total_user_messages || 0,
             })
           }
         }
@@ -546,26 +549,39 @@ export default function ChatPage() {
       })
       const data = await res.json()
       if (res.ok) {
-        setMessages((p) => [
-          ...p,
-          {
-            role: 'assistant',
-            content: `*${getDisplayName(character)} te envía una foto*\n\n![Selfie](${data.image_url})`,
-          },
-        ])
+        // ✅ NUEVA LÓGICA PPV: Si el backend dice que está bloqueada
+        if (data.is_locked) {
+          setMessages((p) => [
+            ...p,
+            {
+              role: 'assistant',
+              content: `*${getDisplayName(character)} te envía una foto*\n\n![Selfie](locked:${data.locked_photo_id})`,
+            },
+          ])
+        } else {
+          // Es gratis o el usuario es VIP
+          setMessages((p) => [
+            ...p,
+            {
+              role: 'assistant',
+              content: `*${getDisplayName(character)} te envía una foto*\n\n![Selfie](${data.image_url})`,
+            },
+          ])
+        }
+
         setGems(data.remaining_gems)
         if (data.remaining_purchased_gems !== undefined) {
            user.purchased_gems = data.remaining_purchased_gems
         }
         
         setPhotoOfferActive(false)
-        if (data.source === 'r2') {
+        if (data.source === 'r2_static') {
           setSeenImageCount((prev) => prev + 1)
         }
 
         Analytics.imageGenerated({
           character_id: characterId,
-          source: data.source || 'r2',
+          source: data.source || 'r2_static',
           image_index: data.image_index ?? null,
           cost: data.cost || 0,
           free: !!data.free,
@@ -583,6 +599,53 @@ export default function ChatPage() {
       alert('Error de conexión')
     } finally {
       setGeneratingImage(false)
+    }
+  }
+
+  // ✅ NUEVA FUNCIÓN: Desbloquear foto PPV
+  const handleUnlockPhoto = async (lockedId: number, price: number) => {
+    if (!user || unlockingPhoto) return
+
+    if ((user.purchased_gems || 0) < price) {
+      alert(`Necesitas ${price} gemas compradas. Ve a la tienda para recargar.`)
+      router.push('/shop')
+      return
+    }
+
+    setUnlockingPhoto(lockedId)
+    try {
+      const res = await tgFetch('/api/unlock-photo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ photo_id: lockedId }),
+      })
+      const data = await res.json()
+
+      if (res.ok && data.image_url) {
+        // Actualizamos el mensaje en la UI reemplazando locked:ID por la URL real
+        setMessages((prev) => 
+          prev.map((msg) => {
+            if (msg.content.includes(`locked:${lockedId}`)) {
+              return {
+                ...msg,
+                content: msg.content.replace(`locked:${lockedId}`, data.image_url)
+              }
+            }
+            return msg
+          })
+        )
+        
+        // Actualizamos las gemas visualmente
+        if (user) {
+          user.purchased_gems = data.remaining_purchased_gems
+        }
+      } else {
+        alert(data.message || data.error || 'Error al desbloquear')
+      }
+    } catch {
+      alert('Error de conexión')
+    } finally {
+      setUnlockingPhoto(null)
     }
   }
 
@@ -704,6 +767,8 @@ export default function ChatPage() {
 
   const formatMessage = (content: string) => {
     const images: string[] = []
+    
+    // ✅ NUEVA LÓGICA PPV: Detecta si la imagen está bloqueada o desbloqueada
     let text = content.replace(
       /!\[([^\]]*)\]\(([^)]+)\)/g,
       (_, alt, url) => {
@@ -714,27 +779,89 @@ export default function ChatPage() {
           .replace(/</g, '&lt;')
           .replace(/>/g, '&gt;')
         
-        images.push(
-          `<div 
-            data-image-url="${url}"
-            role="img" 
-            aria-label="${safeAlt}" 
-            style="
-              width: 100%; 
-              aspect-ratio: 832 / 1216; 
-              background-image: url('${url}'); 
-              background-size: cover; 
-              background-position: center; 
-              border-radius: 16px; 
-              margin-top: 8px; 
-              box-shadow: 0 8px 24px rgba(168,85,247,0.3);
-              -webkit-touch-callout: none;
-              -webkit-user-select: none;
-              user-select: none;
-              cursor: pointer;
-            "
-          ></div>`
-        )
+        // Si la URL empieza con "locked:", renderizamos el candado borroso
+        if (url.startsWith('locked:')) {
+          const lockedId = url.replace('locked:', '')
+          const price = currentImageCost // Usamos el costo del nivel actual
+          
+          images.push(
+            `<div 
+              data-locked-id="${lockedId}"
+              data-unlock-price="${price}"
+              role="button"
+              style="
+                position: relative;
+                width: 100%; 
+                aspect-ratio: 832 / 1216; 
+                border-radius: 16px; 
+                margin-top: 8px; 
+                overflow: hidden;
+                box-shadow: 0 8px 24px rgba(168,85,247,0.3);
+                cursor: pointer;
+                -webkit-touch-callout: none;
+                -webkit-user-select: none;
+                user-select: none;
+              "
+            >
+              <!-- Imagen borrosa de fondo -->
+              <div style="
+                position: absolute; inset: 0;
+                background-image: url('https://images.goddessgridhq.com/placeholder_blur.jpg');
+                background-size: cover;
+                background-position: center;
+                filter: blur(24px) brightness(0.6);
+                transform: scale(1.1);
+              "></div>
+              
+              <!-- Overlay con Candado y Precio -->
+              <div style="
+                position: absolute; inset: 0;
+                display: flex; flex-direction: column;
+                align-items: center; justify-content: center;
+                background: radial-gradient(circle at center, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.8) 100%);
+                gap: 12px;
+              ">
+                <div style="font-size: 48px; filter: drop-shadow(0 0 20px rgba(236,72,153,0.9)); animation: float 2s infinite ease-in-out;">🔒</div>
+                <div style="
+                  background: linear-gradient(135deg, #ec4899 0%, #a855f7 100%);
+                  padding: 10px 20px; border-radius: 12px;
+                  color: white; font-weight: 800; font-size: 15px;
+                  box-shadow: 0 4px 16px rgba(236,72,153,0.6);
+                  display: flex; align-items: center; gap: 8px;
+                  pointer-events: none;
+                ">
+                  <span style="font-size: 18px;">💎</span>
+                  Desbloquear por ${price}
+                </div>
+                <div style="font-size: 10px; color: #fbbf24; font-weight: 700; margin-top: 4px; letter-spacing: 0.05em;">⏰ POR TIEMPO LIMITADO</div>
+              </div>
+            </div>`
+          )
+        } else {
+          // Imagen normal (gratis o VIP desbloqueada)
+          images.push(
+            `<div 
+              data-image-url="${url}"
+              role="img" 
+              aria-label="${safeAlt}" 
+              style="
+                width: 100%; 
+                aspect-ratio: 832 / 1216; 
+                background-image: url('${url}'); 
+                background-size: cover; 
+                background-position: center; 
+                border-radius: 16px; 
+                margin-top: 8px; 
+                box-shadow: 0 8px 24px rgba(168,85,247,0.3);
+                -webkit-touch-callout: none;
+                -webkit-user-select: none;
+                user-select: none;
+                cursor: pointer;
+              "
+            ></div>`
+          )
+        }
+        
         return `@@IMG${idx}@@`
       }
     )
@@ -1007,9 +1134,21 @@ export default function ChatPage() {
       <div 
         className="chat-messages"
         onClick={(e) => {
-          const target = (e.target as HTMLElement).closest('[data-image-url]')
-          if (target) {
-            setSelectedImage(target.getAttribute('data-image-url'))
+          const target = e.target as HTMLElement
+          
+          // ✅ LÓGICA PPV: Si el usuario toca una foto bloqueada
+          const lockedTarget = target.closest('[data-locked-id]')
+          if (lockedTarget) {
+            const lockedId = parseInt(lockedTarget.getAttribute('data-locked-id') || '0')
+            const price = parseInt(lockedTarget.getAttribute('data-unlock-price') || '0')
+            handleUnlockPhoto(lockedId, price)
+            return
+          }
+
+          // Si es una foto nítida, abre el lightbox
+          const imgTarget = target.closest('[data-image-url]')
+          if (imgTarget) {
+            setSelectedImage(imgTarget.getAttribute('data-image-url'))
           }
         }}
       >
@@ -1470,7 +1609,7 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* ✅ LIGHTBOX CON PATRÓN ANTI-RECORTE (versión sutil) */}
+      {/* ✅ LIGHTBOX CON PATRÓN ANTI-RECORTE */}
       {selectedImage && (
         <div 
           className="modal-backdrop" 
@@ -1499,12 +1638,12 @@ export default function ChatPage() {
             WebkitUserSelect: 'none',
             userSelect: 'none',
           }}>
-                      {/* Patrón de marca de agua repetido usando SVG — punto medio */}
+            {/* Patrón de marca de agua repetido usando SVG */}
             <div style={{
               position: 'absolute',
               inset: 0,
               pointerEvents: 'none',
-              opacity: 0.09, // Punto medio: visible pero discreto
+              opacity: 0.09, 
               backgroundImage: `url("data:image/svg+xml,%3Csvg width='280' height='280' xmlns='http://www.w3.org/2000/svg'%3E%3Ctext x='50%25' y='50%25' font-size='22' font-family='sans-serif' font-weight='700' fill='%23ffffff' text-anchor='middle' dominant-baseline='middle' transform='rotate(-45 140 140)'%3ETABOO REALM%3C/text%3E%3C/svg%3E")`,
               backgroundRepeat: 'repeat',
             }} />
