@@ -1,6 +1,5 @@
 // lib/ai.ts
 
-import { runSeedreamSync } from './wiro'
 import { getIntensityFromLevel, getLevelFromMessages, type Intensity } from './levels'
 
 // ═══════════════════════════════════════════════════════════════
@@ -612,14 +611,14 @@ function sanitizeAsterisks(text: string): string {
     const trimmed = line.trim()
     if (trimmed.startsWith('*') && trimmed.endsWith('*') && trimmed.length > 2) {
       const inner = trimmed.slice(1, -1)
-      if (!inner.includes('"') && !inner.includes('"') && !inner.includes('"')) {
+      if (!inner.includes('"') && !inner.includes("'") && !inner.includes('«')) {
         return line
       }
     }
     return line.replace(
       /(\s)\*([^*\n]{1,30}?)\*(\s|,|\.|!|\?|$)/g,
       (_match, before, word, after) => {
-        if (line.includes('"') || line.includes('"') || line.includes('"')) {
+        if (line.includes('"') || line.includes("'") || line.includes('«')) {
           return `${before}${word}${after}`
         }
         return _match
@@ -627,50 +626,6 @@ function sanitizeAsterisks(text: string): string {
     )
   })
   return cleaned.join('\n')
-}
-
-// ═══════════════════════════════════════════════════════════════
-// IMAGE GENERATION
-// ═══════════════════════════════════════════════════════════════
-export async function generateImage(
-  prompt: string,
-  referenceImageUrl?: string,
-  level: number = 1
-): Promise<string> {
-  if (level <= 3) {
-    return generateImageDeepInfra(prompt)
-  } else {
-    try {
-      return await runSeedreamSync(prompt, referenceImageUrl, {
-        resolution: '2k',
-        aspectRatio: '3:4',
-        maxImages: 1,
-      })
-    } catch (wiroError) {
-      console.warn('Wiro falló, usando DeepInfra como fallback:', wiroError)
-      return generateImageDeepInfra(prompt)
-    }
-  }
-}
-
-async function generateImageDeepInfra(prompt: string): Promise<string> {
-  const response = await fetch(
-    'https://api.deepinfra.com/v1/inference/black-forest-labs/FLUX-1-schnell',
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${process.env.DEEPINFRA_TOKEN}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ prompt, width: 1024, height: 1024, num_images: 1 }),
-    }
-  )
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}))
-    throw new Error(err.error || 'Error en DeepInfra')
-  }
-  const data = await response.json()
-  return data.images?.[0]?.url || data.image
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -719,12 +674,6 @@ function detectEmotion(text: string): {
 /**
  * Genera una frase CORTA (para audio) usando DeepSeek.
  * Duración objetivo: 10s (niveles 1-3) o 15s (niveles 4-5).
- *
- * @param recentMessages - Últimos 3 mensajes del chat (contexto)
- * @param characterPrompt - Personalidad del personaje
- * @param lang - Idioma ('es' | 'en')
- * @param level - Nivel actual del personaje (1-5)
- * @returns Frase corta + emoción detectada
  */
 export async function generateShortAudioLine(
   recentMessages: Array<{ role: string; content: string }>,
