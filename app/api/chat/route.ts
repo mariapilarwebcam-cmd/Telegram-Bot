@@ -228,12 +228,16 @@ export async function POST(request: Request) {
         })
       }
 
-      // Cobrar el recargo si es VIP
+      // 🛡️ FIX: COBRO ATÓMICO DEL RECARGO VIP
       if (penaltyGems > 0) {
-        if ((user.gems || 0) < penaltyGems) {
+        const vipCharge = await queryOne<{ gems: number }>(
+          `UPDATE users SET gems = gems - ? WHERE telegram_id = ? AND gems >= ? RETURNING gems`,
+          [penaltyGems, tid, penaltyGems]
+        )
+        if (!vipCharge) {
           return NextResponse.json({ blocked: true, response: 'No tienes gemas suficientes para el recargo.' }, { status: 402 })
         }
-        await incrementGems(tid, -penaltyGems)
+        newGems = vipCharge.gems
         await insertGemTransaction({ telegram_id: tid, amount: -penaltyGems, transaction_type: 'message_penalty', description: 'Recargo por mensaje largo (VIP)' })
       }
     } else {
@@ -259,12 +263,16 @@ export async function POST(request: Request) {
         })
       }
 
+      // 🛡️ FIX: COBRO ATÓMICO DEL MENSAJE
       let charged = false
-      if (totalGems >= totalCost) {
-        newGems = totalGems - totalCost
+      const chargeResult = await queryOne<{ gems: number }>(
+        `UPDATE users SET gems = gems - ? WHERE telegram_id = ? AND gems >= ? RETURNING gems`,
+        [totalCost, tid, totalCost]
+      )
+
+      if (chargeResult) {
+        newGems = chargeResult.gems
         charged = true
-        
-        await incrementGems(tid, -totalCost)
         await insertGemTransaction({
           telegram_id: tid,
           amount: -totalCost,
