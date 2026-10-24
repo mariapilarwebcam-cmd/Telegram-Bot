@@ -143,6 +143,7 @@ export default function ChatPage() {
   const [recentlyUnlocked, setRecentlyUnlocked] = useState<string | null>(null)
   const [activeReactionMsg, setActiveReactionMsg] = useState<number | null>(null)
   const [isPlayingAudio, setIsPlayingAudio] = useState(false)
+  const [messageReactions, setMessageReactions] = useState<Record<string, string>>({})
 
   const [menuOpen, setMenuOpen] = useState(false)
   const [showRename, setShowRename] = useState(false)
@@ -680,8 +681,19 @@ export default function ChatPage() {
     }
   }
 
-  const handleReaction = async (emoji: string, messageContent: string) => {
+  // ✅ Función para manejar reacciones actualizada
+  const handleReaction = async (emoji: string, messageContent: string, msgKey: string) => {
+    setMessageReactions(prev => {
+      if (prev[msgKey] === emoji) {
+        const copy = { ...prev }
+        delete copy[msgKey]
+        return copy
+      }
+      return { ...prev, [msgKey]: emoji }
+    })
+    
     setActiveReactionMsg(null)
+
     try {
       await tgFetch('/api/react', {
         method: 'POST',
@@ -1236,79 +1248,115 @@ export default function ChatPage() {
           </div>
         )}
 
-        {messages.map((m, i) => (
-          <div 
-            key={m.id || i} 
-            style={{ 
-              display: 'flex', 
-              flexDirection: 'column', 
-              alignItems: m.role === 'user' ? 'flex-end' : 'flex-start', 
-              position: 'relative',
-              marginBottom: 8
-            }}
-            onTouchStart={() => startPress(i)}
-            onTouchEnd={cancelPress}
-            onTouchMove={cancelPress}
-            onMouseDown={() => startPress(i)}
-            onMouseUp={cancelPress}
-            onMouseLeave={cancelPress}
-            onContextMenu={(e) => e.preventDefault()}
-          >
-            <div
-              className={m.role === 'user' ? 'bubble-user' : 'bubble-ai'}
-              dangerouslySetInnerHTML={{ __html: formatMessage(m.content) }}
-            />
+        {messages.map((m, i) => {
+          const msgKey = String(m.id || i)
+          const currentReaction = messageReactions[msgKey]
 
-            {/* ✅ MENÚ DE REACCIONES FLOTANTE CON EMOJIS HOT */}
-            {activeReactionMsg === i && (
-              <>
+          return (
+            <div 
+              key={msgKey} 
+              style={{ 
+                display: 'flex', 
+                flexDirection: 'column', 
+                alignItems: m.role === 'user' ? 'flex-end' : 'flex-start', 
+                position: 'relative',
+                marginBottom: 12 // Un poco más de margen para que quepa la reacción
+              }}
+              onTouchStart={() => startPress(i)}
+              onTouchEnd={cancelPress}
+              onTouchMove={cancelPress}
+              onMouseDown={() => startPress(i)}
+              onMouseUp={cancelPress}
+              onMouseLeave={cancelPress}
+              onContextMenu={(e) => e.preventDefault()}
+            >
+              <div
+                className={m.role === 'user' ? 'bubble-user' : 'bubble-ai'}
+                dangerouslySetInnerHTML={{ __html: formatMessage(m.content) }}
+              />
+
+              {/* ✅ MOSTRAR LA REACCIÓN SELECCIONADA PEGADA AL MENSAJE */}
+              {currentReaction && (
                 <div 
-                  onClick={() => setActiveReactionMsg(null)} 
-                  style={{ position: 'fixed', inset: 0, zIndex: 10 }} 
-                />
-                
-                <div 
-                  className="reaction-menu-popup"
+                  onClick={() => setActiveReactionMsg(activeReactionMsg === i ? null : i)}
                   style={{
                     position: 'absolute',
-                    bottom: '100%',
-                    [m.role === 'user' ? 'right' : 'left']: 0,
-                    marginBottom: 8,
+                    bottom: -10,
+                    [m.role === 'user' ? 'left' : 'right']: 10,
                     background: '#1f1733',
-                    borderRadius: 30,
-                    padding: '8px 12px',
-                    display: 'flex',
-                    gap: 10,
-                    boxShadow: '0 8px 24px rgba(0,0,0,0.6), 0 0 0 1px rgba(168,85,247,0.3)',
-                    zIndex: 20,
+                    border: '1px solid rgba(168,85,247,0.4)',
+                    borderRadius: 20,
+                    padding: '2px 6px',
+                    fontSize: 14,
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+                    cursor: 'pointer',
+                    zIndex: 5,
                   }}
                 >
-                  {['❤️', '🔥', '😈', '💦', '🍆', '🍑', '🥵', '💋'].map(emoji => (
-                    <span
-                      key={emoji}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleReaction(emoji, m.content)
-                      }}
-                      style={{ 
-                        cursor: 'pointer', 
-                        fontSize: 24, 
-                        transition: 'transform 0.1s',
-                        WebkitTapHighlightColor: 'transparent'
-                      }}
-                      onTouchStart={(e) => e.currentTarget.style.transform = 'scale(1.3)'}
-                      onTouchEnd={(e) => e.currentTarget.style.transform = 'scale(1)'}
-                      onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.2)'}
-                      onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-                    >
-                      {emoji}
-                    </span>
-                  ))}
+                  {currentReaction}
                 </div>
-              </>
-            )}
-          </div>
-        ))}
+              )}
+
+              {/* ✅ MENÚ DE REACCIONES FLOTANTE CON EMOJIS HOT */}
+              {activeReactionMsg === i && (
+                <>
+                  <div 
+                    onClick={() => setActiveReactionMsg(null)} 
+                    style={{ position: 'fixed', inset: 0, zIndex: 10 }} 
+                  />
+                  
+                  <div 
+                    className="reaction-menu-popup"
+                    style={{
+                      position: 'absolute',
+                      bottom: '100%',
+                      [m.role === 'user' ? 'right' : 'left']: 0,
+                      marginBottom: 10,
+                      background: '#1f1733',
+                      borderRadius: 30,
+                      padding: '8px 12px',
+                      display: 'flex',
+                      gap: 8,
+                      boxShadow: '0 8px 24px rgba(0,0,0,0.6), 0 0 0 1px rgba(168,85,247,0.3)',
+                      zIndex: 20,
+                    }}
+                  >
+                    {['❤️', '🔥', '😈', '💦', '🍆', '🍑', '🥵', '💋'].map(emoji => {
+                      const isSelected = currentReaction === emoji
+                      return (
+                        <span
+                          key={emoji}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleReaction(emoji, m.content, msgKey)
+                          }}
+                          style={{ 
+                            cursor: 'pointer', 
+                            fontSize: 24, 
+                            transition: 'all 0.2s',
+                            padding: '4px',
+                            borderRadius: '50%',
+                            background: isSelected ? 'rgba(236,72,153,0.3)' : 'transparent', // Resalta el emoji elegido
+                            transform: isSelected ? 'scale(1.2)' : 'scale(1)', // Efecto visual del emoji elegido
+                            WebkitTapHighlightColor: 'transparent'
+                          }}
+                          onTouchStart={(e) => {
+                            if (!isSelected) e.currentTarget.style.transform = 'scale(1.3)'
+                          }}
+                          onTouchEnd={(e) => {
+                            if (!isSelected) e.currentTarget.style.transform = 'scale(1)'
+                          }}
+                        >
+                          {emoji}
+                        </span>
+                      )
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+          )
+        })}
 
         {loading && messages.length > 0 && (
           <div className="bubble-ai" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
