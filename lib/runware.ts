@@ -10,6 +10,10 @@ export async function generateRunwareImage(
     throw new Error('Falta la API Key de Runware en las variables de entorno')
   }
 
+  // Ajustamos la fuerza (strength) de img2img según el nivel.
+  // Nivel 1-2: 0.45 (mantiene el rostro y la ropa base casi intactos)
+  // Nivel 3: 0.55 (mantiene el rostro, pero permite cambiar la ropa)
+  // Nivel 4-5: 0.65 (mantiene los rasgos faciales, pero permite cambios de pose y lencería)
   const strength = level <= 2 ? 0.45 : level === 3 ? 0.55 : 0.65
 
   const payload = {
@@ -19,15 +23,16 @@ export async function generateRunwareImage(
     positivePrompt: prompt,
     // 🛡️ BLINDAJE ANTI-BAN DE TELEGRAM
     negativePrompt: "ugly, deformed, bad anatomy, bad hands, missing fingers, extra digits, text, watermark, low quality, multiple people, worst quality, jpeg artifacts, explicit, nude, naked, nudity, genitals, penis, vagina, sex, penetration, cum, bodily fluids, pubic hair, areola, nipples, child, minor, underage, cp, gore, blood, extreme violence",
+    // ✅ Formato vertical (Retrato) 832x1216
     width: 832,
     height: 1216,
     lora: [
       {
-        model: "taboorealm:elusarca@1",
-        weight: 0.85
+        model: "taboorealm:elusarca@1", // ✅ Tu LoRA blindado
+        weight: 0.85 // ✅ Fuerza recomendada por el creador
       }
     ],
-    seedImage: seedImageUrl,
+    seedImage: seedImageUrl, // ✅ La foto base del personaje (img2img)
     strength: strength
   }
 
@@ -43,6 +48,7 @@ export async function generateRunwareImage(
 
     const data = await res.json()
 
+    // Runware devuelve un array en data.data
     if (data.data && data.data[0] && data.data[0].imageURL) {
       return data.data[0].imageURL
     }
