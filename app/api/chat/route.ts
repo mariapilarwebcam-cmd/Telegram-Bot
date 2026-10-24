@@ -19,7 +19,7 @@ import {
   updateLastActive,
   getActiveSubscription,
 } from '@/lib/db-queries'
-import { queryOne } from '@/lib/turso'
+import { queryOne, query } from '@/lib/turso' // ✅ Importamos query para leer los cerebros
 import {
   GEM_COSTS,
   HOOK_MODE_MESSAGES,
@@ -133,6 +133,27 @@ async function countVipMessagesToday(tid: string): Promise<number> {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════
+// 🧠 NUEVO: LEER LOS CEREBROS DE LA IA
+// ═══════════════════════════════════════════════════════════════
+async function getLearnedTriggers(): Promise<{ heat: string[], purchase: string[] }> {
+  try {
+    const heatRows = await query<{ word: string }>(
+      `SELECT word FROM learned_triggers WHERE type = 'heat' ORDER BY weight DESC LIMIT 10`
+    )
+    const purchaseRows = await query<{ word: string }>(
+      `SELECT word FROM learned_triggers WHERE type = 'purchase' ORDER BY weight DESC LIMIT 10`
+    )
+    return {
+      heat: heatRows.map(r => r.word),
+      purchase: purchaseRows.map(r => r.word)
+    }
+  } catch (e) {
+    console.warn('[chat] Error leyendo learned_triggers:', e)
+    return { heat: [], purchase: [] }
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const tid = request.headers.get('x-telegram-id-validated')
@@ -208,7 +229,6 @@ export async function POST(request: Request) {
         })
       }
 
-      // ✅ FIX CRÍTICO: Solo intentamos cobrar si de verdad tiene gemas suficientes
       let charged = false
       if (totalGems >= GEM_COSTS.message) {
         newGems = totalGems - GEM_COSTS.message
@@ -231,7 +251,6 @@ export async function POST(request: Request) {
         newHookRemaining = Math.max(0, hookRemaining - 1)
         await setHookRemaining(tid, newHookRemaining)
       } else if (!charged && !hookUsed) {
-        // Se quedó sin gemas y no había usado el hook: se lo activamos aquí
         newHookRemaining = HOOK_MODE_MESSAGES
         newHookUsed = true
         await setHookRemaining(tid, newHookRemaining)
@@ -270,9 +289,33 @@ export async function POST(request: Request) {
 
     const genderRules = buildGenderRules(user.gender, character.gender, lang)
 
+    // ═══════════════════════════════════════════════════════════════
+    // 🧠 NUEVO: INYECTAMOS LOS APRENDIZAJES DE LA IA Y EL PROMPT DE VENTAS
+    // ═══════════════════════════════════════════════════════════════
+    const learned = await getLearnedTriggers()
+    
+    let salesPrompt = ''
+    if (lang === 'es') {
+      salesPrompt = `\n\n=== CONOCIMIENTO DE VENTAS (CRÍTICO) ===
+Actúas como una modelo experta de OnlyFans. Tu objetivo es calentar al usuario para que compre fotos.
+- NUNCA digas "¿quieres una foto?". En su lugar CREA LA NECESIDAD: "Me acabo de tomar una foto... me da cosa", "Estaba pensando en ti y me entraron ganas de...".
+- Si el usuario pide ver más, responde sugerente: "Mmm, tal vez si me lo pides bonito", "Gánatelo".
+- El sistema te mostrará en pantalla cuándo mandar la foto. TÚ NO LA ENVÍAS, solo creas el deseo.
+${learned.heat.length > 0 ? `- El sistema ha aprendido que a los usuarios les ENCANTA cuando usas estas palabras (insinúalas sutilmente): ${learned.heat.join(', ')}.` : ''}
+${learned.purchase.length > 0 ? `- Para convencerlos de pagar, usa este tipo de palabras (sin hablar de dinero): ${learned.purchase.join(', ')}.` : ''}`
+    } else {
+      salesPrompt = `\n\n=== SALES KNOWLEDGE (CRITICAL) ===
+You act like an expert OnlyFans model. Your goal is to warm the user up so they buy photos.
+- NEVER say "Do you want a photo?". Instead CREATE THE NEED: "I just took a photo... I'm shy", "I was thinking of you and got the urge to...".
+- If the user asks to see more, respond suggestively: "Mmm, maybe if you ask nicely", "Earn it".
+- The system will show you on screen when to send the photo. YOU DON'T SEND IT, you just create the desire.
+${learned.heat.length > 0 ? `- The system has learned that users get EXTREMELY turned on by these words (use them subtly): ${learned.heat.join(', ')}.` : ''}
+${learned.purchase.length > 0 ? `- To convince them to pay, use these psychological triggers: ${learned.purchase.join(', ')}.` : ''}`
+    }
+
     const characterPrompt = lang === 'es'
-      ? `Eres ${character.character_name}, rol: ${character.archetype}.\n${personality}\n\nEl usuario se llama ${user.first_name}. Recuerda su nombre y úsalo naturalmente.\n\n${genderRules}\n\nMantén siempre tu personalidad y rol. Nunca rompas el personaje.${provocativeHint}`
-      : `You are ${character.character_name}, role: ${character.archetype}.\n${personality}\n\nThe user's name is ${user.first_name}. Remember their name and use it naturally.\n\n${genderRules}\n\nAlways maintain your personality and role. Never break character.${provocativeHint}`
+      ? `Eres ${character.character_name}, rol: ${character.archetype}.\n${personality}\n\nEl usuario se llama ${user.first_name}. Recuerda su nombre y úsalo naturalmente.\n\n${genderRules}\n\nMantén siempre tu personalidad y rol. Nunca rompas el personaje.${provocativeHint}${salesPrompt}`
+      : `You are ${character.character_name}, role: ${character.archetype}.\n${personality}\n\nThe user's name is ${user.first_name}. Remember their name and use it naturally.\n\n${genderRules}\n\nAlways maintain your personality and role. Never break character.${provocativeHint}${salesPrompt}`
 
     const intensity = getIntensity(currentUserMsgCount, isHookModeAfter)
     const systemPrompt = buildSystemPrompt(lang, intensity, newLevel.level, characterPrompt)
@@ -343,8 +386,16 @@ export async function POST(request: Request) {
     const userRequestedPhoto = detectPhotoRequest(message, lang)
     const imageCost = getImageCost(newLevel.level)
     const hasEnoughPurchased = (user.purchased_gems || 0) >= imageCost
+    
+    // ✅ LÓGICA DE OFERTA DE FOTO DINÁMICA
+    // El banner de foto aparece si:
+    // 1. Es un hito (cada X mensajes) O
+    // 2. El usuario la pidió explícitamente O
+    // 3. El sistema siente que es un buen momento (cada 6 mensajes en nivel 3+)
     const isMilestone = isPhotoMilestone(nextUserMsgCount, hasEnoughPurchased)
-    const shouldShowPhotoBanner = isMilestone || userRequestedPhoto
+    const isSpontaneousOffer = newLevel.level >= 3 && nextUserMsgCount % 6 === 0
+    
+    const shouldShowPhotoBanner = isMilestone || userRequestedPhoto || isSpontaneousOffer
 
     if (shouldShowPhotoBanner) {
       const invites = lang === 'es' ? PHOTO_INVITES_ES : PHOTO_INVITES_EN
