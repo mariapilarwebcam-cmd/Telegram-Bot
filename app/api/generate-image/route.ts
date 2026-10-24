@@ -41,7 +41,7 @@ import {
   buildR2Key,
   buildTagKey,
 } from '@/lib/r2-upload'
-import { execute } from '@/lib/turso' // ✅ NUEVO: Para crear el registro PPV
+import { execute, queryOne } from '@/lib/turso'
 
 export const maxDuration = 60
 
@@ -283,12 +283,47 @@ const AUTO_SCENES_MALE: Record<number, string> = {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// 🧠 NUEVO: CALCULADOR DE "HEAT SCORE" (INTELIGENCIA ARTIFICIAL)
+// ═══════════════════════════════════════════════════════════════
+function calculateHeatScore(messages: string[]): number {
+  if (!messages || messages.length === 0) return 0
+  
+  let score = 0
+  const text = messages.join(' ').toLowerCase()
+  
+  // 1. Palabras clave (Suben mucho el heat)
+  const hotKeywords = /\b(fuego|caliente|excitad|duro|mojado|húmedo|quiere|dame|tócame|tocame|beso|gemir|cama|desnud|follar|sexo|pasión|pasion|amor|hermosa|preciosa|culo|tetas|pene|vagina)\b/g
+  const matches = text.match(hotKeywords)
+  if (matches) score += matches.length * 15
+  
+  // 2. Signos de exclamación (Indican emoción)
+  const exclamations = (text.match(/!/g) || []).length
+  score += exclamations * 5
+  
+  // 3. Emojis calientes
+  const hotEmojis = /[🥵😈💦🍆💋❤️🔥]/g
+  const emojiMatches = text.match(hotEmojis)
+  if (emojiMatches) score += emojiMatches.length * 10
+
+  // 4. Longitud de los mensajes (Si escribe mucho, está enganchado)
+  if (text.length > 100) score += 10
+  if (text.length > 200) score += 15
+
+  // Cap máximo a 100
+  return Math.min(score, 100)
+}
+
+// ═══════════════════════════════════════════════════════════════
 // extractMoodFromMessages
 // ═══════════════════════════════════════════════════════════════
-function extractMoodFromMessages(messages: string[]): string {
+function extractMoodFromMessages(messages: string[], heat: number): string {
   if (!messages || messages.length === 0) return ''
 
   const text = messages.join(' ').toLowerCase()
+
+  if (heat > 70) {
+    return 'breathless_passionate' // Si está caliente, forzamos el mood
+  }
 
   if (/\b(jadeo|jadea|respira|suspiro|temblor|tiembla|calor|fuego|húmedo|mojado|acelerado|entrecortad)\b/.test(text)) {
     return 'breathless_passionate'
@@ -387,9 +422,6 @@ function getLevelBucket(level: number): 'sfw' | 'nsfw' {
   return level <= 3 ? 'sfw' : 'nsfw'
 }
 
-// ═══════════════════════════════════════════════════════════════
-// Mensajes de bloqueo
-// ═══════════════════════════════════════════════════════════════
 function getContextLimitMessage(lang: 'es' | 'en', characterName: string): string {
   if (lang === 'en') {
     return `*${characterName} smirks and shakes her head*\n\n"Wow, you really love this moment, huh? I think we've already explored this scene enough... let's try something different. Change the mood or the place, and I'll surprise you again."`
@@ -460,8 +492,6 @@ export async function POST(request: Request) {
     const seenIndices = await getSeenR2Indices(tid, character_id)
 
     // ─── Determine next R2 static index based on level ───
-    // Levels 1-3: _1 → _2 → (pool/generate)
-    // Levels 4-5: _1 → _3 → _4 → (pool/generate)
     let r2Index: number | null = null
     const candidateIndices = level.level <= 3 ? [1, 2] : [1, 3, 4]
     for (const idx of candidateIndices) {
@@ -481,11 +511,34 @@ export async function POST(request: Request) {
     let modelUsed: string = ''
     let promptUsed = ''
 
-    // Free rule: only index 1 is free (once per character)
-    const isFree = useR2Static && r2Index === 1
+    // ✅ NUEVO: LÓGICA ONLYFANS DINÁMICA (HEAT SCORE)
+    const imgCountRow = await queryOne<{ c: number }>(
+      `SELECT COUNT(*) AS c FROM image_generations WHERE telegram_id = ? AND character_id = ?`,
+      [tid, character_id]
+    )
+    const totalImagesSent = imgCountRow?.c || 0
 
-    // ─── Compute mood and tag_key early (needed for pool check) ───
-    const mood = extractMoodFromMessages(recent_messages)
+    // Calculamos qué tan caliente está la conversación (0 a 100)
+    const heatScore = calculateHeatScore(recent_messages)
+    
+    let freeChance = 0.15 // Probabilidad base (15%)
+
+    if (heatScore > 70) {
+      // Está MUY caliente. Aprovechamos para cobrar. Solo 5% de dar gratis.
+      freeChance = 0.05 
+    } else if (heatScore < 30 && userMsgCount > 15) {
+      // Está FRÍO pero llevan muchos mensajes. Necesitamos re-engancharlo.
+      // Le damos un 70% de probabilidad de foto gratis.
+      freeChance = 0.70 
+    }
+
+    // Primera foto siempre gratis. El resto, según la probabilidad calculada.
+    const isFree = 
+      totalImagesSent === 0 || 
+      (totalImagesSent > 0 && Math.random() < freeChance)
+
+    // ─── Compute mood and tag_key early ───
+    const mood = extractMoodFromMessages(recent_messages, heatScore)
     const levelBucket = getLevelBucket(level.level)
     const normalizedTagKey = buildTagKey(
       character.archetype,
@@ -494,10 +547,9 @@ export async function POST(request: Request) {
       levelBucket
     )
 
+    console.log(`[generate-image] 🌡️ Heat: ${heatScore}/100 | 🎲 Free Chance: ${Math.round(freeChance*100)}% | 🎁 Is Free: ${isFree}`)
+
     if (useR2Static) {
-      // ═══════════════════════════════════════════════════════
-      // R2 STATIC SERVE
-      // ═══════════════════════════════════════════════════════
       source = 'r2_static'
       imageUrl = buildR2VariantUrl(genderKey, character.archetype, r2Index!)
       modelUsed = 'r2'
@@ -507,56 +559,32 @@ export async function POST(request: Request) {
       } catch (markErr) {
         console.warn('[generate-image] markImageSeen failed:', markErr)
       }
-
-      console.log(
-        `[generate-image] ✅ R2 static _${r2Index} (${isFree ? 'FREE' : `${imageCost}g`})`
-      )
     } else {
-      // ═══════════════════════════════════════════════════════
-      // POOL CHECK FIRST (before generating)
-      // ═══════════════════════════════════════════════════════
       let poolHit = false
-
       const usePool = !userHint && !!mood && r2Available
 
       if (usePool) {
         try {
           const available = await getAvailablePoolImage(normalizedTagKey, tid)
-
           if (available) {
-            console.log(
-              `[generate-image] ♻️ Pool HIT: ${normalizedTagKey} (id=${available.id}, used ${available.times_used}x)`
-            )
             imageUrl = available.r2_url
             source = 'pool'
             modelUsed = 'pool'
             promptUsed = available.prompt_used
             poolHit = true
-
             await markPoolImageViewed(available.id, tid, character_id)
             incrementPoolImageUse(available.id).catch(() => {})
-          } else {
-            console.log(
-              `[generate-image] Pool MISS: ${normalizedTagKey} (no available images for user ${tid})`
-            )
           }
         } catch (poolErr) {
-          console.warn('[generate-image] Pool lookup failed (continuing):', poolErr)
+          console.warn('[generate-image] Pool lookup failed:', poolErr)
         }
       }
 
       if (!poolHit) {
-        // ═══════════════════════════════════════════════════════
-        // GENERATE WITH IA (RUNWARE)
-        // ═══════════════════════════════════════════════════════
         source = 'generated'
 
-        // ─── A. Per-context limit (10) ───
         const tagCount = await countUserGenerationsForTag(tid, normalizedTagKey)
         if (tagCount >= MAX_GENERATIONS_PER_CONTEXT_PER_USER) {
-          console.log(
-            `[generate-image] 🚫 Per-context limit: ${normalizedTagKey} (${tagCount}/${MAX_GENERATIONS_PER_CONTEXT_PER_USER})`
-          )
           return NextResponse.json(
             {
               error: 'context_limit_reached',
@@ -566,28 +594,20 @@ export async function POST(request: Request) {
           )
         }
 
-        // ─── B. Wiro limits (levels 4-5 only) ───
         const willUseWiro = level.level >= 4
-
         if (willUseWiro && isVip) {
           const tokens = await ensureWiroTokensRefilled(tid)
           if (tokens <= 0) {
-            console.log(`[generate-image] 🚫 Wiro tokens exhausted: VIP ${tid}`)
             return NextResponse.json(
               {
                 error: 'wiro_tokens_exhausted',
                 message: getWiroTokensExhaustedMessage(lang, character.character_name),
-                wiro_tokens: 0,
               },
               { status: 429 }
             )
           }
-
           const wiroMonthly = await countUserWiroLast30Days(tid)
           if (wiroMonthly >= VIP_LIMITS.wiro_monthly) {
-            console.log(
-              `[generate-image] 🚫 Wiro monthly limit: VIP ${tid} (${wiroMonthly}/${VIP_LIMITS.wiro_monthly})`
-            )
             return NextResponse.json(
               {
                 error: 'wiro_monthly_limit',
@@ -596,37 +616,27 @@ export async function POST(request: Request) {
               { status: 429 }
             )
           }
-
           await consumeWiroToken(tid)
-          console.log(`[generate-image] 🎫 Wiro token consumed (remaining: ${tokens - 1})`)
         }
 
-        // ─── C. Build prompt + generate ───
-        const autoScenes =
-          character.gender === 'male' ? AUTO_SCENES_MALE : AUTO_SCENES_FEMALE
+        const autoScenes = character.gender === 'male' ? AUTO_SCENES_MALE : AUTO_SCENES_FEMALE
         const sceneHint = userHint || autoScenes[level.level] || autoScenes[1]
 
-        const NO_GENITALIA =
-          'tasteful artistic composition, no explicit genitalia, no nudity visible below waist, strategic coverage, high-end boudoir photography aesthetic, safe for platform'
+        const NO_GENITALIA = 'tasteful artistic composition, no explicit genitalia, no nudity visible below waist, strategic coverage, high-end boudoir photography aesthetic, safe for platform'
 
         let imagePrompt: string
-
-        // ✅ NUEVO: Filtro Global Anti-Errores (Anatomía, Clones y Manos Gigantes)
         const genderTag = character.gender === 'male' ? '1boy, male' : '1girl, female'
         const QUALITY_CONTROL_PROMPT = `(masterpiece, best quality, highres:1.2), solo, single character, ${genderTag}, only one person in frame, perfect anatomy, perfect hands, five fingers, correct proportions, no mutations, no extra limbs, no missing limbs, no multiple people, no deformed hands, no extra fingers, perfectly sized hands, correct hand size, hand in mid-ground, no giant hands touching the lens, natural pose`
 
         if (level.level <= 3) {
-          const dna =
-            CHARACTER_DNA[`${character.gender}_${character.archetype}`] ||
-            'anime character'
+          const dna = CHARACTER_DNA[`${character.gender}_${character.archetype}`] || 'anime character'
           const scene = SFW_SCENE_PROMPTS[level.level] || SFW_SCENE_PROMPTS[1]
-
           let faceRule = ''
           if (faceVisibility === 'hidden') faceRule = FACE_HIDDEN_FRAGMENT
           else if (faceVisibility === 'partial') faceRule = FACE_PARTIAL_FRAGMENT
 
           imagePrompt = [
-            QUALITY_CONTROL_PROMPT, // ✅ FILTRO INYECTADO
+            QUALITY_CONTROL_PROMPT,
             `[CHARACTER: ${dna}]`,
             'highly detailed anime illustration, cel shading, soft cinematic lighting',
             scene,
@@ -639,12 +649,11 @@ export async function POST(request: Request) {
           const facePrompt = getCharacterFace(character.archetype, character.gender)
           const clothing = getClothingLevel(level.level)
           const scene = NSFW_SCENE_PROMPTS[level.level] || NSFW_SCENE_PROMPTS[4]
-          const archetypeHint =
-            ARCHETYPE_IMAGE_HINTS[`${character.gender}_${character.archetype}`] || ''
+          const archetypeHint = ARCHETYPE_IMAGE_HINTS[`${character.gender}_${character.archetype}`] || ''
           const moodFragment = mood ? MOOD_FRAGMENTS[mood] || '' : ''
 
           imagePrompt = [
-            QUALITY_CONTROL_PROMPT, // ✅ FILTRO INYECTADO
+            QUALITY_CONTROL_PROMPT,
             facePrompt,
             'anime style, cel shading, moody atmospheric lighting, deep shadows, muted color palette, cinematic dark tones, detailed anime eyes',
             clothing,
@@ -658,27 +667,18 @@ export async function POST(request: Request) {
         }
 
         promptUsed = imagePrompt
-
-        // ✅ OBTENEMOS LA IMAGEN SEMILLA (LA PORTADA DEL PERSONAJE)
         const seedUrl = getCharacterImageUrl(character.archetype, character.gender)
 
         let rawUrl: string
         try {
-          // ✅ LLAMAMOS A RUNWARE (con el prompt, la imagen semilla y el nivel)
           rawUrl = await generateRunwareImage(imagePrompt, seedUrl, level.level)
         } catch (imgError) {
-          console.error('Image generation error:', imgError)
-          return NextResponse.json(
-            { error: 'Error al generar la imagen' },
-            { status: 500 }
-          )
+          return NextResponse.json({ error: 'Error al generar la imagen' }, { status: 500 })
         }
 
-        // ✅ ACTUALIZAMOS EL MODELO USADO
         modelUsed = 'runware-z-image-turbo'
         imageUrl = rawUrl
 
-        // ─── D. Log generation ───
         await insertImageGeneration({
           telegram_id: tid,
           character_id,
@@ -687,13 +687,11 @@ export async function POST(request: Request) {
           level: level.level,
         })
 
-        // ─── E. Upload to R2 + save to pool ───
         if (r2Available && !userHint && mood) {
           try {
             const { buffer, contentType } = await downloadImage(rawUrl)
             const r2Key = buildR2Key(character.archetype, genderKey, mood, levelBucket)
             const permanentUrl = await uploadToR2(r2Key, buffer, contentType)
-
             imageUrl = permanentUrl
 
             const newImageId = await insertPoolImage({
@@ -711,12 +709,8 @@ export async function POST(request: Request) {
             if (newImageId) {
               await markPoolImageViewed(newImageId, tid, character_id)
             }
-
-            console.log(
-              `[generate-image] 📤 Saved to R2 + pool: ${normalizedTagKey} (id=${newImageId})`
-            )
           } catch (uploadErr) {
-            console.warn('[generate-image] R2 upload failed (using temp URL):', uploadErr)
+            console.warn('[generate-image] R2 upload failed:', uploadErr)
           }
         }
       }
@@ -726,30 +720,21 @@ export async function POST(request: Request) {
     // VIP QUOTA CHECK
     // ═══════════════════════════════════════════════════════════
     let useVipQuota = false
-
     if (!isFree && isVip) {
       if (level.level <= 3) {
-        // SFW quota (10/day)
         const sfwToday = await countSfwImageGenerationsLast24h(tid)
-        if (sfwToday < VIP_LIMITS.sfw_daily) {
-          useVipQuota = true
-        }
-        console.log(`[generate-image] 🎨 VIP SFW quota: ${sfwToday}/${VIP_LIMITS.sfw_daily}`)
+        if (sfwToday < VIP_LIMITS.sfw_daily) useVipQuota = true
       } else {
-        // Wiro territory
         if (source === 'r2_static' || source === 'pool') {
-          // Generated already consumed token above
           const wiroMonthly = await countUserWiroLast30Days(tid)
           if (wiroMonthly < VIP_LIMITS.wiro_monthly) {
             const tokens = await ensureWiroTokensRefilled(tid)
             if (tokens > 0) {
               useVipQuota = true
               await consumeWiroToken(tid)
-              console.log(`[generate-image] 🎫 VIP Wiro quota (R2/pool): token consumed`)
             }
           }
         } else {
-          // Was generated → token already consumed
           useVipQuota = true
         }
       }
@@ -764,8 +749,6 @@ export async function POST(request: Request) {
     let unlockPrice = 0
 
     if (!isFree && !useVipQuota) {
-      // El usuario NO es VIP y no es la foto gratis.
-      // Creamos un registro de PPV (Pay-Per-View).
       unlockPrice = imageCost
       const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString() // 1 hora FOMO
 
@@ -777,17 +760,12 @@ export async function POST(request: Request) {
           [tid, character_id, imageUrl, normalizedTagKey, unlockPrice, expiresAt]
         )
         lockedPhotoId = Number(dbResult.lastInsertRowid)
-        console.log(`[generate-image] 🔒 Locked photo created (ID: ${lockedPhotoId}, Price: ${unlockPrice})`)
       } catch (dbErr) {
-        console.error('[generate-image] Error creating locked photo:', dbErr)
         return NextResponse.json({ error: 'Error creating locked photo' }, { status: 500 })
       }
     }
 
-    // ═══════════════════════════════════════════════════════════
-    // LOG non-generated deliveries (for SFW quota tracking)
-    // ═══════════════════════════════════════════════════════════
-    if (!isFree && source !== 'generated') {
+    if (source !== 'generated') {
       await insertImageGeneration({
         telegram_id: tid,
         character_id,
@@ -797,50 +775,36 @@ export async function POST(request: Request) {
       })
     }
 
-    // ═══════════════════════════════════════════════════════════
-    // PERSIST message in history
-    // ═══════════════════════════════════════════════════════════
     try {
-      // Si hay un bloqueo, guardamos "locked:ID" en el historial
-      // Si es gratis/VIP, guardamos la URL real
       const imageMessageContent = lockedPhotoId
         ? `*${character.character_name} te envía una foto*\n\n![Selfie](locked:${lockedPhotoId})`
         : `*${character.character_name} te envía una foto*\n\n![Selfie](${imageUrl})`
-        
       await insertMessage({
         telegram_id: tid,
         character_id,
         role: 'assistant',
         content: imageMessageContent,
       })
-    } catch (persistErr) {
-      console.warn('[generate-image] Error guardando mensaje:', persistErr)
-    }
+    } catch (persistErr) {}
 
-    // ═══════════════════════════════════════════════════════════
-    // RESPONSE
-    // ═══════════════════════════════════════════════════════════
     return NextResponse.json({
       is_locked: !!lockedPhotoId,
       locked_photo_id: lockedPhotoId,
       unlock_price: unlockPrice,
-      image_url: lockedPhotoId ? undefined : imageUrl, // Ocultamos la URL si está bloqueada
+      image_url: lockedPhotoId ? undefined : imageUrl, 
       remaining_gems: newGems, 
       remaining_purchased_gems: newPurchasedGems,
       level: level.level,
-      cost: 0, // Ya no cobramos en la generación
+      cost: 0, 
       free: isFree,
       vip_quota: useVipQuota,
       source,
       image_index: r2Index,
       face_visibility: faceVisibility,
       model: modelUsed,
+      heat_score: heatScore, // ✅ Lo enviamos al frontend por si quieres mostrarlo
     })
   } catch (error: any) {
-    console.error('Error generando imagen:', error)
-    return NextResponse.json(
-      { error: 'Error al generar la imagen' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Error al generar la imagen' }, { status: 500 })
   }
 }
