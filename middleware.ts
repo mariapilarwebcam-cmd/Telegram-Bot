@@ -68,16 +68,13 @@ try {
   console.error('[middleware] ❌ Error inicializando Upstash:', e?.message)
 }
 
-// ✅ Endpoints públicos (sin auth de Telegram).
-// El webhook Python ya valida su propio secret_token.
-// /api/health y /api/debug se protegen con ADMIN_API_SECRET dentro del handler.
 const PUBLIC_ENDPOINTS = [
   '/api/health',
   '/api/debug',
   '/api/bot',       // ← webhook Python (bot principal)
   '/api/cron',      // ← Vercel Cron (protegido con CRON_SECRET internamente)
   '/api/support',   // ← webhook bot soporte (protegido con secret_token de Telegram)
-  '/api/tonconnect-manifest', // ✅ FIX: Necesario para que las wallets lean el manifest sin token de Telegram
+  '/api/tonconnect-manifest', // ✅ Necesario para que las wallets lean el manifest sin token de Telegram
 ]
 
 const DEV_BYPASS =
@@ -111,7 +108,6 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next()
   }
 
-  // ✅ Públicos: incluye subpaths como /api/bot/webhook
   if (PUBLIC_ENDPOINTS.some((p) => pathname === p || pathname.startsWith(p + '/'))) {
     return NextResponse.next()
   }
