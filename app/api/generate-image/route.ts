@@ -2,46 +2,19 @@
 
 import { NextResponse } from 'next/server'
 import {
-  ensureUser,
-  getCharacter,
-  countUserMessages,
-  insertGemTransaction,
-  getSeenR2Indices,
-  markImageSeen,
-  getAvailablePoolImage,
-  markPoolImageViewed,
-  incrementPoolImageUse,
-  insertPoolImage,
-  insertMessage,
-  getActiveSubscription,
-  insertImageGeneration,
-  countUserWiroLast30Days,
-  countUserGenerationsForTag,
-  ensureWiroTokensRefilled,
-  consumeWiroToken,
-  countSfwImageGenerationsLast24h,
+  ensureUser, getCharacter, countUserMessages, insertGemTransaction,
+  getSeenR2Indices, markImageSeen, getAvailablePoolImage, markPoolImageViewed,
+  incrementPoolImageUse, insertPoolImage, insertMessage, getActiveSubscription,
+  insertImageGeneration, countUserWiroLast30Days, countUserGenerationsForTag,
+  ensureWiroTokensRefilled, consumeWiroToken, countSfwImageGenerationsLast24h,
 } from '@/lib/db-queries'
 import {
-  getCharacterFace,
-  getCharacterImageUrl,
-  VIP_LIMITS,
-  MAX_GENERATIONS_PER_CONTEXT_PER_USER,
+  getCharacterFace, getCharacterImageUrl, VIP_LIMITS, MAX_GENERATIONS_PER_CONTEXT_PER_USER,
 } from '@/lib/constants'
 import { generateRunwareImage } from '@/lib/runware'
-import {
-  getLevelFromMessages,
-  getImageCost,
-  getClothingLevel,
-  getFaceVisibility,
-} from '@/lib/levels'
-import {
-  r2Available,
-  uploadToR2,
-  downloadImage,
-  buildR2Key,
-  buildTagKey,
-} from '@/lib/r2-upload'
-import { execute, queryOne } from '@/lib/turso'
+import { getLevelFromMessages, getImageCost, getClothingLevel, getFaceVisibility } from '@/lib/levels'
+import { r2Available, uploadToR2, downloadImage, buildR2Key, buildTagKey } from '@/lib/r2-upload'
+import { execute, queryOne, query } from '@/lib/turso'
 
 export const maxDuration = 60
 
@@ -283,34 +256,75 @@ const AUTO_SCENES_MALE: Record<number, string> = {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// 🧠 NUEVO: CALCULADOR DE "HEAT SCORE" (INTELIGENCIA ARTIFICIAL)
+// 🧠 EL SISTEMA DE APRENDIZAJE DOBLE
 // ═══════════════════════════════════════════════════════════════
-function calculateHeatScore(messages: string[]): number {
+const STOP_WORDS = new Set(['el', 'la', 'los', 'las', 'un', 'una', 'y', 'o', 'de', 'en', 'que', 'es', 'por', 'para', 'con', 'no', 'si', 'me', 'te', 'se', 'lo', 'mi', 'tu', 'su', 'al', 'del', 'como', 'mas', 'pero'])
+
+async function calculateDynamicHeatScore(messages: string[]): Promise<number> {
   if (!messages || messages.length === 0) return 0
   
   let score = 0
   const text = messages.join(' ').toLowerCase()
   
-  // 1. Palabras clave (Suben mucho el heat)
-  const hotKeywords = /\b(fuego|caliente|excitad|duro|mojado|húmedo|quiere|dame|tócame|tocame|beso|gemir|cama|desnud|follar|sexo|pasión|pasion|amor|hermosa|preciosa|culo|tetas|pene|vagina)\b/g
-  const matches = text.match(hotKeywords)
-  if (matches) score += matches.length * 15
+  // 1. Reglas Estáticas Base
+  const baseHotKeywords = /\b(fuego|caliente|excitad|duro|mojado|húmedo|quiero|dame|toca|beso|cama|pasión|pasion|amor|hermosa|preciosa|ahora|ya|rápido|rapido|por favor|más|mas)\b/g
+  const matches = text.match(baseHotKeywords)
+  if (matches) score += matches.length * 10
+
+  // 2. Signos de exclamación y suspenso
+  score += (text.match(/!/g) || []).length * 5
+  score += (text.match(/\?/g) || []).length * 5
   
-  // 2. Signos de exclamación (Indican emoción)
-  const exclamations = (text.match(/!/g) || []).length
-  score += exclamations * 5
-  
-  // 3. Emojis calientes
+  // 3. Longitud
+  if (text.length > 50) score += 5
+  if (text.length > 150) score += 15
+
+  // 4. 🧠 INTELIGENCIA ARTIFICIAL: Consultamos ambos cerebros
+  try {
+    const words = text.replace(/[^\w\sáéíóúñ]/g, '').split(/\s+/).filter(w => w.length > 2)
+    if (words.length > 0) {
+      const placeholders = words.map(() => '?').join(',')
+      // Buscamos tanto 'heat' como 'purchase' (el sistema aprende de ambos)
+      const triggers = await query<{ weight: number }>(
+        `SELECT weight FROM learned_triggers WHERE word IN (${placeholders})`,
+        words
+      )
+      
+      const learnedScore = triggers.reduce((acc, t) => acc + t.weight, 0)
+      if (learnedScore > 0) {
+        score += learnedScore * 5 // Multiplicador de aprendizaje
+        console.log(`[AI Heat] 🧠 Se detectaron palabras aprendidas: +${learnedScore * 5} pts`)
+      }
+    }
+  } catch (e) {
+    console.warn('[AI Heat] Error consultando learned_triggers:', e)
+  }
+
+  // 5. Emojis
   const hotEmojis = /[🥵😈💦🍆💋❤️🔥]/g
   const emojiMatches = text.match(hotEmojis)
-  if (emojiMatches) score += emojiMatches.length * 10
+  if (emojiMatches) score += emojiMatches.length * 5
 
-  // 4. Longitud de los mensajes (Si escribe mucho, está enganchado)
-  if (text.length > 100) score += 10
-  if (text.length > 200) score += 15
-
-  // Cap máximo a 100
   return Math.min(score, 100)
+}
+
+async function learnHeatTriggers(messages: string[]) {
+  try {
+    const text = messages.join(' ').toLowerCase()
+    const words = text.replace(/[^\w\sáéíóúñ]/g, '').split(/\s+/)
+    const uniqueWords = Array.from(new Set(words)).filter(w => w.length > 2 && !STOP_WORDS.has(w))
+
+    for (const word of uniqueWords) {
+      await execute(
+        `INSERT INTO learned_triggers (word, type, weight) VALUES (?, 'heat', 1)
+         ON CONFLICT(word, type) DO UPDATE SET weight = weight + 1`,
+        [word]
+      )
+    }
+    console.log(`[AI Learn] 🔥 El sistema aprendió nuevas palabras de calentura: ${uniqueWords.join(', ')}`)
+  } catch (e) {
+    console.warn('[AI Learn] Error guardando heat triggers:', e)
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -318,67 +332,28 @@ function calculateHeatScore(messages: string[]): number {
 // ═══════════════════════════════════════════════════════════════
 function extractMoodFromMessages(messages: string[], heat: number): string {
   if (!messages || messages.length === 0) return ''
-
   const text = messages.join(' ').toLowerCase()
 
-  if (heat > 70) {
-    return 'breathless_passionate' // Si está caliente, forzamos el mood
-  }
+  if (heat > 65) return 'breathless_passionate' 
 
-  if (/\b(jadeo|jadea|respira|suspiro|temblor|tiembla|calor|fuego|húmedo|mojado|acelerado|entrecortad)\b/.test(text)) {
-    return 'breathless_passionate'
-  }
-  if (/\b(hazme|tuyo|tuya|obedec|pide|por favor|tómame|tomame|entrégate|entregate|soy tu)\b/.test(text)) {
-    return 'submission_surrender'
-  }
-  if (/\b(domin|manda|control|orden|obedece|rodillas|sumiso|sumisa|mía|mio)\b/.test(text)) {
-    return 'dominant_commanding'
-  }
-  if (/\b(beso|lento|despacio|cerca|roza|toca|acaricia|susurr|muerde|labio)\b/.test(text)) {
-    return 'sensual_slow_burn'
-  }
-  if (/\b(provoc|broma|jugueto|desaf|atrev|coqueto|pícara|picara|tentaci)\b/.test(text)) {
-    return 'playful_teasing'
-  }
-  if (/\b(amor|quiero|corazón|corazon|tierno|dulce|abrazo)\b/.test(text)) {
-    return 'romantic_tender'
-  }
-  if (/\b(enfadad|enojad|discutir|discusión|discusion|pelea|pelean|celos|celoso|reclama|grita|gritar|furia|furios)\b/.test(text)) {
-    return 'tense_argument'
-  }
-  if (/\b(triste|llorar|llora|lágrimas|lagrimas|melancol|consuelo|consolar|vulnerab)\b/.test(text)) {
-    return 'emotional_vulnerable'
-  }
-  if (/\b(lluvia|llueve|tormenta|tempestad|chaparrón|chaparro|empapad)\b/.test(text)) {
-    return 'rainy_intimate'
-  }
-  if (/\b(playa|arena|olas|atardecer|surf|bikini|traje de baño|oceano|océano|costa|marea)\b/.test(text)) {
-    return 'sunset_beach'
-  }
-  if (/\b(cama|sábanas|sabanas|almohada|acostad|recostad|dormir|dormida|dormido|descansar|despierta)\b/.test(text)) {
-    return 'bedroom_intimacy'
-  }
-  if (/\b(ducha|bañera|banera|vapor|vaporoso|jabón|jabon|agua caliente|espuma|burbujas)\b/.test(text)) {
-    return 'bathroom_steamy'
-  }
-  if (/\b(cocina|cocinar|cocinando|comida|cena|vino|bebida|desayuno|restaurante)\b/.test(text)) {
-    return 'kitchen_intimacy'
-  }
-  if (/\b(fiesta|baile|bailar|bailando|música|musica|club|discoteca|concierto)\b/.test(text)) {
-    return 'nightlife_party'
-  }
-  if (/\b(gym|gimnasio|entrenar|entrenando|deporte|sudor|sudando|ejercicio|pesas|cardio|correr)\b/.test(text)) {
-    return 'post_workout'
-  }
-  if (/\b(auto|coche|carro|manejar|conducir|viaje|carretera|road trip)\b/.test(text)) {
-    return 'car_ride'
-  }
-  if (/\b(noche|luna|estrellas|oscuridad|medianoche|nocturno|misterio|velas)\b/.test(text)) {
-    return 'night_mystery'
-  }
-  if (/\b(risa|ríe|rie|reír|reir|divertid|juego|jugando|sonrisa|sonríe|sonrie|alegre)\b/.test(text)) {
-    return 'playful_laughing'
-  }
+  if (/\b(jadeo|jadea|respira|suspiro|temblor|tiembla|calor|fuego|húmedo|mojado|acelerado|entrecortad)\b/.test(text)) return 'breathless_passionate'
+  if (/\b(hazme|tuyo|tuya|obedec|pide|por favor|tómame|tomame|entrégate|entregate|soy tu)\b/.test(text)) return 'submission_surrender'
+  if (/\b(domin|manda|control|orden|obedece|rodillas|sumiso|sumisa|mía|mio)\b/.test(text)) return 'dominant_commanding'
+  if (/\b(beso|lento|despacio|cerca|roza|toca|acaricia|susurr|muerde|labio)\b/.test(text)) return 'sensual_slow_burn'
+  if (/\b(provoc|broma|jugueto|desaf|atrev|coqueto|pícara|picara|tentaci)\b/.test(text)) return 'playful_teasing'
+  if (/\b(amor|quiero|corazón|corazon|tierno|dulce|abrazo)\b/.test(text)) return 'romantic_tender'
+  if (/\b(enfadad|enojad|discutir|discusión|discusion|pelea|pelean|celos|celoso|reclama|grita|gritar|furia|furios)\b/.test(text)) return 'tense_argument'
+  if (/\b(triste|llorar|llora|lágrimas|lagrimas|melancol|consuelo|consolar|vulnerab)\b/.test(text)) return 'emotional_vulnerable'
+  if (/\b(lluvia|llueve|tormenta|tempestad|chaparrón|chaparro|empapad)\b/.test(text)) return 'rainy_intimate'
+  if (/\b(playa|arena|olas|atardecer|surf|bikini|traje de baño|oceano|océano|costa|marea)\b/.test(text)) return 'sunset_beach'
+  if (/\b(cama|sábanas|sabanas|almohada|acostad|recostad|dormir|dormida|dormido|descansar|despierta)\b/.test(text)) return 'bedroom_intimacy'
+  if (/\b(ducha|bañera|banera|vapor|vaporoso|jabón|jabon|agua caliente|espuma|burbujas)\b/.test(text)) return 'bathroom_steamy'
+  if (/\b(cocina|cocinar|cocinando|comida|cena|vino|bebida|desayuno|restaurante)\b/.test(text)) return 'kitchen_intimacy'
+  if (/\b(fiesta|baile|bailar|bailando|música|musica|club|discoteca|concierto)\b/.test(text)) return 'nightlife_party'
+  if (/\b(gym|gimnasio|entrenar|entrenando|deporte|sudor|sudando|ejercicio|pesas|cardio|correr)\b/.test(text)) return 'post_workout'
+  if (/\b(auto|coche|carro|manejar|conducir|viaje|carretera|road trip)\b/.test(text)) return 'car_ride'
+  if (/\b(noche|luna|estrellas|oscuridad|medianoche|nocturno|misterio|velas)\b/.test(text)) return 'night_mystery'
+  if (/\b(risa|ríe|rie|reír|reir|divertid|juego|jugando|sonrisa|sonríe|sonrie|alegre)\b/.test(text)) return 'playful_laughing'
 
   return ''
 }
@@ -407,11 +382,7 @@ const MOOD_FRAGMENTS: Record<string, string> = {
   playful_laughing: 'playful laughing mood, genuine smile, relaxed happy energy',
 }
 
-function buildR2VariantUrl(
-  gender: string,
-  archetype: string,
-  index: number
-): string {
+function buildR2VariantUrl(gender: string, archetype: string, index: number): string {
   const base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL
   if (!base) return ''
   const clean = base.replace(/\/$/, '')
@@ -423,23 +394,17 @@ function getLevelBucket(level: number): 'sfw' | 'nsfw' {
 }
 
 function getContextLimitMessage(lang: 'es' | 'en', characterName: string): string {
-  if (lang === 'en') {
-    return `*${characterName} smirks and shakes her head*\n\n"Wow, you really love this moment, huh? I think we've already explored this scene enough... let's try something different. Change the mood or the place, and I'll surprise you again."`
-  }
+  if (lang === 'en') return `*${characterName} smirks and shakes her head*\n\n"Wow, you really love this moment, huh? I think we've already explored this scene enough... let's try something different. Change the mood or the place, and I'll surprise you again."`
   return `*${characterName} sonríe de lado y niega con la cabeza*\n\n"Wow, veo que te encanta este momento, ¿eh? Creo que ya exploramos bastante esta escena... probemos algo diferente. Cambia el mood o el lugar, y te sorprendo otra vez."`
 }
 
 function getWiroTokensExhaustedMessage(lang: 'es' | 'en', characterName: string): string {
-  if (lang === 'en') {
-    return `*${characterName} bites her lip and looks at you apologetically*\n\n"I'm out of premium photos for today... but I'll have a new one tomorrow. Or come back later, I have something else to show you."`
-  }
+  if (lang === 'en') return `*${characterName} bites her lip and looks at you apologetically*\n\n"I'm out of premium photos for today... but I'll have a new one tomorrow. Or come back later, I have something else to show you."`
   return `*${characterName} se muerde el labio y te mira con disculpa*\n\n"Se me acabaron las fotos premium por hoy... pero mañana tendré una nueva. O vuelve más tarde, tengo algo más que mostrarte."`
 }
 
 function getWiroMonthlyLimitMessage(lang: 'es' | 'en', characterName: string): string {
-  if (lang === 'en') {
-    return `*${characterName} smiles warmly*\n\n"We've shared so many premium moments this month... I need to rest and recharge. Come back next month for more."`
-  }
+  if (lang === 'en') return `*${characterName} smiles warmly*\n\n"We've shared so many premium moments this month... I need to rest and recharge. Come back next month for more."`
   return `*${characterName} sonríe con calidez*\n\n"Hemos compartido tantos momentos premium este mes... necesito descansar y recargarme. Vuelve el próximo mes para más."`
 }
 
@@ -449,49 +414,31 @@ function getWiroMonthlyLimitMessage(lang: 'es' | 'en', characterName: string): s
 export async function POST(request: Request) {
   try {
     const tid = request.headers.get('x-telegram-id-validated')
-    if (!tid) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    }
+    if (!tid) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
     const body = await request.json().catch(() => ({}))
     const character_id = body?.character_id
-
-    const userHint =
-      typeof body?.description === 'string'
-        ? body.description.trim().slice(0, 200)
-        : ''
-
+    const userHint = typeof body?.description === 'string' ? body.description.trim().slice(0, 200) : ''
     const recent_messages: string[] = Array.isArray(body?.recent_messages)
-      ? body.recent_messages
-          .filter((m: any) => typeof m === 'string' && m.trim().length > 0)
-          .slice(-4)
+      ? body.recent_messages.filter((m: any) => typeof m === 'string' && m.trim().length > 0).slice(-4)
       : []
 
     const user = await ensureUser(tid)
-    if (!user) {
-      return NextResponse.json({ error: 'Error cargando tu cuenta' }, { status: 500 })
-    }
+    if (!user) return NextResponse.json({ error: 'Error cargando tu cuenta' }, { status: 500 })
 
     const character = await getCharacter(character_id, tid)
-    if (!character) {
-      return NextResponse.json({ error: 'Personaje no encontrado' }, { status: 404 })
-    }
+    if (!character) return NextResponse.json({ error: 'Personaje no encontrado' }, { status: 404 })
 
     const lang: 'es' | 'en' = user.language === 'en' ? 'en' : 'es'
-
     const userMsgCount = await countUserMessages(tid, character_id)
     const level = getLevelFromMessages(userMsgCount || 0)
     const imageCost = getImageCost(level.level)
     const faceVisibility = getFaceVisibility(level.level)
 
-    // ─── VIP status ───
     const vipSub = await getActiveSubscription(tid)
     const isVip = !!vipSub
-
-    // ─── Seen R2 indices ───
     const seenIndices = await getSeenR2Indices(tid, character_id)
 
-    // ─── Determine next R2 static index based on level ───
     let r2Index: number | null = null
     const candidateIndices = level.level <= 3 ? [1, 2] : [1, 3, 4]
     for (const idx of candidateIndices) {
@@ -505,60 +452,41 @@ export async function POST(request: Request) {
     const r2Base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL
     const useR2Static = r2Index !== null && !!r2Base
 
-    // ─── Determine source ───
     let source: 'r2_static' | 'pool' | 'generated' = 'generated'
     let imageUrl: string = ''
     let modelUsed: string = ''
     let promptUsed = ''
 
-    // ✅ NUEVO: LÓGICA ONLYFANS DINÁMICA (HEAT SCORE)
     const imgCountRow = await queryOne<{ c: number }>(
       `SELECT COUNT(*) AS c FROM image_generations WHERE telegram_id = ? AND character_id = ?`,
       [tid, character_id]
     )
     const totalImagesSent = imgCountRow?.c || 0
 
-    // Calculamos qué tan caliente está la conversación (0 a 100)
-    const heatScore = calculateHeatScore(recent_messages)
+    // ✅ CALCULAMOS EL HEAT SCORE INTELIGENTE
+    const heatScore = await calculateDynamicHeatScore(recent_messages)
     
-    let freeChance = 0.15 // Probabilidad base (15%)
-
-    if (heatScore > 70) {
-      // Está MUY caliente. Aprovechamos para cobrar. Solo 5% de dar gratis.
-      freeChance = 0.05 
-    } else if (heatScore < 30 && userMsgCount > 15) {
-      // Está FRÍO pero llevan muchos mensajes. Necesitamos re-engancharlo.
-      // Le damos un 70% de probabilidad de foto gratis.
-      freeChance = 0.70 
+    // ✅ SI ESTÁ CALIENTE, EL SISTEMA APRENDE SUS PALABRAS
+    if (heatScore > 65 && recent_messages.length > 0) {
+      await learnHeatTriggers(recent_messages)
     }
+    
+    let freeChance = 0.15 
+    if (heatScore > 60) freeChance = 0.05 
+    else if (heatScore < 25 && userMsgCount > 15) freeChance = 0.70 
 
-    // Primera foto siempre gratis. El resto, según la probabilidad calculada.
-    const isFree = 
-      totalImagesSent === 0 || 
-      (totalImagesSent > 0 && Math.random() < freeChance)
-
-    // ─── Compute mood and tag_key early ───
+    const isFree = totalImagesSent === 0 || (totalImagesSent > 0 && Math.random() < freeChance)
     const mood = extractMoodFromMessages(recent_messages, heatScore)
     const levelBucket = getLevelBucket(level.level)
-    const normalizedTagKey = buildTagKey(
-      character.archetype,
-      genderKey,
-      mood || 'default',
-      levelBucket
-    )
+    const normalizedTagKey = buildTagKey(character.archetype, genderKey, mood || 'default', levelBucket)
 
-    console.log(`[generate-image] 🌡️ Heat: ${heatScore}/100 | 🎲 Free Chance: ${Math.round(freeChance*100)}% | 🎁 Is Free: ${isFree}`)
+    console.log(`[generate-image] 🌡️ Heat: ${heatScore}/100 | 🎲 Free: ${Math.round(freeChance*100)}% | 🎁 Is Free: ${isFree}`)
 
     if (useR2Static) {
       source = 'r2_static'
       imageUrl = buildR2VariantUrl(genderKey, character.archetype, r2Index!)
       modelUsed = 'r2'
-
-      try {
-        await markImageSeen(tid, character_id, r2Index!, false)
-      } catch (markErr) {
-        console.warn('[generate-image] markImageSeen failed:', markErr)
-      }
+      try { await markImageSeen(tid, character_id, r2Index!, false) } catch (markErr) {}
     } else {
       let poolHit = false
       const usePool = !userHint && !!mood && r2Available
@@ -575,53 +503,27 @@ export async function POST(request: Request) {
             await markPoolImageViewed(available.id, tid, character_id)
             incrementPoolImageUse(available.id).catch(() => {})
           }
-        } catch (poolErr) {
-          console.warn('[generate-image] Pool lookup failed:', poolErr)
-        }
+        } catch (poolErr) {}
       }
 
       if (!poolHit) {
         source = 'generated'
-
         const tagCount = await countUserGenerationsForTag(tid, normalizedTagKey)
         if (tagCount >= MAX_GENERATIONS_PER_CONTEXT_PER_USER) {
-          return NextResponse.json(
-            {
-              error: 'context_limit_reached',
-              message: getContextLimitMessage(lang, character.character_name),
-            },
-            { status: 429 }
-          )
+          return NextResponse.json({ error: 'context_limit_reached', message: getContextLimitMessage(lang, character.character_name) }, { status: 429 })
         }
 
         const willUseWiro = level.level >= 4
         if (willUseWiro && isVip) {
           const tokens = await ensureWiroTokensRefilled(tid)
-          if (tokens <= 0) {
-            return NextResponse.json(
-              {
-                error: 'wiro_tokens_exhausted',
-                message: getWiroTokensExhaustedMessage(lang, character.character_name),
-              },
-              { status: 429 }
-            )
-          }
+          if (tokens <= 0) return NextResponse.json({ error: 'wiro_tokens_exhausted', message: getWiroTokensExhaustedMessage(lang, character.character_name) }, { status: 429 })
           const wiroMonthly = await countUserWiroLast30Days(tid)
-          if (wiroMonthly >= VIP_LIMITS.wiro_monthly) {
-            return NextResponse.json(
-              {
-                error: 'wiro_monthly_limit',
-                message: getWiroMonthlyLimitMessage(lang, character.character_name),
-              },
-              { status: 429 }
-            )
-          }
+          if (wiroMonthly >= VIP_LIMITS.wiro_monthly) return NextResponse.json({ error: 'wiro_monthly_limit', message: getWiroMonthlyLimitMessage(lang, character.character_name) }, { status: 429 })
           await consumeWiroToken(tid)
         }
 
         const autoScenes = character.gender === 'male' ? AUTO_SCENES_MALE : AUTO_SCENES_FEMALE
         const sceneHint = userHint || autoScenes[level.level] || autoScenes[1]
-
         const NO_GENITALIA = 'tasteful artistic composition, no explicit genitalia, no nudity visible below waist, strategic coverage, high-end boudoir photography aesthetic, safe for platform'
 
         let imagePrompt: string
@@ -634,41 +536,18 @@ export async function POST(request: Request) {
           let faceRule = ''
           if (faceVisibility === 'hidden') faceRule = FACE_HIDDEN_FRAGMENT
           else if (faceVisibility === 'partial') faceRule = FACE_PARTIAL_FRAGMENT
-
-          imagePrompt = [
-            QUALITY_CONTROL_PROMPT,
-            `[CHARACTER: ${dna}]`,
-            'highly detailed anime illustration, cel shading, soft cinematic lighting',
-            scene,
-            sceneHint,
-            faceRule,
-            'muted color palette, elegant composition, best quality, masterpiece',
-            'safe for work, no nudity, no explicit content',
-          ].filter((s) => s && s.length > 0).join(', ')
+          imagePrompt = [QUALITY_CONTROL_PROMPT, `[CHARACTER: ${dna}]`, 'highly detailed anime illustration, cel shading, soft cinematic lighting', scene, sceneHint, faceRule, 'muted color palette, elegant composition, best quality, masterpiece', 'safe for work, no nudity, no explicit content'].filter((s) => s && s.length > 0).join(', ')
         } else {
           const facePrompt = getCharacterFace(character.archetype, character.gender)
           const clothing = getClothingLevel(level.level)
           const scene = NSFW_SCENE_PROMPTS[level.level] || NSFW_SCENE_PROMPTS[4]
           const archetypeHint = ARCHETYPE_IMAGE_HINTS[`${character.gender}_${character.archetype}`] || ''
           const moodFragment = mood ? MOOD_FRAGMENTS[mood] || '' : ''
-
-          imagePrompt = [
-            QUALITY_CONTROL_PROMPT,
-            facePrompt,
-            'anime style, cel shading, moody atmospheric lighting, deep shadows, muted color palette, cinematic dark tones, detailed anime eyes',
-            clothing,
-            scene,
-            archetypeHint,
-            moodFragment,
-            sceneHint,
-            NO_GENITALIA,
-            'beautiful cinematic lighting, 2D illustration, best quality',
-          ].filter((s) => s && s.length > 0).join(', ')
+          imagePrompt = [QUALITY_CONTROL_PROMPT, facePrompt, 'anime style, cel shading, moody atmospheric lighting, deep shadows, muted color palette, cinematic dark tones, detailed anime eyes', clothing, scene, archetypeHint, moodFragment, sceneHint, NO_GENITALIA, 'beautiful cinematic lighting, 2D illustration, best quality'].filter((s) => s && s.length > 0).join(', ')
         }
 
         promptUsed = imagePrompt
         const seedUrl = getCharacterImageUrl(character.archetype, character.gender)
-
         let rawUrl: string
         try {
           rawUrl = await generateRunwareImage(imagePrompt, seedUrl, level.level)
@@ -679,13 +558,7 @@ export async function POST(request: Request) {
         modelUsed = 'runware-z-image-turbo'
         imageUrl = rawUrl
 
-        await insertImageGeneration({
-          telegram_id: tid,
-          character_id,
-          tag_key: normalizedTagKey,
-          model: willUseWiro ? 'wiro' : 'deepinfra', 
-          level: level.level,
-        })
+        await insertImageGeneration({ telegram_id: tid, character_id, tag_key: normalizedTagKey, model: willUseWiro ? 'wiro' : 'deepinfra', level: level.level })
 
         if (r2Available && !userHint && mood) {
           try {
@@ -693,32 +566,13 @@ export async function POST(request: Request) {
             const r2Key = buildR2Key(character.archetype, genderKey, mood, levelBucket)
             const permanentUrl = await uploadToR2(r2Key, buffer, contentType)
             imageUrl = permanentUrl
-
-            const newImageId = await insertPoolImage({
-              tag_key: normalizedTagKey,
-              archetype: character.archetype,
-              gender: genderKey,
-              mood,
-              level_bucket: levelBucket,
-              r2_key: r2Key,
-              r2_url: permanentUrl,
-              prompt_used: imagePrompt,
-              first_user_id: tid,
-            })
-
-            if (newImageId) {
-              await markPoolImageViewed(newImageId, tid, character_id)
-            }
-          } catch (uploadErr) {
-            console.warn('[generate-image] R2 upload failed:', uploadErr)
-          }
+            const newImageId = await insertPoolImage({ tag_key: normalizedTagKey, archetype: character.archetype, gender: genderKey, mood, level_bucket: levelBucket, r2_key: r2Key, r2_url: permanentUrl, prompt_used: imagePrompt, first_user_id: tid })
+            if (newImageId) await markPoolImageViewed(newImageId, tid, character_id)
+          } catch (uploadErr) {}
         }
       }
     }
 
-    // ═══════════════════════════════════════════════════════════
-    // VIP QUOTA CHECK
-    // ═══════════════════════════════════════════════════════════
     let useVipQuota = false
     if (!isFree && isVip) {
       if (level.level <= 3) {
@@ -729,20 +583,12 @@ export async function POST(request: Request) {
           const wiroMonthly = await countUserWiroLast30Days(tid)
           if (wiroMonthly < VIP_LIMITS.wiro_monthly) {
             const tokens = await ensureWiroTokensRefilled(tid)
-            if (tokens > 0) {
-              useVipQuota = true
-              await consumeWiroToken(tid)
-            }
+            if (tokens > 0) { useVipQuota = true; await consumeWiroToken(tid) }
           }
-        } else {
-          useVipQuota = true
-        }
+        } else { useVipQuota = true }
       }
     }
 
-    // ═══════════════════════════════════════════════════════════
-    // CREATE LOCKED PHOTO (PPV)
-    // ═══════════════════════════════════════════════════════════
     let newGems = user.gems || 0
     let newPurchasedGems = user.purchased_gems || 0
     let lockedPhotoId: number | null = null
@@ -750,41 +596,25 @@ export async function POST(request: Request) {
 
     if (!isFree && !useVipQuota) {
       unlockPrice = imageCost
-      const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString() // 1 hora FOMO
-
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString()
       try {
         const dbResult = await execute(
-          `INSERT INTO locked_photos 
-           (telegram_id, character_id, image_url, tag_key, unlock_price, expires_at) 
-           VALUES (?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO locked_photos (telegram_id, character_id, image_url, tag_key, unlock_price, expires_at) VALUES (?, ?, ?, ?, ?, ?)`,
           [tid, character_id, imageUrl, normalizedTagKey, unlockPrice, expiresAt]
         )
         lockedPhotoId = Number(dbResult.lastInsertRowid)
-      } catch (dbErr) {
-        return NextResponse.json({ error: 'Error creating locked photo' }, { status: 500 })
-      }
+      } catch (dbErr) {}
     }
 
     if (source !== 'generated') {
-      await insertImageGeneration({
-        telegram_id: tid,
-        character_id,
-        tag_key: normalizedTagKey,
-        model: source === 'r2_static' ? 'r2' : 'pool',
-        level: level.level,
-      })
+      await insertImageGeneration({ telegram_id: tid, character_id, tag_key: normalizedTagKey, model: source === 'r2_static' ? 'r2' : 'pool', level: level.level })
     }
 
     try {
       const imageMessageContent = lockedPhotoId
         ? `*${character.character_name} te envía una foto*\n\n![Selfie](locked:${lockedPhotoId})`
         : `*${character.character_name} te envía una foto*\n\n![Selfie](${imageUrl})`
-      await insertMessage({
-        telegram_id: tid,
-        character_id,
-        role: 'assistant',
-        content: imageMessageContent,
-      })
+      await insertMessage({ telegram_id: tid, character_id, role: 'assistant', content: imageMessageContent })
     } catch (persistErr) {}
 
     return NextResponse.json({
@@ -802,7 +632,7 @@ export async function POST(request: Request) {
       image_index: r2Index,
       face_visibility: faceVisibility,
       model: modelUsed,
-      heat_score: heatScore, // ✅ Lo enviamos al frontend por si quieres mostrarlo
+      heat_score: heatScore,
     })
   } catch (error: any) {
     return NextResponse.json({ error: 'Error al generar la imagen' }, { status: 500 })
