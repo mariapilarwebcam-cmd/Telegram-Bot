@@ -12,8 +12,9 @@ import {
   REFERRAL_TOP_TIER_PCT,
   REFERRAL_ELITE_TIER_THRESHOLD,
   REFERRAL_ELITE_TIER_PCT,
+  REFERRAL_MIN_MESSAGES, // ✅ AÑADIDO: Importamos la constante
 } from '@/lib/constants'
-import { Analytics } from '@/lib/posthog'                       // ✅ PostHog
+import { Analytics } from '@/lib/posthog'
 
 export default function RewardsPage() {
   const { user, loading: userLoading, lang, refresh, isTelegram } = useUser()
@@ -794,9 +795,10 @@ export default function RewardsPage() {
               },
               {
                 n: '2',
+                // ✅ FIX: Usa la constante dinámica en lugar de "3"
                 text: lang === 'es'
-                  ? 'Tu amigo abre el link y chatea 3 mensajes'
-                  : 'Your friend opens the link and sends 3 messages',
+                  ? `Tu amigo abre el link y chatea ${REFERRAL_MIN_MESSAGES} mensajes`
+                  : `Your friend opens the link and sends ${REFERRAL_MIN_MESSAGES} messages`,
               },
               {
                 n: '3',
