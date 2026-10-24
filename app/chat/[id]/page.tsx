@@ -21,7 +21,7 @@ interface Message {
   role: 'user' | 'assistant'
   content: string
   created_at?: string
-  reaction?: string // ✅ Añadido para persistencia
+  reaction?: string | null
 }
 
 const GRADIENTS = [
@@ -139,14 +139,10 @@ export default function ChatPage() {
   const [generatingImage, setGeneratingImage] = useState(false)
   const [generatingAudio, setGeneratingAudio] = useState(false)
   
-  // ✅ ESTADOS PARA MEJORAS
   const [unlockingPhoto, setUnlockingPhoto] = useState<number | null>(null)
   const [recentlyUnlocked, setRecentlyUnlocked] = useState<string | null>(null)
   const [activeReactionMsg, setActiveReactionMsg] = useState<number | null>(null)
   const [isPlayingAudio, setIsPlayingAudio] = useState(false)
-  const [messageReactions, setMessageReactions] = useState<Record<string, string>>({})
-  
-  // ✅ ESTADO PARA SABER SI EL MENÚ SE ABRE ARRIBA O ABAJO
   const [menuDirection, setMenuDirection] = useState<'top' | 'bottom'>('top')
 
   const [menuOpen, setMenuOpen] = useState(false)
@@ -172,6 +168,8 @@ export default function ChatPage() {
   const sendingRef = useRef(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const longPressTimer = useRef<NodeJS.Timeout | null>(null)
+  const longPressFired = useRef(false)
+  const pressOrigin = useRef<{ x: number; y: number } | null>(null)
 
   useEffect(() => {
     const interval = setInterval(() => setRotationIndex((p) => p + 1), 5000)
@@ -236,23 +234,18 @@ export default function ChatPage() {
           if (cmp !== 0) return cmp
           return (a.id || 0) - (b.id || 0)
         })
+        
+        // ✅ DEDUPLICACIÓN CORREGIDA
         const deduped = sorted.filter((msg, idx, arr) => {
           if (idx === 0) return true
           const prev = arr[idx - 1]
+          if (msg.id && prev.id && msg.id !== prev.id) return true
           return !(prev.role === msg.role && prev.content === msg.content)
         })
+        
         setMessages(deduped)
         setIsPremium(!!data.is_premium)
         setSeenImageCount(data.seen_image_count || 0)
-
-        // ✅ CARGAR REACCIONES GUARDADAS DESDE LA BASE DE DATOS
-        const initialReactions: Record<string, string> = {}
-        deduped.forEach((msg: any) => {
-          if (msg.reaction && msg.id) {
-            initialReactions[String(msg.id)] = msg.reaction
-          }
-        })
-        setMessageReactions(initialReactions)
 
         const count = data.user_message_count || 0
         setTotalUserMessages(count)
@@ -280,7 +273,7 @@ export default function ChatPage() {
       endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
     }, 50)
     return () => clearTimeout(t)
-  }, [messages])
+  }, [messages, loading]) // ✅ Añadido loading para que baje al escribir
 
   useEffect(() => {
     const handleVisibility = () => {
@@ -334,7 +327,11 @@ export default function ChatPage() {
           if (data.blocked) { setBlocked(true); return }
           if (data.already_started) return
           if (data.response) {
-            setMessages([{ role: 'assistant', content: data.response }])
+            setMessages([{ 
+              id: data.assistant_message_id, 
+              role: 'assistant', 
+              content: data.response 
+            }])
             setGems(data.remaining_gems)
           }
         }
@@ -417,9 +414,21 @@ export default function ChatPage() {
             setBlockedMessage(data.response || '')
             setBlocked(true)
             setMessages((p) => p.slice(0, -1))
+            setInput(text) // ✅ Recuperar texto si está bloqueado
           }
         } else {
-          setMessages((p) => [...p, { role: 'assistant', content: data.response }])
+          // ✅ ASIGNAR IDS
+          setMessages((p) => {
+            const copy = [...p]
+            for (let i = copy.length - 1; i >= 0; i--) {
+              if (copy[i].role === 'user' && !copy[i].id) {
+                copy[i] = { ...copy[i], id: data.user_message_id }
+                break
+              }
+            }
+            return [...copy, { id: data.assistant_message_id, role: 'assistant', content: data.response }]
+          })
+          
           setGems(data.remaining_gems)
           setHookRemaining(data.hook_messages_remaining ?? 0)
           setTotalUserMessages((prev) => prev + 1)
@@ -529,7 +538,7 @@ export default function ChatPage() {
       if (res.ok) {
         setGems(data.remaining_gems)
         if (data.remaining_purchased_gems !== undefined) {
-           user.purchased_gems = data.remaining_purchased_gems
+           await refresh() // ✅ Evitar mutación directa
         }
         
         const audio = new Audio(`data:audio/wav;base64,${data.audio}`)
@@ -600,6 +609,7 @@ export default function ChatPage() {
           setMessages((p) => [
             ...p,
             {
+              id: data.message_id, // ✅ Asignar ID
               role: 'assistant',
               content: `*${getDisplayName(character)} te envía una foto*\n\n![Selfie](locked:${data.locked_photo_id})`,
             },
@@ -608,6 +618,7 @@ export default function ChatPage() {
           setMessages((p) => [
             ...p,
             {
+              id: data.message_id, // ✅ Asignar ID
               role: 'assistant',
               content: `*${getDisplayName(character)} te envía una foto*\n\n![Selfie](${data.image_url})`,
             },
@@ -618,7 +629,7 @@ export default function ChatPage() {
 
         setGems(data.remaining_gems)
         if (data.remaining_purchased_gems !== undefined) {
-           user.purchased_gems = data.remaining_purchased_gems
+           await refresh()
         }
         
         setPhotoOfferActive(false)
@@ -694,54 +705,55 @@ export default function ChatPage() {
     }
   }
 
-  // ✅ Función para manejar reacciones actualizada
-  const handleReaction = async (emoji: string, messageContent: string, msgKey: string) => {
-    setMessageReactions(prev => {
-      if (prev[msgKey] === emoji) {
-        const copy = { ...prev }
-        delete copy[msgKey]
-        return copy
-      }
-      return { ...prev, [msgKey]: emoji }
-    })
-    
+  // ✅ Función de reacción con optimismo y rollback
+  const handleReaction = async (msg: Message, emoji: string) => {
     setActiveReactionMsg(null)
+    if (!msg.id) return
+    
+    const prev = msg.reaction ?? null
+    const next = prev === emoji ? null : emoji
+
+    const apply = (r: string | null) =>
+      setMessages((p) => p.map((m) => (m.id === msg.id ? { ...m, reaction: r } : m)))
+
+    apply(next)
 
     try {
-      await tgFetch('/api/react', {
+      const res = await tgFetch('/api/react', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message_content: messageContent,
-          reaction: emoji
-        }),
+        body: JSON.stringify({ message_id: msg.id, reaction: next }),
       })
-    } catch (e) {
-      console.warn('Error enviando reacción:', e)
+      if (!res.ok) throw new Error('react failed')
+    } catch {
+      apply(prev)
     }
   }
 
-  // ✅ Lógica para detectar donde abrir el menú (Arriba o Abajo)
-  const startPress = (index: number, e: React.TouchEvent | React.MouseEvent) => {
-    // Si el toque/clic está en la mitad superior de la pantalla, el menú se abre hacia abajo
-    const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY
-    if (clientY < window.innerHeight / 2) {
-      setMenuDirection('bottom')
-    } else {
-      setMenuDirection('top')
-    }
-
+  // ✅ Pointer Events para evitar conflictos
+  const startPress = (i: number, e: React.PointerEvent<HTMLDivElement>) => {
+    if ((e.target as HTMLElement).closest('[data-reaction-ui]')) return
+    cancelPress()
+    longPressFired.current = false
+    pressOrigin.current = { x: e.clientX, y: e.clientY }
+    const rect = e.currentTarget.getBoundingClientRect()
     longPressTimer.current = setTimeout(() => {
-      setActiveReactionMsg(index)
-      if (window.navigator.vibrate) window.navigator.vibrate(50)
+      longPressFired.current = true
+      setMenuDirection(rect.top < 150 ? 'bottom' : 'top')
+      setActiveReactionMsg(i)
+      navigator.vibrate?.(50)
     }, 400)
   }
 
+  const movePress = (e: React.PointerEvent) => {
+    const o = pressOrigin.current
+    if (o && Math.hypot(e.clientX - o.x, e.clientY - o.y) > 10) cancelPress()
+  }
+
   const cancelPress = () => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current)
-      longPressTimer.current = null
-    }
+    if (longPressTimer.current) clearTimeout(longPressTimer.current)
+    longPressTimer.current = null
+    pressOrigin.current = null
   }
 
   const handleBannerTap = () => {
@@ -875,6 +887,8 @@ export default function ChatPage() {
         
         if (url.startsWith('locked:')) {
           const lockedId = url.replace('locked:', '')
+          if (!/^\d+$/.test(lockedId)) return '@@INVALID@@' // ✅ Sanitización
+          
           const price = currentImageCost
           
           images.push(
@@ -926,18 +940,22 @@ export default function ChatPage() {
             </div>`
           )
         } else {
+          // ✅ Sanitización URL (solo http/https)
+          if (!url.match(/^https?:\/\//)) return '@@INVALID@@'
+          const safeUrl = encodeURI(url).replace(/"/g, '&quot;')
+
           const isRecentlyUnlocked = url === recentlyUnlocked
           const animStyle = isRecentlyUnlocked ? 'animation: unlockReveal 0.8s ease-out;' : ''
 
           images.push(
             `<div 
-              data-image-url="${url}"
+              data-image-url="${safeUrl}"
               role="img" 
               aria-label="${safeAlt}" 
               style="
                 width: 100%; 
                 aspect-ratio: 832 / 1216; 
-                background-image: url('${url}'); 
+                background-image: url('${safeUrl}'); 
                 background-size: cover; 
                 background-position: center; 
                 border-radius: 16px; 
@@ -1225,6 +1243,10 @@ export default function ChatPage() {
       <div 
         className="chat-messages"
         onClick={(e) => {
+          if (longPressFired.current) { 
+            longPressFired.current = false; 
+            return 
+          }
           const target = e.target as HTMLElement
           
           const lockedTarget = target.closest('[data-locked-id]')
@@ -1271,116 +1293,113 @@ export default function ChatPage() {
         )}
 
         {messages.map((m, i) => {
-          const msgKey = String(m.id || i)
-          const currentReaction = messageReactions[msgKey]
-
+          const isUser = m.role === 'user'
           return (
-            <div 
-              key={msgKey} 
-              style={{ 
-                display: 'flex', 
-                flexDirection: 'column', 
-                alignItems: m.role === 'user' ? 'flex-end' : 'flex-start', 
-                position: 'relative',
-                marginBottom: 16 
+            <div
+              key={m.id ?? `tmp-${i}`}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: isUser ? 'flex-end' : 'flex-start',
+                marginBottom: m.reaction ? 26 : 16, // ✅ Espacio extra si hay reacción
               }}
-              onTouchStart={(e) => startPress(i, e)}
-              onTouchEnd={cancelPress}
-              onTouchMove={cancelPress}
-              onMouseDown={(e) => startPress(i, e)}
-              onMouseUp={cancelPress}
-              onMouseLeave={cancelPress}
-              onContextMenu={(e) => e.preventDefault()}
             >
+              {/* ✅ CONTENEDOR EXCLUSIVO PARA LA BURBUJA Y LA REACCIÓN */}
               <div
-                className={m.role === 'user' ? 'bubble-user' : 'bubble-ai'}
-                dangerouslySetInnerHTML={{ __html: formatMessage(m.content) }}
-              />
+                style={{
+                  position: 'relative',
+                  maxWidth: '85%',
+                  touchAction: 'pan-y',
+                  WebkitTouchCallout: 'none',
+                  WebkitUserSelect: 'none',
+                  userSelect: 'none',
+                }}
+                onPointerDown={(e) => startPress(i, e)}
+                onPointerMove={movePress}
+                onPointerUp={cancelPress}
+                onPointerLeave={cancelPress}
+                onPointerCancel={cancelPress}
+                onContextMenu={(e) => e.preventDefault()}
+              >
+                <div
+                  className={isUser ? 'bubble-user' : 'bubble-ai'}
+                  style={{ maxWidth: '100%' }}
+                  dangerouslySetInnerHTML={{ __html: formatMessage(m.content) }}
+                />
 
-              {/* ✅ INSIGNIA DE REACCIÓN DENTRO DEL MENSAJE */}
-              {currentReaction && (
-                <div 
-                  onClick={() => setActiveReactionMsg(activeReactionMsg === i ? null : i)}
-                  style={{
-                    position: 'absolute',
-                    bottom: 6, // Posicionado sutilmente dentro del borde inferior
-                    [m.role === 'user' ? 'left' : 'right']: 6, // En la esquina contraria al texto
-                    background: 'rgba(31, 23, 51, 0.95)',
-                    border: '1px solid rgba(168,85,247,0.5)',
-                    borderRadius: 12,
-                    padding: '2px 6px',
-                    fontSize: 13,
-                    boxShadow: '0 2px 6px rgba(0,0,0,0.5)',
-                    cursor: 'pointer',
-                    zIndex: 5,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    minWidth: 22,
-                    height: 22,
-                  }}
-                >
-                  {currentReaction}
-                </div>
-              )}
-
-              {/* ✅ MENÚ DE REACCIONES FLOTANTE (DINÁMICO ARRIBA/ABAJO) */}
-              {activeReactionMsg === i && (
-                <>
-                  <div 
-                    onClick={() => setActiveReactionMsg(null)} 
-                    style={{ position: 'fixed', inset: 0, zIndex: 10 }} 
-                  />
-                  
-                  <div 
-                    className="reaction-menu-popup"
+                {/* ✅ INSIGNIA DE REACCIÓN */}
+                {m.reaction && (
+                  <button
+                    data-reaction-ui
+                    onClick={() => setActiveReactionMsg(activeReactionMsg === i ? null : i)}
                     style={{
                       position: 'absolute',
-                      [m.role === 'user' ? 'right' : 'left']: 0,
-                      [menuDirection === 'bottom' ? 'top' : 'bottom']: '100%',
-                      [menuDirection === 'bottom' ? 'marginTop' : 'marginBottom']: 10,
+                      bottom: -14, // Se ancla al borde inferior de la burbuja
+                      [isUser ? 'left' : 'right']: 8, // A la izquierda si es tuyo, a la derecha si es de la IA
                       background: '#1f1733',
-                      borderRadius: 30,
-                      padding: '8px 12px',
-                      display: 'flex',
-                      gap: 8,
-                      boxShadow: '0 8px 24px rgba(0,0,0,0.6), 0 0 0 1px rgba(168,85,247,0.3)',
-                      zIndex: 20,
+                      border: '1px solid rgba(168,85,247,0.5)',
+                      borderRadius: 12,
+                      padding: '1px 6px',
+                      fontSize: 14,
+                      height: 24,
+                      minWidth: 26,
+                      lineHeight: 1,
+                      cursor: 'pointer',
+                      zIndex: 5,
                     }}
                   >
-                    {['❤️', '🔥', '😈', '💦', '🍆', '🍑', '🥵', '💋'].map(emoji => {
-                      const isSelected = currentReaction === emoji
-                      return (
-                        <span
+                    {m.reaction}
+                  </button>
+                )}
+
+                {/* ✅ MENÚ DE REACCIONES FLOTANTE */}
+                {activeReactionMsg === i && (
+                  <>
+                    <div
+                      data-reaction-ui
+                      onClick={() => setActiveReactionMsg(null)}
+                      style={{ position: 'fixed', inset: 0, zIndex: 10 }}
+                    />
+                    <div
+                      data-reaction-ui
+                      style={{
+                        position: 'absolute',
+                        [isUser ? 'right' : 'left']: 0,
+                        [menuDirection === 'bottom' ? 'top' : 'bottom']: 'calc(100% + 8px)',
+                        width: 'max-content',
+                        maxWidth: 'calc(100vw - 24px)',
+                        background: '#1f1733',
+                        borderRadius: 28,
+                        padding: '4px 6px',
+                        display: 'flex',
+                        gap: 2,
+                        boxShadow: '0 8px 24px rgba(0,0,0,0.6), 0 0 0 1px rgba(168,85,247,0.3)',
+                        zIndex: 20,
+                      }}
+                    >
+                      {['❤️', '🔥', '😈', '💦', '🍆', '🍑', '🥵', '💋'].map((emoji) => (
+                        <button
                           key={emoji}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleReaction(emoji, m.content, msgKey)
-                          }}
-                          style={{ 
-                            cursor: 'pointer', 
-                            fontSize: 24, 
-                            transition: 'all 0.2s',
-                            padding: '4px',
+                          data-reaction-ui
+                          onClick={(e) => { e.stopPropagation(); handleReaction(m, emoji) }}
+                          style={{
+                            width: 36,
+                            height: 36,
+                            fontSize: 22,
+                            border: 'none',
                             borderRadius: '50%',
-                            background: isSelected ? 'rgba(236,72,153,0.3)' : 'transparent',
-                            transform: isSelected ? 'scale(1.2)' : 'scale(1)',
-                            WebkitTapHighlightColor: 'transparent'
-                          }}
-                          onTouchStart={(e) => {
-                            if (!isSelected) e.currentTarget.style.transform = 'scale(1.3)'
-                          }}
-                          onTouchEnd={(e) => {
-                            if (!isSelected) e.currentTarget.style.transform = 'scale(1)'
+                            cursor: 'pointer',
+                            background: m.reaction === emoji ? 'rgba(236,72,153,0.3)' : 'transparent',
+                            WebkitTapHighlightColor: 'transparent',
                           }}
                         >
                           {emoji}
-                        </span>
-                      )
-                    })}
-                  </div>
-                </>
-              )}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           )
         })}
@@ -1896,4 +1915,4 @@ export default function ChatPage() {
       )}
     </div>
   )
-}
+  }
