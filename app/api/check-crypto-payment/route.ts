@@ -157,7 +157,7 @@ export async function POST(request: Request) {
     }
 
     // ─── Consultar TonAPI ───
-    const url = `https://tonapi.io/v2/accounts/${RECIPIENT_WALLET}/events?limit=20`
+    const url = `https://tonapi.io/v2/accounts/${RECIPIENT_WALLET}/events?limit=100`
     const headers: Record<string, string> = { Accept: 'application/json' }
     if (TONAPI_KEY) headers['Authorization'] = `Bearer ${TONAPI_KEY}`
 
