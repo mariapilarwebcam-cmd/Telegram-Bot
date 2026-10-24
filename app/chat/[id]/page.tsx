@@ -21,6 +21,7 @@ interface Message {
   role: 'user' | 'assistant'
   content: string
   created_at?: string
+  reaction?: string // ✅ Añadido para persistencia
 }
 
 const GRADIENTS = [
@@ -144,6 +145,9 @@ export default function ChatPage() {
   const [activeReactionMsg, setActiveReactionMsg] = useState<number | null>(null)
   const [isPlayingAudio, setIsPlayingAudio] = useState(false)
   const [messageReactions, setMessageReactions] = useState<Record<string, string>>({})
+  
+  // ✅ ESTADO PARA SABER SI EL MENÚ SE ABRE ARRIBA O ABAJO
+  const [menuDirection, setMenuDirection] = useState<'top' | 'bottom'>('top')
 
   const [menuOpen, setMenuOpen] = useState(false)
   const [showRename, setShowRename] = useState(false)
@@ -240,6 +244,15 @@ export default function ChatPage() {
         setMessages(deduped)
         setIsPremium(!!data.is_premium)
         setSeenImageCount(data.seen_image_count || 0)
+
+        // ✅ CARGAR REACCIONES GUARDADAS DESDE LA BASE DE DATOS
+        const initialReactions: Record<string, string> = {}
+        deduped.forEach((msg: any) => {
+          if (msg.reaction && msg.id) {
+            initialReactions[String(msg.id)] = msg.reaction
+          }
+        })
+        setMessageReactions(initialReactions)
 
         const count = data.user_message_count || 0
         setTotalUserMessages(count)
@@ -708,7 +721,16 @@ export default function ChatPage() {
     }
   }
 
-  const startPress = (index: number) => {
+  // ✅ Lógica para detectar donde abrir el menú (Arriba o Abajo)
+  const startPress = (index: number, e: React.TouchEvent | React.MouseEvent) => {
+    // Si el toque/clic está en la mitad superior de la pantalla, el menú se abre hacia abajo
+    const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY
+    if (clientY < window.innerHeight / 2) {
+      setMenuDirection('bottom')
+    } else {
+      setMenuDirection('top')
+    }
+
     longPressTimer.current = setTimeout(() => {
       setActiveReactionMsg(index)
       if (window.navigator.vibrate) window.navigator.vibrate(50)
@@ -1260,12 +1282,12 @@ export default function ChatPage() {
                 flexDirection: 'column', 
                 alignItems: m.role === 'user' ? 'flex-end' : 'flex-start', 
                 position: 'relative',
-                marginBottom: 16 // Margen un poco más grande para evitar que se corte la insignia
+                marginBottom: 16 
               }}
-              onTouchStart={() => startPress(i)}
+              onTouchStart={(e) => startPress(i, e)}
               onTouchEnd={cancelPress}
               onTouchMove={cancelPress}
-              onMouseDown={() => startPress(i)}
+              onMouseDown={(e) => startPress(i, e)}
               onMouseUp={cancelPress}
               onMouseLeave={cancelPress}
               onContextMenu={(e) => e.preventDefault()}
@@ -1275,34 +1297,34 @@ export default function ChatPage() {
                 dangerouslySetInnerHTML={{ __html: formatMessage(m.content) }}
               />
 
-              {/* ✅ INSIGNIA DE REACCIÓN SUPERPUESTA (ESTILO TELEGRAM/WHATSAPP) */}
+              {/* ✅ INSIGNIA DE REACCIÓN DENTRO DEL MENSAJE */}
               {currentReaction && (
                 <div 
                   onClick={() => setActiveReactionMsg(activeReactionMsg === i ? null : i)}
                   style={{
                     position: 'absolute',
-                    bottom: -12, // Lo baja para que pise el borde inferior del mensaje
-                    [m.role === 'user' ? 'left' : 'right']: 12, // A la izquierda si es tuyo, a la derecha si es de la IA
-                    background: '#1f1733',
-                    border: '1.5px solid rgba(168,85,247,0.6)',
-                    borderRadius: 20,
-                    padding: '2px 8px',
-                    fontSize: 14,
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.6)',
+                    bottom: 6, // Posicionado sutilmente dentro del borde inferior
+                    [m.role === 'user' ? 'left' : 'right']: 6, // En la esquina contraria al texto
+                    background: 'rgba(31, 23, 51, 0.95)',
+                    border: '1px solid rgba(168,85,247,0.5)',
+                    borderRadius: 12,
+                    padding: '2px 6px',
+                    fontSize: 13,
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.5)',
                     cursor: 'pointer',
                     zIndex: 5,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    minWidth: 28,
-                    height: 24,
+                    minWidth: 22,
+                    height: 22,
                   }}
                 >
                   {currentReaction}
                 </div>
               )}
 
-              {/* ✅ MENÚ DE REACCIONES FLOTANTE CON EMOJIS HOT */}
+              {/* ✅ MENÚ DE REACCIONES FLOTANTE (DINÁMICO ARRIBA/ABAJO) */}
               {activeReactionMsg === i && (
                 <>
                   <div 
@@ -1314,9 +1336,9 @@ export default function ChatPage() {
                     className="reaction-menu-popup"
                     style={{
                       position: 'absolute',
-                      bottom: '100%',
                       [m.role === 'user' ? 'right' : 'left']: 0,
-                      marginBottom: 10,
+                      [menuDirection === 'bottom' ? 'top' : 'bottom']: '100%',
+                      [menuDirection === 'bottom' ? 'marginTop' : 'marginBottom']: 10,
                       background: '#1f1733',
                       borderRadius: 30,
                       padding: '8px 12px',
@@ -1341,8 +1363,8 @@ export default function ChatPage() {
                             transition: 'all 0.2s',
                             padding: '4px',
                             borderRadius: '50%',
-                            background: isSelected ? 'rgba(236,72,153,0.3)' : 'transparent', // Resalta el emoji elegido
-                            transform: isSelected ? 'scale(1.2)' : 'scale(1)', // Efecto visual del emoji elegido
+                            background: isSelected ? 'rgba(236,72,153,0.3)' : 'transparent',
+                            transform: isSelected ? 'scale(1.2)' : 'scale(1)',
                             WebkitTapHighlightColor: 'transparent'
                           }}
                           onTouchStart={(e) => {
