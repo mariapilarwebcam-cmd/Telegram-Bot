@@ -166,7 +166,7 @@ export default function ChatPage() {
   const menuRef = useRef<HTMLDivElement>(null)
   const sendingRef = useRef(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const longPressTimer = useRef<NodeJS.Timeout | null>(null) // ✅ REF PARA EL LONG PRESS
+  const longPressTimer = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     const interval = setInterval(() => setRotationIndex((p) => p + 1), 5000)
@@ -363,7 +363,7 @@ export default function ChatPage() {
     }
     
     setLoading(true)
-    setActiveReactionMsg(null) // Cerrar menú de reacciones si está abierto
+    setActiveReactionMsg(null) 
 
     try {
       const res = await tgFetch('/api/chat', {
@@ -520,7 +520,6 @@ export default function ChatPage() {
         
         const audio = new Audio(`data:audio/wav;base64,${data.audio}`)
         
-        // ✅ Animación de reproducción de audio
         setIsPlayingAudio(true)
         audio.onended = () => setIsPlayingAudio(false)
         audio.play()
@@ -599,7 +598,6 @@ export default function ChatPage() {
               content: `*${getDisplayName(character)} te envía una foto*\n\n![Selfie](${data.image_url})`,
             },
           ])
-          // ✅ Animación de desbloqueo si se genera nítida directo
           setRecentlyUnlocked(data.image_url)
           setTimeout(() => setRecentlyUnlocked(null), 1000)
         }
@@ -668,7 +666,6 @@ export default function ChatPage() {
           })
         )
         
-        // ✅ Animación de desbloqueo
         setRecentlyUnlocked(data.image_url)
         setTimeout(() => setRecentlyUnlocked(null), 1000)
 
@@ -683,7 +680,6 @@ export default function ChatPage() {
     }
   }
 
-  // ✅ Función para manejar reacciones
   const handleReaction = async (emoji: string, messageContent: string) => {
     setActiveReactionMsg(null)
     try {
@@ -700,12 +696,11 @@ export default function ChatPage() {
     }
   }
 
-  // ✅ Funciones para detectar mantener presionado (Long Press)
   const startPress = (index: number) => {
     longPressTimer.current = setTimeout(() => {
       setActiveReactionMsg(index)
-      if (window.navigator.vibrate) window.navigator.vibrate(50) // Vibración sutil en móviles
-    }, 400) // 400ms de presión
+      if (window.navigator.vibrate) window.navigator.vibrate(50)
+    }, 400)
   }
 
   const cancelPress = () => {
@@ -897,7 +892,6 @@ export default function ChatPage() {
             </div>`
           )
         } else {
-          // ✅ ANIMACIÓN DE DESBLOQUEO AQUÍ
           const isRecentlyUnlocked = url === recentlyUnlocked
           const animStyle = isRecentlyUnlocked ? 'animation: unlockReveal 0.8s ease-out;' : ''
 
@@ -1252,24 +1246,22 @@ export default function ChatPage() {
               position: 'relative',
               marginBottom: 8
             }}
-            // ✅ EVENTOS PARA MANTENER PRESIONADO (LONG PRESS)
             onTouchStart={() => startPress(i)}
             onTouchEnd={cancelPress}
             onTouchMove={cancelPress}
             onMouseDown={() => startPress(i)}
             onMouseUp={cancelPress}
             onMouseLeave={cancelPress}
-            onContextMenu={(e) => e.preventDefault()} // Evita el menú de copiar/pegar nativo
+            onContextMenu={(e) => e.preventDefault()}
           >
             <div
               className={m.role === 'user' ? 'bubble-user' : 'bubble-ai'}
               dangerouslySetInnerHTML={{ __html: formatMessage(m.content) }}
             />
 
-            {/* ✅ MENÚ DE REACCIONES FLOTANTE (Aparece al mantener presionado) */}
+            {/* ✅ MENÚ DE REACCIONES FLOTANTE CON EMOJIS HOT */}
             {activeReactionMsg === i && (
               <>
-                {/* Fondo invisible para cerrar el menú si se toca fuera */}
                 <div 
                   onClick={() => setActiveReactionMsg(null)} 
                   style={{ position: 'fixed', inset: 0, zIndex: 10 }} 
@@ -1286,12 +1278,12 @@ export default function ChatPage() {
                     borderRadius: 30,
                     padding: '8px 12px',
                     display: 'flex',
-                    gap: 12,
+                    gap: 10,
                     boxShadow: '0 8px 24px rgba(0,0,0,0.6), 0 0 0 1px rgba(168,85,247,0.3)',
                     zIndex: 20,
                   }}
                 >
-                  {['❤️', '🔥', '😂', '😮', '😢', '👍'].map(emoji => (
+                  {['❤️', '🔥', '😈', '💦', '🍆', '🍑', '🥵', '💋'].map(emoji => (
                     <span
                       key={emoji}
                       onClick={(e) => {
@@ -1300,7 +1292,7 @@ export default function ChatPage() {
                       }}
                       style={{ 
                         cursor: 'pointer', 
-                        fontSize: 22, 
+                        fontSize: 24, 
                         transition: 'transform 0.1s',
                         WebkitTapHighlightColor: 'transparent'
                       }}
@@ -1449,7 +1441,6 @@ export default function ChatPage() {
 
         <div className="chat-input-row">
           <button onClick={playAudio} disabled={generatingAudio || (!isVip && isPremium && purchasedGems < currentAudioCost) || isPlayingAudio} className="chat-icon-btn" title={`${t.audioTooltip} (${currentAudioCost} gemas)`} style={{ opacity: (!isVip && isPremium && purchasedGems < currentAudioCost) || isPlayingAudio ? 0.5 : 1 }}>
-            {/* ✅ ANIMACIÓN DE AUDIO AQUÍ */}
             {isPlayingAudio ? (
               <div style={{ display: 'flex', gap: 2, alignItems: 'center', height: 20 }}>
                 <div className="audio-wave-bar" />
