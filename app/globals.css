@@ -1174,23 +1174,19 @@ img {
 .audio-wave-bar:nth-child(3) { animation-delay: 0.4s; }
 .audio-wave-bar:nth-child(4) { animation-delay: 0.1s; }
 
-/* ✅ Estilo para el botón de reacciones */
-.reaction-btn {
-  opacity: 0;
-  transition: opacity 0.2s ease, transform 0.2s ease;
+/* ✅ Estilo para el menú flotante de reacciones */
+.reaction-menu-popup {
+  animation: popIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  transform-origin: bottom center;
 }
-.bubble-ai:hover + .reaction-btn,
-.bubble-user:hover + .reaction-btn,
-.reaction-btn.active {
-  opacity: 1;
-} /* <--- ESTA ES LA LLAVE QUE FALTABA */
 
-/* ✅ Fix para móviles (Telegram WebApp) */
-@media (hover: none) {
-  .reaction-btn {
-    opacity: 0.4; /* Siempre visible de forma sutil en celulares */
-  }
-  .reaction-btn.active {
-    opacity: 1; /* Totalmente visible al tocarlo */
-  }
+@keyframes popIn {
+  0% { opacity: 0; transform: scale(0.8) translateY(10px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* Evitar que el texto se seleccione al mantener presionado */
+.chat-messages {
+  -webkit-user-select: none;
+  user-select: none;
 }
