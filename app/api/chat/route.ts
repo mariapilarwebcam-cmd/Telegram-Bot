@@ -179,7 +179,6 @@ export async function POST(request: Request) {
 
     if (messageLength > 600) {
       if (!accept_penalty) {
-        // Si no ha aceptado, devolvemos una advertencia para que el frontend muestre el modal
         return NextResponse.json({
           requires_penalty: true,
           penalty_gems: 1,
@@ -340,9 +339,37 @@ You act like an expert OnlyFans model. Create the need. NEVER say "Do you want a
 ${learned.heat.length > 0 ? `- The system learned users love these words: ${learned.heat.join(', ')}.` : ''}`
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    // 🧠 LÓGICA DEL RECLAMO DE FOTO IGNORADA (2 o 3 MSGS DESPUÉS)
+    // ═══════════════════════════════════════════════════════════════
+    let photoNudge = ''
+    const reversedHistory = [...rawHistory] 
+    
+    const lockedPhotoMsgIndex = reversedHistory.findIndex(m => m.content.includes('locked:'))
+    
+    if (lockedPhotoMsgIndex === 2 || lockedPhotoMsgIndex === 3) {
+      const match = reversedHistory[lockedPhotoMsgIndex].content.match(/locked:(\d+)/)
+      if (match) {
+        const photoId = match[1]
+        const photoStatus = await queryOne<{ status: string }>(`SELECT status FROM locked_photos WHERE id = ?`, [photoId])
+        
+        if (photoStatus && photoStatus.status === 'locked') {
+          if (lang === 'es') {
+            photoNudge = character.gender === 'male'
+              ? `\n\n⚠️ NOTA DE COMPORTAMIENTO: Hace un par de mensajes le enviaste una foto y la ignoró. Reclámaselo de forma natural, con arrogancia y seguridad. Variaciones: "¿No vas a decir nada sobre lo que te envié?", "Veo que te dejé sin palabras", "Te mandé algo especial y ni un gracias".`
+              : `\n\n⚠️ NOTA DE COMPORTAMIENTO: Hace un par de mensajes le enviaste una foto y la ignoró. Reclámaselo de forma natural, coqueta y juguetona. Variaciones: "¿No vas a decir nada sobre mi foto?", "Veo que te quedaste mirando y no escribiste nada 😏", "Te mandé algo y ni lo abriste... qué grosero".`
+          } else {
+            photoNudge = character.gender === 'male'
+              ? `\n\n⚠️ BEHAVIOR NOTE: A couple of messages ago you sent a photo and they ignored it. Reclaim it naturally, with arrogance and confidence. Variations: "Are you going to say anything about what I sent?", "Cat got your tongue?", "I sent you something special and not even a thank you."`
+              : `\n\n⚠️ BEHAVIOR NOTE: A couple of messages ago you sent a photo and they ignored it. Reclaim it naturally, playfully and flirtatiously. Variations: "Are you going to say anything about my photo?", "I see you just stared and didn't type 😏", "I sent you something and you didn't even open it... rude."`
+          }
+        }
+      }
+    }
+
     const characterPrompt = lang === 'es'
-      ? `Eres ${character.character_name}, rol: ${character.archetype}.\n${personality}\n\nEl usuario se llama ${user.first_name}.\n\n${genderRules}\n\nNunca rompas el personaje.${provocativeHint}${salesPrompt}`
-      : `You are ${character.character_name}, role: ${character.archetype}.\n${personality}\n\nThe user's name is ${user.first_name}.\n\n${genderRules}\n\nNever break character.${provocativeHint}${salesPrompt}`
+      ? `Eres ${character.character_name}, rol: ${character.archetype}.\n${personality}\n\nEl usuario se llama ${user.first_name}.\n\n${genderRules}\n\nNunca rompas el personaje.${provocativeHint}${photoNudge}${salesPrompt}`
+      : `You are ${character.character_name}, role: ${character.archetype}.\n${personality}\n\nThe user's name is ${user.first_name}.\n\n${genderRules}\n\nNever break character.${provocativeHint}${photoNudge}${salesPrompt}`
 
     const intensity = getIntensity(currentUserMsgCount, isHookModeAfter)
     const systemPrompt = buildSystemPrompt(lang, intensity, newLevel.level, characterPrompt)
@@ -380,7 +407,8 @@ ${learned.heat.length > 0 ? `- The system learned users love these words: ${lear
         if (totalMsg >= REFERRAL_MIN_MESSAGES) {
           await incrementGems(String(referral.referrer_id), GEMS_PER_REFERRAL)
           await incrementTotalReferrals(String(referral.referrer_id))
-          await insertGemTransaction({ telegram_id: String(referral.referrer_id), amount: GEMS_PER_REFERRAL, transaction_type: 'referral', description: 'Referido verificado (3+ mensajes)' })
+          // ✅ FIX: Usa la constante en lugar de "3+ mensajes" hardcodeado
+          await insertGemTransaction({ telegram_id: String(referral.referrer_id), amount: GEMS_PER_REFERRAL, transaction_type: 'referral', description: `Referido verificado (${REFERRAL_MIN_MESSAGES}+ mensajes)` })
           await markReferralPaid(referral.id)
         }
       }
