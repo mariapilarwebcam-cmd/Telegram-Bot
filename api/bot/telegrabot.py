@@ -28,6 +28,7 @@ if not TELEGRAM_BOT_TOKEN:
 BASE_DAILY_GEMS = 3
 GEMS_PER_REFERRAL = 10
 STARTING_GEMS = 10
+REFERRAL_MIN_MESSAGES = 10 # ✅ NUEVO: Requisito para pagar comisión
 
 REFERRAL_PURCHASE_COMMISSION_PCT = 5
 REFERRAL_TOP_TIER_THRESHOLD = 5
@@ -463,7 +464,6 @@ async def send_interest_question(message: Message, language: str):
 
 # ==================== ONBOARDING ROUTER ====================
 
-# ✅ FIX: Ahora recibe el parámetro is_new_user
 async def route_onboarding_state(message: Message, user: dict, language: str, is_new_user: bool = False):
     lang = user.get('language', language) or language
 
@@ -479,7 +479,6 @@ async def route_onboarding_state(message: Message, user: dict, language: str, is
         await send_interest_question(message, lang)
         return
 
-    # ✅ FIX: Pasa el parámetro dinámicamente en lugar de forzar True
     await send_mini_app_message(message, lang, is_new_user=is_new_user)
 
 
@@ -540,13 +539,13 @@ async def apply_pending_referral(telegram_id: int, ref_code: str) -> bool:
             if lang == 'es':
                 text = (
                     f"🎉 *¡Alguien usó tu código!*\n\n"
-                    f"💎 Recibirás *{GEMS_PER_REFERRAL} gemas* cuando mande 3 mensajes.\n"
+                    f"💎 Recibirás *{GEMS_PER_REFERRAL} gemas* cuando mande {REFERRAL_MIN_MESSAGES} mensajes.\n" # ✅ FIX
                     f"💰 Y *{REFERRAL_PURCHASE_COMMISSION_PCT}%* de todo lo que compre."
                 )
             else:
                 text = (
                     f"🎉 *Someone used your code!*\n\n"
-                    f"💎 You'll receive *{GEMS_PER_REFERRAL} gems* once they send 3 messages.\n"
+                    f"💎 You'll receive *{GEMS_PER_REFERRAL} gems* once they send {REFERRAL_MIN_MESSAGES} messages.\n" # ✅ FIX
                     f"💰 Plus *{REFERRAL_PURCHASE_COMMISSION_PCT}%* of everything they buy."
                 )
             await bot.send_message(int(referrer['telegram_id']), text, parse_mode="Markdown")
@@ -629,7 +628,7 @@ async def cmd_start(message: Message, command: CommandObject = None):
             ref_code = arg
 
     user = await get_user(telegram_id)
-    is_new_user = False # ✅ FIX: Bandera para saber si es nuevo
+    is_new_user = False
 
     if not user:
         is_new_user = True
@@ -658,7 +657,6 @@ async def cmd_start(message: Message, command: CommandObject = None):
         except Exception as e:
             logger.error(f"Error updating pending_referral: {e}")
 
-    # ✅ FIX: Le pasamos la bandera de si es nuevo o no
     await route_onboarding_state(message, user, language, is_new_user=is_new_user)
 
 
@@ -820,7 +818,6 @@ async def on_interest_select(callback: CallbackQuery):
 
     await callback.answer("✅")
 
-    # Aquí sí es True porque acaba de terminar el onboarding
     await send_mini_app_message(callback.message, lang, is_new_user=True)
 
 
@@ -1020,7 +1017,7 @@ async def cmd_invite(message: Message):
         text = (
             f"🎁 *Sistema de Referidos*\n\n"
             f"🔗 Tu enlace:\n`{link}`\n\n"
-            f"💎 *{GEMS_PER_REFERRAL} gemas* cuando tu amigo mande 3 mensajes.\n"
+            f"💎 *{GEMS_PER_REFERRAL} gemas* cuando tu amigo mande {REFERRAL_MIN_MESSAGES} mensajes.\n" # ✅ FIX
             f"💰 *{current_pct}%* de todas sus compras (permanente).\n\n"
             f"📊 Amigos que han comprado: *{paying_count}*\n"
             f"• 5+ → 7% de comisión\n"
@@ -1030,7 +1027,7 @@ async def cmd_invite(message: Message):
         text = (
             f"🎁 *Referral System*\n\n"
             f"🔗 Your link:\n`{link}`\n\n"
-            f"💎 *{GEMS_PER_REFERRAL} gems* when your friend sends 3 messages.\n"
+            f"💎 *{GEMS_PER_REFERRAL} gems* when your friend sends {REFERRAL_MIN_MESSAGES} messages.\n" # ✅ FIX
             f"💰 *{current_pct}%* of all their purchases (permanent).\n\n"
             f"📊 Friends who bought: *{paying_count}*\n"
             f"• 5+ → 7% commission\n"
