@@ -29,7 +29,7 @@ async function verifyCryptoPayment(
   expectedUnits: number
 ): Promise<{ ok: boolean; reason?: string }> {
   try {
-    const url = `https://tonapi.io/v2/accounts/${RECIPIENT_WALLET}/events?limit=30`
+    const url = `https://tonapi.io/v2/accounts/${RECIPIENT_WALLET}/events?limit=100`
     const headers: Record<string, string> = { Accept: 'application/json' }
     if (TONAPI_KEY) headers['Authorization'] = `Bearer ${TONAPI_KEY}`
 
