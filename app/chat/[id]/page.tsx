@@ -336,7 +336,6 @@ export default function ChatPage() {
     }, 300)
   }
 
-  // ✅ NUEVA FUNCIÓN: Acepta parámetro para el recargo
   const send = async (acceptPenalty = false) => {
     if (!input.trim() || !user || loading || sendingRef.current) return
     sendingRef.current = true
@@ -353,7 +352,6 @@ export default function ChatPage() {
     const text = input.trim()
     const wasFirstMessage = totalUserMessages === 0
     
-    // Optimistic UI: Solo limpiamos y mostramos el mensaje si no estamos confirmando
     if (!acceptPenalty) {
       setInput('')
       setMessages((p) => [...p, { role: 'user', content: text }])
@@ -374,17 +372,16 @@ export default function ChatPage() {
       const data = await res.json()
       
       if (res.ok) {
-        // ✅ Manejo del recargo por mensaje largo
         if (data.requires_penalty) {
           setLoading(false)
           sendingRef.current = false
           
           const confirmPenalty = window.confirm(data.message)
           if (confirmPenalty) {
-            send(true) // Reenviamos aceptando el recargo
+            send(true)
           } else {
-            setInput(text) // Restauramos el texto
-            setMessages((p) => p.slice(0, -1)) // Quitamos el mensaje optimista
+            setInput(text)
+            setMessages((p) => p.slice(0, -1))
           }
           return
         }
@@ -570,6 +567,7 @@ export default function ChatPage() {
         body: JSON.stringify({
           character_id: characterId,
           recent_messages: recentMessages,
+          is_direct_request: true, // ✅ AÑADIDO: Le decimos al backend que es una compra directa
         }),
       })
       const data = await res.json()
@@ -1208,80 +1206,124 @@ export default function ChatPage() {
       </div>
 
       <div className="chat-input-bar">
+        {/* ✅ NUEVO BANNER PPV ESTILO ONLYFANS/CANDY.AI */}
         {photoOfferActive && (
           <div
             onClick={handleBannerTap}
-            className="photo-offer-banner"
             style={{
               position: 'relative',
-              marginBottom: 10,
-              padding: '14px 16px',
-              borderRadius: 16,
-              background: isFirstImage
-                ? 'linear-gradient(135deg, rgba(34,197,94,0.4) 0%, rgba(16,185,129,0.3) 50%, rgba(34,197,94,0.4) 100%)'
-                : canAfford && isPremium
-                ? 'linear-gradient(135deg, rgba(236,72,153,0.4) 0%, rgba(168,85,247,0.3) 50%, rgba(236,72,153,0.4) 100%)'
-                : 'linear-gradient(135deg, rgba(124,92,255,0.35) 0%, rgba(168,85,247,0.25) 100%)',
-              backgroundSize: '200% 200%',
-              border: isFirstImage
-                ? '2px solid rgba(34,197,94,0.85)'
-                : canAfford && isPremium
-                ? '2px solid rgba(236,72,153,0.85)'
-                : '2px solid rgba(168,85,247,0.6)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 12,
-              cursor: 'pointer',
+              marginBottom: 12,
+              borderRadius: 20,
               overflow: 'hidden',
-              animation: isFirstImage || (canAfford && isPremium)
-                ? 'pulseGlow 1.8s ease-in-out infinite, shimmer 3s linear infinite'
+              cursor: 'pointer',
+              boxShadow: isFirstImage 
+                ? '0 8px 32px rgba(34, 197, 94, 0.4)' 
+                : '0 8px 32px rgba(236, 72, 153, 0.4)',
+              border: isFirstImage 
+                ? '1.5px solid rgba(34, 197, 94, 0.6)' 
+                : '1.5px solid rgba(236, 72, 153, 0.6)',
+              animation: isFirstImage || (canAfford && isPremium) 
+                ? 'pulseGlow 1.8s ease-in-out infinite' 
                 : 'pulseSoft 2.4s ease-in-out infinite',
             }}
           >
-            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(110deg, transparent 40%, rgba(255,255,255,0.2) 50%, transparent 60%)', backgroundSize: '200% 100%', animation: 'shimmer 2.5s linear infinite', pointerEvents: 'none' }} />
+            {/* Fondo borroso (Avatar del personaje) */}
+            <div style={{
+              position: 'absolute',
+              inset: 0,
+              backgroundImage: `url('${characterAvatar}')`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center 20%',
+              filter: 'blur(24px) brightness(0.4)',
+              transform: 'scale(1.2)',
+              zIndex: 0,
+            }} />
 
-            <div style={{ fontSize: 30, animation: 'float 1.8s ease-in-out infinite', filter: 'drop-shadow(0 0 10px rgba(236,72,153,1))', flexShrink: 0, position: 'relative', zIndex: 1 }}>
-              {isFirstImage ? '🎁' : isPremium ? '📸' : '🔒'}
-            </div>
+            {/* Overlay de gradiente para legibilidad */}
+            <div style={{
+              position: 'absolute',
+              inset: 0,
+              background: isFirstImage 
+                ? 'linear-gradient(to top, rgba(10, 5, 16, 0.95), rgba(34, 197, 94, 0.2))'
+                : 'linear-gradient(to top, rgba(10, 5, 16, 0.95), rgba(236, 72, 153, 0.2))',
+              zIndex: 1,
+            }} />
 
-            <div style={{ flex: 1, minWidth: 0, position: 'relative', zIndex: 1 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-                <span style={{ fontSize: 9, fontWeight: 900, letterSpacing: '0.1em', background: isFirstImage ? 'linear-gradient(90deg, #22c55e, #16a34a)' : canAfford && isPremium ? 'linear-gradient(90deg, #f0abfc, #ec4899)' : 'linear-gradient(90deg, #a78bfa, #7c5cff)', color: '#fff', padding: '2px 8px', borderRadius: 6, animation: 'badgePulse 1.2s ease-in-out infinite', textShadow: '0 0 4px rgba(0,0,0,0.3)' }}>
-                  {isFirstImage
-                    ? (lang === 'es' ? 'GRATIS · TOCA' : 'FREE · TAP')
-                    : !isPremium
-                    ? (lang === 'es' ? 'DESBLOQUEA' : 'UNLOCK')
-                    : canAfford
-                    ? (lang === 'es' ? 'REGALO · TOCA' : 'GIFT · TAP')
-                    : (lang === 'es' ? 'BLOQUEADO' : 'LOCKED')}
-                </span>
-                <span style={{ fontSize: 10, color: '#fbcfe8', fontWeight: 700, letterSpacing: '0.05em' }}>
-                  {isFirstImage ? '✨' : !isPremium ? 'PREMIUM' : canAfford ? '→' : (lang === 'es' ? 'IR A TIENDA' : 'GO TO SHOP')}
-                </span>
+            {/* Contenido del banner */}
+            <div style={{
+              position: 'relative',
+              zIndex: 2,
+              padding: '20px 16px',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 10,
+            }}>
+              <div style={{
+                fontSize: 42,
+                filter: isFirstImage 
+                  ? 'drop-shadow(0 0 16px rgba(34, 197, 94, 0.9))' 
+                  : 'drop-shadow(0 0 16px rgba(236, 72, 153, 0.9))',
+                animation: 'float 2s ease-in-out infinite',
+              }}>
+                {isFirstImage ? '🎁' : '🔒'}
               </div>
 
-              <p style={{ fontSize: 13, fontWeight: 800, color: '#fff', margin: 0, textShadow: '0 1px 4px rgba(0,0,0,0.5)', lineHeight: 1.25 }}>
-                {isFirstImage
-                  ? (lang === 'es' ? `¡Foto de bienvenida de ${displayName}!` : `Welcome photo from ${displayName}!`)
-                  : lang === 'es'
-                  ? `${displayName} quiere mandarte algo especial`
-                  : `${displayName} wants to send you something special`}
-              </p>
+              <div style={{ textAlign: 'center' }}>
+                <p style={{
+                  fontSize: 18,
+                  fontWeight: 900,
+                  color: '#fff',
+                  margin: 0,
+                  textShadow: '0 2px 10px rgba(0,0,0,0.8)',
+                  lineHeight: 1.2,
+                }}>
+                  {isFirstImage 
+                    ? (lang === 'es' ? '¡Regalo de bienvenida!' : 'Welcome gift!')
+                    : (lang === 'es' ? `${displayName} te envió una foto` : `${displayName} sent you a photo`)}
+                </p>
+                <p style={{
+                  fontSize: 13,
+                  color: isFirstImage ? '#86efac' : '#fbcfe8',
+                  margin: '4px 0 0 0',
+                  fontWeight: 600,
+                  textShadow: '0 1px 4px rgba(0,0,0,0.6)',
+                }}>
+                  {isFirstImage 
+                    ? (lang === 'es' ? 'Reclama tu foto gratis ahora' : 'Claim your free photo now')
+                    : (lang === 'es' ? 'Contenido exclusivo esperando' : 'Exclusive content waiting')}
+                </p>
+              </div>
 
-              <p style={{ fontSize: 11, color: isFirstImage ? '#86efac' : canAfford && isPremium ? '#f0abfc' : '#fbbf24', margin: '3px 0 0 0', fontWeight: 800 }}>
-                {isFirstImage
-                  ? (lang === 'es' ? '🎁 Primera foto gratis · reclamar ahora' : '🎁 First photo free · claim now')
-                  : !isPremium
-                  ? (lang === 'es' ? 'Compra gemas para verla' : 'Buy gems to see it')
-                  : canAfford
-                  ? `📸 ${currentImageCost} — ${lang === 'es' ? 'reclamar ahora' : 'claim now'}`
-                  : `⚠️ ${lang === 'es' ? 'Te faltan' : "You're missing"} ${missingGems} gemas compradas`}
-              </p>
+              <div style={{
+                marginTop: 6,
+                padding: '12px 24px',
+                borderRadius: 14,
+                background: isFirstImage 
+                  ? 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)' 
+                  : 'linear-gradient(135deg, #ec4899 0%, #a855f7 100%)',
+                color: '#fff',
+                fontSize: 15,
+                fontWeight: 800,
+                boxShadow: isFirstImage 
+                  ? '0 4px 16px rgba(34, 197, 94, 0.5)' 
+                  : '0 4px 16px rgba(236, 72, 153, 0.5)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                pointerEvents: 'none',
+              }}>
+                {isFirstImage ? (
+                  <>{lang === 'es' ? 'Reclamar Gratis' : 'Claim Free'}</>
+                ) : (
+                  <>
+                    <span>💎 {currentImageCost}</span>
+                    <span style={{ opacity: 0.6 }}>|</span>
+                    <span>{lang === 'es' ? 'Desbloquear' : 'Unlock'}</span>
+                  </>
+                )}
+              </div>
             </div>
-
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" style={{ animation: 'badgePulse 1.2s ease-in-out infinite', flexShrink: 0, filter: 'drop-shadow(0 0 8px rgba(240,171,252,1))', position: 'relative', zIndex: 1 }}>
-              <path d="m9 6 6 6-6 6" stroke="#f0abfc" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
           </div>
         )}
 
@@ -1316,7 +1358,7 @@ export default function ChatPage() {
             disabled={loading}
             className="chat-input"
             rows={1}
-            maxLength={750} // ✅ Añadido: Límite máximo
+            maxLength={750}
           />
 
           <button onClick={() => send()} disabled={loading || !input.trim()} className="chat-send-btn" title="Enviar">
