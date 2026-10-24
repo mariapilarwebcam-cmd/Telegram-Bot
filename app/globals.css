@@ -1144,3 +1144,53 @@ img {
 .chat-messages {
   -webkit-touch-callout: none !important;
 }
+/* ✅ Animación para el Desbloqueo (Fade + Scale) */
+@keyframes unlockReveal {
+  0% {
+    opacity: 0.3;
+    filter: blur(15px);
+    transform: scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0px);
+    transform: scale(1);
+  }
+}
+
+/* ✅ Animación para las ondas del audio */
+@keyframes audioWave {
+  0%, 100% { height: 6px; }
+  50% { height: 18px; }
+}
+
+.audio-wave-bar {
+  width: 3px;
+  background-color: #f0abfc;
+  border-radius: 3px;
+  animation: audioWave 1s ease-in-out infinite;
+}
+.audio-wave-bar:nth-child(2) { animation-delay: 0.2s; }
+.audio-wave-bar:nth-child(3) { animation-delay: 0.4s; }
+.audio-wave-bar:nth-child(4) { animation-delay: 0.1s; }
+
+/* ✅ Estilo para el botón de reacciones */
+.reaction-btn {
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.bubble-ai:hover + .reaction-btn,
+.bubble-user:hover + .reaction-btn,
+.reaction-btn.active {
+  opacity: 1;
+} /* <--- ESTA ES LA LLAVE QUE FALTABA */
+
+/* ✅ Fix para móviles (Telegram WebApp) */
+@media (hover: none) {
+  .reaction-btn {
+    opacity: 0.4; /* Siempre visible de forma sutil en celulares */
+  }
+  .reaction-btn.active {
+    opacity: 1; /* Totalmente visible al tocarlo */
+  }
+}
