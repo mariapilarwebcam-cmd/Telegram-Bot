@@ -416,7 +416,7 @@ export default function ChatPage() {
             Analytics.levelUp({
               character_id: characterId,
               new_level: data.new_level,
-              total_user_messages: data.total_user_messages || 0,
+            total_messages: data.total_user_messages || 0,
             })
           }
         }
