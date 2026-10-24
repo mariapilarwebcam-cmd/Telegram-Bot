@@ -451,6 +451,21 @@ export async function POST(request: Request) {
     else if (heatScore < 25 && userMsgCount > 15) freeChance = 0.70 
 
     const isFree = totalImagesSent === 0 || (totalImagesSent > 0 && Math.random() < freeChance)
+
+    // 🛡️ FIX CRÍTICO: VERIFICAR SALDO ANTES DE GASTAR EN RUNWARE
+    if (!isFree && !isVip) {
+      const userPurchasedGems = user.purchased_gems || 0
+      if (userPurchasedGems < imageCost) {
+        return NextResponse.json({ 
+          error: 'insufficient_gems', 
+          message: lang === 'es' 
+            ? `Necesitas ${imageCost} gemas compradas para ver esta foto.` 
+            : `You need ${imageCost} purchased gems to see this photo.`,
+          required: imageCost
+        }, { status: 402 })
+      }
+    }
+
     const mood = extractMoodFromMessages(recent_messages, heatScore)
     const levelBucket = getLevelBucket(level.level)
     const normalizedTagKey = buildTagKey(character.archetype, genderKey, mood || 'default', levelBucket)
@@ -485,7 +500,6 @@ export async function POST(request: Request) {
         source = 'generated'
         
         // 🛡️ FIX CRÍTICO: RESERVA ATÓMICA (Evita el Race Condition)
-        // Solo inserta el registro SI el conteo actual es menor al límite.
         const reservation = await execute(
           `INSERT INTO image_generations (telegram_id, character_id, tag_key, model, level)
            SELECT ?, ?, ?, ?, ?
@@ -554,8 +568,6 @@ export async function POST(request: Request) {
 
         modelUsed = 'runware-z-image-turbo'
         imageUrl = rawUrl
-
-        // Nota: Ya no llamamos a insertImageGeneration aquí porque lo hicimos arriba atómicamente.
 
         if (r2Available && !userHint && mood) {
           try {
