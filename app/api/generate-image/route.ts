@@ -7,6 +7,7 @@ import {
   incrementPoolImageUse, insertPoolImage, insertMessage, getActiveSubscription,
   insertImageGeneration, countUserWiroLast30Days, 
   ensureWiroTokensRefilled, consumeWiroToken, countSfwImageGenerationsLast24h,
+  incrementGems, // ✅ AÑADIDO: Para hacer los reembolsos correctamente
 } from '@/lib/db-queries'
 import {
   getCharacterFace, getCharacterImageUrl, VIP_LIMITS, MAX_GENERATIONS_PER_CONTEXT_PER_USER,
