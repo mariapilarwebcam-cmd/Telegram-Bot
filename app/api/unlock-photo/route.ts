@@ -1,9 +1,8 @@
 // app/api/unlock-photo/route.ts
 import { NextResponse } from 'next/server'
-import { queryOne, query, execute } from '@/lib/turso'
-import { decrementGemsAndPurchased, insertGemTransaction, getRecentMessages } from '@/lib/db-queries'
+import { queryOne, query, execute, transaction } from '@/lib/turso'
+import { insertGemTransaction, getRecentMessages } from '@/lib/db-queries'
 
-// Lista de palabras vacías (stop words) que no aportan información
 const STOP_WORDS = new Set(['el', 'la', 'los', 'las', 'un', 'una', 'y', 'o', 'de', 'en', 'que', 'es', 'por', 'para', 'con', 'no', 'si', 'me', 'te', 'se', 'lo', 'mi', 'tu', 'su', 'al', 'del', 'como', 'mas', 'pero'])
 
 export async function POST(request: Request) {
@@ -27,18 +26,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'expired' }, { status: 410 })
     }
 
+    // 🛡️ FIX 1: COBRO ATÓMICO (Evita el doble clic)
+    // Solo resta las gemas si el usuario tiene suficientes
     const user = await queryOne<{ purchased_gems: number }>(
-      `SELECT purchased_gems FROM users WHERE telegram_id = ? LIMIT 1`,
-      [tid]
+      `UPDATE users 
+       SET purchased_gems = purchased_gems - ? 
+       WHERE telegram_id = ? AND purchased_gems >= ?
+       RETURNING purchased_gems`,
+      [photo.unlock_price, tid, photo.unlock_price]
     )
 
-    if (!user || user.purchased_gems < photo.unlock_price) {
+    if (!user) {
+      // Si user es null, es porque el UPDATE no afectó a ninguna fila (no tenía saldo)
       return NextResponse.json({ error: 'insufficient_gems', required: photo.unlock_price }, { status: 402 })
     }
 
-    // 1. Cobrar y desbloquear
-    await decrementGemsAndPurchased(tid, photo.unlock_price)
+    // 2. Bloquear la foto para que no se pueda volver a comprar
     await execute(`UPDATE locked_photos SET status = 'unlocked' WHERE id = ?`, [photo.id])
+    
     await insertGemTransaction({
       telegram_id: tid,
       amount: -photo.unlock_price,
@@ -46,7 +51,7 @@ export async function POST(request: Request) {
       description: `Desbloqueo de foto premium (ID: ${photo.id})`,
     })
 
-    // 2. 🧠 EL SISTEMA APRENDE: Analizamos los últimos mensajes del usuario
+    // 🛡️ FIX 2: APRENDIZAJE LIMITADO (Evita colapso de DB)
     try {
       const recentMsgs = await getRecentMessages(tid, photo.character_id, 3)
       const userText = recentMsgs
@@ -54,30 +59,33 @@ export async function POST(request: Request) {
         .map((m: any) => m.content.toLowerCase())
         .join(' ')
 
-      // Extraemos las palabras y filtramos las que no sirven
       const words = userText.replace(/[^\w\sáéíóúñ]/g, '').split(/\s+/)
-      const uniqueWords = Array.from(new Set(words)).filter(w => w.length > 2 && !STOP_WORDS.has(w))
+      const uniqueWords = Array.from(new Set(words))
+        .filter(w => w.length > 2 && !STOP_WORDS.has(w))
+        .slice(0, 5) // ✅ Límite de 5 palabras por compra
 
-      // Guardamos en la base de datos de aprendizaje
-      for (const word of uniqueWords) {
-        await execute(
-          `INSERT INTO learned_triggers (word, weight) VALUES (?, 1)
-           ON CONFLICT(word) DO UPDATE SET weight = weight + 1`,
-          [word]
-        )
+      if (uniqueWords.length > 0) {
+        // Usamos un batch para hacer los inserts en una sola petición a Turso
+        const stmts = uniqueWords.map(word => ({
+          sql: `INSERT INTO learned_triggers (word, type, weight) VALUES (?, 'purchase', 1)
+                ON CONFLICT(word, type) DO UPDATE SET weight = weight + 1`,
+          args: [word]
+        }))
+        await transaction(stmts)
+        console.log(`[AI Learn] 🧠 Aprendido de compra: ${uniqueWords.join(', ')}`)
       }
-      console.log(`[AI Learn] 🧠 Sistema aprendió de la compra: ${uniqueWords.join(', ')}`)
     } catch (learnError) {
-      console.warn('[AI Learn] No se pudo aprender del mensaje:', learnError)
+      console.warn('[AI Learn] Error aprendiendo:', learnError)
     }
 
     return NextResponse.json({
       success: true,
       image_url: photo.image_url,
-      remaining_purchased_gems: user.purchased_gems - photo.unlock_price,
+      remaining_purchased_gems: user.purchased_gems,
     })
 
   } catch (error: any) {
+    console.error('[unlock-photo] Error:', error)
     return NextResponse.json({ error: 'Error interno' }, { status: 500 })
   }
 }
