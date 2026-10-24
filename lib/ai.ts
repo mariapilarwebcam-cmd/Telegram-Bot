@@ -605,20 +605,22 @@ export async function generateAIResponse(
   throw new Error(errorMessage)
 }
 
+// ✅ FIX: Lógica de comillas corregida para evitar fallos de formato
 function sanitizeAsterisks(text: string): string {
   const lines = text.split('\n')
   const cleaned = lines.map((line) => {
     const trimmed = line.trim()
     if (trimmed.startsWith('*') && trimmed.endsWith('*') && trimmed.length > 2) {
       const inner = trimmed.slice(1, -1)
-      if (!inner.includes('"') && !inner.includes("'") && !inner.includes('«')) {
+      // Si no tiene comillas dobles, simples o angulares dentro, es una acción válida
+      if (!inner.includes('"') && !inner.includes("'") && !inner.includes('«') && !inner.includes('“')) {
         return line
       }
     }
     return line.replace(
       /(\s)\*([^*\n]{1,30}?)\*(\s|,|\.|!|\?|$)/g,
       (_match, before, word, after) => {
-        if (line.includes('"') || line.includes("'") || line.includes('«')) {
+        if (line.includes('"') || line.includes("'") || line.includes('«') || line.includes('“')) {
           return `${before}${word}${after}`
         }
         return _match
