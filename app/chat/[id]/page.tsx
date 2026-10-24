@@ -138,7 +138,11 @@ export default function ChatPage() {
   const [generatingImage, setGeneratingImage] = useState(false)
   const [generatingAudio, setGeneratingAudio] = useState(false)
   
+  // ✅ NUEVOS ESTADOS PARA LAS MEJORAS
   const [unlockingPhoto, setUnlockingPhoto] = useState<number | null>(null)
+  const [recentlyUnlocked, setRecentlyUnlocked] = useState<string | null>(null)
+  const [activeReactionMsg, setActiveReactionMsg] = useState<number | null>(null)
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false)
 
   const [menuOpen, setMenuOpen] = useState(false)
   const [showRename, setShowRename] = useState(false)
@@ -358,6 +362,7 @@ export default function ChatPage() {
     }
     
     setLoading(true)
+    setActiveReactionMsg(null) // Cerrar menú de reacciones si está abierto
 
     try {
       const res = await tgFetch('/api/chat', {
@@ -512,7 +517,12 @@ export default function ChatPage() {
            user.purchased_gems = data.remaining_purchased_gems
         }
         
-        new Audio(`data:audio/wav;base64,${data.audio}`).play()
+        const audio = new Audio(`data:audio/wav;base64,${data.audio}`)
+        
+        // ✅ Animación de reproducción de audio
+        setIsPlayingAudio(true)
+        audio.onended = () => setIsPlayingAudio(false)
+        audio.play()
 
         Analytics.audioGenerated({
           character_id: characterId,
@@ -567,7 +577,7 @@ export default function ChatPage() {
         body: JSON.stringify({
           character_id: characterId,
           recent_messages: recentMessages,
-          is_direct_request: true, // ✅ AÑADIDO: Le decimos al backend que es una compra directa
+          is_direct_request: true,
         }),
       })
       const data = await res.json()
@@ -588,6 +598,9 @@ export default function ChatPage() {
               content: `*${getDisplayName(character)} te envía una foto*\n\n![Selfie](${data.image_url})`,
             },
           ])
+          // ✅ Animación de desbloqueo si se genera nítida directo
+          setRecentlyUnlocked(data.image_url)
+          setTimeout(() => setRecentlyUnlocked(null), 1000)
         }
 
         setGems(data.remaining_gems)
@@ -653,6 +666,11 @@ export default function ChatPage() {
             return msg
           })
         )
+        
+        // ✅ Animación de desbloqueo
+        setRecentlyUnlocked(data.image_url)
+        setTimeout(() => setRecentlyUnlocked(null), 1000)
+
         await refresh()
       } else {
         alert(data.message || data.error || 'Error al desbloquear')
@@ -661,6 +679,24 @@ export default function ChatPage() {
       alert('Error de conexión')
     } finally {
       setUnlockingPhoto(null)
+    }
+  }
+
+  // ✅ Función para manejar reacciones
+  const handleReaction = async (emoji: string, messageContent: string) => {
+    setActiveReactionMsg(null)
+    try {
+      await tgFetch('/api/react', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message_content: messageContent,
+          reaction: emoji
+        }),
+      })
+      // Opcional: podrías mostrar una pequeña animación de que se guardó la reacción
+    } catch (e) {
+      console.warn('Error enviando reacción:', e)
     }
   }
 
@@ -846,6 +882,10 @@ export default function ChatPage() {
             </div>`
           )
         } else {
+          // ✅ ANIMACIÓN DE DESBLOQUEO AQUÍ
+          const isRecentlyUnlocked = url === recentlyUnlocked
+          const animStyle = isRecentlyUnlocked ? 'animation: unlockReveal 0.8s ease-out;' : ''
+
           images.push(
             `<div 
               data-image-url="${url}"
@@ -864,6 +904,7 @@ export default function ChatPage() {
                 -webkit-user-select: none;
                 user-select: none;
                 cursor: pointer;
+                ${animStyle}
               "
             ></div>`
           )
@@ -1187,11 +1228,60 @@ export default function ChatPage() {
         )}
 
         {messages.map((m, i) => (
-          <div
-            key={m.id || i}
-            className={m.role === 'user' ? 'bubble-user' : 'bubble-ai'}
-            dangerouslySetInnerHTML={{ __html: formatMessage(m.content) }}
-          />
+          <div key={m.id || i} style={{ display: 'flex', flexDirection: 'column', alignItems: m.role === 'user' ? 'flex-end' : 'flex-start', position: 'relative' }}>
+            <div
+              className={m.role === 'user' ? 'bubble-user' : 'bubble-ai'}
+              dangerouslySetInnerHTML={{ __html: formatMessage(m.content) }}
+            />
+            {/* ✅ BOTÓN DE REACCIÓN FLOTANTE */}
+            <button
+              className={`reaction-btn ${activeReactionMsg === i ? 'active' : ''}`}
+              onClick={() => setActiveReactionMsg(activeReactionMsg === i ? null : i)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#8b8b9e',
+                cursor: 'pointer',
+                padding: '4px 8px',
+                fontSize: 16,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              😀
+            </button>
+
+            {/* ✅ MENÚ DE REACCIONES */}
+            {activeReactionMsg === i && (
+              <div style={{
+                position: 'absolute',
+                bottom: '100%',
+                [m.role === 'user' ? 'right' : 'left']: 0,
+                marginBottom: 4,
+                background: '#1f1733',
+                borderRadius: 20,
+                padding: '6px 12px',
+                display: 'flex',
+                gap: 8,
+                boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+                border: '1px solid rgba(168,85,247,0.3)',
+                zIndex: 20,
+              }}>
+                {['❤️', '🔥', '😂', '😮', '😢', '👍'].map(emoji => (
+                  <span
+                    key={emoji}
+                    onClick={() => handleReaction(emoji, m.content)}
+                    style={{ cursor: 'pointer', fontSize: 20, transition: 'transform 0.1s' }}
+                    onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.2)'}
+                    onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                  >
+                    {emoji}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
         ))}
 
         {loading && messages.length > 0 && (
@@ -1206,7 +1296,6 @@ export default function ChatPage() {
       </div>
 
       <div className="chat-input-bar">
-        {/* ✅ NUEVO BANNER PPV ESTILO ONLYFANS/CANDY.AI */}
         {photoOfferActive && (
           <div
             onClick={handleBannerTap}
@@ -1227,7 +1316,6 @@ export default function ChatPage() {
                 : 'pulseSoft 2.4s ease-in-out infinite',
             }}
           >
-            {/* Fondo borroso (Avatar del personaje) */}
             <div style={{
               position: 'absolute',
               inset: 0,
@@ -1239,7 +1327,6 @@ export default function ChatPage() {
               zIndex: 0,
             }} />
 
-            {/* Overlay de gradiente para legibilidad */}
             <div style={{
               position: 'absolute',
               inset: 0,
@@ -1249,7 +1336,6 @@ export default function ChatPage() {
               zIndex: 1,
             }} />
 
-            {/* Contenido del banner */}
             <div style={{
               position: 'relative',
               zIndex: 2,
@@ -1328,11 +1414,21 @@ export default function ChatPage() {
         )}
 
         <div className="chat-input-row">
-          <button onClick={playAudio} disabled={generatingAudio || (!isVip && isPremium && purchasedGems < currentAudioCost)} className="chat-icon-btn" title={`${t.audioTooltip} (${currentAudioCost} gemas)`} style={{ opacity: !isVip && isPremium && purchasedGems < currentAudioCost ? 0.3 : 1 }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-              <path d="M11 5 6 9H2v6h4l5 4V5z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
-              <path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            </svg>
+          <button onClick={playAudio} disabled={generatingAudio || (!isVip && isPremium && purchasedGems < currentAudioCost) || isPlayingAudio} className="chat-icon-btn" title={`${t.audioTooltip} (${currentAudioCost} gemas)`} style={{ opacity: (!isVip && isPremium && purchasedGems < currentAudioCost) || isPlayingAudio ? 0.5 : 1 }}>
+            {/* ✅ ANIMACIÓN DE AUDIO AQUÍ */}
+            {isPlayingAudio ? (
+              <div style={{ display: 'flex', gap: 2, alignItems: 'center', height: 20 }}>
+                <div className="audio-wave-bar" />
+                <div className="audio-wave-bar" />
+                <div className="audio-wave-bar" />
+                <div className="audio-wave-bar" />
+              </div>
+            ) : (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                <path d="M11 5 6 9H2v6h4l5 4V5z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+                <path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            )}
           </button>
 
           <button onClick={handleBannerTap} disabled={generatingImage} className="chat-icon-btn" title={`${t.imageTooltip} (${currentImageCost} gemas)`} style={{ opacity: !isFirstImage && !isVip && isPremium && purchasedGems < currentImageCost ? 0.4 : 1, boxShadow: photoOfferActive ? '0 0 20px rgba(236,72,153,0.9), 0 0 30px rgba(168,85,247,0.6)' : undefined, borderColor: photoOfferActive ? '#ec4899' : undefined }}>
