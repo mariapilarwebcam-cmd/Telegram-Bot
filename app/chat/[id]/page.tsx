@@ -1260,7 +1260,7 @@ export default function ChatPage() {
                 flexDirection: 'column', 
                 alignItems: m.role === 'user' ? 'flex-end' : 'flex-start', 
                 position: 'relative',
-                marginBottom: 12 // Un poco más de margen para que quepa la reacción
+                marginBottom: 16 // Margen un poco más grande para evitar que se corte la insignia
               }}
               onTouchStart={() => startPress(i)}
               onTouchEnd={cancelPress}
@@ -1275,22 +1275,27 @@ export default function ChatPage() {
                 dangerouslySetInnerHTML={{ __html: formatMessage(m.content) }}
               />
 
-              {/* ✅ MOSTRAR LA REACCIÓN SELECCIONADA PEGADA AL MENSAJE */}
+              {/* ✅ INSIGNIA DE REACCIÓN SUPERPUESTA (ESTILO TELEGRAM/WHATSAPP) */}
               {currentReaction && (
                 <div 
                   onClick={() => setActiveReactionMsg(activeReactionMsg === i ? null : i)}
                   style={{
                     position: 'absolute',
-                    bottom: -10,
-                    [m.role === 'user' ? 'left' : 'right']: 10,
+                    bottom: -12, // Lo baja para que pise el borde inferior del mensaje
+                    [m.role === 'user' ? 'left' : 'right']: 12, // A la izquierda si es tuyo, a la derecha si es de la IA
                     background: '#1f1733',
-                    border: '1px solid rgba(168,85,247,0.4)',
+                    border: '1.5px solid rgba(168,85,247,0.6)',
                     borderRadius: 20,
-                    padding: '2px 6px',
+                    padding: '2px 8px',
                     fontSize: 14,
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.6)',
                     cursor: 'pointer',
                     zIndex: 5,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    minWidth: 28,
+                    height: 24,
                   }}
                 >
                   {currentReaction}
