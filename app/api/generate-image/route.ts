@@ -259,41 +259,26 @@ const STOP_WORDS = new Set(['el', 'la', 'los', 'las', 'un', 'una', 'y', 'o', 'de
 
 async function calculateDynamicHeatScore(messages: string[]): Promise<number> {
   if (!messages || messages.length === 0) return 0
-  
   let score = 0
   const text = messages.join(' ').toLowerCase()
-  
   const baseHotKeywords = /\b(fuego|caliente|excitad|duro|mojado|húmedo|quiero|dame|toca|beso|cama|pasión|pasion|amor|hermosa|preciosa|ahora|ya|rápido|rapido|por favor|más|mas)\b/g
   const matches = text.match(baseHotKeywords)
   if (matches) score += matches.length * 10
-
   score += (text.match(/!/g) || []).length * 5
   score += (text.match(/\?/g) || []).length * 5
-  
   if (text.length > 50) score += 5
   if (text.length > 150) score += 15
-
   try {
     const words = text.replace(/[^\w\sáéíóúñ]/g, '').split(/\s+/).filter(w => w.length > 2)
     if (words.length > 0) {
       const placeholders = words.map(() => '?').join(',')
-      const triggers = await query<{ weight: number }>(
-        `SELECT weight FROM learned_triggers WHERE word IN (${placeholders})`,
-        words
-      )
-      
+      const triggers = await query<{ weight: number }>(`SELECT weight FROM learned_triggers WHERE word IN (${placeholders})`, words)
       const learnedScore = triggers.reduce((acc, t) => acc + t.weight, 0)
-      if (learnedScore > 0) {
-        score += learnedScore * 5
-        console.log(`[AI Heat] 🧠 Se detectaron palabras aprendidas: +${learnedScore * 5} pts`)
-      }
+      if (learnedScore > 0) score += learnedScore * 5
     }
   } catch (e) {}
-
   const hotEmojis = /[🥵😈💦🍆💋❤️🔥]/g
-  const emojiMatches = text.match(hotEmojis)
-  if (emojiMatches) score += emojiMatches.length * 5
-
+  if (text.match(hotEmojis)) score += text.match(hotEmojis)!.length * 5
   return Math.min(score, 100)
 }
 
@@ -302,13 +287,8 @@ async function learnHeatTriggers(messages: string[]) {
     const text = messages.join(' ').toLowerCase()
     const words = text.replace(/[^\w\sáéíóúñ]/g, '').split(/\s+/)
     const uniqueWords = Array.from(new Set(words)).filter(w => w.length > 2 && !STOP_WORDS.has(w))
-
     for (const word of uniqueWords) {
-      await execute(
-        `INSERT INTO learned_triggers (word, type, weight) VALUES (?, 'heat', 1)
-         ON CONFLICT(word, type) DO UPDATE SET weight = weight + 1`,
-        [word]
-      )
+      await execute(`INSERT INTO learned_triggers (word, type, weight) VALUES (?, 'heat', 1) ON CONFLICT(word, type) DO UPDATE SET weight = weight + 1`, [word])
     }
   } catch (e) {}
 }
@@ -316,9 +296,7 @@ async function learnHeatTriggers(messages: string[]) {
 function extractMoodFromMessages(messages: string[], heat: number): string {
   if (!messages || messages.length === 0) return ''
   const text = messages.join(' ').toLowerCase()
-
   if (heat > 65) return 'breathless_passionate' 
-
   if (/\b(jadeo|jadea|respira|suspiro|temblor|tiembla|calor|fuego|húmedo|mojado|acelerado|entrecortad)\b/.test(text)) return 'breathless_passionate'
   if (/\b(hazme|tuyo|tuya|obedec|pide|por favor|tómame|tomame|entrégate|entregate|soy tu)\b/.test(text)) return 'submission_surrender'
   if (/\b(domin|manda|control|orden|obedece|rodillas|sumiso|sumisa|mía|mio)\b/.test(text)) return 'dominant_commanding'
@@ -337,7 +315,6 @@ function extractMoodFromMessages(messages: string[], heat: number): string {
   if (/\b(auto|coche|carro|manejar|conducir|viaje|carretera|road trip)\b/.test(text)) return 'car_ride'
   if (/\b(noche|luna|estrellas|oscuridad|medianoche|nocturno|misterio|velas)\b/.test(text)) return 'night_mystery'
   if (/\b(risa|ríe|rie|reír|reir|divertid|juego|jugando|sonrisa|sonríe|sonrie|alegre)\b/.test(text)) return 'playful_laughing'
-
   return ''
 }
 
@@ -400,6 +377,9 @@ export async function POST(request: Request) {
       ? body.recent_messages.filter((m: any) => typeof m === 'string' && m.trim().length > 0).slice(-4)
       : []
 
+    // ✅ NUEVO: Flag para saber si el usuario presionó el botón explícitamente
+    const isDirectRequest = body?.is_direct_request === true
+
     const user = await ensureUser(tid)
     if (!user) return NextResponse.json({ error: 'Error cargando tu cuenta' }, { status: 500 })
 
@@ -450,27 +430,36 @@ export async function POST(request: Request) {
     if (heatScore > 60) freeChance = 0.05 
     else if (heatScore < 25 && userMsgCount > 15) freeChance = 0.70 
 
-    const isFree = totalImagesSent === 0 || (totalImagesSent > 0 && Math.random() < freeChance)
+    let isFree = totalImagesSent === 0 || (totalImagesSent > 0 && Math.random() < freeChance)
+    let useVipQuota = false
+    let gemsCharged = false
 
-    // 🛡️ FIX CRÍTICO: VERIFICAR SALDO ANTES DE GASTAR EN RUNWARE
-    if (!isFree && !isVip) {
-      const userPurchasedGems = user.purchased_gems || 0
-      if (userPurchasedGems < imageCost) {
-        return NextResponse.json({ 
-          error: 'insufficient_gems', 
-          message: lang === 'es' 
-            ? `Necesitas ${imageCost} gemas compradas para ver esta foto.` 
-            : `You need ${imageCost} purchased gems to see this photo.`,
-          required: imageCost
-        }, { status: 402 })
+    // ✅ LÓGICA DE COBRO DIRECTO (Si el usuario presiona el botón de la cámara)
+    if (isDirectRequest && !isFree && !isVip) {
+      // Intentamos cobrar de forma atómica ANTES de generar
+      const charged = await queryOne<{ purchased_gems: number, gems: number }>(
+        `UPDATE users SET purchased_gems = purchased_gems - ?, gems = gems - ? WHERE telegram_id = ? AND purchased_gems >= ? RETURNING purchased_gems, gems`,
+        [imageCost, imageCost, tid, imageCost]
+      )
+      
+      if (!charged) {
+        return NextResponse.json({ error: 'insufficient_gems', message: lang === 'es' ? `Necesitas ${imageCost} gemas compradas.` : `You need ${imageCost} purchased gems.` }, { status: 402 })
       }
+      
+      gemsCharged = true
+      await insertGemTransaction({ telegram_id: tid, amount: -imageCost, transaction_type: 'image', description: `Generación directa nivel ${level.level}` })
+      isFree = false // Ya no es gratis porque lo cobramos manualmente
+    } 
+    // Si no es petición directa, pero no tiene gemas, lo bloqueamos (solo si no es gratis ni VIP)
+    else if (!isDirectRequest && !isFree && !isVip && (user.purchased_gems || 0) < imageCost) {
+       return NextResponse.json({ error: 'insufficient_gems', message: `Necesitas ${imageCost} gemas compradas.` }, { status: 402 })
     }
 
     const mood = extractMoodFromMessages(recent_messages, heatScore)
     const levelBucket = getLevelBucket(level.level)
     const normalizedTagKey = buildTagKey(character.archetype, genderKey, mood || 'default', levelBucket)
 
-    console.log(`[generate-image] 🌡️ Heat: ${heatScore}/100 | 🎲 Free: ${Math.round(freeChance*100)}% | 🎁 Is Free: ${isFree}`)
+    console.log(`[generate-image] 🌡️ Heat: ${heatScore}/100 | 🎲 Free: ${Math.round(freeChance*100)}% | 🎁 Is Free: ${isFree} | 📷 Direct: ${isDirectRequest}`)
 
     if (useR2Static) {
       source = 'r2_static'
@@ -511,6 +500,10 @@ export async function POST(request: Request) {
         )
 
         if (reservation.rowsAffected === 0) {
+          if (gemsCharged) {
+            await incrementGems(tid, imageCost)
+            await insertGemTransaction({ telegram_id: tid, amount: imageCost, transaction_type: 'refund', description: 'Reembolso por límite de contexto' })
+          }
           return NextResponse.json({ error: 'context_limit_reached', message: getContextLimitMessage(lang, character.character_name) }, { status: 429 })
         }
 
@@ -521,11 +514,13 @@ export async function POST(request: Request) {
           const tokens = await ensureWiroTokensRefilled(tid)
           if (tokens <= 0) {
             await execute(`DELETE FROM image_generations WHERE id = ?`, [generationId]) // Rollback
+            if (gemsCharged) await incrementGems(tid, imageCost)
             return NextResponse.json({ error: 'wiro_tokens_exhausted', message: getWiroTokensExhaustedMessage(lang, character.character_name) }, { status: 429 })
           }
           const wiroMonthly = await countUserWiroLast30Days(tid)
           if (wiroMonthly >= VIP_LIMITS.wiro_monthly) {
             await execute(`DELETE FROM image_generations WHERE id = ?`, [generationId]) // Rollback
+            if (gemsCharged) await incrementGems(tid, imageCost)
             return NextResponse.json({ error: 'wiro_monthly_limit', message: getWiroMonthlyLimitMessage(lang, character.character_name) }, { status: 429 })
           }
           await consumeWiroToken(tid)
@@ -563,6 +558,11 @@ export async function POST(request: Request) {
         } catch (imgError) {
           // 🛡️ ROLLBACK: Si Runware falla, borramos la reserva para no gastar la oportunidad del usuario.
           await execute(`DELETE FROM image_generations WHERE id = ?`, [generationId])
+          // 🛡️ REFUND: Si el usuario pagó, le devolvemos sus gemas.
+          if (gemsCharged) {
+            await incrementGems(tid, imageCost)
+            await insertGemTransaction({ telegram_id: tid, amount: imageCost, transaction_type: 'refund', description: 'Reembolso por fallo en generación' })
+          }
           return NextResponse.json({ error: 'Error al generar la imagen' }, { status: 500 })
         }
 
@@ -582,7 +582,6 @@ export async function POST(request: Request) {
       }
     }
 
-    let useVipQuota = false
     if (!isFree && isVip) {
       if (level.level <= 3) {
         const sfwToday = await countSfwImageGenerationsLast24h(tid)
@@ -603,8 +602,18 @@ export async function POST(request: Request) {
     let lockedPhotoId: number | null = null
     let unlockPrice = 0
 
-    if (!isFree && !useVipQuota) {
-      unlockPrice = imageCost
+    // ✅ LÓGICA DE RESPUESTA: ¿Bloqueada o Nítida?
+    if (isDirectRequest) {
+      // Si es petición directa, la imagen ya se cobró y se muestra nítida
+      lockedPhotoId = null
+      unlockPrice = 0
+      if (gemsCharged) {
+        newGems -= imageCost
+        newPurchasedGems -= imageCost
+      }
+    } else {
+      // Si es automático (Banner/Tease), se devuelve bloqueada
+      unlockPrice = isFree || useVipQuota ? 0 : imageCost
       const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString()
       try {
         const dbResult = await execute(
@@ -634,7 +643,7 @@ export async function POST(request: Request) {
       remaining_gems: newGems, 
       remaining_purchased_gems: newPurchasedGems,
       level: level.level,
-      cost: 0, 
+      cost: gemsCharged ? imageCost : 0, 
       free: isFree,
       vip_quota: useVipQuota,
       source,
