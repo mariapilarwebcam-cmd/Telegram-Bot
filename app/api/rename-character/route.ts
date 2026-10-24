@@ -4,10 +4,10 @@ import { NextResponse } from 'next/server'
 import {
   ensureUser,
   getCharacter,
-  incrementGems,
   insertGemTransaction,
   renameCharacter,
 } from '@/lib/db-queries'
+import { queryOne } from '@/lib/turso'
 import { GEM_COSTS } from '@/lib/constants'
 
 export async function POST(request: Request) {
@@ -61,7 +61,16 @@ export async function POST(request: Request) {
       })
     }
 
-    if ((user.gems || 0) < GEM_COSTS.rename_character) {
+    // 🛡️ FIX: COBRO ATÓMICO (Evita saldo negativo con doble clic)
+    const charged = await queryOne<{ gems: number }>(
+      `UPDATE users
+       SET gems = gems - ?
+       WHERE telegram_id = ? AND gems >= ?
+       RETURNING gems`,
+      [GEM_COSTS.rename_character, tid, GEM_COSTS.rename_character]
+    )
+
+    if (!charged) {
       return NextResponse.json(
         {
           error: 'insufficient_gems',
@@ -75,9 +84,6 @@ export async function POST(request: Request) {
       )
     }
 
-    // RPC atómica: descuenta gemas
-    const newGems = await incrementGems(tid, -GEM_COSTS.rename_character)
-
     await insertGemTransaction({
       telegram_id: tid,
       amount: -GEM_COSTS.rename_character,
@@ -90,10 +96,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       character_name: name,
-      remaining_gems:
-        typeof newGems === 'number'
-          ? newGems
-          : (user.gems || 0) - GEM_COSTS.rename_character,
+      remaining_gems: charged.gems,
     })
   } catch (e: any) {
     console.error('Error en rename-character:', e)
