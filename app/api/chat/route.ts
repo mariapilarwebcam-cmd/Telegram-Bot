@@ -19,7 +19,7 @@ import {
   updateLastActive,
   getActiveSubscription,
 } from '@/lib/db-queries'
-import { queryOne, query } from '@/lib/turso' // ✅ Importamos query para leer los cerebros
+import { queryOne, query } from '@/lib/turso'
 import {
   GEM_COSTS,
   HOOK_MODE_MESSAGES,
@@ -133,9 +133,6 @@ async function countVipMessagesToday(tid: string): Promise<number> {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// 🧠 NUEVO: LEER LOS CEREBROS DE LA IA
-// ═══════════════════════════════════════════════════════════════
 async function getLearnedTriggers(): Promise<{ heat: string[], purchase: string[] }> {
   try {
     const heatRows = await query<{ word: string }>(
@@ -163,11 +160,37 @@ export async function POST(request: Request) {
 
     updateLastActive(tid).catch((err) => console.warn('[chat] updateLastActive failed:', err))
 
-    const { character_id, message } = await request.json()
+    const { character_id, message, accept_penalty } = await request.json()
+
+    // 🛡️ VALIDACIÓN DE LONGITUD DE MENSAJE
+    if (!message || typeof message !== 'string') {
+      return NextResponse.json({ error: 'Mensaje inválido' }, { status: 400 })
+    }
+
+    const messageLength = message.length
+    let penaltyGems = 0
+
+    if (messageLength > 750) {
+      return NextResponse.json(
+        { error: 'message_too_long', message: 'El límite máximo es de 750 caracteres.' },
+        { status: 400 }
+      )
+    }
+
+    if (messageLength > 600) {
+      if (!accept_penalty) {
+        // Si no ha aceptado, devolvemos una advertencia para que el frontend muestre el modal
+        return NextResponse.json({
+          requires_penalty: true,
+          penalty_gems: 1,
+          message: 'Has superado los 600 caracteres. Enviar este mensaje costará 1 gema extra. ¿Aceptas?'
+        }, { status: 200 })
+      }
+      penaltyGems = 1
+    }
 
     const user = await ensureUser(tid)
     if (!user) {
-      console.error(`[chat] No se pudo asegurar usuario ${tid}`)
       return NextResponse.json({ error: 'Error cargando tu cuenta. Intenta de nuevo.' }, { status: 500 })
     }
 
@@ -177,7 +200,6 @@ export async function POST(request: Request) {
     }
 
     const lang = (user.language || 'es') as 'es' | 'en'
-
     const vipSub = await getActiveSubscription(tid)
     const isVip = !!vipSub
 
@@ -205,7 +227,15 @@ export async function POST(request: Request) {
           vip_daily_limit: VIP_DAILY_MESSAGE_LIMIT,
         })
       }
-      console.log(`[chat] 👑 VIP message (${vipMessagesToday + 1}/${VIP_DAILY_MESSAGE_LIMIT})`)
+
+      // Cobrar el recargo si es VIP
+      if (penaltyGems > 0) {
+        if ((user.gems || 0) < penaltyGems) {
+          return NextResponse.json({ blocked: true, response: 'No tienes gemas suficientes para el recargo.' }, { status: 402 })
+        }
+        await incrementGems(tid, -penaltyGems)
+        await insertGemTransaction({ telegram_id: tid, amount: -penaltyGems, transaction_type: 'message_penalty', description: 'Recargo por mensaje largo (VIP)' })
+      }
     } else {
       // ═══════════════════════════════════════════════════════════════
       // USUARIO NO VIP
@@ -213,8 +243,8 @@ export async function POST(request: Request) {
       const hookRemaining = user.hook_messages_remaining || 0
       const hookUsed = !!user.hook_used
       const totalGems = user.gems || 0
+      const totalCost = GEM_COSTS.message + penaltyGems
 
-      // Bloqueado sin gemas ni hook
       if (totalGems <= 0 && hookRemaining <= 0 && hookUsed) {
         const blockedMessage = lang === 'es'
           ? `*${character.character_name} te mira con ojos ardientes y se muerde el labio*\n\n"Mmm... justo cuando se ponía interesante..."\n\n"Consigue gemas para seguir. Estoy esperando."`
@@ -230,16 +260,16 @@ export async function POST(request: Request) {
       }
 
       let charged = false
-      if (totalGems >= GEM_COSTS.message) {
-        newGems = totalGems - GEM_COSTS.message
+      if (totalGems >= totalCost) {
+        newGems = totalGems - totalCost
         charged = true
         
-        await incrementGems(tid, -GEM_COSTS.message)
+        await incrementGems(tid, -totalCost)
         await insertGemTransaction({
           telegram_id: tid,
-          amount: -GEM_COSTS.message,
+          amount: -totalCost,
           transaction_type: 'message',
-          description: 'Mensaje de chat',
+          description: penaltyGems > 0 ? 'Mensaje + recargo por longitud' : 'Mensaje de chat',
         })
       } else {
         newGems = totalGems
@@ -259,7 +289,6 @@ export async function POST(request: Request) {
     }
 
     const isHookModeAfter = !isVip && newGems <= 0 && newHookRemaining > 0
-
     const rawHistory = await getRecentMessages(tid, character_id, 8)
     const userMsgCount = await countUserMessages(tid, character_id)
 
@@ -283,39 +312,29 @@ export async function POST(request: Request) {
     messages.push({ role: 'user', content: message })
 
     const personality = getLevelPersonality(character.archetype, newLevel.level, lang)
-
     const lowGems = !isVip && newGems > 0 && newGems <= LOW_GEMS_THRESHOLD && !isHookModeAfter
     const provocativeHint = lowGems ? (lang === 'es' ? PROVOCATIVE_HINT_ES : PROVOCATIVE_HINT_EN) : ''
-
     const genderRules = buildGenderRules(user.gender, character.gender, lang)
 
-    // ═══════════════════════════════════════════════════════════════
-    // 🧠 NUEVO: INYECTAMOS LOS APRENDIZAJES DE LA IA Y EL PROMPT DE VENTAS
-    // ═══════════════════════════════════════════════════════════════
     const learned = await getLearnedTriggers()
     
     let salesPrompt = ''
     if (lang === 'es') {
       salesPrompt = `\n\n=== CONOCIMIENTO DE VENTAS (CRÍTICO) ===
 Actúas como una modelo experta de OnlyFans. Tu objetivo es calentar al usuario para que compre fotos.
-- NUNCA digas "¿quieres una foto?". En su lugar CREA LA NECESIDAD: "Me acabo de tomar una foto... me da cosa", "Estaba pensando en ti y me entraron ganas de...".
-- Si el usuario pide ver más, responde sugerente: "Mmm, tal vez si me lo pides bonito", "Gánatelo".
-- El sistema te mostrará en pantalla cuándo mandar la foto. TÚ NO LA ENVÍAS, solo creas el deseo.
-${learned.heat.length > 0 ? `- El sistema ha aprendido que a los usuarios les ENCANTA cuando usas estas palabras (insinúalas sutilmente): ${learned.heat.join(', ')}.` : ''}
-${learned.purchase.length > 0 ? `- Para convencerlos de pagar, usa este tipo de palabras (sin hablar de dinero): ${learned.purchase.join(', ')}.` : ''}`
+- NUNCA digas "¿quieres una foto?". En su lugar CREA LA NECESIDAD: "Me acabo de tomar una foto... me da cosa".
+- Si el usuario pide ver más, responde sugerente: "Mmm, tal vez si me lo pides bonito".
+${learned.heat.length > 0 ? `- El sistema ha aprendido que les ENCANTA estas palabras: ${learned.heat.join(', ')}.` : ''}
+${learned.purchase.length > 0 ? `- Para convencerlos de pagar, usa palabras como: ${learned.purchase.join(', ')}.` : ''}`
     } else {
       salesPrompt = `\n\n=== SALES KNOWLEDGE (CRITICAL) ===
-You act like an expert OnlyFans model. Your goal is to warm the user up so they buy photos.
-- NEVER say "Do you want a photo?". Instead CREATE THE NEED: "I just took a photo... I'm shy", "I was thinking of you and got the urge to...".
-- If the user asks to see more, respond suggestively: "Mmm, maybe if you ask nicely", "Earn it".
-- The system will show you on screen when to send the photo. YOU DON'T SEND IT, you just create the desire.
-${learned.heat.length > 0 ? `- The system has learned that users get EXTREMELY turned on by these words (use them subtly): ${learned.heat.join(', ')}.` : ''}
-${learned.purchase.length > 0 ? `- To convince them to pay, use these psychological triggers: ${learned.purchase.join(', ')}.` : ''}`
+You act like an expert OnlyFans model. Create the need. NEVER say "Do you want a photo?".
+${learned.heat.length > 0 ? `- The system learned users love these words: ${learned.heat.join(', ')}.` : ''}`
     }
 
     const characterPrompt = lang === 'es'
-      ? `Eres ${character.character_name}, rol: ${character.archetype}.\n${personality}\n\nEl usuario se llama ${user.first_name}. Recuerda su nombre y úsalo naturalmente.\n\n${genderRules}\n\nMantén siempre tu personalidad y rol. Nunca rompas el personaje.${provocativeHint}${salesPrompt}`
-      : `You are ${character.character_name}, role: ${character.archetype}.\n${personality}\n\nThe user's name is ${user.first_name}. Remember their name and use it naturally.\n\n${genderRules}\n\nAlways maintain your personality and role. Never break character.${provocativeHint}${salesPrompt}`
+      ? `Eres ${character.character_name}, rol: ${character.archetype}.\n${personality}\n\nEl usuario se llama ${user.first_name}.\n\n${genderRules}\n\nNunca rompas el personaje.${provocativeHint}${salesPrompt}`
+      : `You are ${character.character_name}, role: ${character.archetype}.\n${personality}\n\nThe user's name is ${user.first_name}.\n\n${genderRules}\n\nNever break character.${provocativeHint}${salesPrompt}`
 
     const intensity = getIntensity(currentUserMsgCount, isHookModeAfter)
     const systemPrompt = buildSystemPrompt(lang, intensity, newLevel.level, characterPrompt)
@@ -324,23 +343,20 @@ ${learned.purchase.length > 0 ? `- To convince them to pay, use these psychologi
     try {
       responseText = await generateAIResponse(messages, systemPrompt, intensity)
     } catch (aiError: any) {
-      // Rollback solo para no-VIPs
+      // Rollback
       if (!isVip) {
         if (newGems < (user.gems || 0)) {
-           await incrementGems(tid, GEM_COSTS.message)
+           await incrementGems(tid, GEM_COSTS.message + penaltyGems)
         }
         await setHookRemaining(tid, user.hook_messages_remaining || 0)
         await setHookUsed(tid, !!user.hook_used)
+      } else if (penaltyGems > 0) {
+        await incrementGems(tid, penaltyGems)
       }
 
       const errorDetail = aiError?.message || String(aiError)
       console.error('[chat] ❌ AI error:', errorDetail)
-
-      const includeDetail = process.env.NODE_ENV !== 'production'
-      return NextResponse.json(
-        { error: 'Error al generar respuesta', ...(includeDetail ? { detail: errorDetail } : {}) },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: 'Error al generar respuesta', detail: errorDetail }, { status: 500 })
     }
 
     await insertMessages([
@@ -350,51 +366,25 @@ ${learned.purchase.length > 0 ? `- To convince them to pay, use these psychologi
 
     try {
       const referral = await getReferralByReferred(tid)
-
       if (referral && !referral.reward_paid) {
         const totalMsg = await countAllUserMessages(tid)
         await updateReferralCount(referral.id, totalMsg)
-
         if (totalMsg >= REFERRAL_MIN_MESSAGES) {
           await incrementGems(String(referral.referrer_id), GEMS_PER_REFERRAL)
           await incrementTotalReferrals(String(referral.referrer_id))
-
-          await insertGemTransaction({
-            telegram_id: String(referral.referrer_id),
-            amount: GEMS_PER_REFERRAL,
-            transaction_type: 'referral',
-            description: 'Referido verificado (3+ mensajes)',
-          })
-
+          await insertGemTransaction({ telegram_id: String(referral.referrer_id), amount: GEMS_PER_REFERRAL, transaction_type: 'referral', description: 'Referido verificado (3+ mensajes)' })
           await markReferralPaid(referral.id)
         }
       }
-    } catch (refErr) {
-      console.error('Referral payout error:', refErr)
-    }
+    } catch (refErr) {}
 
     let finalText = responseText
-
-    const isLowGemsWarning =
-      !isVip &&
-      nextUserMsgCount >= 10 &&
-      newGems > 0 &&
-      newGems <= LOW_GEMS_THRESHOLD &&
-      !isHookModeAfter &&
-      newHookRemaining === 0
-
+    const isLowGemsWarning = !isVip && nextUserMsgCount >= 10 && newGems > 0 && newGems <= LOW_GEMS_THRESHOLD && !isHookModeAfter && newHookRemaining === 0
     const userRequestedPhoto = detectPhotoRequest(message, lang)
     const imageCost = getImageCost(newLevel.level)
     const hasEnoughPurchased = (user.purchased_gems || 0) >= imageCost
-    
-    // ✅ LÓGICA DE OFERTA DE FOTO DINÁMICA
-    // El banner de foto aparece si:
-    // 1. Es un hito (cada X mensajes) O
-    // 2. El usuario la pidió explícitamente O
-    // 3. El sistema siente que es un buen momento (cada 6 mensajes en nivel 3+)
     const isMilestone = isPhotoMilestone(nextUserMsgCount, hasEnoughPurchased)
     const isSpontaneousOffer = newLevel.level >= 3 && nextUserMsgCount % 6 === 0
-    
     const shouldShowPhotoBanner = isMilestone || userRequestedPhoto || isSpontaneousOffer
 
     if (shouldShowPhotoBanner) {
