@@ -5,7 +5,6 @@ import {
   ensureUser,
   getCharacter,
   countUserMessages,
-  decrementGemsAndPurchased,
   insertGemTransaction,
   getSeenR2Indices,
   markImageSeen,
@@ -28,7 +27,7 @@ import {
   VIP_LIMITS,
   MAX_GENERATIONS_PER_CONTEXT_PER_USER,
 } from '@/lib/constants'
-import { generateRunwareImage } from '@/lib/runware' // ✅ IMPORTAMOS RUNWARE
+import { generateRunwareImage } from '@/lib/runware'
 import {
   getLevelFromMessages,
   getImageCost,
@@ -42,6 +41,7 @@ import {
   buildR2Key,
   buildTagKey,
 } from '@/lib/r2-upload'
+import { execute } from '@/lib/turso' // ✅ NUEVO: Para crear el registro PPV
 
 export const maxDuration = 60
 
@@ -683,7 +683,7 @@ export async function POST(request: Request) {
           telegram_id: tid,
           character_id,
           tag_key: normalizedTagKey,
-          model: willUseWiro ? 'wiro' : 'deepinfra', // Mantenemos la métrica antigua para no romper la DB, pero el modelo real es Runware
+          model: willUseWiro ? 'wiro' : 'deepinfra', 
           level: level.level,
         })
 
@@ -756,52 +756,32 @@ export async function POST(request: Request) {
     }
 
     // ═══════════════════════════════════════════════════════════
-    // CHARGE (if not free and not VIP quota)
+    // CREATE LOCKED PHOTO (PPV)
     // ═══════════════════════════════════════════════════════════
     let newGems = user.gems || 0
     let newPurchasedGems = user.purchased_gems || 0
+    let lockedPhotoId: number | null = null
+    let unlockPrice = 0
 
     if (!isFree && !useVipQuota) {
-      const purchasedGems = user.purchased_gems || 0
+      // El usuario NO es VIP y no es la foto gratis.
+      // Creamos un registro de PPV (Pay-Per-View).
+      unlockPrice = imageCost
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString() // 1 hora FOMO
 
-      if (purchasedGems <= 0) {
-        return NextResponse.json(
-          {
-            error: 'premium_required',
-            message:
-              lang === 'en'
-                ? 'Image generation is a Premium feature. Buy gems with Stars to unlock it.'
-                : 'La generación de imágenes es Premium. Compra gemas con Stars para desbloquearla.',
-          },
-          { status: 403 }
+      try {
+        const dbResult = await execute(
+          `INSERT INTO locked_photos 
+           (telegram_id, character_id, image_url, tag_key, unlock_price, expires_at) 
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [tid, character_id, imageUrl, normalizedTagKey, unlockPrice, expiresAt]
         )
+        lockedPhotoId = Number(dbResult.lastInsertRowid)
+        console.log(`[generate-image] 🔒 Locked photo created (ID: ${lockedPhotoId}, Price: ${unlockPrice})`)
+      } catch (dbErr) {
+        console.error('[generate-image] Error creating locked photo:', dbErr)
+        return NextResponse.json({ error: 'Error creating locked photo' }, { status: 500 })
       }
-
-      if (purchasedGems < imageCost) {
-        return NextResponse.json(
-          {
-            error: 'insufficient_gems',
-            message:
-              lang === 'en'
-                ? `You need ${imageCost} purchased gems`
-                : `Necesitas ${imageCost} gemas compradas`,
-            required: imageCost,
-            available: purchasedGems,
-          },
-          { status: 402 }
-        )
-      }
-
-      const rpcData = await decrementGemsAndPurchased(tid, imageCost)
-      newGems = rpcData.new_gems
-      newPurchasedGems = rpcData.new_purchased
-
-      await insertGemTransaction({
-        telegram_id: tid,
-        amount: -imageCost,
-        transaction_type: 'image',
-        description: `Imagen ${source} nivel ${level.level}`,
-      })
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -821,7 +801,12 @@ export async function POST(request: Request) {
     // PERSIST message in history
     // ═══════════════════════════════════════════════════════════
     try {
-      const imageMessageContent = `*${character.character_name} te envía una foto*\n\n![Selfie](${imageUrl})`
+      // Si hay un bloqueo, guardamos "locked:ID" en el historial
+      // Si es gratis/VIP, guardamos la URL real
+      const imageMessageContent = lockedPhotoId
+        ? `*${character.character_name} te envía una foto*\n\n![Selfie](locked:${lockedPhotoId})`
+        : `*${character.character_name} te envía una foto*\n\n![Selfie](${imageUrl})`
+        
       await insertMessage({
         telegram_id: tid,
         character_id,
@@ -836,11 +821,14 @@ export async function POST(request: Request) {
     // RESPONSE
     // ═══════════════════════════════════════════════════════════
     return NextResponse.json({
-      image_url: imageUrl,
-      remaining_gems: newGems,
+      is_locked: !!lockedPhotoId,
+      locked_photo_id: lockedPhotoId,
+      unlock_price: unlockPrice,
+      image_url: lockedPhotoId ? undefined : imageUrl, // Ocultamos la URL si está bloqueada
+      remaining_gems: newGems, 
       remaining_purchased_gems: newPurchasedGems,
       level: level.level,
-      cost: isFree ? 0 : useVipQuota ? 0 : imageCost,
+      cost: 0, // Ya no cobramos en la generación
       free: isFree,
       vip_quota: useVipQuota,
       source,
