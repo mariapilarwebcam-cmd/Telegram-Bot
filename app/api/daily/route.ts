@@ -3,11 +3,9 @@
 import { NextResponse } from 'next/server'
 import {
   ensureUser,
-  getUser,
-  incrementGems,
-  setLastDailyClaim,
   insertGemTransaction,
 } from '@/lib/db-queries'
+import { queryOne } from '@/lib/turso' // ✅ Importamos queryOne para el UPDATE atómico
 import { BASE_DAILY_GEMS, HOURS_BETWEEN_CLAIMS } from '@/lib/constants'
 
 export async function POST(request: Request) {
@@ -17,47 +15,42 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
-    // ✅ ensureUser (crea si no existe)
     const user = await ensureUser(tid)
     if (!user) {
+      return NextResponse.json({ error: 'Error cargando tu cuenta' }, { status: 500 })
+    }
+
+    const dailyTotal = BASE_DAILY_GEMS
+
+    // 🛡️ FIX CRÍTICO: COBRO ATÓMICO Y VERIFICACIÓN DE 24H EN UN SOLO PASO
+    // Solo suma gemas SI el cooldown de 24h ha expirado.
+    const claimed = await queryOne<{ gems: number }>(
+      `UPDATE users
+       SET gems = gems + ?,
+           last_daily_claim = datetime('now'),
+           hook_messages_remaining = 0
+       WHERE telegram_id = ?
+         AND (last_daily_claim IS NULL OR last_daily_claim < datetime('now', '-24 hours'))
+       RETURNING gems`,
+      [dailyTotal, tid]
+    )
+
+    if (!claimed) {
+      // Si no se pudo reclamar, es porque el cooldown sigue activo
+      const hoursRemaining = HOURS_BETWEEN_CLAIMS
       return NextResponse.json(
-        { error: 'Error cargando tu cuenta' },
-        { status: 500 }
+        {
+          error:
+            user.language === 'en'
+              ? `Come back in ${hoursRemaining}h`
+              : `Vuelve en ${hoursRemaining}h`,
+          hours_remaining: hoursRemaining,
+        },
+        { status: 429 }
       )
     }
 
-    const now = Date.now()
-
-    // ── Cooldown 24h ──
-    if (user.last_daily_claim) {
-      const hoursSince =
-        (now - new Date(user.last_daily_claim).getTime()) / 3_600_000
-
-      if (hoursSince < HOURS_BETWEEN_CLAIMS) {
-        const hoursRemaining = Math.ceil(HOURS_BETWEEN_CLAIMS - hoursSince)
-        return NextResponse.json(
-          {
-            error:
-              user.language === 'en'
-                ? `Come back in ${hoursRemaining}h`
-                : `Vuelve en ${hoursRemaining}h`,
-            hours_remaining: hoursRemaining,
-          },
-          { status: 429 }
-        )
-      }
-    }
-
-    // ── Recompensa plana: 3 gemas ──
-    const dailyTotal = BASE_DAILY_GEMS
-
-    // ✅ RPC atómica (Turso)
-    const newGems = await incrementGems(tid, dailyTotal)
-
-    // Timestamp + reset hook
-    await setLastDailyClaim(tid)
-
-    // Registrar transacción
+    // El reclamo fue exitoso y seguro
     await insertGemTransaction({
       telegram_id: tid,
       amount: dailyTotal,
@@ -66,7 +59,7 @@ export async function POST(request: Request) {
     })
 
     return NextResponse.json({
-      gems: newGems,
+      gems: claimed.gems,
       claimed: dailyTotal,
       base: BASE_DAILY_GEMS,
       referral_bonus: 0,
