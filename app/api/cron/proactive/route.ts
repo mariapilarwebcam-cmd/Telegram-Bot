@@ -47,7 +47,12 @@ export async function GET(request: Request) {
   // Vercel manda automáticamente el header:
   //   Authorization: Bearer ${CRON_SECRET}
   // ═══════════════════════════════════════════════════════════════
-  if (CRON_SECRET) {
+  if (!CRON_SECRET) {
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[cron/proactive] ❌ CRON_SECRET no configurado en producción')
+      return NextResponse.json({ error: 'Configuración incompleta' }, { status: 500 })
+    }
+  } else {
     const authHeader = request.headers.get('authorization')
     if (authHeader !== `Bearer ${CRON_SECRET}`) {
       console.warn('[cron/proactive] unauthorized attempt')
