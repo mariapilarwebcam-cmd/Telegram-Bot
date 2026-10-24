@@ -98,7 +98,6 @@ export default function ChatPage() {
   const router = useRouter()
   const characterId = parseInt(id as string)
 
-  // ✅ Añadimos refresh para actualizar las gemas globales
   const { user, loading: userLoading, lang, setGems, setHookRemaining, refresh } = useUser()
 
   const [character, setCharacter] = useState<any>(null)
@@ -139,7 +138,6 @@ export default function ChatPage() {
   const [generatingImage, setGeneratingImage] = useState(false)
   const [generatingAudio, setGeneratingAudio] = useState(false)
   
-  // ✅ Estado para el desbloqueo de fotos PPV
   const [unlockingPhoto, setUnlockingPhoto] = useState<number | null>(null)
 
   const [menuOpen, setMenuOpen] = useState(false)
@@ -338,14 +336,15 @@ export default function ChatPage() {
     }, 300)
   }
 
-  const send = async () => {
+  // ✅ NUEVA FUNCIÓN: Acepta parámetro para el recargo
+  const send = async (acceptPenalty = false) => {
     if (!input.trim() || !user || loading || sendingRef.current) return
     sendingRef.current = true
 
     const gems = user.gems || 0
     const hookRemaining = user.hook_messages_remaining || 0
 
-    if (!isVip && gems < GEM_COSTS.message && hookRemaining <= 0) {
+    if (!acceptPenalty && !isVip && gems < GEM_COSTS.message && hookRemaining <= 0) {
       sendingRef.current = false
       setBlocked(true)
       return
@@ -353,18 +352,43 @@ export default function ChatPage() {
 
     const text = input.trim()
     const wasFirstMessage = totalUserMessages === 0
-    setInput('')
+    
+    // Optimistic UI: Solo limpiamos y mostramos el mensaje si no estamos confirmando
+    if (!acceptPenalty) {
+      setInput('')
+      setMessages((p) => [...p, { role: 'user', content: text }])
+    }
+    
     setLoading(true)
-    setMessages((p) => [...p, { role: 'user', content: text }])
 
     try {
       const res = await tgFetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ character_id: characterId, message: text }),
+        body: JSON.stringify({ 
+          character_id: characterId, 
+          message: text,
+          accept_penalty: acceptPenalty
+        }),
       })
       const data = await res.json()
+      
       if (res.ok) {
+        // ✅ Manejo del recargo por mensaje largo
+        if (data.requires_penalty) {
+          setLoading(false)
+          sendingRef.current = false
+          
+          const confirmPenalty = window.confirm(data.message)
+          if (confirmPenalty) {
+            send(true) // Reenviamos aceptando el recargo
+          } else {
+            setInput(text) // Restauramos el texto
+            setMessages((p) => p.slice(0, -1)) // Quitamos el mensaje optimista
+          }
+          return
+        }
+
         if (data.blocked) {
           if (data.vip_limit_reached) {
             setMessages((p) => p.slice(0, -1))
@@ -417,7 +441,7 @@ export default function ChatPage() {
             Analytics.levelUp({
               character_id: characterId,
               new_level: data.new_level,
-              total_messages: data.total_user_messages || 0, // ✅ FIXED: total_messages
+              total_messages: data.total_user_messages || 0,
             })
           }
         }
@@ -427,12 +451,12 @@ export default function ChatPage() {
           : (data.error || `Error HTTP ${res.status}`)
         console.error('[chat] API error:', data)
         alert(errMsg)
-        setMessages((p) => p.slice(0, -1))
+        if (!acceptPenalty) setMessages((p) => p.slice(0, -1))
       }
     } catch (err: any) {
       console.error('[chat] fetch error:', err)
       alert('Error de conexión: ' + (err?.message || 'desconocido'))
-      setMessages((p) => p.slice(0, -1))
+      if (!acceptPenalty) setMessages((p) => p.slice(0, -1))
     } finally {
       sendingRef.current = false
       setLoading(false)
@@ -550,7 +574,6 @@ export default function ChatPage() {
       })
       const data = await res.json()
       if (res.ok) {
-        // ✅ NUEVA LÓGICA PPV: Si el backend dice que está bloqueada
         if (data.is_locked) {
           setMessages((p) => [
             ...p,
@@ -560,7 +583,6 @@ export default function ChatPage() {
             },
           ])
         } else {
-          // Es gratis o el usuario es VIP
           setMessages((p) => [
             ...p,
             {
@@ -603,7 +625,6 @@ export default function ChatPage() {
     }
   }
 
-  // ✅ NUEVA FUNCIÓN: Desbloquear foto PPV
   const handleUnlockPhoto = async (lockedId: number, price: number) => {
     if (!user || unlockingPhoto) return
 
@@ -623,7 +644,6 @@ export default function ChatPage() {
       const data = await res.json()
 
       if (res.ok && data.image_url) {
-        // Actualizamos el mensaje en la UI reemplazando locked:ID por la URL real
         setMessages((prev) => 
           prev.map((msg) => {
             if (msg.content.includes(`locked:${lockedId}`)) {
@@ -635,8 +655,6 @@ export default function ChatPage() {
             return msg
           })
         )
-        
-        // ✅ Usamos refresh() para actualizar el contador global de gemas al instante
         await refresh()
       } else {
         alert(data.message || data.error || 'Error al desbloquear')
@@ -777,7 +795,6 @@ export default function ChatPage() {
           .replace(/</g, '&lt;')
           .replace(/>/g, '&gt;')
         
-        // Si la URL empieza con "locked:", renderizamos el candado borroso
         if (url.startsWith('locked:')) {
           const lockedId = url.replace('locked:', '')
           const price = currentImageCost
@@ -801,14 +818,12 @@ export default function ChatPage() {
                 user-select: none;
               "
             >
-              <!-- ✅ FIX: Fondo premium con gradiente, sin depender de imagen externa -->
               <div style="
                 position: absolute; inset: 0;
                 background: linear-gradient(135deg, rgba(124,92,255,0.4) 0%, rgba(236,72,153,0.4) 100%);
                 backdrop-filter: blur(10px);
               "></div>
               
-              <!-- Overlay con Candado y Precio -->
               <div style="
                 position: absolute; inset: 0;
                 display: flex; flex-direction: column;
@@ -1130,7 +1145,6 @@ export default function ChatPage() {
         onClick={(e) => {
           const target = e.target as HTMLElement
           
-          // ✅ LÓGICA PPV: Si el usuario toca una foto bloqueada
           const lockedTarget = target.closest('[data-locked-id]')
           if (lockedTarget) {
             const lockedId = parseInt(lockedTarget.getAttribute('data-locked-id') || '0')
@@ -1139,7 +1153,6 @@ export default function ChatPage() {
             return
           }
 
-          // Si es una foto nítida, abre el lightbox
           const imgTarget = target.closest('[data-image-url]')
           if (imgTarget) {
             setSelectedImage(imgTarget.getAttribute('data-image-url'))
@@ -1303,9 +1316,10 @@ export default function ChatPage() {
             disabled={loading}
             className="chat-input"
             rows={1}
+            maxLength={750} // ✅ Añadido: Límite máximo
           />
 
-          <button onClick={send} disabled={loading || !input.trim()} className="chat-send-btn" title="Enviar">
+          <button onClick={() => send()} disabled={loading || !input.trim()} className="chat-send-btn" title="Enviar">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
               <path d="m4 4 17 8-17 8V4z" fill="currentColor" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
             </svg>
@@ -1603,7 +1617,6 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* ✅ LIGHTBOX CON PATRÓN ANTI-RECORTE */}
       {selectedImage && (
         <div 
           className="modal-backdrop" 
@@ -1632,7 +1645,6 @@ export default function ChatPage() {
             WebkitUserSelect: 'none',
             userSelect: 'none',
           }}>
-            {/* Patrón de marca de agua repetido usando SVG */}
             <div style={{
               position: 'absolute',
               inset: 0,
