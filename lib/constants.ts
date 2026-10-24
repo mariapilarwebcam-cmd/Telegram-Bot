@@ -867,7 +867,7 @@ export const GEM_COSTS = {
 export const HOOK_MODE_MESSAGES = 5
 
 export const GEMS_PER_REFERRAL = 10
-export const REFERRAL_MIN_MESSAGES = 3
+export const REFERRAL_MIN_MESSAGES = 10
 
 export const REFERRAL_PURCHASE_COMMISSION_PCT = 5
 export const REFERRAL_TOP_TIER_THRESHOLD = 5
