@@ -98,7 +98,8 @@ export default function ChatPage() {
   const router = useRouter()
   const characterId = parseInt(id as string)
 
-  const { user, loading: userLoading, lang, setGems, setHookRemaining } = useUser()
+  // ✅ Añadimos refresh para actualizar las gemas globales
+  const { user, loading: userLoading, lang, setGems, setHookRemaining, refresh } = useUser()
 
   const [character, setCharacter] = useState<any>(null)
   const [messages, setMessages] = useState<Message[]>([])
@@ -138,7 +139,7 @@ export default function ChatPage() {
   const [generatingImage, setGeneratingImage] = useState(false)
   const [generatingAudio, setGeneratingAudio] = useState(false)
   
-  // ✅ NUEVO: Estado para el desbloqueo de fotos PPV
+  // ✅ Estado para el desbloqueo de fotos PPV
   const [unlockingPhoto, setUnlockingPhoto] = useState<number | null>(null)
 
   const [menuOpen, setMenuOpen] = useState(false)
@@ -416,7 +417,7 @@ export default function ChatPage() {
             Analytics.levelUp({
               character_id: characterId,
               new_level: data.new_level,
-            total_messages: data.total_user_messages || 0,
+              total_messages: data.total_user_messages || 0, // ✅ FIXED: total_messages
             })
           }
         }
@@ -635,10 +636,8 @@ export default function ChatPage() {
           })
         )
         
-        // Actualizamos las gemas visualmente
-        if (user) {
-          user.purchased_gems = data.remaining_purchased_gems
-        }
+        // ✅ Usamos refresh() para actualizar el contador global de gemas al instante
+        await refresh()
       } else {
         alert(data.message || data.error || 'Error al desbloquear')
       }
@@ -768,7 +767,6 @@ export default function ChatPage() {
   const formatMessage = (content: string) => {
     const images: string[] = []
     
-    // ✅ NUEVA LÓGICA PPV: Detecta si la imagen está bloqueada o desbloqueada
     let text = content.replace(
       /!\[([^\]]*)\]\(([^)]+)\)/g,
       (_, alt, url) => {
@@ -782,7 +780,7 @@ export default function ChatPage() {
         // Si la URL empieza con "locked:", renderizamos el candado borroso
         if (url.startsWith('locked:')) {
           const lockedId = url.replace('locked:', '')
-          const price = currentImageCost // Usamos el costo del nivel actual
+          const price = currentImageCost
           
           images.push(
             `<div 
@@ -803,14 +801,11 @@ export default function ChatPage() {
                 user-select: none;
               "
             >
-              <!-- Imagen borrosa de fondo -->
+              <!-- ✅ FIX: Fondo premium con gradiente, sin depender de imagen externa -->
               <div style="
                 position: absolute; inset: 0;
-                background-image: url('https://images.goddessgridhq.com/placeholder_blur.jpg');
-                background-size: cover;
-                background-position: center;
-                filter: blur(24px) brightness(0.6);
-                transform: scale(1.1);
+                background: linear-gradient(135deg, rgba(124,92,255,0.4) 0%, rgba(236,72,153,0.4) 100%);
+                backdrop-filter: blur(10px);
               "></div>
               
               <!-- Overlay con Candado y Precio -->
@@ -838,7 +833,6 @@ export default function ChatPage() {
             </div>`
           )
         } else {
-          // Imagen normal (gratis o VIP desbloqueada)
           images.push(
             `<div 
               data-image-url="${url}"
