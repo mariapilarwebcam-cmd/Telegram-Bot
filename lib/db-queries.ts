@@ -1386,4 +1386,55 @@ export async function getAudioTokens(
   } catch {
     return 1
   }
+// ═══════════════════════════════════════════════════════════════
+// ✅ NUEVAS FUNCIONES: FRENO DE MANO Y PASE DE MENSAJES
+// ═══════════════════════════════════════════════════════════════
+
+export async function getActivePass(telegram_id: string) {
+  const now = Math.floor(Date.now() / 1000)
+  return queryOne<{ id: number, messages_limit: number, messages_used: number }>(
+    `SELECT id, messages_limit, messages_used FROM message_passes 
+     WHERE user_id = ? AND expires_at > ? AND messages_used < messages_limit 
+     ORDER BY created_at DESC LIMIT 1`,
+    [telegram_id, now]
+  )
+}
+
+export async function consumePass(passId: number) {
+  return execute(
+    `UPDATE message_passes SET messages_used = messages_used + 1 WHERE id = ?`,
+    [passId]
+  )
+}
+
+export async function getSpendState(telegram_id: string) {
+  return queryOne<{ gems_spent_24h: number, level: string }>(
+    `SELECT gems_spent_24h, level FROM spend_state WHERE user_id = ? LIMIT 1`,
+    [telegram_id]
+  )
+}
+
+export async function updateSpendState(telegram_id: string, amount: number) {
+  // Upsert: Si existe, suma; si no, crea.
+  return execute(
+    `INSERT INTO spend_state (user_id, gems_spent_24h, last_updated) 
+     VALUES (?, ?, unixepoch())
+     ON CONFLICT(user_id) DO UPDATE SET 
+       gems_spent_24h = gems_spent_24h + ?, 
+       last_updated = unixepoch()`,
+    [telegram_id, amount, amount]
+  )
+}
+
+export async function grantPass(telegram_id: string) {
+  const expiresAt = Math.floor(Date.now() / 1000) + 86400 // 24 horas
+  await execute(
+    `INSERT INTO message_passes (user_id, expires_at) VALUES (?, ?)`,
+    [telegram_id, expiresAt]
+  )
+  // Reiniciamos su contador de gasto para que no reciba otro pase enseguida
+  await execute(
+    `UPDATE spend_state SET gems_spent_24h = 0, level = 'rest' WHERE user_id = ?`,
+    [telegram_id]
+  )
 }
