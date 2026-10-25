@@ -1,6 +1,8 @@
 // app/api/generate-image/route.ts
 
 import { NextResponse } from 'next/server'
+import sharp from 'sharp' // ✅ IMPORTAMOS SHARP
+import crypto from 'node:crypto' // ✅ PARA GENERAR UUIDs
 import {
   ensureUser, getCharacter, countUserMessages, insertGemTransaction,
   getSeenR2Indices, markImageSeen, getAvailablePoolImage, markPoolImageViewed,
@@ -22,7 +24,7 @@ import { execute, queryOne, query } from '@/lib/turso'
 export const maxDuration = 60
 
 // ═══════════════════════════════════════════════════════════════
-// CHARACTER DNA
+// CHARACTER DNA (Mantén tu diccionario intacto aquí)
 // ═══════════════════════════════════════════════════════════════
 const CHARACTER_DNA: Record<string, string> = {
   female_stepmom: "mature woman, long dark hair, green eyes, elegant",
@@ -374,6 +376,15 @@ function getWiroMonthlyLimitMessage(lang: 'es' | 'en', characterName: string): s
   return `*${characterName} sonríe con calidez*\n\n"Hemos compartido tantos momentos premium este mes... necesito descansar y recargarme. Vuelve el próximo mes para más."`
 }
 
+// ✅ NUEVA FUNCIÓN: Blur Seguro (24px)
+async function makeBlur(buf: Buffer): Promise<Buffer> {
+  return sharp(buf)
+    .resize(24, 35, { fit: 'cover' })
+    .blur(1.2)
+    .webp({ quality: 60 })
+    .toBuffer()
+}
+
 export async function POST(request: Request) {
   try {
     const tid = request.headers.get('x-telegram-id-validated')
@@ -425,13 +436,16 @@ export async function POST(request: Request) {
     }
 
     const genderKey = character.gender === 'male' ? 'male' : 'female'
+    const characterKey = `${character.archetype}_${genderKey}`
     const r2Base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL
     const useR2Static = r2Index !== null && !!r2Base
 
     let source: 'r2_static' | 'pool' | 'generated' = 'generated'
     let imageUrl: string = ''
+    let blurUrl: string = ''
     let modelUsed: string = ''
     let promptUsed = ''
+    let imageId: number | null = null
 
     const imgCountRow = await queryOne<{ c: number }>(
       `SELECT COUNT(*) AS c FROM image_generations WHERE telegram_id = ? AND character_id = ?`,
@@ -483,6 +497,8 @@ export async function POST(request: Request) {
     if (useR2Static) {
       source = 'r2_static'
       imageUrl = buildR2VariantUrl(genderKey, character.archetype, r2Index!)
+      // Nota: Si usas imágenes estáticas de R2, asumimos que ya tienes una versión blur guardada o usas la misma.
+      blurUrl = imageUrl 
       modelUsed = 'r2'
       try { await markImageSeen(tid, character_id, r2Index!, false) } catch (markErr) {}
     } else {
@@ -494,6 +510,8 @@ export async function POST(request: Request) {
           const available = await getAvailablePoolImage(normalizedTagKey, tid)
           if (available) {
             imageUrl = available.r2_url
+            blurUrl = available.blur_r2_key || available.r2_url // Fallback
+            imageId = available.id
             source = 'pool'
             modelUsed = 'pool'
             promptUsed = available.prompt_used
@@ -583,18 +601,29 @@ export async function POST(request: Request) {
         }
 
         modelUsed = 'runware-z-image-turbo'
-        imageUrl = rawUrl
+        
+        // ✅ CREACIÓN DEL BLUR Y GUARDADO EN R2
+        const { buffer } = await downloadImage(rawUrl)
+        const blurBuffer = await makeBlur(buffer)
+        
+        const key = crypto.randomUUID()
+        const origKey = `orig/${key}.webp`
+        const blurKey = `blur/${key}.webp`
+        
+        await Promise.all([
+          uploadToR2(origKey, buffer, 'image/webp'),
+          uploadToR2(blurKey, blurBuffer, 'image/webp')
+        ])
+        
+        imageUrl = origKey
+        blurUrl = blurKey
 
-        if (r2Available && !userHint && mood) {
-          try {
-            const { buffer, contentType } = await downloadImage(rawUrl)
-            const r2Key = buildR2Key(character.archetype, genderKey, mood, levelBucket)
-            const permanentUrl = await uploadToR2(r2Key, buffer, contentType)
-            imageUrl = permanentUrl
-            const newImageId = await insertPoolImage({ tag_key: normalizedTagKey, archetype: character.archetype, gender: genderKey, mood, level_bucket: levelBucket, r2_key: r2Key, r2_url: permanentUrl, prompt_used: imagePrompt, first_user_id: tid })
-            if (newImageId) await markPoolImageViewed(newImageId, tid, character_id)
-          } catch (uploadErr) {}
-        }
+        // Guardar en generated_images
+        const ins = await execute(
+          `INSERT INTO generated_images (r2_key, blur_r2_key, character_key, max_level, status) VALUES (?, ?, ?, ?, 'candidate')`,
+          [origKey, blurKey, characterKey, level.level]
+        )
+        imageId = Number(ins.lastInsertRowid)
       }
     }
 
@@ -615,26 +644,39 @@ export async function POST(request: Request) {
 
     let newGems = user.gems || 0
     let newPurchasedGems = user.purchased_gems || 0
-    let lockedPhotoId: number | null = null
-    let unlockPrice = 0
+    
+    // ✅ LÓGICA DE OFERTA (photo_offers en lugar de locked_photos)
+    let offerId: number | null = null
+    let publicBlurUrl = ''
 
     if (isDirectRequest) {
-      lockedPhotoId = null
-      unlockPrice = 0
+      // Si es petición directa, la imagen ya se cobró y se muestra nítida
       if (gemsCharged) {
         newGems -= imageCost
         newPurchasedGems -= imageCost
       }
     } else {
-      unlockPrice = isFree || useVipQuota ? 0 : imageCost
-      const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString()
-      try {
-        const dbResult = await execute(
-          `INSERT INTO locked_photos (telegram_id, character_id, image_url, tag_key, unlock_price, expires_at) VALUES (?, ?, ?, ?, ?, ?)`,
-          [tid, character_id, imageUrl, normalizedTagKey, unlockPrice, expiresAt]
-        )
-        lockedPhotoId = Number(dbResult.lastInsertRowid)
-      } catch (dbErr) {}
+      const offerPrice = isFree || useVipQuota ? 0 : imageCost
+      const base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || ''
+      publicBlurUrl = `${base.replace(/\/$/, '')}/${blurUrl}`
+
+      // Insertamos la oferta
+      await execute(
+        `INSERT OR IGNORE INTO photo_offers (user_id, image_id, character_id, price_gems, source) VALUES (?, ?, ?, ?, ?)`,
+        [tid, imageId, character_id, offerPrice, source]
+      )
+      
+      const offer = await queryOne<{ id: number }>(
+        `SELECT id FROM photo_offers WHERE user_id = ? AND image_id = ?`,
+        [tid, imageId]
+      )
+      offerId = offer!.id
+
+      // Si es gratis o VIP, se desbloquea automáticamente
+      if (offerPrice === 0) {
+        await execute(`UPDATE photo_offers SET state = 'unlocked', unlocked_at = unixepoch() WHERE id = ?`, [offerId])
+        await execute(`UPDATE generated_images SET status = 'active' WHERE id = ?`, [imageId])
+      }
     }
 
     if (source !== 'generated') {
@@ -643,16 +685,20 @@ export async function POST(request: Request) {
 
     let insertedMsgId: number | undefined
     try {
-      const imageMessageContent = lockedPhotoId
-        ? `*${character.character_name} te envía una foto*\n\n![Selfie](locked:${lockedPhotoId}|${Date.now() + 3600000})`
-        : `*${character.character_name} te envía una foto*\n\n![Selfie](${imageUrl})`
+      const base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || ''
+      const fullOrigUrl = `${base.replace(/\/$/, '')}/${imageUrl}`
+      
+      // ✅ FORMATO DE MENSAJE: locked:ID@URL_BLUR
+      const imageMessageContent = (offerId && !isDirectRequest)
+        ? `*${character.character_name} te envía una foto*\n\n![Selfie](locked:${offerId}@${publicBlurUrl})`
+        : `*${character.character_name} te envía una foto*\n\n![Selfie](${fullOrigUrl})`
+
       const inserted = await insertMessage({ telegram_id: tid, character_id, role: 'assistant', content: imageMessageContent })
       insertedMsgId = inserted?.id
     } catch (persistErr) {}
 
     // ✅ GUARDAR ETIQUETAS PARA RECOMENDACIONES
-    const newPhotoId = lockedPhotoId || insertedMsgId
-    if (newPhotoId) {
+    if (imageId) {
       const autoTags = [
         ...extractTagsFromText(userHint),
         mood,
@@ -661,15 +707,15 @@ export async function POST(request: Request) {
       ].filter(Boolean) as string[]
       
       if (autoTags.length > 0) {
-        await saveContentTags(newPhotoId, autoTags)
+        await saveContentTags(imageId, autoTags)
       }
     }
 
     return NextResponse.json({
-      is_locked: !!lockedPhotoId,
-      locked_photo_id: lockedPhotoId,
-      unlock_price: unlockPrice,
-      image_url: lockedPhotoId ? undefined : imageUrl, 
+      is_locked: !!offerId && !isDirectRequest,
+      offer_id: offerId,
+      blur_url: (offerId && !isDirectRequest) ? publicBlurUrl : undefined,
+      image_url: (!offerId || isDirectRequest) ? `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL?.replace(/\/$/, '')}/${imageUrl}` : undefined,
       remaining_gems: newGems, 
       remaining_purchased_gems: newPurchasedGems,
       level: level.level,
@@ -684,6 +730,7 @@ export async function POST(request: Request) {
       message_id: insertedMsgId,
     })
   } catch (error: any) {
+    console.error('[generate-image] error:', error)
     return NextResponse.json({ error: 'Error al generar la imagen' }, { status: 500 })
   }
 }
