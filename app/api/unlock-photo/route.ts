@@ -1,7 +1,7 @@
 // app/api/unlock-photo/route.ts
 import { NextResponse } from 'next/server'
 import { queryOne, execute } from '@/lib/turso'
-import { insertGemTransaction, updateSpendState } from '@/lib/db-queries' // ✅ IMPORTAMOS updateSpendState
+import { insertGemTransaction, updateSpendState, rewardUserTags } from '@/lib/db-queries' // ✅ IMPORTAMOS rewardUserTags
 
 export async function POST(request: Request) {
   try {
@@ -23,7 +23,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'expired' }, { status: 410 })
     }
 
-    // 🛡️ SI ES GRATIS (PRECIO 0), NO COBRAMOS GEMAS
+    // 🛡️ SI ES GRATIS (PRECIO 0), NO COBRAMOS GEMAS PERO SÍ APRENDEMOS
     if (photo.unlock_price > 0) {
       const user = await queryOne<{ purchased_gems: number }>(
         `UPDATE users SET purchased_gems = purchased_gems - ? WHERE telegram_id = ? AND purchased_gems >= ? RETURNING purchased_gems`,
@@ -47,6 +47,9 @@ export async function POST(request: Request) {
 
     // Marcar como desbloqueada (sea gratis o pagada)
     await execute(`UPDATE locked_photos SET status = 'unlocked' WHERE id = ?`, [photo.id])
+
+    // ✅ NUEVO: El sistema aprende qué etiquetas le gustaron al usuario (+3 puntos)
+    await rewardUserTags(tid, photo.id, 3)
 
     return NextResponse.json({
       success: true,
