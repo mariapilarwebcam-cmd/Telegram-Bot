@@ -76,7 +76,8 @@ export async function POST(request: Request) {
     const template = openingTemplate ? openingTemplate[lang] : fallback
     const openingMessage = template.replace(/{name}/g, character.character_name)
 
-    await insertMessage({
+    // ✅ INTEGRACIÓN: Capturamos el ID del mensaje insertado
+    const insertedMsg = await insertMessage({
       telegram_id: tid,
       character_id,
       role: 'assistant',
@@ -85,6 +86,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       response: openingMessage,
+      assistant_message_id: insertedMsg?.id, // ✅ AÑADIDO
       remaining_gems: charged.gems, // Usamos las gemas devueltas por la DB
     })
   } catch (e: any) {
