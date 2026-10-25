@@ -18,7 +18,6 @@ import {
   incrementTotalReferrals,
   updateLastActive,
   getActiveSubscription,
-  // ✅ NUEVAS IMPORTACIONES
   getActivePass,
   consumePass,
   updateSpendState,
@@ -168,7 +167,6 @@ export async function POST(request: Request) {
 
     const { character_id, message, accept_penalty } = await request.json()
 
-    // 🛡️ VALIDACIÓN DE LONGITUD DE MENSAJE
     if (!message || typeof message !== 'string') {
       return NextResponse.json({ error: 'Mensaje inválido' }, { status: 400 })
     }
@@ -213,7 +211,6 @@ export async function POST(request: Request) {
     let newHookRemaining = user.hook_messages_remaining || 0
     let newHookUsed = !!user.hook_used
 
-    // ✅ NUEVO: VERIFICAR PASE DE MENSAJES
     const activePass = await getActivePass(tid)
     let usedPass = false
     let passMessage = ''
@@ -288,15 +285,14 @@ export async function POST(request: Request) {
           description: penaltyGems > 0 ? 'Mensaje + recargo por longitud' : 'Mensaje de chat',
         })
 
-        // ✅ ACTUALIZAR GASTO Y REGALAR PASE SI GASTA MÁS DE 250 GEMAS
         await updateSpendState(tid, totalCost)
         const spendState = await getSpendState(tid)
         
         if (spendState && spendState.gems_spent_24h >= 250) {
-          await grantPass(tid, 150) // Le regalamos 150 mensajes
+          await grantPass(tid, 150)
           passMessage = lang === 'es' 
-            ? '\n\n🎁 *¡Has desbloqueado un Pase de Mensajes VIP!* Veo que estás muy conectado hoy. Te regalo **150 mensajes gratis** por las próximas 24 horas para que no tengas que preocuparte por las gemas. Descansa y disfruta.' 
-            : '\n\n🎁 *You unlocked a VIP Message Pass!* I see you are very connected today. I am gifting you **150 free messages** for the next 24 hours so you don\'t have to worry about gems. Rest and enjoy.'
+            ? '\n\n🎁 *¡Has desbloqueado un Pase de Mensajes VIP!* Veo que estás muy conectado hoy. Te regalo **150 mensajes gratis por las próximas 24 horas** para que no tengas que preocuparte por las gemas. Descansa y disfruta.' 
+            : '\n\n🎁 *You unlocked a VIP Message Pass!* I see you are very connected today. I am gifting you **150 free messages for the next 24 hours** so you don\'t have to worry about gems. Rest and enjoy.'
         }
       } else {
         newGems = totalGems
@@ -445,7 +441,10 @@ ${learned.heat.length > 0 ? `- The system learned users love these words: ${lear
     const hasEnoughPurchased = (user.purchased_gems || 0) >= imageCost
     const isMilestone = isPhotoMilestone(nextUserMsgCount, hasEnoughPurchased)
     const isSpontaneousOffer = newLevel.level >= 3 && nextUserMsgCount % 6 === 0 && !usedPass
-    const shouldShowPhotoBanner = isMilestone || userRequestedPhoto || isSpontaneousOffer
+    
+    // ✅ FRENO DE MANO: No ofrecer si está en 'rest'
+    const spendState = await getSpendState(tid)
+    const shouldShowPhotoBanner = (isMilestone || userRequestedPhoto || isSpontaneousOffer) && spendState?.level !== 'rest'
 
     if (shouldShowPhotoBanner) {
       const invites = lang === 'es' ? PHOTO_INVITES_ES : PHOTO_INVITES_EN
