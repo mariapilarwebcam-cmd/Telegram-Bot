@@ -733,4 +733,4 @@ export async function POST(request: Request) {
     console.error('[generate-image] error:', error)
     return NextResponse.json({ error: 'Error al generar la imagen' }, { status: 500 })
   }
-}
+} 
