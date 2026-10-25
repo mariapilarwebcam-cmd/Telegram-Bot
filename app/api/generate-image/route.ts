@@ -7,7 +7,8 @@ import {
   incrementPoolImageUse, insertPoolImage, insertMessage, getActiveSubscription,
   insertImageGeneration, countUserWiroLast30Days, 
   ensureWiroTokensRefilled, consumeWiroToken, countSfwImageGenerationsLast24h,
-  incrementGems, // ✅ AÑADIDO: Para hacer los reembolsos correctamente
+  incrementGems,
+  getSpendState, updateSpendState // ✅ NUEVAS IMPORTACIONES
 } from '@/lib/db-queries'
 import {
   getCharacterFace, getCharacterImageUrl, VIP_LIMITS, MAX_GENERATIONS_PER_CONTEXT_PER_USER,
@@ -378,7 +379,6 @@ export async function POST(request: Request) {
       ? body.recent_messages.filter((m: any) => typeof m === 'string' && m.trim().length > 0).slice(-4)
       : []
 
-    // ✅ NUEVO: Flag para saber si el usuario presionó el botón explícitamente
     const isDirectRequest = body?.is_direct_request === true
 
     const user = await ensureUser(tid)
@@ -396,6 +396,17 @@ export async function POST(request: Request) {
     const vipSub = await getActiveSubscription(tid)
     const isVip = !!vipSub
     const seenIndices = await getSeenR2Indices(tid, character_id)
+
+    // ✅ NUEVO: FRENO DE MANO (SPEND STATE)
+    const spendState = await getSpendState(tid)
+    if (spendState?.level === 'rest' && !isDirectRequest) {
+      return NextResponse.json({ 
+        error: 'rest_mode', 
+        message: lang === 'es' 
+          ? 'Has estado muy activo hoy. Descansa un poco, te esperaré mañana con más energía.' 
+          : "You've been very active today. Rest a bit, I'll wait for you tomorrow with more energy." 
+      }, { status: 429 })
+    }
 
     let r2Index: number | null = null
     const candidateIndices = level.level <= 3 ? [1, 2] : [1, 3, 4]
@@ -449,6 +460,7 @@ export async function POST(request: Request) {
       
       gemsCharged = true
       await insertGemTransaction({ telegram_id: tid, amount: -imageCost, transaction_type: 'image', description: `Generación directa nivel ${level.level}` })
+      await updateSpendState(tid, imageCost) // ✅ ACTUALIZAMOS EL FRENO DE MANO
       isFree = false // Ya no es gratis porque lo cobramos manualmente
     } 
     // Si no es petición directa, pero no tiene gemas, lo bloqueamos (solo si no es gratis ni VIP)
