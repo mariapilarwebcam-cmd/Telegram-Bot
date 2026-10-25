@@ -18,6 +18,12 @@ import {
   incrementTotalReferrals,
   updateLastActive,
   getActiveSubscription,
+  // ✅ NUEVAS IMPORTACIONES
+  getActivePass,
+  consumePass,
+  updateSpendState,
+  getSpendState,
+  grantPass
 } from '@/lib/db-queries'
 import { queryOne, query } from '@/lib/turso'
 import {
@@ -207,7 +213,15 @@ export async function POST(request: Request) {
     let newHookRemaining = user.hook_messages_remaining || 0
     let newHookUsed = !!user.hook_used
 
-    if (isVip) {
+    // ✅ NUEVO: VERIFICAR PASE DE MENSAJES
+    const activePass = await getActivePass(tid)
+    let usedPass = false
+    let passMessage = ''
+
+    if (activePass) {
+      await consumePass(activePass.id)
+      usedPass = true
+    } else if (isVip) {
       vipMessagesToday = await countVipMessagesToday(tid)
 
       if (vipMessagesToday >= VIP_DAILY_MESSAGE_LIMIT) {
@@ -227,7 +241,6 @@ export async function POST(request: Request) {
         })
       }
 
-      // 🛡️ FIX: COBRO ATÓMICO DEL RECARGO VIP
       if (penaltyGems > 0) {
         const vipCharge = await queryOne<{ gems: number }>(
           `UPDATE users SET gems = gems - ? WHERE telegram_id = ? AND gems >= ? RETURNING gems`,
@@ -240,9 +253,6 @@ export async function POST(request: Request) {
         await insertGemTransaction({ telegram_id: tid, amount: -penaltyGems, transaction_type: 'message_penalty', description: 'Recargo por mensaje largo (VIP)' })
       }
     } else {
-      // ═══════════════════════════════════════════════════════════════
-      // USUARIO NO VIP
-      // ═══════════════════════════════════════════════════════════════
       const hookRemaining = user.hook_messages_remaining || 0
       const hookUsed = !!user.hook_used
       const totalGems = user.gems || 0
@@ -262,7 +272,6 @@ export async function POST(request: Request) {
         })
       }
 
-      // 🛡️ FIX: COBRO ATÓMICO DEL MENSAJE
       let charged = false
       const chargeResult = await queryOne<{ gems: number }>(
         `UPDATE users SET gems = gems - ? WHERE telegram_id = ? AND gems >= ? RETURNING gems`,
@@ -278,6 +287,17 @@ export async function POST(request: Request) {
           transaction_type: 'message',
           description: penaltyGems > 0 ? 'Mensaje + recargo por longitud' : 'Mensaje de chat',
         })
+
+        // ✅ ACTUALIZAR GASTO Y REGALAR PASE SI GASTA MÁS DE 250 GEMAS
+        await updateSpendState(tid, totalCost)
+        const spendState = await getSpendState(tid)
+        
+        if (spendState && spendState.gems_spent_24h >= 250) {
+          await grantPass(tid, 150) // Le regalamos 150 mensajes
+          passMessage = lang === 'es' 
+            ? '\n\n🎁 *¡Has desbloqueado un Pase de Mensajes VIP!* Veo que estás muy conectado hoy. Te regalo **150 mensajes gratis** por las próximas 24 horas para que no tengas que preocuparte por las gemas. Descansa y disfruta.' 
+            : '\n\n🎁 *You unlocked a VIP Message Pass!* I see you are very connected today. I am gifting you **150 free messages** for the next 24 hours so you don\'t have to worry about gems. Rest and enjoy.'
+        }
       } else {
         newGems = totalGems
       }
@@ -319,7 +339,7 @@ export async function POST(request: Request) {
     messages.push({ role: 'user', content: message })
 
     const personality = getLevelPersonality(character.archetype, newLevel.level, lang)
-    const lowGems = !isVip && newGems > 0 && newGems <= LOW_GEMS_THRESHOLD && !isHookModeAfter
+    const lowGems = !isVip && !usedPass && newGems > 0 && newGems <= LOW_GEMS_THRESHOLD && !isHookModeAfter
     const provocativeHint = lowGems ? (lang === 'es' ? PROVOCATIVE_HINT_ES : PROVOCATIVE_HINT_EN) : ''
     const genderRules = buildGenderRules(user.gender, character.gender, lang)
 
@@ -339,9 +359,6 @@ You act like an expert OnlyFans model. Create the need. NEVER say "Do you want a
 ${learned.heat.length > 0 ? `- The system learned users love these words: ${learned.heat.join(', ')}.` : ''}`
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // 🧠 LÓGICA DEL RECLAMO DE FOTO IGNORADA (2 o 3 MSGS DESPUÉS)
-    // ═══════════════════════════════════════════════════════════════
     let photoNudge = ''
     const reversedHistory = [...rawHistory] 
     
@@ -378,8 +395,7 @@ ${learned.heat.length > 0 ? `- The system learned users love these words: ${lear
     try {
       responseText = await generateAIResponse(messages, systemPrompt, intensity)
     } catch (aiError: any) {
-      // Rollback
-      if (!isVip) {
+      if (!isVip && !usedPass) {
         if (newGems < (user.gems || 0)) {
            await incrementGems(tid, GEM_COSTS.message + penaltyGems)
         }
@@ -394,7 +410,6 @@ ${learned.heat.length > 0 ? `- The system learned users love these words: ${lear
       return NextResponse.json({ error: 'Error al generar respuesta', detail: errorDetail }, { status: 500 })
     }
 
-    // ✅ INTEGRACIÓN DE IDs: Capturamos los IDs que devuelve insertMessages
     let userMessageId: number | undefined
     let assistantMessageId: number | undefined
 
@@ -407,7 +422,6 @@ ${learned.heat.length > 0 ? `- The system learned users love these words: ${lear
       assistantMessageId = inserted[1]?.id
     } catch (dbErr) {
       console.error('[chat] Error guardando mensajes:', dbErr)
-      // No detenemos la ejecución, pero avisamos en consola.
     }
 
     try {
@@ -418,7 +432,6 @@ ${learned.heat.length > 0 ? `- The system learned users love these words: ${lear
         if (totalMsg >= REFERRAL_MIN_MESSAGES) {
           await incrementGems(String(referral.referrer_id), GEMS_PER_REFERRAL)
           await incrementTotalReferrals(String(referral.referrer_id))
-          // ✅ FIX: Usa la constante en lugar de "3+ mensajes" hardcodeado
           await insertGemTransaction({ telegram_id: String(referral.referrer_id), amount: GEMS_PER_REFERRAL, transaction_type: 'referral', description: `Referido verificado (${REFERRAL_MIN_MESSAGES}+ mensajes)` })
           await markReferralPaid(referral.id)
         }
@@ -426,12 +439,12 @@ ${learned.heat.length > 0 ? `- The system learned users love these words: ${lear
     } catch (refErr) {}
 
     let finalText = responseText
-    const isLowGemsWarning = !isVip && nextUserMsgCount >= 10 && newGems > 0 && newGems <= LOW_GEMS_THRESHOLD && !isHookModeAfter && newHookRemaining === 0
+    const isLowGemsWarning = !isVip && !usedPass && nextUserMsgCount >= 10 && newGems > 0 && newGems <= LOW_GEMS_THRESHOLD && !isHookModeAfter && newHookRemaining === 0
     const userRequestedPhoto = detectPhotoRequest(message, lang)
     const imageCost = getImageCost(newLevel.level)
     const hasEnoughPurchased = (user.purchased_gems || 0) >= imageCost
     const isMilestone = isPhotoMilestone(nextUserMsgCount, hasEnoughPurchased)
-    const isSpontaneousOffer = newLevel.level >= 3 && nextUserMsgCount % 6 === 0
+    const isSpontaneousOffer = newLevel.level >= 3 && nextUserMsgCount % 6 === 0 && !usedPass
     const shouldShowPhotoBanner = isMilestone || userRequestedPhoto || isSpontaneousOffer
 
     if (shouldShowPhotoBanner) {
@@ -440,12 +453,16 @@ ${learned.heat.length > 0 ? `- The system learned users love these words: ${lear
       finalText += `\n\n${invite(character.character_name)}`
     }
 
+    if (passMessage) {
+      finalText += passMessage
+    }
+
     const nextLevelAt = getNextLevelThreshold(newLevel.level)
 
     return NextResponse.json({
       response: finalText,
-      user_message_id: userMessageId,          // ✅ AÑADIDO AQUÍ
-      assistant_message_id: assistantMessageId, // ✅ AÑADIDO AQUÍ
+      user_message_id: userMessageId,          
+      assistant_message_id: assistantMessageId, 
       remaining_gems: newGems,
       hook_messages_remaining: newHookRemaining,
       is_hook_mode: isHookModeAfter,
