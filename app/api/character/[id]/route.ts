@@ -8,6 +8,7 @@ import {
   getSeenImageCount,
   getActivePass,
 } from '@/lib/db-queries'
+import { queryOne } from '@/lib/turso' // ✅ Importamos para buscar el inventario
 
 export const dynamic = 'force-dynamic'
 
@@ -36,11 +37,14 @@ export async function GET(
     ])
 
     if (!character) {
-      return NextResponse.json(
-        { error: 'Personaje no encontrado' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: 'Personaje no encontrado' }, { status: 404 })
     }
+
+    // ✅ NUEVO: Verificamos si el usuario tiene un Pase de Fantasía
+    const fantasyPass = await queryOne<{ item_key: string }>(
+      `SELECT item_key FROM user_inventory WHERE user_id = ? AND item_type = 'fantasy_pass' LIMIT 1`,
+      [tid]
+    )
 
     return NextResponse.json({
       character,
@@ -49,6 +53,7 @@ export async function GET(
       is_premium: !!purchase,
       seen_image_count: seenCount,
       active_pass: activePass || null,
+      has_fantasy_pass: !!fantasyPass, // ✅ Enviamos el estado al frontend
     })
   } catch (e: any) {
     console.error('[character/[id]] error:', e)
