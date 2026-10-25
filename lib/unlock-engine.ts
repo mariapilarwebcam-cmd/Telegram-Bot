@@ -1,6 +1,6 @@
 // lib/unlock-engine.ts
 import { db } from '@/lib/turso'
-import { updateSpendState, rewardUserTags } from '@/lib/db-queries' // ✅ IMPORTAMOS LO QUE FALTABA
+import { updateSpendState, rewardUserTags } from '@/lib/db-queries'
 
 export class HttpError extends Error {
   constructor(public status: number, public code: string) {
@@ -26,7 +26,7 @@ async function consumeVipToken(tx: any, userId: string): Promise<boolean> {
   let tokens = Number(user.t || 0)
   let lastAt = Number(user.a) || now
 
-  // Cálculo de acumulación (1 por día)
+  // Cálculo de acumulación (1 por día, máximo 5)
   const daysPassed = Math.floor((now - lastAt) / DAY_SECONDS)
   if (daysPassed > 0) {
     tokens = Math.min(MAX_TOKENS, tokens + daysPassed)
