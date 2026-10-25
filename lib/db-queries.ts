@@ -446,7 +446,6 @@ export async function hasAnyMessage(
   return (row?.c ?? 0) > 0
 }
 
-// ✅ ACTUALIZADO: Ahora devuelve el ID del mensaje insertado
 export async function insertMessage(data: {
   telegram_id: string
   character_id: number
@@ -462,7 +461,6 @@ export async function insertMessage(data: {
   return { id: Number(res.lastInsertRowid) }
 }
 
-// ✅ ACTUALIZADO: Ahora devuelve un array con los IDs de los mensajes insertados
 export async function insertMessages(
   msgs: Array<{
     telegram_id: string
@@ -1386,8 +1384,10 @@ export async function getAudioTokens(
   } catch {
     return 1
   }
+}
+
 // ═══════════════════════════════════════════════════════════════
-// ✅ NUEVAS FUNCIONES: FRENO DE MANO Y PASE DE MENSAJES
+// ✅ FRENO DE MANO Y PASE DE MENSAJES (NUEVO)
 // ═══════════════════════════════════════════════════════════════
 
 export async function getActivePass(telegram_id: string) {
@@ -1415,7 +1415,6 @@ export async function getSpendState(telegram_id: string) {
 }
 
 export async function updateSpendState(telegram_id: string, amount: number) {
-  // Upsert: Si existe, suma; si no, crea.
   return execute(
     `INSERT INTO spend_state (user_id, gems_spent_24h, last_updated) 
      VALUES (?, ?, unixepoch())
@@ -1426,13 +1425,13 @@ export async function updateSpendState(telegram_id: string, amount: number) {
   )
 }
 
-export async function grantPass(telegram_id: string) {
+export async function grantPass(telegram_id: string, limit: number = 150) {
   const expiresAt = Math.floor(Date.now() / 1000) + 86400 // 24 horas
   await execute(
-    `INSERT INTO message_passes (user_id, expires_at) VALUES (?, ?)`,
-    [telegram_id, expiresAt]
+    `INSERT INTO message_passes (user_id, expires_at, messages_limit) VALUES (?, ?, ?)`,
+    [telegram_id, expiresAt, limit]
   )
-  // Reiniciamos su contador de gasto para que no reciba otro pase enseguida
+  // Reiniciamos su contador de gasto
   await execute(
     `UPDATE spend_state SET gems_spent_24h = 0, level = 'rest' WHERE user_id = ?`,
     [telegram_id]
