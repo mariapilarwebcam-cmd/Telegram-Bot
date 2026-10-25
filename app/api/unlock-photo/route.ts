@@ -1,7 +1,7 @@
 // app/api/unlock-photo/route.ts
 import { NextResponse } from 'next/server'
 import { queryOne, execute } from '@/lib/turso'
-import { insertGemTransaction } from '@/lib/db-queries'
+import { insertGemTransaction, updateSpendState } from '@/lib/db-queries' // ✅ IMPORTAMOS updateSpendState
 
 export async function POST(request: Request) {
   try {
@@ -40,6 +40,9 @@ export async function POST(request: Request) {
         transaction_type: 'unlock_photo',
         description: `Desbloqueo de foto premium (ID: ${photo.id})`,
       })
+
+      // ✅ NUEVO: Sumar al Freno de Mano
+      await updateSpendState(tid, photo.unlock_price)
     }
 
     // Marcar como desbloqueada (sea gratis o pagada)
