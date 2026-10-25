@@ -323,7 +323,6 @@ export async function POST(request: Request) {
     const levelUp = newLevel.level > prevLevel.level
 
     // ✅ 1. DETECCIÓN DEL PICOS DE DESEO (PEAK DESIRE)
-    // Buscamos si el ÚLTIMO mensaje de la IA tuvo una reacción "hot"
     const lastAssistantMsg = await queryOne<{ id: number, reaction: string }>(
       `SELECT id, reaction FROM conversation_history 
        WHERE telegram_id = ? AND character_id = ? AND role = 'assistant' 
@@ -334,11 +333,9 @@ export async function POST(request: Request) {
     const hotEmojis = ['❤️', '🔥', '😈', '💦', '🍆', '🍑', '🥵', '💋']
     const hadRecentHotReaction = lastAssistantMsg?.reaction && hotEmojis.includes(lastAssistantMsg.reaction)
     
-    // Es un pico si hubo reacción hot O si acaba de subir de nivel
     const isPeakDesire = hadRecentHotReaction || levelUp
 
     // ✅ 2. CÁLCULO MATEMÁTICO DE VIP (UPSEL)
-    // Calculamos cuánto ha gastado en los últimos 7 días
     const spend7dRow = await queryOne<{ total: number }>(
       `SELECT SUM(ABS(amount)) as total FROM gem_transactions 
        WHERE telegram_id = ? AND amount < 0 
@@ -394,12 +391,13 @@ ${learned.heat.length > 0 ? `- The system learned users love these words: ${lear
     const lockedPhotoMsgIndex = reversedHistory.findIndex(m => m.content.includes('locked:'))
     
     if (lockedPhotoMsgIndex === 2 || lockedPhotoMsgIndex === 3) {
-      const match = reversedHistory[lockedPhotoMsgIndex].content.match(/locked:(\d+)/)
+      const match = reversedHistory[lockedPhotoMsgIndex].content.match(/locked:(\d+)@/)
       if (match) {
-        const photoId = match[1]
-        const photoStatus = await queryOne<{ status: string }>(`SELECT status FROM locked_photos WHERE id = ?`, [photoId])
+        const offerId = match[1]
+        // ✅ FIX: Consultar la tabla correcta (photo_offers en vez de locked_photos)
+        const photoStatus = await queryOne<{ state: string }>(`SELECT state FROM photo_offers WHERE id = ?`, [offerId])
         
-        if (photoStatus && photoStatus.status === 'locked') {
+        if (photoStatus && photoStatus.state === 'locked') {
           if (lang === 'es') {
             photoNudge = character.gender === 'male'
               ? `\n\n⚠️ NOTA DE COMPORTAMIENTO: Hace un par de mensajes le enviaste una foto y la ignoró. Reclámaselo de forma natural, con arrogancia y seguridad. Variaciones: "¿No vas a decir nada sobre lo que te envié?", "Veo que te dejé sin palabras", "Te mandé algo especial y ni un gracias".`
@@ -475,7 +473,6 @@ ${learned.heat.length > 0 ? `- The system learned users love these words: ${lear
     const isMilestone = isPhotoMilestone(nextUserMsgCount, hasEnoughPurchased)
     
     // ✅ 4. COMBINACIÓN INTELIGENTE PARA MOSTRAR LA OFERTA
-    // Ahora también se muestra si hay un Pico de Deseo
     const isSpontaneousOffer = newLevel.level >= 3 && nextUserMsgCount % 6 === 0 && !usedPass
     
     const spendState = await getSpendState(tid)
