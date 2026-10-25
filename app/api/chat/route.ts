@@ -208,6 +208,7 @@ export async function POST(request: Request) {
 
     let vipMessagesToday = 0
     let newGems = user.gems || 0
+    let newBonusGems = user.bonus_gems || 0 // ✅ NUEVO: Saldo de gemas bonus
     let newHookRemaining = user.hook_messages_remaining || 0
     let newHookUsed = !!user.hook_used
 
@@ -231,6 +232,7 @@ export async function POST(request: Request) {
           vip_limit_reached: true,
           response: blockedMessage,
           remaining_gems: newGems,
+          remaining_bonus_gems: newBonusGems,
           hook_messages_remaining: 0,
           is_vip: true,
           vip_messages_today: vipMessagesToday,
@@ -252,10 +254,12 @@ export async function POST(request: Request) {
     } else {
       const hookRemaining = user.hook_messages_remaining || 0
       const hookUsed = !!user.hook_used
-      const totalGems = user.gems || 0
       const totalCost = GEM_COSTS.message + penaltyGems
+      
+      // ✅ NUEVO: Verificamos si tiene saldo total (bonus + reales) para no bloquearlo antes de tiempo
+      const hasTotalGems = (newBonusGems + newGems) >= totalCost
 
-      if (totalGems <= 0 && hookRemaining <= 0 && hookUsed) {
+      if (!hasTotalGems && hookRemaining <= 0 && hookUsed) {
         const blockedMessage = lang === 'es'
           ? `*${character.character_name} te mira con ojos ardientes y se muerde el labio*\n\n"Mmm... justo cuando se ponía interesante..."\n\n"Consigue gemas para seguir. Estoy esperando."`
           : `*${character.character_name} looks at you with burning eyes and bites their lip*\n\n"Mmm... just when it was getting interesting..."\n\n"Get gems to continue. I'm waiting."`
@@ -263,39 +267,55 @@ export async function POST(request: Request) {
         return NextResponse.json({
           blocked: true,
           response: blockedMessage,
-          remaining_gems: 0,
+          remaining_gems: newGems,
+          remaining_bonus_gems: newBonusGems,
           hook_messages_remaining: 0,
           is_vip: false,
         })
       }
 
       let charged = false
-      const chargeResult = await queryOne<{ gems: number }>(
-        `UPDATE users SET gems = gems - ? WHERE telegram_id = ? AND gems >= ? RETURNING gems`,
-        [totalCost, tid, totalCost]
-      )
-
-      if (chargeResult) {
-        newGems = chargeResult.gems
-        charged = true
-        await insertGemTransaction({
-          telegram_id: tid,
-          amount: -totalCost,
-          transaction_type: 'message',
-          description: penaltyGems > 0 ? 'Mensaje + recargo por longitud' : 'Mensaje de chat',
-        })
-
-        await updateSpendState(tid, totalCost)
-        const spendState = await getSpendState(tid)
-        
-        if (spendState && spendState.gems_spent_24h >= 250) {
-          await grantPass(tid, 150)
-          passMessage = lang === 'es' 
-            ? '\n\n🎁 *¡Has desbloqueado un Pase de Mensajes VIP!* Veo que estás muy conectado hoy. Te regalo **150 mensajes gratis por las próximas 24 horas** para que no tengas que preocuparte por las gemas. Descansa y disfruta.' 
-            : '\n\n🎁 *You unlocked a VIP Message Pass!* I see you are very connected today. I am gifting you **150 free messages for the next 24 hours** so you don\'t have to worry about gems. Rest and enjoy.'
+      
+      // ✅ 1. Intentar cobrar de las Gemas de Chat (Bonus)
+      if (newBonusGems >= totalCost) {
+        const bonusResult = await queryOne<{ bonus_gems: number }>(
+          `UPDATE users SET bonus_gems = bonus_gems - ? WHERE telegram_id = ? AND bonus_gems >= ? RETURNING bonus_gems`,
+          [totalCost, tid, totalCost]
+        )
+        if (bonusResult) {
+          newBonusGems = bonusResult.bonus_gems
+          charged = true
+          // No registramos transacción de gema real porque son bonus
         }
-      } else {
-        newGems = totalGems
+      }
+
+      // ✅ 2. Si no le alcanzó con las Bonus, cobrar de las Reales
+      if (!charged) {
+        const chargeResult = await queryOne<{ gems: number }>(
+          `UPDATE users SET gems = gems - ? WHERE telegram_id = ? AND gems >= ? RETURNING gems`,
+          [totalCost, tid, totalCost]
+        )
+
+        if (chargeResult) {
+          newGems = chargeResult.gems
+          charged = true
+          await insertGemTransaction({
+            telegram_id: tid,
+            amount: -totalCost,
+            transaction_type: 'message',
+            description: penaltyGems > 0 ? 'Mensaje + recargo por longitud' : 'Mensaje de chat',
+          })
+
+          await updateSpendState(tid, totalCost)
+          const spendState = await getSpendState(tid)
+          
+          if (spendState && spendState.gems_spent_24h >= 250) {
+            await grantPass(tid, 150)
+            passMessage = lang === 'es' 
+              ? '\n\n🎁 *¡Has desbloqueado un Pase de Mensajes VIP!* Veo que estás muy conectado hoy. Te regalo **150 mensajes gratis por las próximas 24 horas** para que no tengas que preocuparte por las gemas. Descansa y disfruta.' 
+              : '\n\n🎁 *You unlocked a VIP Message Pass!* I see you are very connected today. I am gifting you **150 free messages for the next 24 hours** so you don\'t have to worry about gems. Rest and enjoy.'
+          }
+        }
       }
 
       const isHookMode = !charged && hookRemaining > 0
@@ -311,7 +331,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const isHookModeAfter = !isVip && newGems <= 0 && newHookRemaining > 0
+    const isHookModeAfter = !isVip && newGems <= 0 && newBonusGems <= 0 && newHookRemaining > 0
     const rawHistory = await getRecentMessages(tid, character_id, 8)
     const userMsgCount = await countUserMessages(tid, character_id)
 
@@ -322,7 +342,6 @@ export async function POST(request: Request) {
     const newLevel = getLevelFromMessages(nextUserMsgCount)
     const levelUp = newLevel.level > prevLevel.level
 
-    // ✅ 1. DETECCIÓN DEL PICOS DE DESEO (PEAK DESIRE)
     const lastAssistantMsg = await queryOne<{ id: number, reaction: string }>(
       `SELECT id, reaction FROM conversation_history 
        WHERE telegram_id = ? AND character_id = ? AND role = 'assistant' 
@@ -335,7 +354,6 @@ export async function POST(request: Request) {
     
     const isPeakDesire = hadRecentHotReaction || levelUp
 
-    // ✅ 2. CÁLCULO MATEMÁTICO DE VIP (UPSEL)
     const spend7dRow = await queryOne<{ total: number }>(
       `SELECT SUM(ABS(amount)) as total FROM gem_transactions 
        WHERE telegram_id = ? AND amount < 0 
@@ -358,7 +376,7 @@ export async function POST(request: Request) {
     messages.push({ role: 'user', content: message })
 
     const personality = getLevelPersonality(character.archetype, newLevel.level, lang)
-    const lowGems = !isVip && !usedPass && newGems > 0 && newGems <= LOW_GEMS_THRESHOLD && !isHookModeAfter
+    const lowGems = !isVip && !usedPass && (newGems + newBonusGems) > 0 && (newGems + newBonusGems) <= LOW_GEMS_THRESHOLD && !isHookModeAfter
     const provocativeHint = lowGems ? (lang === 'es' ? PROVOCATIVE_HINT_ES : PROVOCATIVE_HINT_EN) : ''
     const genderRules = buildGenderRules(user.gender, character.gender, lang)
 
@@ -378,7 +396,6 @@ You act like an expert OnlyFans model. Create the need. NEVER say "Do you want a
 ${learned.heat.length > 0 ? `- The system learned users love these words: ${learned.heat.join(', ')}.` : ''}`
     }
 
-    // ✅ 3. INYECCIÓN DEL MENSAJE DE UPSELL VIP
     let vipUpsellPrompt = ''
     if (shouldUpsellVip) {
       vipUpsellPrompt = lang === 'es'
@@ -394,7 +411,6 @@ ${learned.heat.length > 0 ? `- The system learned users love these words: ${lear
       const match = reversedHistory[lockedPhotoMsgIndex].content.match(/locked:(\d+)@/)
       if (match) {
         const offerId = match[1]
-        // ✅ FIX: Consultar la tabla correcta (photo_offers en vez de locked_photos)
         const photoStatus = await queryOne<{ state: string }>(`SELECT state FROM photo_offers WHERE id = ?`, [offerId])
         
         if (photoStatus && photoStatus.state === 'locked') {
@@ -466,13 +482,12 @@ ${learned.heat.length > 0 ? `- The system learned users love these words: ${lear
     } catch (refErr) {}
 
     let finalText = responseText
-    const isLowGemsWarning = !isVip && !usedPass && nextUserMsgCount >= 10 && newGems > 0 && newGems <= LOW_GEMS_THRESHOLD && !isHookModeAfter && newHookRemaining === 0
+    const isLowGemsWarning = !isVip && !usedPass && nextUserMsgCount >= 10 && (newGems + newBonusGems) > 0 && (newGems + newBonusGems) <= LOW_GEMS_THRESHOLD && !isHookModeAfter && newHookRemaining === 0
     const userRequestedPhoto = detectPhotoRequest(message, lang)
     const imageCost = getImageCost(newLevel.level)
     const hasEnoughPurchased = (user.purchased_gems || 0) >= imageCost
     const isMilestone = isPhotoMilestone(nextUserMsgCount, hasEnoughPurchased)
     
-    // ✅ 4. COMBINACIÓN INTELIGENTE PARA MOSTRAR LA OFERTA
     const isSpontaneousOffer = newLevel.level >= 3 && nextUserMsgCount % 6 === 0 && !usedPass
     
     const spendState = await getSpendState(tid)
@@ -495,6 +510,7 @@ ${learned.heat.length > 0 ? `- The system learned users love these words: ${lear
       user_message_id: userMessageId,          
       assistant_message_id: assistantMessageId, 
       remaining_gems: newGems,
+      remaining_bonus_gems: newBonusGems, // ✅ NUEVO: Enviamos el saldo de bonus al frontend
       hook_messages_remaining: newHookRemaining,
       is_hook_mode: isHookModeAfter,
       is_vip: isVip,
@@ -507,7 +523,7 @@ ${learned.heat.length > 0 ? `- The system learned users love these words: ${lear
       new_level: levelUp ? newLevel.level : null,
       new_level_badge: levelUp ? newLevel.badgeKey : null,
       low_gems_warning: isLowGemsWarning,
-      low_gems_count: isLowGemsWarning ? newGems : 0,
+      low_gems_count: isLowGemsWarning ? (newGems + newBonusGems) : 0,
       total_user_messages: nextUserMsgCount,
       next_level_at: nextLevelAt,
     })
