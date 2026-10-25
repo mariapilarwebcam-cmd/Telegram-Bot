@@ -322,6 +322,32 @@ export async function POST(request: Request) {
     const newLevel = getLevelFromMessages(nextUserMsgCount)
     const levelUp = newLevel.level > prevLevel.level
 
+    // ✅ 1. DETECCIÓN DEL PICOS DE DESEO (PEAK DESIRE)
+    // Buscamos si el ÚLTIMO mensaje de la IA tuvo una reacción "hot"
+    const lastAssistantMsg = await queryOne<{ id: number, reaction: string }>(
+      `SELECT id, reaction FROM conversation_history 
+       WHERE telegram_id = ? AND character_id = ? AND role = 'assistant' 
+       ORDER BY id DESC LIMIT 1`,
+      [tid, character_id]
+    )
+    
+    const hotEmojis = ['❤️', '🔥', '😈', '💦', '🍆', '🍑', '🥵', '💋']
+    const hadRecentHotReaction = lastAssistantMsg?.reaction && hotEmojis.includes(lastAssistantMsg.reaction)
+    
+    // Es un pico si hubo reacción hot O si acaba de subir de nivel
+    const isPeakDesire = hadRecentHotReaction || levelUp
+
+    // ✅ 2. CÁLCULO MATEMÁTICO DE VIP (UPSEL)
+    // Calculamos cuánto ha gastado en los últimos 7 días
+    const spend7dRow = await queryOne<{ total: number }>(
+      `SELECT SUM(ABS(amount)) as total FROM gem_transactions 
+       WHERE telegram_id = ? AND amount < 0 
+         AND created_at >= datetime('now', '-7 days')`,
+      [tid]
+    )
+    const spend7d = spend7dRow?.total || 0
+    const shouldUpsellVip = !isVip && spend7d >= 150 && !usedPass
+
     const sortedHistory = [...rawHistory].sort((a: any, b: any) => {
       const cmp = String(a.created_at || '').localeCompare(String(b.created_at || ''))
       if (cmp !== 0) return cmp
@@ -355,9 +381,16 @@ You act like an expert OnlyFans model. Create the need. NEVER say "Do you want a
 ${learned.heat.length > 0 ? `- The system learned users love these words: ${learned.heat.join(', ')}.` : ''}`
     }
 
+    // ✅ 3. INYECCIÓN DEL MENSAJE DE UPSELL VIP
+    let vipUpsellPrompt = ''
+    if (shouldUpsellVip) {
+      vipUpsellPrompt = lang === 'es'
+        ? `\n\n⚠️ NOTA DE SISTEMA: El usuario ha gastado ${Math.floor(spend7d)} gemas esta semana. Menciónale de forma natural y sugerente que con la suscripción VIP habría ahorrado mucho más y tendría imágenes gratis. (No lo obligues, solo siéntalo como una buena oferta).`
+        : `\n\n⚠️ SYSTEM NOTE: The user has spent ${Math.floor(spend7d)} gems this week. Naturally and suggestively mention that with a VIP subscription they would have saved a lot more and would have free images. (Don't force it, just make it feel like a good deal).`
+    }
+
     let photoNudge = ''
     const reversedHistory = [...rawHistory] 
-    
     const lockedPhotoMsgIndex = reversedHistory.findIndex(m => m.content.includes('locked:'))
     
     if (lockedPhotoMsgIndex === 2 || lockedPhotoMsgIndex === 3) {
@@ -381,8 +414,8 @@ ${learned.heat.length > 0 ? `- The system learned users love these words: ${lear
     }
 
     const characterPrompt = lang === 'es'
-      ? `Eres ${character.character_name}, rol: ${character.archetype}.\n${personality}\n\nEl usuario se llama ${user.first_name}.\n\n${genderRules}\n\nNunca rompas el personaje.${provocativeHint}${photoNudge}${salesPrompt}`
-      : `You are ${character.character_name}, role: ${character.archetype}.\n${personality}\n\nThe user's name is ${user.first_name}.\n\n${genderRules}\n\nNever break character.${provocativeHint}${photoNudge}${salesPrompt}`
+      ? `Eres ${character.character_name}, rol: ${character.archetype}.\n${personality}\n\nEl usuario se llama ${user.first_name}.\n\n${genderRules}\n\nNunca rompas el personaje.${provocativeHint}${photoNudge}${salesPrompt}${vipUpsellPrompt}`
+      : `You are ${character.character_name}, role: ${character.archetype}.\n${personality}\n\nThe user's name is ${user.first_name}.\n\n${genderRules}\n\nNever break character.${provocativeHint}${photoNudge}${salesPrompt}${vipUpsellPrompt}`
 
     const intensity = getIntensity(currentUserMsgCount, isHookModeAfter)
     const systemPrompt = buildSystemPrompt(lang, intensity, newLevel.level, characterPrompt)
@@ -440,11 +473,13 @@ ${learned.heat.length > 0 ? `- The system learned users love these words: ${lear
     const imageCost = getImageCost(newLevel.level)
     const hasEnoughPurchased = (user.purchased_gems || 0) >= imageCost
     const isMilestone = isPhotoMilestone(nextUserMsgCount, hasEnoughPurchased)
+    
+    // ✅ 4. COMBINACIÓN INTELIGENTE PARA MOSTRAR LA OFERTA
+    // Ahora también se muestra si hay un Pico de Deseo
     const isSpontaneousOffer = newLevel.level >= 3 && nextUserMsgCount % 6 === 0 && !usedPass
     
-    // ✅ FRENO DE MANO: No ofrecer si está en 'rest'
     const spendState = await getSpendState(tid)
-    const shouldShowPhotoBanner = (isMilestone || userRequestedPhoto || isSpontaneousOffer) && spendState?.level !== 'rest'
+    const shouldShowPhotoBanner = (isMilestone || userRequestedPhoto || isSpontaneousOffer || isPeakDesire) && spendState?.level !== 'rest'
 
     if (shouldShowPhotoBanner) {
       const invites = lang === 'es' ? PHOTO_INVITES_ES : PHOTO_INVITES_EN
