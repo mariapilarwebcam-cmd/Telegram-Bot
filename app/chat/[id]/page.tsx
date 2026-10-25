@@ -111,7 +111,6 @@ export default function ChatPage() {
 
   const [totalUserMessages, setTotalUserMessages] = useState(0)
   const [photoOfferActive, setPhotoOfferActive] = useState(false)
-
   const [seenImageCount, setSeenImageCount] = useState(0)
 
   const [isVip, setIsVip] = useState(false)
@@ -163,6 +162,10 @@ export default function ChatPage() {
   const [autoStartAttempted, setAutoStartAttempted] = useState(false)
 
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
+  
+  // ✅ NUEVO: Estado para el Pase de Fantasía
+  const [hasFantasyPass, setHasFantasyPass] = useState(false)
+  const [usingFantasyPass, setUsingFantasyPass] = useState(false)
 
   const endRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -247,6 +250,7 @@ export default function ChatPage() {
         setIsPremium(!!data.is_premium)
         setSeenImageCount(data.seen_image_count || 0)
         setActivePass(data.active_pass)
+        setHasFantasyPass(!!data.has_fantasy_pass) // ✅ Cargamos el Pase
 
         const count = data.user_message_count || 0
         setTotalUserMessages(count)
@@ -489,6 +493,45 @@ export default function ChatPage() {
     }
   }
 
+  const useFantasyPass = async () => {
+    if (!hasFantasyPass || usingFantasyPass || !character) return
+
+    setUsingFantasyPass(true)
+    try {
+      const res = await tgFetch('/api/generate-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          character_id: characterId,
+          is_fantasy_pass: true, // ✅ Indicamos al backend que use el pase
+        }),
+      })
+      const data = await res.json()
+
+      if (res.ok) {
+        setMessages((p) => [
+          ...p,
+          {
+            id: data.message_id,
+            role: 'assistant',
+            content: `*${getDisplayName(character)} te envía una foto*\n\n![Selfie](${data.image_url})`,
+          },
+        ])
+        setRecentlyUnlocked(data.image_url)
+        setTimeout(() => setRecentlyUnlocked(null), 1000)
+        
+        setHasFantasyPass(false) // Consumimos el pase visualmente
+        await refresh()
+      } else {
+        alert(data.error || 'Error al usar el Pase de Fantasía')
+      }
+    } catch {
+      alert('Error de conexión')
+    } finally {
+      setUsingFantasyPass(false)
+    }
+  }
+
   const playAudio = async () => {
     if (!user) return
     if (!isPremium) {
@@ -606,7 +649,6 @@ export default function ChatPage() {
       const data = await res.json()
       if (res.ok) {
         if (data.is_locked) {
-          // ✅ NUEVO: Formato locked:offerId@blurUrl
           setMessages((p) => [
             ...p,
             {
@@ -675,7 +717,7 @@ export default function ChatPage() {
       const res = await tgFetch('/api/unlock-photo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ offer_id: offerId }), // ✅ Ahora es offer_id
+        body: JSON.stringify({ offer_id: offerId }),
       })
       const data = await res.json()
 
@@ -685,7 +727,6 @@ export default function ChatPage() {
             if (msg.content.includes(`locked:${offerId}@`)) {
               return {
                 ...msg,
-                // Reemplazamos todo el bloque locked:ID@URL por la URL real
                 content: msg.content.replace(new RegExp(`\\(locked:${offerId}@[^)]+\\)`), `(${data.image_url})`)
               }
             }
@@ -885,7 +926,6 @@ export default function ChatPage() {
           .replace(/>/g, '&gt;')
         
         if (url.startsWith('locked:')) {
-          // ✅ NUEVO FORMATO: locked:ID@URL_BLUR
           const match = url.match(/^locked:(\d+)@(https?:\/\/.+)$/)
           if (!match) return '@@INVALID@@'
           
@@ -916,7 +956,7 @@ export default function ChatPage() {
             >
               <div style="
                 position: absolute; inset: 0;
-                background: rgba(10, 5, 16, 0.55); /* ✅ Capa oscura para que se vea la silueta */
+                background: rgba(10, 5, 16, 0.55);
               "></div>
               
               <div style="
@@ -992,6 +1032,7 @@ export default function ChatPage() {
 
   const t = getTranslations(lang)
   const gems = user?.gems || 0
+  const bonusGems = (user as any)?.bonus_gems || 0 // ✅ Obtenemos las gemas de chat
   const purchasedGems = user?.purchased_gems || 0
   const hookRemaining = user?.hook_messages_remaining || 0
 
@@ -1014,7 +1055,6 @@ export default function ChatPage() {
 
   const isFirstImage = seenImageCount === 0
   const canAfford = purchasedGems >= currentImageCost || isFirstImage
-  const missingGems = isFirstImage ? 0 : Math.max(0, currentImageCost - purchasedGems)
 
   let headerBadgeText = ''
   let headerBadgeVariant: 'hook' | 'low-gems' | null = null
@@ -1239,13 +1279,24 @@ export default function ChatPage() {
           )}
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.05)', padding: '5px 10px', borderRadius: 20, border: '1px solid rgba(168,85,247,0.3)', flexShrink: 0 }}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-            <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" fill="#a78bfa" />
-          </svg>
-          <span style={{ fontSize: 12, fontWeight: 600 }}>
-            <AnimatedNumber value={gems} />
-          </span>
+        {/* ✅ HEADER: Mostramos las gemas de pago y las de chat (si hay) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+          {bonusGems > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(34, 197, 94, 0.15)', padding: '5px 8px', borderRadius: 20, border: '1px solid rgba(34, 197, 94, 0.4)' }}>
+              <span style={{ fontSize: 10 }}>💬</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#22c55e' }}>
+                <AnimatedNumber value={bonusGems} />
+              </span>
+            </div>
+          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.05)', padding: '5px 10px', borderRadius: 20, border: '1px solid rgba(168,85,247,0.3)' }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+              <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" fill="#a78bfa" />
+            </svg>
+            <span style={{ fontSize: 12, fontWeight: 600 }}>
+              <AnimatedNumber value={gems} />
+            </span>
+          </div>
         </div>
       </header>
 
@@ -1422,7 +1473,38 @@ export default function ChatPage() {
       </div>
 
       <div className="chat-input-bar">
-        {photoOfferActive && (
+        {/* ✅ BOTÓN FLOTANTE PARA USAR EL PASE DE FANTASÍA */}
+        {hasFantasyPass && (
+          <div style={{ marginBottom: 12 }}>
+            <button
+              onClick={useFantasyPass}
+              disabled={usingFantasyPass || generatingImage}
+              style={{
+                width: '100%',
+                padding: '14px 20px',
+                borderRadius: 16,
+                background: 'linear-gradient(135deg, #fbbf24 0%, #ec4899 100%)',
+                border: '2px solid #fbbf24',
+                color: '#fff',
+                fontSize: 14,
+                fontWeight: 900,
+                cursor: usingFantasyPass ? 'wait' : 'pointer',
+                boxShadow: '0 0 30px rgba(251, 191, 36, 0.6)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 10,
+                animation: 'pulseGlow 2s infinite',
+                textShadow: '0 2px 4px rgba(0,0,0,0.4)'
+              }}
+            >
+              <span style={{ fontSize: 20 }}>🎟️</span>
+              {usingFantasyPass ? (lang === 'es' ? 'Invocando fantasía...' : 'Summoning fantasy...') : (lang === 'es' ? 'Usar Pase de Fantasía (Nivel 5)' : 'Use Fantasy Pass (Level 5)')}
+            </button>
+          </div>
+        )}
+
+        {photoOfferActive && !hasFantasyPass && (
           <div
             onClick={handleBannerTap}
             style={{
@@ -1920,8 +2002,7 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* ✅ ANIMACIÓN DE CARGA (OVERLAY) CUANDO SE GENERA UNA FOTO */}
-      {generatingImage && (
+      {generatingImage && !usingFantasyPass && (
         <div 
           className="modal-backdrop" 
           style={{ 
