@@ -1387,7 +1387,7 @@ export async function getAudioTokens(
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ✅ FRENO DE MANO Y PASE DE MENSAJES (NUEVO)
+// ✅ FRENO DE MANO Y PASE DE MENSAJES (ACTUALIZADO)
 // ═══════════════════════════════════════════════════════════════
 
 export async function getActivePass(telegram_id: string) {
@@ -1408,21 +1408,69 @@ export async function consumePass(passId: number) {
 }
 
 export async function getSpendState(telegram_id: string) {
-  return queryOne<{ gems_spent_24h: number, level: string }>(
-    `SELECT gems_spent_24h, level FROM spend_state WHERE user_id = ? LIMIT 1`,
+  const now = Math.floor(Date.now() / 1000)
+  const state = await queryOne<{ gems_spent_24h: number, level: string, last_updated: number, rest_until: number }>(
+    `SELECT gems_spent_24h, level, last_updated, rest_until FROM spend_state WHERE user_id = ? LIMIT 1`,
     [telegram_id]
   )
+  
+  if (!state) return null
+  
+  // Si ha pasado más de 24h desde la última actualización, reiniciamos el contador
+  if (now - state.last_updated > 86400) {
+    await execute(
+      `UPDATE spend_state SET gems_spent_24h = 0, level = 'green', last_updated = ? WHERE user_id = ?`,
+      [now, telegram_id]
+    )
+    return { gems_spent_24h: 0, level: 'green' }
+  }
+  
+  // Si estaba en descanso pero ya expiró, lo desbloqueamos
+  if (state.level === 'rest' && state.rest_until < now) {
+    await execute(
+      `UPDATE spend_state SET gems_spent_24h = 0, level = 'green', last_updated = ? WHERE user_id = ?`,
+      [now, telegram_id]
+    )
+    return { gems_spent_24h: 0, level: 'green' }
+  }
+  
+  return { gems_spent_24h: state.gems_spent_24h, level: state.level }
 }
 
 export async function updateSpendState(telegram_id: string, amount: number) {
-  return execute(
+  const now = Math.floor(Date.now() / 1000)
+  
+  // Sumar gasto
+  await execute(
     `INSERT INTO spend_state (user_id, gems_spent_24h, last_updated) 
-     VALUES (?, ?, unixepoch())
+     VALUES (?, ?, ?)
      ON CONFLICT(user_id) DO UPDATE SET 
        gems_spent_24h = gems_spent_24h + ?, 
-       last_updated = unixepoch()`,
-    [telegram_id, amount, amount]
+       last_updated = ?`,
+    [telegram_id, amount, now, amount, now]
   )
+  
+  // Verificar si hay que cambiar de nivel
+  const state = await queryOne<{ gems_spent_24h: number }>(
+    `SELECT gems_spent_24h FROM spend_state WHERE user_id = ?`,
+    [telegram_id]
+  )
+  
+  if (state) {
+    if (state.gems_spent_24h >= 500) {
+      // Nivel ROJO: Freno total por 24 horas
+      await execute(
+        `UPDATE spend_state SET level = 'rest', rest_until = ? WHERE user_id = ?`,
+        [now + 86400, telegram_id]
+      )
+    } else if (state.gems_spent_24h >= 300) {
+      // Nivel ÁMBAR: Alerta (no bloquea, pero podríamos usarlo para no ofrecer banners)
+      await execute(
+        `UPDATE spend_state SET level = 'amber' WHERE user_id = ?`,
+        [telegram_id]
+      )
+    }
+  }
 }
 
 export async function grantPass(telegram_id: string, limit: number = 150) {
@@ -1431,9 +1479,9 @@ export async function grantPass(telegram_id: string, limit: number = 150) {
     `INSERT INTO message_passes (user_id, expires_at, messages_limit) VALUES (?, ?, ?)`,
     [telegram_id, expiresAt, limit]
   )
-  // Reiniciamos su contador de gasto
+  // Reiniciamos su contador de gasto para que el pase no le bloquee las fotos
   await execute(
-    `UPDATE spend_state SET gems_spent_24h = 0, level = 'rest' WHERE user_id = ?`,
+    `UPDATE spend_state SET gems_spent_24h = 0, level = 'green' WHERE user_id = ?`,
     [telegram_id]
   )
 }
