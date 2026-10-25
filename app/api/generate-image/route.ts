@@ -1,4 +1,4 @@
-// app/api/generate-image/route.ts
+// app/api/generate-image/route.ts 
 
 import { NextResponse } from 'next/server'
 import sharp from 'sharp' // ✅ IMPORTAMOS SHARP
