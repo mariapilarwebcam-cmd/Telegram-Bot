@@ -925,6 +925,7 @@ export interface PoolImageRow {
   mood: string
   level_bucket: string
   r2_key: string
+  blur_r2_key: string | null // ✅ AÑADIDO
   r2_url: string
   prompt_used: string
   times_used: number
