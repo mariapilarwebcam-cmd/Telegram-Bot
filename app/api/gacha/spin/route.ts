@@ -35,7 +35,6 @@ export async function POST(request: Request) {
       }
 
       // 2. Verificar el Sistema de Pity (Lástima)
-      // Buscamos las últimas 9 tiradas. Si no hay épicos+, forzamos uno.
       const last9 = await tx.execute({
         sql: `SELECT reward_tier FROM gacha_history WHERE user_id = ? ORDER BY id DESC LIMIT 9`,
         args: [tid]
@@ -55,8 +54,7 @@ export async function POST(request: Request) {
       let itemKey = ''
 
       if (forceEpic) {
-        // Si se activa el Pity, le damos un Épico garantizado
-        tier = Math.random() < 0.4 ? 'epic' : 'epic' // 100% épico
+        tier = 'epic'
       } else if (roll < 0.1) {
         tier = 'mythic'
       } else if (roll < 2.0) {
@@ -71,12 +69,10 @@ export async function POST(request: Request) {
 
       // 4. Asignar el Premio según la rareza
       if (tier === 'mythic' || tier === 'legendary') {
-        // Personajes Exclusivos
-        const isFemale = user.interested_in !== 'male' // Si le gustan mujeres o ambos
+        const isFemale = user.interested_in !== 'male'
         const pool = isFemale ? GACHA_CHARACTERS_FEMALE : GACHA_CHARACTERS_MALE
         const char = pool[Math.floor(Math.random() * pool.length)]
 
-        // Insertar en el inventario como personaje
         await tx.execute({
           sql: `INSERT INTO user_inventory (user_id, item_type, item_key) VALUES (?, 'gacha_character', ?)`,
           args: [tid, char]
@@ -87,8 +83,7 @@ export async function POST(request: Request) {
         itemKey = char
 
       } else if (tier === 'epic') {
-        // Pase de Fantasía (Foto Nivel 5) o Outfit
-        const isFantasyPass = Math.random() < 0.6 // 60% foto nivel 5, 40% outfit
+        const isFantasyPass = Math.random() < 0.6
 
         if (isFantasyPass) {
           await tx.execute({
@@ -99,7 +94,11 @@ export async function POST(request: Request) {
           rewardDetails = '¡Pase de Fantasía! (Foto Nivel 5 Ultra-Secreta)'
           itemKey = 'level_5'
         } else {
-          const outfit = await tx.execute({ sql: `SELECT id, name FROM gacha_outfits ORDER BY RANDOM() LIMIT 1` })
+          // ✅ FIX: Añadido args: []
+          const outfit = await tx.execute({ 
+            sql: `SELECT id, name FROM gacha_outfits ORDER BY RANDOM() LIMIT 1`,
+            args: []
+          })
           const o = outfit.rows[0]
           await tx.execute({
             sql: `INSERT INTO user_inventory (user_id, item_type, item_key) VALUES (?, 'outfit', ?)`,
@@ -111,7 +110,6 @@ export async function POST(request: Request) {
         }
 
       } else if (tier === 'rare') {
-        // Pase de 24h (150 msgs) o Foto Nivel 3/4
         if (Math.random() < 0.5) {
           const expiresAt = Math.floor(Date.now() / 1000) + 86400
           await tx.execute({
@@ -130,8 +128,6 @@ export async function POST(request: Request) {
         }
 
       } else {
-        // Común: Gemas de Chat (Bonus Gems)
-        // 36% 20, 12% 30, 6% 35, 4.8% 40, 1.2% 50
         let bonus = 20
         const cRoll = Math.random() * 100
         if (cRoll > 98.8) bonus = 50
@@ -156,7 +152,6 @@ export async function POST(request: Request) {
 
       await tx.commit()
 
-      // Registrar transacción de gemas
       await insertGemTransaction({
         telegram_id: tid,
         amount: -COST_GEMS,
