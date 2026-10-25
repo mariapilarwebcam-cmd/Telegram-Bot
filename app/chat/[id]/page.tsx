@@ -172,26 +172,6 @@ export default function ChatPage() {
   const longPressFired = useRef(false)
   const pressOrigin = useRef<{ x: number; y: number } | null>(null)
 
-  // ✅ TEMPORIZADOR REAL
-  useEffect(() => {
-    const interval = setInterval(() => {
-      document.querySelectorAll('.countdown-timer').forEach(el => {
-        const exp = parseInt(el.getAttribute('data-expires') || '0', 10)
-        if (exp > 0) {
-          const left = Math.max(0, Math.floor((exp - Date.now()) / 1000))
-          const m = Math.floor(left / 60)
-          const s = left % 60
-          el.textContent = `⏰ ${m}:${s.toString().padStart(2, '0')}`
-          if (left === 0) {
-             el.textContent = '⏰ EXPIRADO'
-             ;(el as HTMLElement).style.color = '#ef4444'
-          }
-        }
-      })
-    }, 1000)
-    return () => clearInterval(interval)
-  }, [])
-
   useEffect(() => {
     const interval = setInterval(() => setRotationIndex((p) => p + 1), 5000)
     return () => clearInterval(interval)
@@ -626,12 +606,13 @@ export default function ChatPage() {
       const data = await res.json()
       if (res.ok) {
         if (data.is_locked) {
+          // ✅ NUEVO: Formato locked:offerId@blurUrl
           setMessages((p) => [
             ...p,
             {
               id: data.message_id,
               role: 'assistant',
-              content: `*${getDisplayName(character)} te envía una foto*\n\n![Selfie](locked:${data.locked_photo_id}|${Date.now() + 3600000})`,
+              content: `*${getDisplayName(character)} te envía una foto*\n\n![Selfie](locked:${data.offer_id}@${data.blur_url})`,
             },
           ])
         } else {
@@ -680,7 +661,7 @@ export default function ChatPage() {
     }
   }
 
-  const handleUnlockPhoto = async (lockedId: number, price: number) => {
+  const handleUnlockPhoto = async (offerId: number, price: number) => {
     if (!user || unlockingPhoto) return
 
     if ((user.purchased_gems || 0) < price) {
@@ -689,22 +670,23 @@ export default function ChatPage() {
       return
     }
 
-    setUnlockingPhoto(lockedId)
+    setUnlockingPhoto(offerId)
     try {
       const res = await tgFetch('/api/unlock-photo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ photo_id: lockedId }),
+        body: JSON.stringify({ offer_id: offerId }), // ✅ Ahora es offer_id
       })
       const data = await res.json()
 
       if (res.ok && data.image_url) {
         setMessages((prev) => 
           prev.map((msg) => {
-            if (msg.content.includes(`locked:${lockedId}`)) {
+            if (msg.content.includes(`locked:${offerId}@`)) {
               return {
                 ...msg,
-                content: msg.content.replace(new RegExp(`locked:${lockedId}(\\|\\d+)?`), data.image_url)
+                // Reemplazamos todo el bloque locked:ID@URL por la URL real
+                content: msg.content.replace(new RegExp(`\\(locked:${offerId}@[^)]+\\)`), `(${data.image_url})`)
               }
             }
             return msg
@@ -713,7 +695,6 @@ export default function ChatPage() {
         
         setRecentlyUnlocked(data.image_url)
         setTimeout(() => setRecentlyUnlocked(null), 1000)
-
         await refresh()
       } else {
         alert(data.message || data.error || 'Error al desbloquear')
@@ -904,16 +885,16 @@ export default function ChatPage() {
           .replace(/>/g, '&gt;')
         
         if (url.startsWith('locked:')) {
-          const raw = url.replace('locked:', '')
-          const [lockedId, expiresTs] = raw.split('|')
-          if (!/^\d+$/.test(lockedId)) return '@@INVALID@@'
+          // ✅ NUEVO FORMATO: locked:ID@URL_BLUR
+          const match = url.match(/^locked:(\d+)@(https?:\/\/.+)$/)
+          if (!match) return '@@INVALID@@'
           
+          const [, offerId, blurUrl] = match
           const price = currentImageCost
-          const timestamp = parseInt(expiresTs || '0', 10)
           
           images.push(
             `<div 
-              data-locked-id="${lockedId}"
+              data-locked-id="${offerId}"
               data-unlock-price="${price}"
               role="button"
               style="
@@ -925,6 +906,9 @@ export default function ChatPage() {
                 overflow: hidden;
                 box-shadow: 0 8px 24px rgba(168,85,247,0.3);
                 cursor: pointer;
+                background-image: url('${blurUrl}');
+                background-size: cover;
+                background-position: center;
                 -webkit-touch-callout: none;
                 -webkit-user-select: none;
                 user-select: none;
@@ -932,15 +916,13 @@ export default function ChatPage() {
             >
               <div style="
                 position: absolute; inset: 0;
-                background: linear-gradient(135deg, rgba(124,92,255,0.4) 0%, rgba(236,72,153,0.4) 100%);
-                backdrop-filter: blur(10px);
+                background: rgba(10, 5, 16, 0.55); /* ✅ Capa oscura para que se vea la silueta */
               "></div>
               
               <div style="
                 position: absolute; inset: 0;
                 display: flex; flex-direction: column;
                 align-items: center; justify-content: center;
-                background: radial-gradient(circle at center, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.8) 100%);
                 gap: 12px;
               ">
                 <div style="font-size: 48px; filter: drop-shadow(0 0 20px rgba(236,72,153,0.9)); animation: float 2s infinite ease-in-out;">🔒</div>
@@ -954,13 +936,6 @@ export default function ChatPage() {
                 ">
                   <span style="font-size: 18px;">💎</span>
                   Desbloquear por ${price}
-                </div>
-                <div 
-                  class="countdown-timer" 
-                  data-expires="${timestamp}"
-                  style="font-size: 11px; color: #fbbf24; font-weight: 700; margin-top: 4px; letter-spacing: 0.05em;"
-                >
-                  ⏰ --
                 </div>
               </div>
             </div>`
@@ -1945,7 +1920,7 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* ✅ NUEVO: ANIMACIÓN DE CARGA (OVERLAY) CUANDO SE GENERA UNA FOTO */}
+      {/* ✅ ANIMACIÓN DE CARGA (OVERLAY) CUANDO SE GENERA UNA FOTO */}
       {generatingImage && (
         <div 
           className="modal-backdrop" 
