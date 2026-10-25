@@ -15,8 +15,11 @@
     "app/api/generate-audio/route.ts": {
       "maxDuration": 60
     },
-    "app/api/image-status/route.ts": {
-      "maxDuration": 10
+    "app/api/cron/proactive/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/cron/maintenance/route.ts": {
+      "maxDuration": 60
     }
   },
   "crons": [
