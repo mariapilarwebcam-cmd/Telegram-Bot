@@ -8,7 +8,8 @@ import {
   insertImageGeneration, countUserWiroLast30Days, 
   ensureWiroTokensRefilled, consumeWiroToken, countSfwImageGenerationsLast24h,
   incrementGems,
-  getSpendState, updateSpendState // ✅ NUEVAS IMPORTACIONES
+  getSpendState, updateSpendState,
+  saveContentTags, getUserTopTags // ✅ NUEVO: Importamos las funciones de tags
 } from '@/lib/db-queries'
 import {
   getCharacterFace, getCharacterImageUrl, VIP_LIMITS, MAX_GENERATIONS_PER_CONTEXT_PER_USER,
@@ -259,6 +260,13 @@ const AUTO_SCENES_MALE: Record<number, string> = {
 // ═══════════════════════════════════════════════════════════════
 const STOP_WORDS = new Set(['el', 'la', 'los', 'las', 'un', 'una', 'y', 'o', 'de', 'en', 'que', 'es', 'por', 'para', 'con', 'no', 'si', 'me', 'te', 'se', 'lo', 'mi', 'tu', 'su', 'al', 'del', 'como', 'mas', 'pero'])
 
+// ✅ NUEVO: Función para extraer etiquetas automáticamente del userHint
+function extractTagsFromText(text: string): string[] {
+  if (!text) return []
+  const words = text.toLowerCase().replace(/[^\w\sáéíóúñ]/g, '').split(/\s+/)
+  return Array.from(new Set(words)).filter(w => w.length > 3 && !STOP_WORDS.has(w)).slice(0, 4)
+}
+
 async function calculateDynamicHeatScore(messages: string[]): Promise<number> {
   if (!messages || messages.length === 0) return 0
   let score = 0
@@ -397,7 +405,7 @@ export async function POST(request: Request) {
     const isVip = !!vipSub
     const seenIndices = await getSeenR2Indices(tid, character_id)
 
-    // ✅ NUEVO: FRENO DE MANO (SPEND STATE)
+    // ✅ FRENO DE MANO
     const spendState = await getSpendState(tid)
     if (spendState?.level === 'rest' && !isDirectRequest) {
       return NextResponse.json({ 
@@ -446,9 +454,8 @@ export async function POST(request: Request) {
     let useVipQuota = false
     let gemsCharged = false
 
-    // ✅ LÓGICA DE COBRO DIRECTO (Si el usuario presiona el botón de la cámara)
+    // ✅ LÓGICA DE COBRO DIRECTO
     if (isDirectRequest && !isFree && !isVip) {
-      // Intentamos cobrar de forma atómica ANTES de generar
       const charged = await queryOne<{ purchased_gems: number, gems: number }>(
         `UPDATE users SET purchased_gems = purchased_gems - ?, gems = gems - ? WHERE telegram_id = ? AND purchased_gems >= ? RETURNING purchased_gems, gems`,
         [imageCost, imageCost, tid, imageCost]
@@ -460,10 +467,9 @@ export async function POST(request: Request) {
       
       gemsCharged = true
       await insertGemTransaction({ telegram_id: tid, amount: -imageCost, transaction_type: 'image', description: `Generación directa nivel ${level.level}` })
-      await updateSpendState(tid, imageCost) // ✅ ACTUALIZAMOS EL FRENO DE MANO
-      isFree = false // Ya no es gratis porque lo cobramos manualmente
+      await updateSpendState(tid, imageCost)
+      isFree = false 
     } 
-    // Si no es petición directa, pero no tiene gemas, lo bloqueamos (solo si no es gratis ni VIP)
     else if (!isDirectRequest && !isFree && !isVip && (user.purchased_gems || 0) < imageCost) {
        return NextResponse.json({ error: 'insufficient_gems', message: `Necesitas ${imageCost} gemas compradas.` }, { status: 402 })
     }
@@ -472,7 +478,11 @@ export async function POST(request: Request) {
     const levelBucket = getLevelBucket(level.level)
     const normalizedTagKey = buildTagKey(character.archetype, genderKey, mood || 'default', levelBucket)
 
-    console.log(`[generate-image] 🌡️ Heat: ${heatScore}/100 | 🎲 Free: ${Math.round(freeChance*100)}% | 🎁 Is Free: ${isFree} | 📷 Direct: ${isDirectRequest}`)
+    // ✅ NUEVO: Leer los tags favoritos del usuario para inyectarlos en el prompt
+    const userTopTags = await getUserTopTags(tid, 3)
+    const userTopTagsPrompt = userTopTags.length > 0 ? `user favorite elements: ${userTopTags.join(', ')}` : ''
+
+    console.log(`[generate-image] 🌡️ Heat: ${heatScore}/100 | 🎲 Free: ${Math.round(freeChance*100)}% | 🎁 Is Free: ${isFree} | 📷 Direct: ${isDirectRequest} | 🏷️ Top Tags: ${userTopTags.join(', ')}`)
 
     if (useR2Static) {
       source = 'r2_static'
@@ -501,7 +511,6 @@ export async function POST(request: Request) {
       if (!poolHit) {
         source = 'generated'
         
-        // 🛡️ FIX CRÍTICO: RESERVA ATÓMICA (Evita el Race Condition)
         const reservation = await execute(
           `INSERT INTO image_generations (telegram_id, character_id, tag_key, model, level)
            SELECT ?, ?, ?, ?, ?
@@ -526,13 +535,13 @@ export async function POST(request: Request) {
         if (willUseWiro && isVip) {
           const tokens = await ensureWiroTokensRefilled(tid)
           if (tokens <= 0) {
-            await execute(`DELETE FROM image_generations WHERE id = ?`, [generationId]) // Rollback
+            await execute(`DELETE FROM image_generations WHERE id = ?`, [generationId])
             if (gemsCharged) await incrementGems(tid, imageCost)
             return NextResponse.json({ error: 'wiro_tokens_exhausted', message: getWiroTokensExhaustedMessage(lang, character.character_name) }, { status: 429 })
           }
           const wiroMonthly = await countUserWiroLast30Days(tid)
           if (wiroMonthly >= VIP_LIMITS.wiro_monthly) {
-            await execute(`DELETE FROM image_generations WHERE id = ?`, [generationId]) // Rollback
+            await execute(`DELETE FROM image_generations WHERE id = ?`, [generationId])
             if (gemsCharged) await incrementGems(tid, imageCost)
             return NextResponse.json({ error: 'wiro_monthly_limit', message: getWiroMonthlyLimitMessage(lang, character.character_name) }, { status: 429 })
           }
@@ -553,14 +562,16 @@ export async function POST(request: Request) {
           let faceRule = ''
           if (faceVisibility === 'hidden') faceRule = FACE_HIDDEN_FRAGMENT
           else if (faceVisibility === 'partial') faceRule = FACE_PARTIAL_FRAGMENT
-          imagePrompt = [QUALITY_CONTROL_PROMPT, `[CHARACTER: ${dna}]`, 'highly detailed anime illustration, cel shading, soft cinematic lighting', scene, sceneHint, faceRule, 'muted color palette, elegant composition, best quality, masterpiece', 'safe for work, no nudity, no explicit content'].filter((s) => s && s.length > 0).join(', ')
+          // ✅ NUEVO: Añadimos los tags favoritos del usuario al prompt
+          imagePrompt = [QUALITY_CONTROL_PROMPT, `[CHARACTER: ${dna}]`, 'highly detailed anime illustration, cel shading, soft cinematic lighting', scene, sceneHint, faceRule, userTopTagsPrompt, 'muted color palette, elegant composition, best quality, masterpiece', 'safe for work, no nudity, no explicit content'].filter((s) => s && s.length > 0).join(', ')
         } else {
           const facePrompt = getCharacterFace(character.archetype, character.gender)
           const clothing = getClothingLevel(level.level)
           const scene = NSFW_SCENE_PROMPTS[level.level] || NSFW_SCENE_PROMPTS[4]
           const archetypeHint = ARCHETYPE_IMAGE_HINTS[`${character.gender}_${character.archetype}`] || ''
           const moodFragment = mood ? MOOD_FRAGMENTS[mood] || '' : ''
-          imagePrompt = [QUALITY_CONTROL_PROMPT, facePrompt, 'anime style, cel shading, moody atmospheric lighting, deep shadows, muted color palette, cinematic dark tones, detailed anime eyes', clothing, scene, archetypeHint, moodFragment, sceneHint, NO_GENITALIA, 'beautiful cinematic lighting, 2D illustration, best quality'].filter((s) => s && s.length > 0).join(', ')
+          // ✅ NUEVO: Añadimos los tags favoritos del usuario al prompt
+          imagePrompt = [QUALITY_CONTROL_PROMPT, facePrompt, 'anime style, cel shading, moody atmospheric lighting, deep shadows, muted color palette, cinematic dark tones, detailed anime eyes', clothing, scene, archetypeHint, moodFragment, sceneHint, userTopTagsPrompt, NO_GENITALIA, 'beautiful cinematic lighting, 2D illustration, best quality'].filter((s) => s && s.length > 0).join(', ')
         }
 
         promptUsed = imagePrompt
@@ -569,9 +580,7 @@ export async function POST(request: Request) {
         try {
           rawUrl = await generateRunwareImage(imagePrompt, seedUrl, level.level)
         } catch (imgError) {
-          // 🛡️ ROLLBACK: Si Runware falla, borramos la reserva para no gastar la oportunidad del usuario.
           await execute(`DELETE FROM image_generations WHERE id = ?`, [generationId])
-          // 🛡️ REFUND: Si el usuario pagó, le devolvemos sus gemas.
           if (gemsCharged) {
             await incrementGems(tid, imageCost)
             await insertGemTransaction({ telegram_id: tid, amount: imageCost, transaction_type: 'refund', description: 'Reembolso por fallo en generación' })
@@ -615,9 +624,7 @@ export async function POST(request: Request) {
     let lockedPhotoId: number | null = null
     let unlockPrice = 0
 
-    // ✅ LÓGICA DE RESPUESTA: ¿Bloqueada o Nítida?
     if (isDirectRequest) {
-      // Si es petición directa, la imagen ya se cobró y se muestra nítida
       lockedPhotoId = null
       unlockPrice = 0
       if (gemsCharged) {
@@ -625,7 +632,6 @@ export async function POST(request: Request) {
         newPurchasedGems -= imageCost
       }
     } else {
-      // Si es automático (Banner/Tease), se devuelve bloqueada
       unlockPrice = isFree || useVipQuota ? 0 : imageCost
       const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString()
       try {
@@ -641,15 +647,30 @@ export async function POST(request: Request) {
       await insertImageGeneration({ telegram_id: tid, character_id, tag_key: normalizedTagKey, model: source === 'r2_static' ? 'r2' : 'pool', level: level.level })
     }
 
-    // ✅ INTEGRACIÓN: Capturamos el ID del mensaje de la foto para asociar la reacción
     let insertedMsgId: number | undefined
     try {
       const imageMessageContent = lockedPhotoId
         ? `*${character.character_name} te envía una foto*\n\n![Selfie](locked:${lockedPhotoId})`
         : `*${character.character_name} te envía una foto*\n\n![Selfie](${imageUrl})`
       const inserted = await insertMessage({ telegram_id: tid, character_id, role: 'assistant', content: imageMessageContent })
-      insertedMsgId = inserted?.id // ✅ AÑADIDO
+      insertedMsgId = inserted?.id
     } catch (persistErr) {}
+
+    // ✅ NUEVO: Guardar las etiquetas de esta foto (automáticamente) para futuras recomendaciones
+    const newPhotoId = lockedPhotoId || insertedMsgId
+    if (newPhotoId) {
+      // Extraemos las etiquetas del userHint y del mood actual
+      const autoTags = [
+        ...extractTagsFromText(userHint),
+        mood,
+        levelBucket,
+        character.archetype
+      ].filter(Boolean) as string[]
+      
+      if (autoTags.length > 0) {
+        await saveContentTags(newPhotoId, autoTags)
+      }
+    }
 
     return NextResponse.json({
       is_locked: !!lockedPhotoId,
@@ -667,7 +688,7 @@ export async function POST(request: Request) {
       face_visibility: faceVisibility,
       model: modelUsed,
       heat_score: heatScore,
-      message_id: insertedMsgId, // ✅ AÑADIDO AQUÍ
+      message_id: insertedMsgId,
     })
   } catch (error: any) {
     return NextResponse.json({ error: 'Error al generar la imagen' }, { status: 500 })
