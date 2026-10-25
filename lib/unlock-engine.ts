@@ -1,5 +1,6 @@
 // lib/unlock-engine.ts
-import { db } from '@/lib/turso' // ✅ Usamos la instancia de la base de datos directamente
+import { db } from '@/lib/turso'
+import { updateSpendState, rewardUserTags } from '@/lib/db-queries' // ✅ IMPORTAMOS LO QUE FALTABA
 
 export class HttpError extends Error {
   constructor(public status: number, public code: string) {
@@ -29,7 +30,6 @@ async function consumeVipToken(tx: any, userId: string): Promise<boolean> {
   const daysPassed = Math.floor((now - lastAt) / DAY_SECONDS)
   if (daysPassed > 0) {
     tokens = Math.min(MAX_TOKENS, tokens + daysPassed)
-    // Si llegamos al tope, reiniciamos el contador de tiempo para no acumular "fantasmas"
     lastAt = tokens >= MAX_TOKENS ? now : lastAt + (daysPassed * DAY_SECONDS)
   }
 
@@ -46,6 +46,10 @@ async function consumeVipToken(tx: any, userId: string): Promise<boolean> {
 
 export async function unlockOffer(userId: string, offerId: number) {
   const tx = await db.transaction('write')
+  let wasAlreadyUnlocked = false
+  let imageIdToReward = 0
+  let pricePaid = 0
+  let paidWithMode = ''
 
   try {
     // 1. Obtener la oferta y verificar que pertenece al usuario
@@ -63,8 +67,12 @@ export async function unlockOffer(userId: string, offerId: number) {
       throw new HttpError(404, 'offer_not_found')
     }
 
+    imageIdToReward = Number(offer.image_id)
+    pricePaid = Number(offer.price_gems)
+
     if (offer.state === 'unlocked') {
       // Ya estaba desbloqueada, devolvemos la imagen sin cobrar
+      wasAlreadyUnlocked = true
       const imgRes = await tx.execute({
         sql: 'SELECT r2_key FROM generated_images WHERE id = ?',
         args: [offer.image_id]
@@ -107,6 +115,8 @@ export async function unlockOffer(userId: string, offerId: number) {
       }
     }
 
+    paidWithMode = paidWith
+
     // 3. Marcar la oferta como desbloqueada
     await tx.execute({
       sql: `UPDATE photo_offers SET state = 'unlocked', paid_with = ?, unlocked_at = unixepoch() WHERE id = ?`,
@@ -114,7 +124,6 @@ export async function unlockOffer(userId: string, offerId: number) {
     })
 
     // 4. Registrar en el libro contable (Auditoría y doble protección)
-    // El UNIQUE(kind, ref) evita que se inserte dos veces el mismo cobro
     await tx.execute({
       sql: `INSERT INTO gem_ledger (user_id, delta, kind, ref) VALUES (?, ?, ?, ?)`,
       args: [
@@ -135,9 +144,19 @@ export async function unlockOffer(userId: string, offerId: number) {
 
     await tx.commit()
 
+    // ✅ 6. LÓGICA RECUPERADA: Sumar al Freno de Mano y Aprender Etiquetas
+    // (Esto va FUERA de la transacción para no bloquear la base de datos)
+    if (!wasAlreadyUnlocked) {
+      if (paidWithMode === 'gems' && pricePaid > 0) {
+        await updateSpendState(userId, pricePaid)
+      }
+      // El bot aprende de la foto (le sumamos 3 puntos a sus gustos)
+      await rewardUserTags(userId, imageIdToReward, 3)
+    }
+
     const imgRes = await db.execute({
       sql: 'SELECT r2_key FROM generated_images WHERE id = ?',
-      args: [imageId]
+      args: [imageIdToReward]
     })
 
     return { 
