@@ -629,11 +629,14 @@ export async function POST(request: Request) {
       await insertImageGeneration({ telegram_id: tid, character_id, tag_key: normalizedTagKey, model: source === 'r2_static' ? 'r2' : 'pool', level: level.level })
     }
 
+    // ✅ INTEGRACIÓN: Capturamos el ID del mensaje de la foto para asociar la reacción
+    let insertedMsgId: number | undefined
     try {
       const imageMessageContent = lockedPhotoId
         ? `*${character.character_name} te envía una foto*\n\n![Selfie](locked:${lockedPhotoId})`
         : `*${character.character_name} te envía una foto*\n\n![Selfie](${imageUrl})`
-      await insertMessage({ telegram_id: tid, character_id, role: 'assistant', content: imageMessageContent })
+      const inserted = await insertMessage({ telegram_id: tid, character_id, role: 'assistant', content: imageMessageContent })
+      insertedMsgId = inserted?.id // ✅ AÑADIDO
     } catch (persistErr) {}
 
     return NextResponse.json({
@@ -652,6 +655,7 @@ export async function POST(request: Request) {
       face_visibility: faceVisibility,
       model: modelUsed,
       heat_score: heatScore,
+      message_id: insertedMsgId, // ✅ AÑADIDO AQUÍ
     })
   } catch (error: any) {
     return NextResponse.json({ error: 'Error al generar la imagen' }, { status: 500 })
