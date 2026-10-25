@@ -115,6 +115,7 @@ export default function ChatPage() {
   const [seenImageCount, setSeenImageCount] = useState(0)
 
   const [isVip, setIsVip] = useState(false)
+  const [activePass, setActivePass] = useState<any>(null)
   const [vipMessagesToday, setVipMessagesToday] = useState(0)
   const [showVipLimitModal, setShowVipLimitModal] = useState(false)
 
@@ -170,6 +171,26 @@ export default function ChatPage() {
   const longPressTimer = useRef<NodeJS.Timeout | null>(null)
   const longPressFired = useRef(false)
   const pressOrigin = useRef<{ x: number; y: number } | null>(null)
+
+  // ✅ TEMPORIZADOR REAL
+  useEffect(() => {
+    const interval = setInterval(() => {
+      document.querySelectorAll('.countdown-timer').forEach(el => {
+        const exp = parseInt(el.getAttribute('data-expires') || '0', 10)
+        if (exp > 0) {
+          const left = Math.max(0, Math.floor((exp - Date.now()) / 1000))
+          const m = Math.floor(left / 60)
+          const s = left % 60
+          el.textContent = `⏰ ${m}:${s.toString().padStart(2, '0')}`
+          if (left === 0) {
+             el.textContent = '⏰ EXPIRADO'
+             ;(el as HTMLElement).style.color = '#ef4444'
+          }
+        }
+      })
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [])
 
   useEffect(() => {
     const interval = setInterval(() => setRotationIndex((p) => p + 1), 5000)
@@ -235,7 +256,6 @@ export default function ChatPage() {
           return (a.id || 0) - (b.id || 0)
         })
         
-        // ✅ DEDUPLICACIÓN CORREGIDA
         const deduped = sorted.filter((msg, idx, arr) => {
           if (idx === 0) return true
           const prev = arr[idx - 1]
@@ -246,6 +266,7 @@ export default function ChatPage() {
         setMessages(deduped)
         setIsPremium(!!data.is_premium)
         setSeenImageCount(data.seen_image_count || 0)
+        setActivePass(data.active_pass)
 
         const count = data.user_message_count || 0
         setTotalUserMessages(count)
@@ -273,7 +294,7 @@ export default function ChatPage() {
       endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
     }, 50)
     return () => clearTimeout(t)
-  }, [messages, loading]) // ✅ Añadido loading para que baje al escribir
+  }, [messages, loading])
 
   useEffect(() => {
     const handleVisibility = () => {
@@ -310,7 +331,7 @@ export default function ChatPage() {
       const gems = user.gems || 0
       const hookRemaining = user.hook_messages_remaining || 0
 
-      if (!isVip && gems < GEM_COSTS.message && hookRemaining <= 0) {
+      if (!isVip && gems < GEM_COSTS.message && hookRemaining <= 0 && !activePass) {
         setBlocked(true)
         return
       }
@@ -344,7 +365,7 @@ export default function ChatPage() {
 
     startChat()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [historyLoaded, user, character, messages.length, isVip])
+  }, [historyLoaded, user, character, messages.length, isVip, activePass])
 
   const handleInputFocus = () => {
     setTimeout(() => {
@@ -359,7 +380,7 @@ export default function ChatPage() {
     const gems = user.gems || 0
     const hookRemaining = user.hook_messages_remaining || 0
 
-    if (!acceptPenalty && !isVip && gems < GEM_COSTS.message && hookRemaining <= 0) {
+    if (!acceptPenalty && !isVip && gems < GEM_COSTS.message && hookRemaining <= 0 && !activePass) {
       sendingRef.current = false
       setBlocked(true)
       return
@@ -414,10 +435,9 @@ export default function ChatPage() {
             setBlockedMessage(data.response || '')
             setBlocked(true)
             setMessages((p) => p.slice(0, -1))
-            setInput(text) // ✅ Recuperar texto si está bloqueado
+            setInput(text)
           }
         } else {
-          // ✅ ASIGNAR IDS
           setMessages((p) => {
             const copy = [...p]
             for (let i = copy.length - 1; i >= 0; i--) {
@@ -538,7 +558,7 @@ export default function ChatPage() {
       if (res.ok) {
         setGems(data.remaining_gems)
         if (data.remaining_purchased_gems !== undefined) {
-           await refresh() // ✅ Evitar mutación directa
+           await refresh()
         }
         
         const audio = new Audio(`data:audio/wav;base64,${data.audio}`)
@@ -609,16 +629,16 @@ export default function ChatPage() {
           setMessages((p) => [
             ...p,
             {
-              id: data.message_id, // ✅ Asignar ID
+              id: data.message_id,
               role: 'assistant',
-              content: `*${getDisplayName(character)} te envía una foto*\n\n![Selfie](locked:${data.locked_photo_id})`,
+              content: `*${getDisplayName(character)} te envía una foto*\n\n![Selfie](locked:${data.locked_photo_id}|${Date.now() + 3600000})`,
             },
           ])
         } else {
           setMessages((p) => [
             ...p,
             {
-              id: data.message_id, // ✅ Asignar ID
+              id: data.message_id,
               role: 'assistant',
               content: `*${getDisplayName(character)} te envía una foto*\n\n![Selfie](${data.image_url})`,
             },
@@ -684,7 +704,7 @@ export default function ChatPage() {
             if (msg.content.includes(`locked:${lockedId}`)) {
               return {
                 ...msg,
-                content: msg.content.replace(`locked:${lockedId}`, data.image_url)
+                content: msg.content.replace(new RegExp(`locked:${lockedId}(\\|\\d+)?`), data.image_url)
               }
             }
             return msg
@@ -705,7 +725,6 @@ export default function ChatPage() {
     }
   }
 
-  // ✅ Función de reacción con optimismo y rollback
   const handleReaction = async (msg: Message, emoji: string) => {
     setActiveReactionMsg(null)
     if (!msg.id) return
@@ -730,7 +749,6 @@ export default function ChatPage() {
     }
   }
 
-  // ✅ Pointer Events para evitar conflictos
   const startPress = (i: number, e: React.PointerEvent<HTMLDivElement>) => {
     if ((e.target as HTMLElement).closest('[data-reaction-ui]')) return
     cancelPress()
@@ -886,10 +904,12 @@ export default function ChatPage() {
           .replace(/>/g, '&gt;')
         
         if (url.startsWith('locked:')) {
-          const lockedId = url.replace('locked:', '')
-          if (!/^\d+$/.test(lockedId)) return '@@INVALID@@' // ✅ Sanitización
+          const raw = url.replace('locked:', '')
+          const [lockedId, expiresTs] = raw.split('|')
+          if (!/^\d+$/.test(lockedId)) return '@@INVALID@@'
           
           const price = currentImageCost
+          const timestamp = parseInt(expiresTs || '0', 10)
           
           images.push(
             `<div 
@@ -935,12 +955,17 @@ export default function ChatPage() {
                   <span style="font-size: 18px;">💎</span>
                   Desbloquear por ${price}
                 </div>
-                <div style="font-size: 10px; color: #fbbf24; font-weight: 700; margin-top: 4px; letter-spacing: 0.05em;">⏰ POR TIEMPO LIMITADO</div>
+                <div 
+                  class="countdown-timer" 
+                  data-expires="${timestamp}"
+                  style="font-size: 11px; color: #fbbf24; font-weight: 700; margin-top: 4px; letter-spacing: 0.05em;"
+                >
+                  ⏰ --
+                </div>
               </div>
             </div>`
           )
         } else {
-          // ✅ Sanitización URL (solo http/https)
           if (!url.match(/^https?:\/\//)) return '@@INVALID@@'
           const safeUrl = encodeURI(url).replace(/"/g, '&quot;')
 
@@ -982,18 +1007,10 @@ export default function ChatPage() {
       .replace(/"/g, '&quot;')
 
     text = text.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
-
-    text = text.replace(
-      /\*([^*\n]+)\*/g,
-      '<span class="chat-action">*$1*</span>'
-    )
-
+    text = text.replace(/\*([^*\n]+)\*/g, '<span class="chat-action">*$1*</span>')
     text = text.replace(/_([^_\n]+)_/g, '<em style="color:#c4b5fd;">$1</em>')
 
-    text = text.replace(
-      /@@IMG(\d+)@@/g,
-      (_, idx) => images[parseInt(idx)] || ''
-    )
+    text = text.replace(/@@IMG(\d+)@@/g, (_, idx) => images[parseInt(idx)] || '')
 
     return text
   }
@@ -1106,6 +1123,23 @@ export default function ChatPage() {
             ) : (
               <span className="level-badge" style={{ color: currentLevel.color, background: `${currentLevel.color}20` }}>
                 {t[currentLevel.badgeKey as keyof typeof t]}
+              </span>
+            )}
+
+            {activePass && (
+              <span 
+                className="level-badge" 
+                style={{ 
+                  color: '#000', 
+                  background: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)',
+                  border: '1px solid #fbbf24',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 3,
+                  animation: 'pulseSoft 2s ease-in-out infinite',
+                }}
+              >
+                🎟️ {activePass.messages_limit - activePass.messages_used} msgs
               </span>
             )}
 
@@ -1301,10 +1335,9 @@ export default function ChatPage() {
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: isUser ? 'flex-end' : 'flex-start',
-                marginBottom: m.reaction ? 26 : 16, // ✅ Espacio extra si hay reacción
+                marginBottom: m.reaction ? 26 : 16,
               }}
             >
-              {/* ✅ CONTENEDOR EXCLUSIVO PARA LA BURBUJA Y LA REACCIÓN */}
               <div
                 style={{
                   position: 'relative',
@@ -1327,15 +1360,14 @@ export default function ChatPage() {
                   dangerouslySetInnerHTML={{ __html: formatMessage(m.content) }}
                 />
 
-                {/* ✅ INSIGNIA DE REACCIÓN */}
                 {m.reaction && (
                   <button
                     data-reaction-ui
                     onClick={() => setActiveReactionMsg(activeReactionMsg === i ? null : i)}
                     style={{
                       position: 'absolute',
-                      bottom: -14, // Se ancla al borde inferior de la burbuja
-                      [isUser ? 'left' : 'right']: 8, // A la izquierda si es tuyo, a la derecha si es de la IA
+                      bottom: -14,
+                      [isUser ? 'left' : 'right']: 8,
                       background: '#1f1733',
                       border: '1px solid rgba(168,85,247,0.5)',
                       borderRadius: 12,
@@ -1352,7 +1384,6 @@ export default function ChatPage() {
                   </button>
                 )}
 
-                {/* ✅ MENÚ DE REACCIONES FLOTANTE */}
                 {activeReactionMsg === i && (
                   <>
                     <div
