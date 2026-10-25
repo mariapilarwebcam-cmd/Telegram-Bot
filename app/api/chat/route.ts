@@ -394,10 +394,21 @@ ${learned.heat.length > 0 ? `- The system learned users love these words: ${lear
       return NextResponse.json({ error: 'Error al generar respuesta', detail: errorDetail }, { status: 500 })
     }
 
-    await insertMessages([
-      { telegram_id: tid, character_id, role: 'user', content: message },
-      { telegram_id: tid, character_id, role: 'assistant', content: responseText },
-    ])
+    // ✅ INTEGRACIÓN DE IDs: Capturamos los IDs que devuelve insertMessages
+    let userMessageId: number | undefined
+    let assistantMessageId: number | undefined
+
+    try {
+      const inserted = await insertMessages([
+        { telegram_id: tid, character_id, role: 'user', content: message },
+        { telegram_id: tid, character_id, role: 'assistant', content: responseText },
+      ])
+      userMessageId = inserted[0]?.id
+      assistantMessageId = inserted[1]?.id
+    } catch (dbErr) {
+      console.error('[chat] Error guardando mensajes:', dbErr)
+      // No detenemos la ejecución, pero avisamos en consola.
+    }
 
     try {
       const referral = await getReferralByReferred(tid)
@@ -433,6 +444,8 @@ ${learned.heat.length > 0 ? `- The system learned users love these words: ${lear
 
     return NextResponse.json({
       response: finalText,
+      user_message_id: userMessageId,          // ✅ AÑADIDO AQUÍ
+      assistant_message_id: assistantMessageId, // ✅ AÑADIDO AQUÍ
       remaining_gems: newGems,
       hook_messages_remaining: newHookRemaining,
       is_hook_mode: isHookModeAfter,
