@@ -9,7 +9,7 @@ import {
   ensureWiroTokensRefilled, consumeWiroToken, countSfwImageGenerationsLast24h,
   incrementGems,
   getSpendState, updateSpendState,
-  saveContentTags, getUserTopTags // ✅ NUEVO: Importamos las funciones de tags
+  saveContentTags, getUserTopTags
 } from '@/lib/db-queries'
 import {
   getCharacterFace, getCharacterImageUrl, VIP_LIMITS, MAX_GENERATIONS_PER_CONTEXT_PER_USER,
@@ -260,7 +260,6 @@ const AUTO_SCENES_MALE: Record<number, string> = {
 // ═══════════════════════════════════════════════════════════════
 const STOP_WORDS = new Set(['el', 'la', 'los', 'las', 'un', 'una', 'y', 'o', 'de', 'en', 'que', 'es', 'por', 'para', 'con', 'no', 'si', 'me', 'te', 'se', 'lo', 'mi', 'tu', 'su', 'al', 'del', 'como', 'mas', 'pero'])
 
-// ✅ NUEVO: Función para extraer etiquetas automáticamente del userHint
 function extractTagsFromText(text: string): string[] {
   if (!text) return []
   const words = text.toLowerCase().replace(/[^\w\sáéíóúñ]/g, '').split(/\s+/)
@@ -478,11 +477,8 @@ export async function POST(request: Request) {
     const levelBucket = getLevelBucket(level.level)
     const normalizedTagKey = buildTagKey(character.archetype, genderKey, mood || 'default', levelBucket)
 
-    // ✅ NUEVO: Leer los tags favoritos del usuario para inyectarlos en el prompt
     const userTopTags = await getUserTopTags(tid, 3)
     const userTopTagsPrompt = userTopTags.length > 0 ? `user favorite elements: ${userTopTags.join(', ')}` : ''
-
-    console.log(`[generate-image] 🌡️ Heat: ${heatScore}/100 | 🎲 Free: ${Math.round(freeChance*100)}% | 🎁 Is Free: ${isFree} | 📷 Direct: ${isDirectRequest} | 🏷️ Top Tags: ${userTopTags.join(', ')}`)
 
     if (useR2Static) {
       source = 'r2_static'
@@ -562,7 +558,6 @@ export async function POST(request: Request) {
           let faceRule = ''
           if (faceVisibility === 'hidden') faceRule = FACE_HIDDEN_FRAGMENT
           else if (faceVisibility === 'partial') faceRule = FACE_PARTIAL_FRAGMENT
-          // ✅ NUEVO: Añadimos los tags favoritos del usuario al prompt
           imagePrompt = [QUALITY_CONTROL_PROMPT, `[CHARACTER: ${dna}]`, 'highly detailed anime illustration, cel shading, soft cinematic lighting', scene, sceneHint, faceRule, userTopTagsPrompt, 'muted color palette, elegant composition, best quality, masterpiece', 'safe for work, no nudity, no explicit content'].filter((s) => s && s.length > 0).join(', ')
         } else {
           const facePrompt = getCharacterFace(character.archetype, character.gender)
@@ -570,7 +565,6 @@ export async function POST(request: Request) {
           const scene = NSFW_SCENE_PROMPTS[level.level] || NSFW_SCENE_PROMPTS[4]
           const archetypeHint = ARCHETYPE_IMAGE_HINTS[`${character.gender}_${character.archetype}`] || ''
           const moodFragment = mood ? MOOD_FRAGMENTS[mood] || '' : ''
-          // ✅ NUEVO: Añadimos los tags favoritos del usuario al prompt
           imagePrompt = [QUALITY_CONTROL_PROMPT, facePrompt, 'anime style, cel shading, moody atmospheric lighting, deep shadows, muted color palette, cinematic dark tones, detailed anime eyes', clothing, scene, archetypeHint, moodFragment, sceneHint, userTopTagsPrompt, NO_GENITALIA, 'beautiful cinematic lighting, 2D illustration, best quality'].filter((s) => s && s.length > 0).join(', ')
         }
 
@@ -650,16 +644,15 @@ export async function POST(request: Request) {
     let insertedMsgId: number | undefined
     try {
       const imageMessageContent = lockedPhotoId
-        ? `*${character.character_name} te envía una foto*\n\n![Selfie](locked:${lockedPhotoId})`
+        ? `*${character.character_name} te envía una foto*\n\n![Selfie](locked:${lockedPhotoId}|${Date.now() + 3600000})`
         : `*${character.character_name} te envía una foto*\n\n![Selfie](${imageUrl})`
       const inserted = await insertMessage({ telegram_id: tid, character_id, role: 'assistant', content: imageMessageContent })
       insertedMsgId = inserted?.id
     } catch (persistErr) {}
 
-    // ✅ NUEVO: Guardar las etiquetas de esta foto (automáticamente) para futuras recomendaciones
+    // ✅ GUARDAR ETIQUETAS PARA RECOMENDACIONES
     const newPhotoId = lockedPhotoId || insertedMsgId
     if (newPhotoId) {
-      // Extraemos las etiquetas del userHint y del mood actual
       const autoTags = [
         ...extractTagsFromText(userHint),
         mood,
