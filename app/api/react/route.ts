@@ -23,7 +23,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'invalid_reaction' }, { status: 400 })
     }
 
-    // 2. GUARDAR LA REACCIÓN EN LA BASE DE DATOS (Lo nuevo)
+    // 2. GUARDAR LA REACCIÓN EN LA BASE DE DATOS
     const updated = await execute(
       `UPDATE conversation_history 
        SET reaction = ? 
@@ -36,13 +36,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'not_found' }, { status: 404 })
     }
 
-    // 3. MANTENER TU LÓGICA DE APRENDIZAJE (Lo original)
-    // Reacciones positivas
-    const hotReactions = ['❤️', '🔥', '😍', '🥵', '💦']
+    // 3. TU LÓGICA DE APRENDIZAJE (AHORA CON LOS 8 EMOJIS CORRECTOS)
+    // Reacciones positivas (usamos el mismo array de ALLOWED_REACTIONS para que aprenda de todos)
+    const hotReactions = ['❤️', '🔥', '😈', '💦', '🍆', '🍑', '🥵', '💋']
     const isPositive = hotReactions.includes(reaction)
 
     if (isPositive) {
-      // Como el frontend ya no envía el texto, lo buscamos en la base de datos
+      // Buscamos el texto del mensaje en la BD para extraer las palabras
       const msg = await queryOne<{ content: string }>(
         `SELECT content FROM conversation_history WHERE id = ? AND telegram_id = ?`,
         [message_id, tid]
