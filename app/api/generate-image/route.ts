@@ -1,14 +1,13 @@
 // app/api/generate-image/route.ts  
 
 import { NextResponse } from 'next/server'
-import sharp from 'sharp' // ✅ IMPORTAMOS SHARP
-import crypto from 'node:crypto' // ✅ PARA GENERAR UUIDs
+import sharp from 'sharp' 
+import crypto from 'node:crypto' 
 import {
   ensureUser, getCharacter, countUserMessages, insertGemTransaction,
   getSeenR2Indices, markImageSeen, getAvailablePoolImage, markPoolImageViewed,
   incrementPoolImageUse, insertPoolImage, insertMessage, getActiveSubscription,
-  insertImageGeneration, countUserWiroLast30Days, 
-  ensureWiroTokensRefilled, consumeWiroToken, countSfwImageGenerationsLast24h,
+  insertImageGeneration,
   incrementGems,
   getSpendState, updateSpendState,
   saveContentTags, getUserTopTags
@@ -24,7 +23,7 @@ import { execute, queryOne, query } from '@/lib/turso'
 export const maxDuration = 60
 
 // ═══════════════════════════════════════════════════════════════
-// CHARACTER DNA (Mantén tu diccionario intacto aquí)
+// CHARACTER DNA
 // ═══════════════════════════════════════════════════════════════
 const CHARACTER_DNA: Record<string, string> = {
   female_stepmom: "mature woman, long dark hair, green eyes, elegant",
@@ -236,25 +235,45 @@ const SFW_SCENE_PROMPTS: Record<number, string> = {
       no nudity, no explicit content, safe for work, elegant anime aesthetic`,
 }
 
+// ✅ PROMPTS SEMI-NSFW (Máximo sugerente, cero explícito)
 const NSFW_SCENE_PROMPTS: Record<number, string> = {
-  4: 'intimate photo, minimal tasteful clothing or elegant lingerie, very revealing but no explicit nudity, artistic suggestive pose, low intimate lighting, bedroom setting, high-end boudoir aesthetic, heat and tension palpable, flushed skin, breathless expression, sensual atmosphere',
-  5: 'artistic boudoir photo, tasteful implied nudity with strategic coverage (sheets, shadows, artistic angles), no exposed genitalia, no explicit sexual acts, high-end artistic composition, dramatic cinematic lighting, peak intimacy moment, tangled sheets, marked skin, glowing skin, post-intimacy atmosphere, sensual silence, everything suggested nothing shown',
+  4: `intimate photo, minimal tasteful clothing or elegant lingerie, 
+      very revealing but strategically covered at all times, 
+      artistic suggestive pose, low intimate lighting, bedroom setting, 
+      high-end boudoir aesthetic, magnetic desire in the eyes, 
+      parted lips, soft blush, tempting invitation, undeniable chemistry, 
+      heat and tension palpable, flushed skin, breathless expression, 
+      sensual atmosphere, fabric slipping off one shoulder, 
+      sheets loosely draped around body, everything suggested nothing shown, 
+      the art of seduction and anticipation, 
+      no exposed genitalia, no explicit sexual acts, no full nudity`,
+
+  5: `artistic boudoir photo, tasteful implied coverage with strategic 
+      placement of silk sheets and dramatic shadows, 
+      elegant artistic angles that conceal and reveal, 
+      no exposed genitalia, no explicit sexual acts, no full nudity, 
+      high-end artistic composition, dramatic cinematic lighting, 
+      peak intimacy and anticipation, longing gaze, magnetic attraction, 
+      undeniable chemistry between the subject and the viewer, 
+      tangled sheets, glowing skin, post-intimacy atmosphere, 
+      sensual silence, maximum suggestion without explicit content, 
+      the art of desire, everything suggested nothing shown`,
 }
 
 const AUTO_SCENES_FEMALE: Record<number, string> = {
   1: 'relaxed at home in a cozy room, natural soft smile, casual daylight atmosphere, warm and wholesome vibe',
   2: 'lying on her bed, playful flirty look toward the camera, warm intimate lighting, teasing energy',
   3: 'seductive pose in a dimly lit room, elegant lingerie, moody atmosphere, confident inviting gaze',
-  4: 'intimate boudoir pose, soft shadows on skin, low warm lighting, private bedroom setting, sensual but tasteful',
-  5: 'artistic intimate composition, cinematic dramatic lighting, elegant and tasteful, high-end boudoir editorial',
+  4: 'intimate boudoir pose, soft shadows on skin, low warm lighting, private bedroom setting, sensual but tasteful, maximum suggestion without explicit content',
+  5: 'artistic intimate composition, cinematic dramatic lighting, elegant and tasteful, high-end boudoir editorial, the art of desire, everything suggested nothing shown',
 }
 
 const AUTO_SCENES_MALE: Record<number, string> = {
   1: 'relaxed at home in a cozy room, natural soft smile, casual daylight atmosphere, warm and wholesome vibe',
   2: 'lying on his bed, playful confident look toward the camera, warm intimate lighting, teasing energy',
   3: 'seductive pose in a dimly lit room, half-open shirt, moody atmosphere, intense inviting gaze',
-  4: 'intimate boudoir pose, soft shadows on skin, low warm lighting, private bedroom setting, sensual but tasteful',
-  5: 'artistic intimate composition, cinematic dramatic lighting, elegant and tasteful, high-end boudoir editorial',
+  4: 'intimate boudoir pose, soft shadows on skin, low warm lighting, private bedroom setting, sensual but tasteful, maximum suggestion without explicit content',
+  5: 'artistic intimate composition, cinematic dramatic lighting, elegant and tasteful, high-end boudoir editorial, the art of desire, everything suggested nothing shown',
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -366,16 +385,6 @@ function getContextLimitMessage(lang: 'es' | 'en', characterName: string): strin
   return `*${characterName} sonríe de lado y niega con la cabeza*\n\n"Wow, veo que te encanta este momento, ¿eh? Creo que ya exploramos bastante esta escena... probemos algo diferente. Cambia el mood o el lugar, y te sorprendo otra vez."`
 }
 
-function getWiroTokensExhaustedMessage(lang: 'es' | 'en', characterName: string): string {
-  if (lang === 'en') return `*${characterName} bites her lip and looks at you apologetically*\n\n"I'm out of premium photos for today... but I'll have a new one tomorrow. Or come back later, I have something else to show you."`
-  return `*${characterName} se muerde el labio y te mira con disculpa*\n\n"Se me acabaron las fotos premium por hoy... pero mañana tendré una nueva. O vuelve más tarde, tengo algo más que mostrarte."`
-}
-
-function getWiroMonthlyLimitMessage(lang: 'es' | 'en', characterName: string): string {
-  if (lang === 'en') return `*${characterName} smiles warmly*\n\n"We've shared so many premium moments this month... I need to rest and recharge. Come back next month for more."`
-  return `*${characterName} sonríe con calidez*\n\n"Hemos compartido tantos momentos premium este mes... necesito descansar y recargarme. Vuelve el próximo mes para más."`
-}
-
 // ✅ NUEVA FUNCIÓN: Blur Seguro (24px)
 async function makeBlur(buf: Buffer): Promise<Buffer> {
   return sharp(buf)
@@ -383,6 +392,29 @@ async function makeBlur(buf: Buffer): Promise<Buffer> {
     .blur(1.2)
     .webp({ quality: 60 })
     .toBuffer()
+}
+
+// ✅ NUEVA FUNCIÓN: CONSUMIR TOKEN VIP (Runware)
+async function consumeVipPhotoToken(user: any): Promise<boolean> {
+  const now = Math.floor(Date.now() / 1000)
+  let tokens = user.photo_tokens || 0
+  let lastAt = user.photo_tokens_at || now
+
+  // Acumulación: 1 por día, máximo 5
+  const daysPassed = Math.floor((now - lastAt) / 86400)
+  if (daysPassed > 0) {
+    tokens = Math.min(5, tokens + daysPassed)
+    lastAt = tokens >= 5 ? now : lastAt + (daysPassed * 86400)
+  }
+
+  if (tokens < 1) return false
+
+  await execute(
+    `UPDATE users SET photo_tokens = ?, photo_tokens_at = ? WHERE telegram_id = ?`,
+    [tokens - 1, lastAt, user.telegram_id]
+  )
+  
+  return true
 }
 
 export async function POST(request: Request) {
@@ -467,8 +499,16 @@ export async function POST(request: Request) {
     let useVipQuota = false
     let gemsCharged = false
 
-    // ✅ LÓGICA DE COBRO DIRECTO
-    if (isDirectRequest && !isFree && !isVip) {
+    // ✅ LÓGICA VIP: Consumir token si es VIP y no es la primera imagen
+    if (isVip && !isFree && !isDirectRequest) {
+      const hasToken = await consumeVipPhotoToken(user)
+      if (hasToken) {
+        useVipQuota = true
+      }
+    }
+
+    // ✅ LÓGICA DE COBRO (SOLO SI NO ES VIP CON TOKEN NI ES GRATIS)
+    if (isDirectRequest && !isFree && !useVipQuota) {
       const charged = await queryOne<{ purchased_gems: number, gems: number }>(
         `UPDATE users SET purchased_gems = purchased_gems - ?, gems = gems - ? WHERE telegram_id = ? AND purchased_gems >= ? RETURNING purchased_gems, gems`,
         [imageCost, imageCost, tid, imageCost]
@@ -483,7 +523,7 @@ export async function POST(request: Request) {
       await updateSpendState(tid, imageCost)
       isFree = false 
     } 
-    else if (!isDirectRequest && !isFree && !isVip && (user.purchased_gems || 0) < imageCost) {
+    else if (!isDirectRequest && !isFree && !useVipQuota && (user.purchased_gems || 0) < imageCost) {
        return NextResponse.json({ error: 'insufficient_gems', message: `Necesitas ${imageCost} gemas compradas.` }, { status: 402 })
     }
 
@@ -497,7 +537,6 @@ export async function POST(request: Request) {
     if (useR2Static) {
       source = 'r2_static'
       imageUrl = buildR2VariantUrl(genderKey, character.archetype, r2Index!)
-      // Nota: Si usas imágenes estáticas de R2, asumimos que ya tienes una versión blur guardada o usas la misma.
       blurUrl = imageUrl 
       modelUsed = 'r2'
       try { await markImageSeen(tid, character_id, r2Index!, false) } catch (markErr) {}
@@ -509,8 +548,8 @@ export async function POST(request: Request) {
         try {
           const available = await getAvailablePoolImage(normalizedTagKey, tid)
           if (available) {
-            imageUrl = available.r2_url
-            blurUrl = available.blur_r2_key || available.r2_url // Fallback
+            imageUrl = available.r2_key
+            blurUrl = available.blur_r2_key || available.r2_key
             imageId = available.id
             source = 'pool'
             modelUsed = 'pool'
@@ -532,7 +571,7 @@ export async function POST(request: Request) {
              SELECT COUNT(*) FROM image_generations
              WHERE telegram_id = ? AND tag_key = ? AND created_at >= datetime('now', '-30 days')
            ) < ?`,
-          [tid, character_id, normalizedTagKey, 'deepinfra', level.level, tid, normalizedTagKey, MAX_GENERATIONS_PER_CONTEXT_PER_USER]
+          [tid, character_id, normalizedTagKey, 'runware', level.level, tid, normalizedTagKey, MAX_GENERATIONS_PER_CONTEXT_PER_USER]
         )
 
         if (reservation.rowsAffected === 0) {
@@ -544,23 +583,6 @@ export async function POST(request: Request) {
         }
 
         const generationId = Number(reservation.lastInsertRowid)
-
-        const willUseWiro = level.level >= 4
-        if (willUseWiro && isVip) {
-          const tokens = await ensureWiroTokensRefilled(tid)
-          if (tokens <= 0) {
-            await execute(`DELETE FROM image_generations WHERE id = ?`, [generationId])
-            if (gemsCharged) await incrementGems(tid, imageCost)
-            return NextResponse.json({ error: 'wiro_tokens_exhausted', message: getWiroTokensExhaustedMessage(lang, character.character_name) }, { status: 429 })
-          }
-          const wiroMonthly = await countUserWiroLast30Days(tid)
-          if (wiroMonthly >= VIP_LIMITS.wiro_monthly) {
-            await execute(`DELETE FROM image_generations WHERE id = ?`, [generationId])
-            if (gemsCharged) await incrementGems(tid, imageCost)
-            return NextResponse.json({ error: 'wiro_monthly_limit', message: getWiroMonthlyLimitMessage(lang, character.character_name) }, { status: 429 })
-          }
-          await consumeWiroToken(tid)
-        }
 
         const autoScenes = character.gender === 'male' ? AUTO_SCENES_MALE : AUTO_SCENES_FEMALE
         const sceneHint = userHint || autoScenes[level.level] || autoScenes[1]
@@ -627,30 +649,14 @@ export async function POST(request: Request) {
       }
     }
 
-    if (!isFree && isVip) {
-      if (level.level <= 3) {
-        const sfwToday = await countSfwImageGenerationsLast24h(tid)
-        if (sfwToday < VIP_LIMITS.sfw_daily) useVipQuota = true
-      } else {
-        if (source === 'r2_static' || source === 'pool') {
-          const wiroMonthly = await countUserWiroLast30Days(tid)
-          if (wiroMonthly < VIP_LIMITS.wiro_monthly) {
-            const tokens = await ensureWiroTokensRefilled(tid)
-            if (tokens > 0) { useVipQuota = true; await consumeWiroToken(tid) }
-          }
-        } else { useVipQuota = true }
-      }
-    }
-
     let newGems = user.gems || 0
     let newPurchasedGems = user.purchased_gems || 0
     
-    // ✅ LÓGICA DE OFERTA (photo_offers en lugar de locked_photos)
+    // ✅ LÓGICA DE OFERTA (photo_offers)
     let offerId: number | null = null
     let publicBlurUrl = ''
 
     if (isDirectRequest) {
-      // Si es petición directa, la imagen ya se cobró y se muestra nítida
       if (gemsCharged) {
         newGems -= imageCost
         newPurchasedGems -= imageCost
@@ -733,4 +739,4 @@ export async function POST(request: Request) {
     console.error('[generate-image] error:', error)
     return NextResponse.json({ error: 'Error al generar la imagen' }, { status: 500 })
   }
-} 
+}
