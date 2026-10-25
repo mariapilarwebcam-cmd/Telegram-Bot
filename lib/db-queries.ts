@@ -446,20 +446,23 @@ export async function hasAnyMessage(
   return (row?.c ?? 0) > 0
 }
 
+// ✅ ACTUALIZADO: Ahora devuelve el ID del mensaje insertado
 export async function insertMessage(data: {
   telegram_id: string
   character_id: number
   role: string
   content: string
 }) {
-  return execute(
+  const res = await execute(
     `INSERT INTO conversation_history
       (telegram_id, character_id, role, content)
      VALUES (?, ?, ?, ?)`,
     [data.telegram_id, data.character_id, data.role, data.content]
   )
+  return { id: Number(res.lastInsertRowid) }
 }
 
+// ✅ ACTUALIZADO: Ahora devuelve un array con los IDs de los mensajes insertados
 export async function insertMessages(
   msgs: Array<{
     telegram_id: string
@@ -468,7 +471,7 @@ export async function insertMessages(
     content: string
   }>
 ) {
-  return transaction(
+  const results = await transaction(
     msgs.map((m) => ({
       sql: `INSERT INTO conversation_history
             (telegram_id, character_id, role, content)
@@ -476,6 +479,7 @@ export async function insertMessages(
       args: [m.telegram_id, m.character_id, m.role, m.content],
     }))
   )
+  return results.map((res) => ({ id: Number(res.lastInsertRowid) }))
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -647,8 +651,6 @@ export async function getPurchaseByChargeId(charge_id: string) {
 export async function getChatListData(telegram_id: string) {
   const chars = await getAllUserCharacters(telegram_id)
 
-  // ✅ FIX DE RENDIMIENTO: Hacemos la agrupación en SQL en lugar de en memoria.
-  // Solo trae el conteo y el último mensaje por personaje.
   const historySummary = await query<{
     character_id: number
     lastMessage: string
