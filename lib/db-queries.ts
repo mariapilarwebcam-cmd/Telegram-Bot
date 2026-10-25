@@ -24,7 +24,8 @@ const USER_COLS = `
   paying_referrals_count, age_verified, streak_count, longest_streak,
   last_daily_claim, referred_by, pending_referral_code,
   gender, interested_in, onboarding_complete,
-  last_proactive_at, proactive_count, bot_blocked
+  last_proactive_at, proactive_count, bot_blocked,
+  photo_tokens, photo_tokens_at
 `
 
 export async function getUser(telegram_id: string) {
@@ -100,8 +101,8 @@ export async function createUser(data: {
         (telegram_id, first_name, username, language, gems, purchased_gems,
          referral_code, referred_by, total_referrals, paying_referrals_count,
          hook_messages_remaining, hook_used, age_verified, pending_referral_code,
-         gender, interested_in, onboarding_complete)
-       VALUES (?, ?, ?, ?, ?, 0, ?, NULL, 0, 0, 0, 0, 0, ?, NULL, NULL, 0)`,
+         gender, interested_in, onboarding_complete, photo_tokens, photo_tokens_at)
+       VALUES (?, ?, ?, ?, ?, 0, ?, NULL, 0, 0, 0, 0, 0, ?, NULL, NULL, 0, 1, unixepoch())`,
       [
         data.telegram_id,
         data.first_name || 'User',
@@ -914,7 +915,7 @@ export async function getSubscriptionByChargeId(charge_id: string) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ✅ POOL v2 — Imágenes compartidas SIN repetir al mismo usuario
+// POOL — Imágenes compartidas SIN repetir al mismo usuario
 // ═══════════════════════════════════════════════════════════════
 
 export interface PoolImageRow {
@@ -925,7 +926,7 @@ export interface PoolImageRow {
   mood: string
   level_bucket: string
   r2_key: string
-  blur_r2_key: string | null // ✅ AÑADIDO
+  blur_r2_key: string | null
   r2_url: string
   prompt_used: string
   times_used: number
@@ -941,6 +942,7 @@ export async function getAvailablePoolImage(
   return queryOne<PoolImageRow>(
     `SELECT gi.* FROM generated_images gi
      WHERE gi.tag_key = ?
+       AND gi.status = 'active'
        AND NOT EXISTS (
          SELECT 1 FROM pool_image_views piv
          WHERE piv.pool_image_id = gi.id
@@ -1061,14 +1063,14 @@ export async function getPoolStats(): Promise<{
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ✅ IMAGE GENERATIONS TRACKING
+// IMAGE GENERATIONS TRACKING
 // ═══════════════════════════════════════════════════════════════
 
 export async function insertImageGeneration(data: {
   telegram_id: string
   character_id: number
   tag_key: string
-  model: 'deepinfra' | 'wiro' | 'r2' | 'pool'
+  model: 'runware' | 'r2' | 'pool'
   level: number
 }): Promise<void> {
   try {
@@ -1080,24 +1082,6 @@ export async function insertImageGeneration(data: {
     )
   } catch (e) {
     console.warn('[image_generations] insert failed:', e)
-  }
-}
-
-export async function countUserWiroLast30Days(
-  telegram_id: string
-): Promise<number> {
-  try {
-    const row = await queryOne<{ c: number }>(
-      `SELECT COUNT(*) AS c FROM image_generations
-       WHERE telegram_id = ?
-         AND model = 'wiro'
-         AND created_at >= datetime('now', '-30 days')`,
-      [telegram_id]
-    )
-    return row?.c ?? 0
-  } catch (e) {
-    console.warn('[image_generations] countUserWiroLast30Days failed:', e)
-    return 0
   }
 }
 
@@ -1121,118 +1105,7 @@ export async function countUserGenerationsForTag(
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ✅ WIRO TOKENS — Sistema de acumulación (1/día, cap 5)
-// ═══════════════════════════════════════════════════════════════
-
-export async function ensureWiroTokensRefilled(
-  telegram_id: string
-): Promise<number> {
-  try {
-    const user = await queryOne<{
-      wiro_tokens: number | null
-      wiro_last_refill_at: string | null
-    }>(
-      `SELECT
-         wiro_tokens,
-         wiro_last_refill_at
-       FROM users
-       WHERE telegram_id = ?
-       LIMIT 1`,
-      [telegram_id]
-    )
-
-    if (!user) return 0
-
-    const currentTokens = user.wiro_tokens
-    const lastRefill = user.wiro_last_refill_at
-
-    if (lastRefill == null || currentTokens == null) {
-      try {
-        await execute(
-          `UPDATE users
-           SET wiro_tokens = 1,
-               wiro_last_refill_at = datetime('now')
-           WHERE telegram_id = ?`,
-          [telegram_id]
-        )
-      } catch (e) {
-        console.warn('[wiro_tokens] init failed:', e)
-      }
-      return 1
-    }
-
-    const row = await queryOne<{ days: number }>(
-      `SELECT CAST(julianday('now') - julianday(?) AS INTEGER) AS days`,
-      [lastRefill]
-    )
-    const daysPassed = Math.max(0, row?.days ?? 0)
-
-    if (daysPassed === 0) {
-      return currentTokens
-    }
-
-    const WiroCap = 5
-    const newTokens = Math.min(currentTokens + daysPassed, WiroCap)
-
-    if (newTokens >= WiroCap) {
-      await execute(
-        `UPDATE users
-         SET wiro_tokens = ?,
-             wiro_last_refill_at = datetime('now')
-         WHERE telegram_id = ?`,
-        [WiroCap, telegram_id]
-      )
-    } else {
-      await execute(
-        `UPDATE users
-         SET wiro_tokens = ?,
-             wiro_last_refill_at = datetime(wiro_last_refill_at, '+' || ? || ' days')
-         WHERE telegram_id = ?`,
-        [newTokens, daysPassed, telegram_id]
-      )
-    }
-
-    return newTokens
-  } catch (e) {
-    console.warn('[wiro_tokens] ensureWiroTokensRefilled failed:', e)
-    return 1
-  }
-}
-
-export async function consumeWiroToken(
-  telegram_id: string
-): Promise<number> {
-  try {
-    const row = await queryOne<{ wiro_tokens: number }>(
-      `UPDATE users
-       SET wiro_tokens = MAX(COALESCE(wiro_tokens, 0) - 1, 0)
-       WHERE telegram_id = ?
-       RETURNING wiro_tokens`,
-      [telegram_id]
-    )
-    return row?.wiro_tokens ?? 0
-  } catch (e) {
-    console.warn('[wiro_tokens] consumeWiroToken failed:', e)
-    return 0
-  }
-}
-
-export async function getWiroTokens(
-  telegram_id: string
-): Promise<number> {
-  try {
-    const row = await queryOne<{ wiro_tokens: number | null }>(
-      `SELECT wiro_tokens FROM users WHERE telegram_id = ? LIMIT 1`,
-      [telegram_id]
-    )
-    return row?.wiro_tokens ?? 1
-  } catch {
-    return 1
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════
-// ✅ SEEN R2 INDICES
+// SEEN R2 INDICES
 // ═══════════════════════════════════════════════════════════════
 
 export async function getSeenR2Indices(
@@ -1255,7 +1128,7 @@ export async function getSeenR2Indices(
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ✅ SFW DAILY QUOTA
+// SFW DAILY QUOTA
 // ═══════════════════════════════════════════════════════════════
 
 export async function countSfwImageGenerationsLast24h(
@@ -1277,7 +1150,7 @@ export async function countSfwImageGenerationsLast24h(
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ✅ AUDIO TOKENS — Sistema de acumulación (1/día, cap 5)
+// AUDIO TOKENS — Sistema de acumulación (1/día, cap 5)
 // ═══════════════════════════════════════════════════════════════
 
 export async function ensureAudioTokensRefilled(
@@ -1388,7 +1261,7 @@ export async function getAudioTokens(
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ✅ FRENO DE MANO Y PASE DE MENSAJES (PASO 3)
+// FRENO DE MANO Y PASE DE MENSAJES
 // ═══════════════════════════════════════════════════════════════
 
 export async function getActivePass(telegram_id: string) {
@@ -1481,7 +1354,7 @@ export async function grantPass(telegram_id: string, limit: number = 150) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ✅ SISTEMA DE ETIQUETAS DE PREFERENCIAS (PASO 4)
+// SISTEMA DE ETIQUETAS DE PREFERENCIAS
 // ═══════════════════════════════════════════════════════════════
 
 export async function saveContentTags(photo_id: number, tags: string[]) {
