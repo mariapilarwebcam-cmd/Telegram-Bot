@@ -1944,6 +1944,46 @@ export default function ChatPage() {
           </div>
         </div>
       )}
+
+      {/* ✅ NUEVO: ANIMACIÓN DE CARGA (OVERLAY) CUANDO SE GENERA UNA FOTO */}
+      {generatingImage && (
+        <div 
+          className="modal-backdrop" 
+          style={{ 
+            zIndex: 9000, 
+            background: 'rgba(10, 5, 16, 0.85)', 
+            backdropFilter: 'blur(10px)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 16
+          }}
+        >
+          <div style={{
+            width: 80,
+            height: 80,
+            borderRadius: '50%',
+            background: 'linear-gradient(135deg, #ec4899 0%, #a855f7 100%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 36,
+            boxShadow: '0 0 40px rgba(236, 72, 153, 0.6)',
+            animation: 'pulseGlow 1.5s ease-in-out infinite'
+          }}>
+            📸
+          </div>
+          <div style={{ textAlign: 'center' }}>
+            <p style={{ color: '#fff', fontSize: 16, fontWeight: 700, margin: 0 }}>
+              {lang === 'es' ? `${displayName} está preparando la cámara...` : `${displayName} is preparing the camera...`}
+            </p>
+            <p style={{ color: '#a395c9', fontSize: 13, marginTop: 4 }}>
+              {lang === 'es' ? 'Esto tomará solo unos segundos' : 'This will take just a few seconds'}
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
