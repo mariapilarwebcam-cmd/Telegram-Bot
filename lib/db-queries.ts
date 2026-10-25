@@ -1485,3 +1485,59 @@ export async function grantPass(telegram_id: string, limit: number = 150) {
     [telegram_id]
   )
 }
+// ═══════════════════════════════════════════════════════════════
+// ✅ SISTEMA DE ETIQUETAS DE PREFERENCIAS (PASO 4)
+// ═══════════════════════════════════════════════════════════════
+
+export async function saveContentTags(photo_id: number, tags: string[]) {
+  if (!tags || tags.length === 0) return
+  try {
+    // Usamos un batch para insertar rápido y evitar duplicados
+    const statements = tags.map((tag) => ({
+      sql: `INSERT OR IGNORE INTO content_tags (photo_id, tag) VALUES (?, ?)`,
+      args: [photo_id, tag.trim().toLowerCase()]
+    }))
+    await transaction(statements)
+  } catch (e) {
+    console.warn('[content_tags] saveContentTags failed:', e)
+  }
+}
+
+export async function rewardUserTags(telegram_id: string, photo_id: number, delta: number) {
+  try {
+    // Buscamos las etiquetas de esa foto
+    const tags = await query<{ tag: string }>(
+      `SELECT tag FROM content_tags WHERE photo_id = ?`,
+      [photo_id]
+    )
+    if (tags.length === 0) return
+
+    // Sumamos (o restamos) el peso a cada etiqueta para este usuario
+    const statements = tags.map((t) => ({
+      sql: `INSERT INTO user_tag_scores (user_id, tag, score, updated_at) 
+            VALUES (?, ?, ?, unixepoch()) 
+            ON CONFLICT(user_id, tag) DO UPDATE SET 
+              score = score + ?, 
+              updated_at = unixepoch()`,
+      args: [telegram_id, t.tag, delta, delta]
+    }))
+    await transaction(statements)
+  } catch (e) {
+    console.warn('[user_tag_scores] rewardUserTags failed:', e)
+  }
+}
+
+export async function getUserTopTags(telegram_id: string, limit: number = 3): Promise<string[]> {
+  try {
+    const rows = await query<{ tag: string }>(
+      `SELECT tag FROM user_tag_scores 
+       WHERE user_id = ? AND score > 0 
+       ORDER BY score DESC LIMIT ?`,
+      [telegram_id, limit]
+    )
+    return rows.map(r => r.tag)
+  } catch (e) {
+    console.warn('[user_tag_scores] getUserTopTags failed:', e)
+    return []
+  }
+}
