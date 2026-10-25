@@ -1387,7 +1387,7 @@ export async function getAudioTokens(
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ✅ FRENO DE MANO Y PASE DE MENSAJES (ACTUALIZADO)
+// ✅ FRENO DE MANO Y PASE DE MENSAJES (PASO 3)
 // ═══════════════════════════════════════════════════════════════
 
 export async function getActivePass(telegram_id: string) {
@@ -1416,7 +1416,6 @@ export async function getSpendState(telegram_id: string) {
   
   if (!state) return null
   
-  // Si ha pasado más de 24h desde la última actualización, reiniciamos el contador
   if (now - state.last_updated > 86400) {
     await execute(
       `UPDATE spend_state SET gems_spent_24h = 0, level = 'green', last_updated = ? WHERE user_id = ?`,
@@ -1425,7 +1424,6 @@ export async function getSpendState(telegram_id: string) {
     return { gems_spent_24h: 0, level: 'green' }
   }
   
-  // Si estaba en descanso pero ya expiró, lo desbloqueamos
   if (state.level === 'rest' && state.rest_until < now) {
     await execute(
       `UPDATE spend_state SET gems_spent_24h = 0, level = 'green', last_updated = ? WHERE user_id = ?`,
@@ -1440,7 +1438,6 @@ export async function getSpendState(telegram_id: string) {
 export async function updateSpendState(telegram_id: string, amount: number) {
   const now = Math.floor(Date.now() / 1000)
   
-  // Sumar gasto
   await execute(
     `INSERT INTO spend_state (user_id, gems_spent_24h, last_updated) 
      VALUES (?, ?, ?)
@@ -1450,7 +1447,6 @@ export async function updateSpendState(telegram_id: string, amount: number) {
     [telegram_id, amount, now, amount, now]
   )
   
-  // Verificar si hay que cambiar de nivel
   const state = await queryOne<{ gems_spent_24h: number }>(
     `SELECT gems_spent_24h FROM spend_state WHERE user_id = ?`,
     [telegram_id]
@@ -1458,13 +1454,11 @@ export async function updateSpendState(telegram_id: string, amount: number) {
   
   if (state) {
     if (state.gems_spent_24h >= 500) {
-      // Nivel ROJO: Freno total por 24 horas
       await execute(
         `UPDATE spend_state SET level = 'rest', rest_until = ? WHERE user_id = ?`,
         [now + 86400, telegram_id]
       )
     } else if (state.gems_spent_24h >= 300) {
-      // Nivel ÁMBAR: Alerta (no bloquea, pero podríamos usarlo para no ofrecer banners)
       await execute(
         `UPDATE spend_state SET level = 'amber' WHERE user_id = ?`,
         [telegram_id]
@@ -1474,17 +1468,17 @@ export async function updateSpendState(telegram_id: string, amount: number) {
 }
 
 export async function grantPass(telegram_id: string, limit: number = 150) {
-  const expiresAt = Math.floor(Date.now() / 1000) + 86400 // 24 horas
+  const expiresAt = Math.floor(Date.now() / 1000) + 86400
   await execute(
     `INSERT INTO message_passes (user_id, expires_at, messages_limit) VALUES (?, ?, ?)`,
     [telegram_id, expiresAt, limit]
   )
-  // Reiniciamos su contador de gasto para que el pase no le bloquee las fotos
   await execute(
     `UPDATE spend_state SET gems_spent_24h = 0, level = 'green' WHERE user_id = ?`,
     [telegram_id]
   )
 }
+
 // ═══════════════════════════════════════════════════════════════
 // ✅ SISTEMA DE ETIQUETAS DE PREFERENCIAS (PASO 4)
 // ═══════════════════════════════════════════════════════════════
@@ -1492,7 +1486,6 @@ export async function grantPass(telegram_id: string, limit: number = 150) {
 export async function saveContentTags(photo_id: number, tags: string[]) {
   if (!tags || tags.length === 0) return
   try {
-    // Usamos un batch para insertar rápido y evitar duplicados
     const statements = tags.map((tag) => ({
       sql: `INSERT OR IGNORE INTO content_tags (photo_id, tag) VALUES (?, ?)`,
       args: [photo_id, tag.trim().toLowerCase()]
@@ -1505,14 +1498,12 @@ export async function saveContentTags(photo_id: number, tags: string[]) {
 
 export async function rewardUserTags(telegram_id: string, photo_id: number, delta: number) {
   try {
-    // Buscamos las etiquetas de esa foto
     const tags = await query<{ tag: string }>(
       `SELECT tag FROM content_tags WHERE photo_id = ?`,
       [photo_id]
     )
     if (tags.length === 0) return
 
-    // Sumamos (o restamos) el peso a cada etiqueta para este usuario
     const statements = tags.map((t) => ({
       sql: `INSERT INTO user_tag_scores (user_id, tag, score, updated_at) 
             VALUES (?, ?, ?, unixepoch()) 
