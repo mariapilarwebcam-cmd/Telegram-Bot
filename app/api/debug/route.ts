@@ -29,7 +29,7 @@ export async function GET(request: Request) {
     TELEGRAM_BOT_TOKEN: !!process.env.TELEGRAM_BOT_TOKEN,
     OPENROUTER_API_KEY: !!process.env.OPENROUTER_API_KEY,
     DEEPINFRA_TOKEN: !!process.env.DEEPINFRA_TOKEN,
-    WIRO_API_KEY: !!process.env.WIRO_API_KEY,
+    RUNWARE_API_KEY: !!process.env.RUNWARE_API_KEY, // ✅ Ahora revisamos Runware
     TELEGRAM_WEBHOOK_SECRET: !!process.env.TELEGRAM_WEBHOOK_SECRET,
     ADMIN_API_SECRET: !!process.env.ADMIN_API_SECRET,
     NEXT_PUBLIC_R2_PUBLIC_URL: process.env.NEXT_PUBLIC_R2_PUBLIC_URL || '❌ MISSING',
@@ -43,7 +43,7 @@ export async function GET(request: Request) {
     'NEXT_PUBLIC_SUPABASE_ANON_KEY',
     'SUPABASE_SERVICE_ROLE_KEY',
     'NEXT_PUBLIC_R2_PUBLIC_URL',
-    'WIRO_API_KEY',
+    'RUNWARE_API_KEY', // ✅ Reemplazamos WIRO por RUNWARE
     'TELEGRAM_BOT_TOKEN',
     'OPENROUTER_API_KEY',
     'DEEPINFRA_TOKEN',
