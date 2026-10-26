@@ -163,9 +163,14 @@ export default function ChatPage() {
 
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
   
-  // ✅ NUEVO: Estado para el Pase de Fantasía
+  // ✅ ESTADOS DEL PASE DE FANTASÍA
   const [hasFantasyPass, setHasFantasyPass] = useState(false)
   const [usingFantasyPass, setUsingFantasyPass] = useState(false)
+
+  // ✅ ESTADOS DEL ARMARIO (OUTFITS)
+  const [showWardrobe, setShowWardrobe] = useState(false)
+  const [wardrobeData, setWardrobeData] = useState<{ inventory: any[], owned: string[], equipped: string | null }>({ inventory: [], owned: [], equipped: null })
+  const [equippingOutfit, setEquippingOutfit] = useState(false)
 
   const endRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -250,7 +255,7 @@ export default function ChatPage() {
         setIsPremium(!!data.is_premium)
         setSeenImageCount(data.seen_image_count || 0)
         setActivePass(data.active_pass)
-        setHasFantasyPass(!!data.has_fantasy_pass) // ✅ Cargamos el Pase
+        setHasFantasyPass(!!data.has_fantasy_pass)
 
         const count = data.user_message_count || 0
         setTotalUserMessages(count)
@@ -415,6 +420,11 @@ export default function ChatPage() {
             if (typeof data.vip_messages_today === 'number') {
               setVipMessagesToday(data.vip_messages_today)
             }
+          } else if (data.vip_expired) {
+            setBlockedMessage(data.response || '')
+            setBlocked(true)
+            setMessages((p) => p.slice(0, -1))
+            setInput(text)
           } else {
             setBlockedMessage(data.response || '')
             setBlocked(true)
@@ -503,7 +513,7 @@ export default function ChatPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           character_id: characterId,
-          is_fantasy_pass: true, // ✅ Indicamos al backend que use el pase
+          is_fantasy_pass: true,
         }),
       })
       const data = await res.json()
@@ -520,7 +530,7 @@ export default function ChatPage() {
         setRecentlyUnlocked(data.image_url)
         setTimeout(() => setRecentlyUnlocked(null), 1000)
         
-        setHasFantasyPass(false) // Consumimos el pase visualmente
+        setHasFantasyPass(false)
         await refresh()
       } else {
         alert(data.error || 'Error al usar el Pase de Fantasía')
@@ -529,6 +539,68 @@ export default function ChatPage() {
       alert('Error de conexión')
     } finally {
       setUsingFantasyPass(false)
+    }
+  }
+
+  // ✅ FUNCIÓN PARA EQUIPAR/REGALAR OUTFIT
+  const handleEquipOutfit = async (outfitKey: string) => {
+    if (!character || equippingOutfit) return
+    setEquippingOutfit(true)
+
+    try {
+      const res = await tgFetch('/api/outfits/equip', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ character_id: characterId, outfit_key: outfitKey }),
+      })
+      const data = await res.json()
+
+      if (!res.ok) {
+        alert(data.message || data.error || 'Error al equipar')
+        setEquippingOutfit(false)
+        return
+      }
+
+      // Actualizamos el estado local del armario
+      setWardrobeData(prev => ({
+        ...prev,
+        equipped: outfitKey,
+        inventory: prev.inventory.filter(i => i.item_key !== outfitKey),
+        owned: prev.owned.includes(outfitKey) ? prev.owned : [...prev.owned, outfitKey]
+      }))
+
+      setShowWardrobe(false)
+
+      // ✅ Si es un outfit NUEVO, disparamos la foto de agradecimiento
+      if (data.is_new) {
+        const imgRes = await tgFetch('/api/generate-image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            character_id: characterId,
+            is_gift_photo: true,
+          }),
+        })
+        const imgData = await imgRes.json()
+
+        if (imgRes.ok && imgData.image_url) {
+          setMessages((p) => [
+            ...p,
+            {
+              id: imgData.message_id,
+              role: 'assistant',
+              content: `*${getDisplayName(character)} se sonroja y te muestra cómo le queda*\n\n"¡No puedo creer que me hayas comprado esto! Espera, déjame mostrarte..."\n\n![Regalo](${imgData.image_url})`,
+            },
+          ])
+          setRecentlyUnlocked(imgData.image_url)
+          setTimeout(() => setRecentlyUnlocked(null), 1000)
+          await refresh()
+        }
+      }
+    } catch (e) {
+      alert('Error de conexión')
+    } finally {
+      setEquippingOutfit(false)
     }
   }
 
@@ -1032,7 +1104,7 @@ export default function ChatPage() {
 
   const t = getTranslations(lang)
   const gems = user?.gems || 0
-  const bonusGems = (user as any)?.bonus_gems || 0 // ✅ Obtenemos las gemas de chat
+  const bonusGems = (user as any)?.bonus_gems || 0
   const purchasedGems = user?.purchased_gems || 0
   const hookRemaining = user?.hook_messages_remaining || 0
 
@@ -1226,6 +1298,31 @@ export default function ChatPage() {
                 {t.renameTitle}
               </button>
 
+              {/* ✅ NUEVO BOTÓN DE ARMARIO */}
+              <button
+                className="menu-item"
+                onClick={async () => {
+                  setMenuOpen(false)
+                  setShowWardrobe(true)
+                  try {
+                    const res = await tgFetch(`/api/outfits/available?character_id=${characterId}`)
+                    if (res.ok) {
+                      const data = await res.json()
+                      setWardrobeData({
+                        inventory: data.inventory_items || [],
+                        owned: data.character_owned || [],
+                        equipped: data.character_equipped || null
+                      })
+                    }
+                  } catch (e) {
+                    console.error(e)
+                  }
+                }}
+              >
+                <span style={{ fontSize: 16 }}>👗</span>
+                {lang === 'es' ? 'Armario / Regalos' : 'Wardrobe / Gifts'}
+              </button>
+
               <div style={{ height: 1, background: 'rgba(168, 85, 247, 0.15)', margin: '4px 8px' }} />
 
               <button
@@ -1279,7 +1376,6 @@ export default function ChatPage() {
           )}
         </div>
 
-        {/* ✅ HEADER: Mostramos las gemas de pago y las de chat (si hay) */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
           {bonusGems > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(34, 197, 94, 0.15)', padding: '5px 8px', borderRadius: 20, border: '1px solid rgba(34, 197, 94, 0.4)' }}>
@@ -1473,7 +1569,6 @@ export default function ChatPage() {
       </div>
 
       <div className="chat-input-bar">
-        {/* ✅ BOTÓN FLOTANTE PARA USAR EL PASE DE FANTASÍA */}
         {hasFantasyPass && (
           <div style={{ marginBottom: 12 }}>
             <button
@@ -1672,6 +1767,97 @@ export default function ChatPage() {
         </div>
       </div>
 
+      {/* MODAL DEL ARMARIO */}
+      {showWardrobe && (
+        <div className="modal-backdrop" onClick={() => setShowWardrobe(false)}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()} style={{ maxHeight: '80vh', overflowY: 'auto' }}>
+            <h3 className="modal-title" style={{ textAlign: 'center' }}>
+              {lang === 'es' ? 'Armario y Regalos' : 'Wardrobe & Gifts'}
+            </h3>
+            <p className="modal-desc" style={{ textAlign: 'center', marginBottom: 16 }}>
+              {lang === 'es' 
+                ? `Viste a ${displayName} con tus outfits.` 
+                : `Dress up ${displayName} with your outfits.`}
+            </p>
+
+            {wardrobeData.inventory.length === 0 && wardrobeData.owned.length === 0 ? (
+              <p style={{ textAlign: 'center', color: '#8b8b9e', fontSize: 13, padding: '20px 0' }}>
+                {lang === 'es' ? 'No tienes outfits. ¡Consíguelos en la Ruleta!' : 'You have no outfits. Get them in the Roulette!'}
+              </p>
+            ) : (
+              <>
+                {/* Outfits para regalar (Consumen inventario) */}
+                {wardrobeData.inventory.length > 0 && (
+                  <div style={{ marginBottom: 20 }}>
+                    <p style={{ fontSize: 12, color: '#a395c9', fontWeight: 700, marginBottom: 8, textTransform: 'uppercase' }}>
+                      🎁 Para regalar (se consume)
+                    </p>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                      {wardrobeData.inventory.map((item) => (
+                        <button
+                          key={item.id}
+                          onClick={() => handleEquipOutfit(item.item_key)}
+                          disabled={equippingOutfit}
+                          style={{
+                            padding: 12, borderRadius: 12,
+                            background: 'rgba(168, 85, 247, 0.1)', border: '1px solid rgba(168, 85, 247, 0.3)',
+                            color: '#fff', cursor: 'pointer', fontFamily: 'inherit',
+                            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6
+                          }}
+                        >
+                          <span style={{ fontSize: 24 }}>👗</span>
+                          <span style={{ fontSize: 12, fontWeight: 700 }}>{item.item_key}</span>
+                          <span style={{ fontSize: 10, color: '#fbbf24', fontWeight: 800 }}>REGALAR</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Outfits que ya posee el personaje (Solo alternan) */}
+                {wardrobeData.owned.length > 0 && (
+                  <div>
+                    <p style={{ fontSize: 12, color: '#a395c9', fontWeight: 700, marginBottom: 8, textTransform: 'uppercase' }}>
+                      👗 Armario del personaje (alternar)
+                    </p>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                      {wardrobeData.owned.map((key) => (
+                        <button
+                          key={key}
+                          onClick={() => handleEquipOutfit(key)}
+                          disabled={equippingOutfit}
+                          style={{
+                            padding: 12, borderRadius: 12,
+                            background: wardrobeData.equipped === key ? 'rgba(34, 197, 94, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                            border: wardrobeData.equipped === key ? '1px solid #22c55e' : '1px solid rgba(255,255,255,0.1)',
+                            color: wardrobeData.equipped === key ? '#22c55e' : '#fff',
+                            cursor: 'pointer', fontFamily: 'inherit',
+                            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6
+                          }}
+                        >
+                          <span style={{ fontSize: 24 }}>👗</span>
+                          <span style={{ fontSize: 12, fontWeight: 700 }}>{key}</span>
+                          {wardrobeData.equipped === key && <span style={{ fontSize: 10, fontWeight: 800 }}>EQUIPADO</span>}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+            
+            <button
+              onClick={() => setShowWardrobe(false)}
+              className="modal-btn secondary"
+              style={{ width: '100%', marginTop: 20 }}
+            >
+              {lang === 'es' ? 'Cerrar' : 'Close'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* LEVEL UP MODAL */}
       {levelUpModal && (
         <div className="modal-backdrop">
           <div className="modal-box level-up-modal">
@@ -1699,6 +1885,7 @@ export default function ChatPage() {
         </div>
       )}
 
+      {/* VIP LIMIT MODAL */}
       {showVipLimitModal && (
         <div className="modal-backdrop">
           <div className="modal-box level-up-modal">
@@ -1779,6 +1966,7 @@ export default function ChatPage() {
         </div>
       )}
 
+      {/* PREMIUM MODAL */}
       {showPremiumModal && (
         <div className="modal-backdrop">
           <div className="modal-box">
@@ -1799,6 +1987,7 @@ export default function ChatPage() {
         </div>
       )}
 
+      {/* RENAME MODAL */}
       {showRename && (
         <div className="modal-backdrop">
           <div className="modal-box">
@@ -1815,6 +2004,7 @@ export default function ChatPage() {
         </div>
       )}
 
+      {/* REPORT MODAL */}
       {showReportModal && (
         <div className="modal-backdrop" onClick={() => !reportSending && setShowReportModal(false)}>
           <div className="modal-box" onClick={(e) => e.stopPropagation()} style={{ maxHeight: '90vh', overflowY: 'auto' }}>
@@ -1947,6 +2137,7 @@ export default function ChatPage() {
         </div>
       )}
 
+      {/* BLOCKED MODAL */}
       {blocked && (
         <div className="modal-backdrop">
           <div className="modal-box danger">
@@ -1962,6 +2153,7 @@ export default function ChatPage() {
         </div>
       )}
 
+      {/* SELECTED IMAGE */}
       {selectedImage && (
         <div 
           className="modal-backdrop" 
@@ -2002,6 +2194,7 @@ export default function ChatPage() {
         </div>
       )}
 
+      {/* LOADING IMAGE OVERLAY */}
       {generatingImage && !usingFantasyPass && (
         <div 
           className="modal-backdrop" 
