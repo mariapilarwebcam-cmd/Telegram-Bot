@@ -23,7 +23,6 @@ export async function GET(request: Request) {
 
   try {
     // 1. Expirar ofertas que el usuario no desbloqueó en 24 horas
-    // En lugar de locked_photos, usamos photo_offers
     const expiredOffers = await query<{ id: number, user_id: string, image_id: number }>(
       `SELECT id, user_id, image_id FROM photo_offers WHERE state = 'locked' AND created_at < unixepoch() - 86400`
     )
@@ -37,17 +36,18 @@ export async function GET(request: Request) {
     await execute(`UPDATE user_tag_scores SET score = score * 0.95 WHERE score != 0`)
     await execute(`UPDATE learned_triggers SET weight = weight * 0.98 WHERE weight > 0`)
 
-    // ✅ 3. PROMOCIÓN DIFERIDA (Claude's Rule)
-    // Las fotos gratis o con token pasan a 'active' después de 24h si no tienen reportes
+    // ✅ 3. PROMOCIÓN DIFERIDA (Mejorada)
+    // Promovemos imágenes 'candidate' que tengan más de 24h, no tengan reportes,
+    // y que NO estén esperando ser desbloqueadas (es decir, que no estén en ofertas 'locked').
+    // Esto incluye fotos gratis, de regalo, pases de fantasía y peticiones directas.
     const promote = await execute(`
       UPDATE generated_images 
       SET status = 'active'
-      WHERE status = 'candidate' AND reports = 0
-        AND id IN (
-          SELECT image_id FROM photo_offers
-          WHERE state = 'unlocked' 
-            AND paid_with IN ('token', 'free')
-            AND unlocked_at < unixepoch() - 86400
+      WHERE status = 'candidate' 
+        AND reports = 0
+        AND created_at < unixepoch() - 86400
+        AND id NOT IN (
+          SELECT image_id FROM photo_offers WHERE state = 'locked'
         )
     `)
     stats.promoted_photos = promote.rowsAffected
