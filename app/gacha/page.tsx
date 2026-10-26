@@ -125,7 +125,6 @@ export default function GachaPage() {
   const targetPos = useRef(0)
   const currentPrize = useRef<Prize | null>(null)
 
-  // Inicializar el carrete con premios aleatorios
   useEffect(() => {
     if (reelItems.length === 0) {
       setReelItems(Array.from({ length: 20 }, () => getRandomPrize()))
@@ -142,7 +141,6 @@ export default function GachaPage() {
       .catch(console.error)
   }, [user?.telegram_id])
 
-  // BG Stars
   useEffect(() => {
     const cv = bgCanvasRef.current
     if (!cv) return
@@ -244,7 +242,7 @@ export default function GachaPage() {
     setTimeout(() => setIsShaking(false), 400)
 
     setTimeout(() => {
-      setResult(result) // Muestra el modal
+      setResult(result)
     }, 600)
   }
 
@@ -299,7 +297,6 @@ export default function GachaPage() {
       const resultPrize = getResultPrize(data)
       currentPrize.current = resultPrize
 
-      // INYECCIÓN DEL "CASI LO CONSIGO"
       const newItems = Array.from({ length: STRIP_LEN }, () => getRandomPrize())
       newItems[WIN_INDEX] = resultPrize
       
@@ -367,10 +364,21 @@ export default function GachaPage() {
         </div>
       </div>
 
-      <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', marginTop: 24 }}>
+      {/* CONTENEDOR CENTRAL DE LA MÁQUINA */}
+      <div style={{ position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'center', marginTop: 24, padding: '0 16px' }}>
+        
+        {/* PALANCA (Posicionada a la derecha sin descuadrar) */}
+        <div className="lever-wrap" ref={leverRef} onClick={handleSpin} style={{ position: 'absolute', right: '10px', bottom: '20px' }}>
+          <div className="lever-rail"></div>
+          <div className="lever-arm"><div className="lever-ball"></div></div>
+          <div className="lever-base"></div>
+          <span className="lever-tag">PULL</span>
+        </div>
+
         {/* MÁQUINA */}
-        <div className={`cabinet ${isShaking ? 'shaking' : ''}`}>
-          {/* Marquesina */}
+        <div className={`cabinet ${isShaking ? 'shaking' : ''}`} style={{ marginRight: '40px' /* Espacio para la palanca */ }}>
+          
+          {/* Marquesina 3D */}
           <div className="marquee">
             <div className="marquee-body">
               <p className="marquee-title">Taboo Realm</p>
@@ -383,7 +391,7 @@ export default function GachaPage() {
 
           {/* Cuerpo Central */}
           <div className="cab-body">
-            {/* PANTALLA (Marco con bordes superior/inferior pronunciados) */}
+            {/* PANTALLA (Cristal, profundidad, marco grueso) */}
             <div className="screen-frame">
               <div className={`reel-panel ${glowClass}`} ref={reelWindowRef}>
                 <div className="reel-inner">
@@ -440,33 +448,14 @@ export default function GachaPage() {
             </div>
           </div>
 
-          {/* Panel de Control */}
+          {/* Panel de Control (Botón Gigante) */}
           <div className="control-panel">
-            <div className="status-lights">
-              <div className={`slight ${glowClass.includes('rare') || glowClass.includes('epic') || glowClass.includes('legendary') || glowClass.includes('mythic') ? 'on-c' : ''}`}></div>
-              <div className={`slight ${glowClass.includes('epic') || glowClass.includes('legendary') || glowClass.includes('mythic') ? 'on-p' : ''}`}></div>
-              <div className={`slight ${glowClass.includes('legendary') || glowClass.includes('mythic') ? 'on-g' : ''}`}></div>
-            </div>
-            
             <button className="spin-btn" onClick={handleSpin} disabled={spinning}>
               {spinning ? '✦ GIRANDO...' : '⚡ GIRAR'}
             </button>
-            
-            <div className="coin-slot">
-              <div className="slot-hole"></div>
-              <span className="slot-label">INSERT</span>
-            </div>
           </div>
           
           <div className="cab-base"><div className="cab-foot"></div></div>
-        </div>
-
-        {/* PALANCA */}
-        <div className="lever-wrap" ref={leverRef} onClick={handleSpin}>
-          <div className="lever-rail"></div>
-          <div className="lever-arm"><div className="lever-ball"></div></div>
-          <div className="lever-base"></div>
-          <span className="lever-tag">PULL</span>
         </div>
       </div>
 
@@ -474,7 +463,7 @@ export default function GachaPage() {
 
       {error && <p style={{ color: '#fca5a5', fontSize: 13, textAlign: 'center', marginTop: 12, position: 'relative', zIndex: 10 }}>⚠️ {error}</p>}
 
-      {/* TABS Y GRILLAS (RESTAURADAS) */}
+      {/* TABS Y GRILLAS (Sin cambios, se ven preciosas) */}
       <div style={{ padding: '40px 24px 0', position: 'relative', zIndex: 10 }}>
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
           <button
@@ -583,108 +572,251 @@ export default function GachaPage() {
       )}
 
       <style jsx>{`
-        :root {
-            --neon-c: #22d3ee;
-            --gold-1: #ffe066;
+        /* =========================================
+           NUEVO CSS PREMIUM CON VOLUMEN Y CRISTAL
+        ========================================= */
+        .cabinet { 
+          position: relative; 
+          width: 100%; 
+          max-width: 320px; 
+          display: flex; 
+          flex-direction: column; 
+          align-items: center; 
+          /* Sombra pesada para dar volumen 3D */
+          filter: drop-shadow(0 25px 35px rgba(0,0,0,0.9)) drop-shadow(0 0 40px rgba(168,85,247,0.2)); 
+          transition: transform 0.1s; 
+          z-index: 2;
         }
-        .cabinet { position: relative; width: 100%; max-width: 360px; display: flex; flex-direction: column; align-items: center; filter: drop-shadow(0 20px 40px rgba(0,0,0,0.9)); transition: transform 0.1s; }
+        
         .cabinet.shaking { animation: shake 0.38s ease; }
-        @keyframes shake { 0%,100%{transform:translateX(0);} 20%{transform:translateX(-4px);} 40%{transform:translateX(4px);} 60%{transform:translateX(-3px);} 80%{transform:translateX(3px);} }
+        @keyframes shake { 
+          0%,100%{transform:translateX(0);} 
+          20%{transform:translateX(-4px);} 
+          40%{transform:translateX(4px);} 
+          60%{transform:translateX(-3px);} 
+          80%{transform:translateX(3px);} 
+        }
 
-        /* Marquesina */
-        .marquee { width: 100%; position: relative; margin-bottom: -2px; z-index: 2; }
-        .marquee-body { position: relative; margin: 0 10px; background: linear-gradient(180deg, #0d0b2a 0%, #150f24 100%); border-radius: 16px 16px 0 0; padding: 16px 20px 12px; border: 2px solid #b8860b; border-bottom: none; }
-        .marquee-title { text-align: center; font-size: 9px; font-weight: 700; letter-spacing: 0.28em; color: rgba(255,224,102,0.7); margin-bottom: 4px; }
-        .marquee-name { text-align: center; font-size: 18px; font-weight: 900; letter-spacing: 0.05em; background: linear-gradient(135deg, #22d3ee 0%, #ffe066 35%, #e879f9 65%, #f472b6 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; filter: drop-shadow(0 0 16px rgba(255,224,102,0.6)); }
-        .marquee-lights { display: flex; justify-content: center; gap: 4px; margin-top: 8px; }
-        .mlight { width: 6px; height: 6px; border-radius: 50%; background: #22d3ee; box-shadow: 0 0 8px #22d3ee; animation: mflicker 1.4s infinite; }
-        .mlight:nth-child(2n) { background: #ec4899; animation-delay: .2s; }
-        .mlight:nth-child(3n) { background: #a855f7; animation-delay: .4s; }
-        @keyframes mflicker { 0%,100%{opacity:1;} 45%{opacity:0.35;} 50%{opacity:1;} }
+        /* Marquesina con Efecto Cristal */
+        .marquee { width: 100%; position: relative; margin-bottom: -2px; z-index: 3; }
+        .marquee-body { 
+          position: relative; 
+          margin: 0 12px; 
+          background: linear-gradient(180deg, rgba(20, 15, 40, 0.95) 0%, rgba(10, 5, 20, 0.98) 100%);
+          backdrop-filter: blur(10px);
+          border-radius: 16px 16px 0 0; 
+          padding: 14px 20px 12px; 
+          border: 2px solid #c4b5fd; 
+          border-bottom: none; 
+          box-shadow: inset 0 4px 15px rgba(255,255,255,0.1), 0 0 15px rgba(196, 181, 253, 0.4);
+        }
+        .marquee-title { text-align: center; font-size: 9px; font-weight: 800; letter-spacing: 0.3em; color: #a78bfa; margin-bottom: 4px; text-shadow: 0 0 10px #a78bfa; }
+        .marquee-name { 
+          text-align: center; 
+          font-size: 18px; 
+          font-weight: 900; 
+          letter-spacing: 0.05em; 
+          background: linear-gradient(135deg, #ffe066 0%, #f472b6 50%, #22d3ee 100%); 
+          -webkit-background-clip: text; 
+          -webkit-text-fill-color: transparent; 
+          filter: drop-shadow(0 0 12px rgba(255,224,102,0.5)); 
+        }
+        .marquee-lights { display: flex; justify-content: center; gap: 5px; margin-top: 8px; }
+        .mlight { width: 6px; height: 6px; border-radius: 50%; background: #22d3ee; box-shadow: 0 0 10px #22d3ee; animation: mflicker 1.4s infinite; }
+        .mlight:nth-child(2n) { background: #ec4899; box-shadow: 0 0 10px #ec4899; animation-delay: .2s; }
+        .mlight:nth-child(3n) { background: #a855f7; box-shadow: 0 0 10px #a855f7; animation-delay: .4s; }
+        @keyframes mflicker { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
 
-        /* Cuerpo */
-        .cab-body { width: 100%; position: relative; background: linear-gradient(180deg, #150f24 0%, #1f1733 40%, #0a0510 100%); border-left: 4px solid #7a4f10; border-right: 4px solid #7a4f10; padding: 16px 10px; z-index: 1; }
+        /* Cuerpo Central Metálico */
+        .cab-body { 
+          width: 100%; 
+          position: relative; 
+          background: linear-gradient(180deg, #1a1228 0%, #0d0820 100%); 
+          border-left: 4px solid #7a4f10; 
+          border-right: 4px solid #7a4f10; 
+          padding: 16px 14px; 
+          z-index: 1; 
+          box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
+        }
 
-        /* EL NUEVO MARCO DE PANTALLA (Bordes superior/inferior) */
+        /* El Monitor (Ventana de la Ruleta) */
         .screen-frame {
           width: 100%;
-          border-top: 4px solid #b8860b;
-          border-bottom: 4px solid #b8860b;
+          /* Borde metálico grueso simulando la pantalla */
+          border: 3px solid #b8860b;
           border-radius: 8px;
           background: #060514;
-          padding: 2px 0;
-          box-shadow: inset 0 0 20px rgba(0,0,0,0.9), 0 0 10px rgba(184,134,11,0.3);
+          padding: 2px;
+          box-shadow: 
+            inset 0 0 15px rgba(0,0,0,1), 
+            0 4px 10px rgba(0,0,0,0.5),
+            0 0 15px rgba(184,134,11,0.4);
         }
 
-        .reel-panel { position: relative; border-radius: 4px; padding: 2px; transition: box-shadow 0.5s ease; }
-        .reel-inner { background: linear-gradient(180deg, #060514 0%, #0d0b22 50%, #060514 100%); border-radius: 2px; overflow: hidden; position: relative; }
+        .reel-panel { position: relative; border-radius: 6px; padding: 2px; transition: box-shadow 0.5s ease; }
+        .reel-inner { background: linear-gradient(180deg, #060514 0%, #0d0b22 50%, #060514 100%); border-radius: 4px; overflow: hidden; position: relative; box-shadow: inset 0 10px 20px rgba(0,0,0,0.9); }
         
-        /* Ventana y rodillo */
-        .reel-window { position: relative; width: 100%; height: 120px; }
-        .selection-zone { position: absolute; top: 50%; left: 0; right: 0; transform: translateY(-50%); height: 88px; z-index: 8; pointer-events: none; }
+        .reel-window { position: relative; width: 100%; height: 110px; }
+        .selection-zone { position: absolute; top: 50%; left: 0; right: 0; transform: translateY(-50%); height: 80px; z-index: 8; pointer-events: none; }
         .selection-zone::before, .selection-zone::after { content: ''; position: absolute; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent 0%, #22d3ee 15%, #ffe066 50%, #22d3ee 85%, transparent 100%); box-shadow: 0 0 10px #22d3ee; }
         .selection-zone::before { top: 0; } .selection-zone::after { bottom: 0; }
         
         .arrow { position: absolute; left: 50%; transform: translateX(-50%); z-index: 25; filter: drop-shadow(0 0 8px #22d3ee); }
-        .arrow-top { top: -2px; } .arrow-bottom { bottom: -2px; }
+        .arrow-top { top: -4px; } .arrow-bottom { bottom: -4px; }
         
         .reel-clip { position: absolute; inset: 0; overflow: hidden; }
-        .reel-strip { display: flex; height: 120px; will-change: transform; align-items: center; }
-        .reel-item { width: 80px; height: 96px; padding: 4px; flex-shrink: 0; }
+        .reel-strip { display: flex; height: 110px; will-change: transform; align-items: center; }
+        .reel-item { width: 80px; height: 90px; padding: 4px; flex-shrink: 0; }
         
         .item-inner { width: 100%; height: 100%; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; position: relative; overflow: hidden; }
         
-        .reel-glass { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(255,255,255,0.04) 0%, transparent 40%, rgba(0,0,0,0.2) 100%); pointer-events: none; z-index: 15; }
+        .reel-glass { position: absolute; inset: 0; background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, transparent 40%, rgba(0,0,0,0.3) 100%); pointer-events: none; z-index: 15; }
         .fade-left { position: absolute; top: 0; bottom: 0; left: 0; width: 20%; background: linear-gradient(90deg, #060514 0%, transparent 100%); z-index: 12; pointer-events: none; }
         .fade-right { position: absolute; top: 0; bottom: 0; right: 0; width: 20%; background: linear-gradient(270deg, #060514 0%, transparent 100%); z-index: 12; pointer-events: none; }
 
         .impact-ring { position: absolute; top: 50%; left: 50%; width: 0; height: 0; border-radius: 50%; border: 2px solid transparent; transform: translate(-50%,-50%); pointer-events: none; z-index: 30; opacity: 0; }
         @keyframes impactWave { 0% { width: 60px; height: 60px; opacity: 0.9; border-color: var(--wave-color,#ec4899); } 100% { width: 300px; height: 120px; opacity: 0; border-color: var(--wave-color,#ec4899); } }
 
-        .cab-info { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; padding: 6px 10px; background: rgba(0,0,0,0.35); border-radius: 10px; border: 1px solid rgba(129,140,248,0.15); }
-        .info-gem { font-size: 10px; color: rgba(129,140,248,0.75); font-weight: 600; }
+        .cab-info { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; padding: 6px 10px; background: rgba(0,0,0,0.4); border-radius: 8px; border: 1px solid rgba(168,85,247,0.2); }
+        .info-gem { font-size: 10px; color: rgba(196,181,253,0.7); font-weight: 600; }
         .info-gem b { color: #c4b5fd; font-size: 12px; }
         .info-tier { font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; transition: color 0.3s; }
         .vents { display: flex; gap: 3px; }
         .vent { width: 2px; height: 10px; border-radius: 1px; background: rgba(255,224,102,0.15); }
 
-        .control-panel { background: linear-gradient(180deg, #1f1733 0%, #150f24 100%); border-left: 4px solid #7a4f10; border-right: 4px solid #7a4f10; padding: 16px 16px 12px; display: flex; align-items: center; justify-content: space-between; }
-        .status-lights { display: flex; flex-direction: column; gap: 4px; }
-        .slight { width: 6px; height: 16px; border-radius: 3px; background: #1a1535; transition: background 0.3s, box-shadow 0.3s; }
-        .slight.on-p { background: #a855f7; box-shadow: 0 0 8px #a855f7; }
-        .slight.on-c { background: #06b6d4; box-shadow: 0 0 8px #06b6d4; }
-        .slight.on-g { background: #ffe066; box-shadow: 0 0 8px #ffe066; }
+        /* Panel de control (Botón centrado y grande) */
+        .control-panel { 
+          background: linear-gradient(180deg, #150f24 0%, #0a0510 100%); 
+          border-left: 4px solid #7a4f10; 
+          border-right: 4px solid #7a4f10; 
+          padding: 16px; 
+          display: flex; 
+          justify-content: center; 
+          box-shadow: inset 0 5px 15px rgba(0,0,0,0.8);
+        }
         
-        .spin-btn { position: relative; width: 130px; height: 44px; border: none; cursor: pointer; border-radius: 12px; font-size: 13px; font-weight: 900; color: #fff; background: linear-gradient(135deg, #e879f9 0%, #ffe066 50%, #e879f9 100%); background-size: 200% 100%; box-shadow: 0 4px 20px rgba(232,121,249,0.5); transition: transform 0.1s; overflow: hidden; }
+        .spin-btn { 
+          position: relative; 
+          width: 85%; 
+          height: 50px; 
+          border: none; 
+          cursor: pointer; 
+          border-radius: 14px; 
+          font-size: 15px; 
+          font-weight: 900; 
+          color: #1a1228; 
+          background: linear-gradient(135deg, #f472b6 0%, #ffe066 50%, #f472b6 100%); 
+          background-size: 200% 100%; 
+          box-shadow: 
+            0 6px 20px rgba(244,114,182,0.6),
+            inset 0 2px 5px rgba(255,255,255,0.5);
+          transition: transform 0.1s; 
+          overflow: hidden; 
+        }
         .spin-btn:hover { background-position: 100% 0; transform: translateY(-1px); }
         .spin-btn:active { transform: scale(0.97); }
-        .spin-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
-
-        .coin-slot { display: flex; flex-direction: column; align-items: center; gap: 4px; }
-        .slot-hole { width: 20px; height: 4px; background: #000; border-radius: 2px; border: 1px solid rgba(129,140,248,0.35); }
-        .slot-label { font-size: 7px; color: rgba(255,224,102,0.4); letter-spacing: 0.1em; }
+        .spin-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; filter: grayscale(1); }
 
         .cab-base { width: 100%; }
-        .cab-foot { width: 100%; height: 16px; background: linear-gradient(180deg, #0e0b1e 0%, #07050f 100%); border-radius: 0 0 12px 12px; border: 2px solid #7a4f10; border-top: none; }
+        .cab-foot { 
+          width: 100%; 
+          height: 16px; 
+          background: linear-gradient(180deg, #0e0b1e 0%, #07050f 100%); 
+          border-radius: 0 0 12px 12px; 
+          border: 2px solid #7a4f10; 
+          border-top: none; 
+          box-shadow: 0 10px 20px rgba(0,0,0,0.9);
+        }
 
-        /* Palanca */
-        .lever-wrap { position: relative; width: 40px; height: 300px; display: flex; flex-direction: column; align-items: center; margin-bottom: 10px; margin-left: 4px; cursor: pointer; user-select: none; }
-        .lever-rail { position: absolute; top: 30px; bottom: 30px; left: 50%; transform: translateX(-50%); width: 8px; background: linear-gradient(90deg, #060514, #1f1733, #060514); border-radius: 4px; border: 1px solid rgba(129,140,248,0.2); }
-        .lever-arm { position: absolute; top: 40px; left: 50%; transform: translateX(-50%); width: 6px; height: 140px; background: linear-gradient(90deg, #b8860b, #c4b5fd 30%, #a5b4fc 60%, #3730a3); border-radius: 3px; transition: transform 0.15s ease; }
-        .lever-ball { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); width: 24px; height: 24px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #f9a8d4 0%, #f472b6 25%, #c026d3 60%, #701a75 100%); box-shadow: 0 4px 16px rgba(244,114,182,0.8), inset 0 -2px 6px rgba(0,0,0,0.4); }
-        .lever-base { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); width: 18px; height: 18px; border-radius: 50%; background: conic-gradient(from 90deg, #ffe066, #b8860b, #5a3a0c, #b8860b, #ffe066); }
-        .lever-tag { position: absolute; bottom: 0; font-size: 8px; letter-spacing: 0.15em; color: rgba(129,140,248,0.45); text-transform: uppercase; }
+        /* PALANCA (Rediseñada Premium) */
+        .lever-wrap { 
+          position: absolute; 
+          right: 0px; 
+          bottom: 10px; 
+          width: 50px; 
+          height: 260px; 
+          display: flex; 
+          flex-direction: column; 
+          align-items: center; 
+          cursor: pointer; 
+          user-select: none; 
+          z-index: 1;
+        }
+        
+        .lever-rail { 
+          position: absolute; 
+          top: 20px; 
+          bottom: 20px; 
+          left: 50%; 
+          transform: translateX(-50%); 
+          width: 10px; 
+          background: linear-gradient(90deg, #0a0510, #1f1733, #0a0510); 
+          border-radius: 5px; 
+          border: 1px solid rgba(168,85,247,0.3); 
+          box-shadow: inset 0 5px 10px rgba(0,0,0,0.9);
+        }
+        
+        .lever-arm { 
+          position: absolute; 
+          top: 30px; 
+          left: 50%; 
+          transform: translateX(-50%); 
+          width: 8px; 
+          height: 140px; 
+          background: linear-gradient(90deg, #7a4f10, #c4b5fd 30%, #a5b4fc 60%, #3730a3); 
+          border-radius: 4px; 
+          transition: transform 0.15s ease; 
+          box-shadow: 2px 2px 5px rgba(0,0,0,0.5);
+        }
+        
+        .lever-ball { 
+          position: absolute; 
+          top: -16px; 
+          left: 50%; 
+          transform: translateX(-50%); 
+          width: 30px; 
+          height: 30px; 
+          border-radius: 50%; 
+          background: radial-gradient(circle at 30% 30%, #fff 0%, #f472b6 20%, #c026d3 60%, #4c1d95 100%); 
+          box-shadow: 
+            0 6px 15px rgba(192,38,211,0.8), 
+            inset 0 -4px 8px rgba(0,0,0,0.6),
+            inset 4px 4px 8px rgba(255,255,255,0.4);
+        }
+        
+        .lever-base { 
+          position: absolute; 
+          bottom: 10px; 
+          left: 50%; 
+          transform: translateX(-50%); 
+          width: 24px; 
+          height: 24px; 
+          border-radius: 50%; 
+          background: conic-gradient(from 90deg, #ffe066, #7a4f10, #0a0510, #7a4f10, #ffe066); 
+          box-shadow: 0 4px 10px rgba(0,0,0,0.9);
+        }
+        
+        .lever-tag { 
+          position: absolute; 
+          bottom: -10px; 
+          font-size: 9px; 
+          letter-spacing: 0.2em; 
+          color: #a78bfa; 
+          text-transform: uppercase; 
+          font-weight: 800;
+          text-shadow: 0 0 8px #a78bfa;
+        }
 
-        .lever-wrap.pulling .lever-arm { transform: translateX(-50%) rotate(28deg); transition: transform 0.12s ease-in; }
-        .lever-wrap.releasing .lever-arm { transform: translateX(-50%) rotate(-5deg); transition: transform 0.25s ease-out; }
-        .lever-wrap.back .lever-arm { transform: translateX(-50%) rotate(0deg); transition: transform 0.35s cubic-bezier(0.34,1.56,0.64,1); }
+        .lever-wrap.pulling .lever-arm { transform: translateX(-50%) rotate(35deg); transition: transform 0.1s ease-in; }
+        .lever-wrap.releasing .lever-arm { transform: translateX(-50%) rotate(-5deg); transition: transform 0.2s ease-out; }
+        .lever-wrap.back .lever-arm { transform: translateX(-50%) rotate(0deg); transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1); }
 
         /* Glow Reactivo */
-        .glow-common { box-shadow: 0 0 20px rgba(129,140,248,0.4); }
-        .glow-rare { box-shadow: 0 0 30px rgba(6,182,212,0.6); }
-        .glow-epic { box-shadow: 0 0 40px rgba(168,85,247,0.8); }
-        .glow-legendary { box-shadow: 0 0 60px rgba(251,191,36,0.9); }
-        .glow-mythic { box-shadow: 0 0 70px rgba(236,72,153,1); }
+        .glow-common { box-shadow: inset 0 0 30px rgba(129,140,248,0.3), 0 0 20px rgba(129,140,248,0.4); }
+        .glow-rare { box-shadow: inset 0 0 30px rgba(6,182,212,0.5), 0 0 30px rgba(6,182,212,0.6); }
+        .glow-epic { box-shadow: inset 0 0 40px rgba(168,85,247,0.7), 0 0 40px rgba(168,85,247,0.8); }
+        .glow-legendary { box-shadow: inset 0 0 50px rgba(251,191,36,0.8), 0 0 50px rgba(251,191,36,0.9); }
+        .glow-mythic { box-shadow: inset 0 0 60px rgba(236,72,153,0.9), 0 0 60px rgba(236,72,153,1); }
 
         .skip-btn { position: fixed; bottom: 24px; right: 24px; z-index: 200; padding: 8px 16px; border-radius: 8px; border: 1px solid rgba(129,140,248,0.4); background: rgba(7,6,26,0.85); color: rgba(196,181,253,0.8); font-size: 11px; font-weight: 700; cursor: pointer; backdrop-filter: blur(4px); transition: opacity 0.2s; }
         .skip-btn:hover { border-color: rgba(34,211,238,0.6); color: #22d3ee; }
