@@ -93,18 +93,52 @@ export async function POST(request: Request) {
           rewardDetails = '¡Pase de Fantasía! (Foto Nivel 5 Ultra-Secreta)'
           itemKey = 'level_5'
         } else {
-          const outfit = await tx.execute({ 
-            sql: `SELECT id, name FROM gacha_outfits ORDER BY RANDOM() LIMIT 1`,
-            args: []
+          // ✅ OUTFIT PONDERADO POR RAREZA (Usando la DB)
+          // 5% legendary | 15% epic | 80% rare
+          const outfitRoll = Math.random() * 100
+          let targetRarity: 'rare' | 'epic' | 'legendary'
+          if (outfitRoll < 5) targetRarity = 'legendary'
+          else if (outfitRoll < 20) targetRarity = 'epic'
+          else targetRarity = 'rare'
+
+          // Buscar un outfit de esa rareza al azar
+          let outfit = await tx.execute({
+            sql: `SELECT id, name FROM gacha_outfits WHERE rarity = ? ORDER BY RANDOM() LIMIT 1`,
+            args: [targetRarity]
           })
-          const o = outfit.rows[0]
-          await tx.execute({
-            sql: `INSERT INTO user_inventory (user_id, item_type, item_key) VALUES (?, 'outfit', ?)`,
-            args: [tid, String(o.id)]
-          })
-          rewardType = 'outfit'
-          rewardDetails = `¡Outfit Exclusivo: ${o.name}!`
-          itemKey = String(o.id)
+
+          // Fallback: Si por alguna razón la DB no tiene ese tier, elige uno al azar
+          if (outfit.rows.length === 0) {
+            outfit = await tx.execute({
+              sql: `SELECT id, name FROM gacha_outfits ORDER BY RANDOM() LIMIT 1`,
+              args: []
+            })
+          }
+
+          if (outfit.rows.length > 0) {
+            const o = outfit.rows[0]
+            await tx.execute({
+              sql: `INSERT INTO user_inventory (user_id, item_type, item_key) VALUES (?, 'outfit', ?)`,
+              args: [tid, String(o.id)]
+            })
+
+            const rarityPrefix =
+              targetRarity === 'legendary' ? '🔥 ¡OUTFIT LEGENDARIO! ' :
+              targetRarity === 'epic'      ? '💜 ' : ''
+
+            rewardType = 'outfit'
+            rewardDetails = `${rarityPrefix}¡${o.name}!`
+            itemKey = String(o.id)
+          } else {
+            // Fallback final si la tabla gacha_outfits está vacía
+            await tx.execute({
+              sql: `INSERT INTO user_inventory (user_id, item_type, item_key) VALUES (?, 'fantasy_pass', 'level_5')`,
+              args: [tid]
+            })
+            rewardType = 'fantasy_pass'
+            rewardDetails = '¡Pase de Fantasía! (Foto Nivel 5 Ultra-Secreta)'
+            itemKey = 'level_5'
+          }
         }
 
       } else if (tier === 'rare') {
