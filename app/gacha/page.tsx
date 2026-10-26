@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useUser } from '@/lib/UserContext'
 import { tgFetch } from '@/lib/telegram-fetch'
@@ -17,6 +17,61 @@ const TIER_COLORS = {
 }
 
 const COST = 50
+
+// ─── Reel configuration ───
+const ITEM_WIDTH = 100
+const ITEM_HEIGHT = 120
+const FAST_SPEED = 40          // px por frame en fase rápida
+const MIN_SPIN_TIME = 900      // ms mínimo de giro rápido (antes de frenar)
+const LANDING_DURATION = 2200  // ms de desaceleración
+const WIN_OFFSET = 24          // items adelante del actual donde se coloca el ganador
+
+interface Prize {
+  icon: string
+  label: string
+  color: string
+  tier: string
+}
+
+const REEL_POOL: Prize[] = [
+  { icon: '💬', label: '+15', color: '#a395c9', tier: 'common' },
+  { icon: '💬', label: '+20', color: '#a395c9', tier: 'common' },
+  { icon: '💬', label: '+25', color: '#a395c9', tier: 'common' },
+  { icon: '💬', label: '+30', color: '#a395c9', tier: 'common' },
+  { icon: '💬', label: '+35', color: '#06b6d4', tier: 'rare' },
+  { icon: '💬', label: '+40', color: '#06b6d4', tier: 'rare' },
+  { icon: '📸', label: 'Foto', color: '#06b6d4', tier: 'rare' },
+  { icon: '🎵', label: 'Audio', color: '#06b6d4', tier: 'rare' },
+  { icon: '👗', label: 'Outfit', color: '#a855f7', tier: 'epic' },
+  { icon: '🎟️', label: 'Pase', color: '#a855f7', tier: 'epic' },
+  { icon: '👑', label: 'Personaje', color: '#fbbf24', tier: 'legendary' },
+  { icon: '🔥', label: 'Mítico', color: '#ec4899', tier: 'mythic' },
+]
+
+function getRandomPrize(): Prize {
+  const r = Math.random() * 100
+  let idx: number
+  if (r < 40) idx = Math.floor(Math.random() * 4)            // gems comunes
+  else if (r < 65) idx = 4 + Math.floor(Math.random() * 2)   // gems raras
+  else if (r < 82) idx = 6 + Math.floor(Math.random() * 2)   // foto/audio
+  else if (r < 93) idx = 8 + Math.floor(Math.random() * 2)   // outfit/pase
+  else if (r < 98) idx = 10                                   // personaje
+  else idx = 11                                               // mítico
+  return { ...REEL_POOL[idx] }
+}
+
+function getResultPrize(result: any): Prize {
+  const tierColor = (TIER_COLORS as any)[result.tier]?.color || '#a395c9'
+  const tier = result.tier
+  if (result.reward_type === 'gacha_character') {
+    return { icon: tier === 'mythic' ? '🔥' : '👑', label: 'Personaje', color: tierColor, tier }
+  }
+  if (result.reward_type === 'fantasy_pass') return { icon: '🎟️', label: 'Pase', color: tierColor, tier }
+  if (result.reward_type === 'outfit') return { icon: '👗', label: 'Outfit', color: tierColor, tier }
+  if (result.reward_type === 'photo_token') return { icon: '📸', label: 'Foto', color: tierColor, tier }
+  if (result.reward_type === 'audio_token') return { icon: '🎵', label: 'Audio', color: tierColor, tier }
+  return { icon: '💬', label: `+${result.item_key}`, color: tierColor, tier }
+}
 
 const getItemImageUrl = (itemId: string) => {
   const base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL
@@ -53,10 +108,40 @@ export default function GachaPage() {
   const [result, setResult] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'characters' | 'outfits'>('characters')
-  
+
   const [ownedCharacters, setOwnedCharacters] = useState<string[]>([])
   const [loadingChars, setLoadingChars] = useState(true)
 
+  // ─── Reel refs y estado ───
+  const [reelItems, setReelItems] = useState<Prize[]>([])
+  const reelRef = useRef<HTMLDivElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const positionRef = useRef(0)
+  const targetRef = useRef(0)
+  const phaseRef = useRef<'idle' | 'fast' | 'landing'>('idle')
+  const landingStartRef = useRef(0)
+  const landingStartPosRef = useRef(0)
+  const rafRef = useRef(0)
+  const spinStartRef = useRef(0)
+  const spinningRef = useRef(false)
+  const handleLandingCompleteRef = useRef<() => void>(() => {})
+
+  // Inicializar preview del reel
+  useEffect(() => {
+    if (reelItems.length === 0) {
+      setReelItems(Array.from({ length: 20 }, () => getRandomPrize()))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Cleanup en unmount
+  useEffect(() => {
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+    }
+  }, [])
+
+  // Cargar personajes poseídos
   useEffect(() => {
     if (!user?.telegram_id) return
     tgFetch('/api/characters')
@@ -70,41 +155,116 @@ export default function GachaPage() {
       .finally(() => setLoadingChars(false))
   }, [user?.telegram_id])
 
+  // ─── Animation loop ───
+  const tick = (time: number) => {
+    if (phaseRef.current === 'fast') {
+      positionRef.current -= FAST_SPEED
+      if (reelRef.current) {
+        reelRef.current.style.transform = `translateX(${positionRef.current}px)`
+      }
+      rafRef.current = requestAnimationFrame(tick)
+      return
+    }
+    if (phaseRef.current === 'landing') {
+      const elapsed = time - landingStartRef.current
+      const t = Math.min(1, elapsed / LANDING_DURATION)
+      // Ease-out cuadrático: la velocidad inicial coincide con la del fast spin → transición sin saltos
+      const eased = 1 - (1 - t) * (1 - t)
+      const pos = landingStartPosRef.current + (targetRef.current - landingStartPosRef.current) * eased
+      positionRef.current = pos
+      if (reelRef.current) {
+        reelRef.current.style.transform = `translateX(${pos}px)`
+      }
+      if (t >= 1) {
+        phaseRef.current = 'idle'
+        handleLandingCompleteRef.current()
+        return
+      }
+      rafRef.current = requestAnimationFrame(tick)
+      return
+    }
+  }
+
+  const startLanding = (resultData: any) => {
+    const currentIndex = Math.floor(-positionRef.current / ITEM_WIDTH)
+    const winIndex = currentIndex + WIN_OFFSET
+
+    const items = [...reelItems]
+    while (items.length <= winIndex + 3) {
+      items.push(getRandomPrize())
+    }
+    items[winIndex] = getResultPrize(resultData)
+    setReelItems(items)
+
+    const containerWidth = containerRef.current?.offsetWidth || 340
+    const targetX = containerWidth / 2 - (winIndex * ITEM_WIDTH + ITEM_WIDTH / 2)
+
+    // Establecer fase y capturar posición de forma atómica (sin frames en medio)
+    phaseRef.current = 'landing'
+    targetRef.current = targetX
+    landingStartPosRef.current = positionRef.current
+    landingStartRef.current = performance.now()
+
+    handleLandingCompleteRef.current = () => {
+      setResult(resultData)
+      setSpinning(false)
+      spinningRef.current = false
+      refresh().catch(() => {})
+      if (resultData.reward_type === 'gacha_character') {
+        setOwnedCharacters(prev => [...prev, resultData.item_key])
+      }
+    }
+  }
+
   const handleSpin = async () => {
-    if (!user || spinning) return
+    if (!user || spinningRef.current) return
     if ((user.purchased_gems || 0) < COST) {
       setError(lang === 'es' ? 'Necesitas 50 gemas compradas para tirar.' : 'You need 50 purchased gems to spin.')
       return
     }
 
+    spinningRef.current = true
     setSpinning(true)
     setResult(null)
     setError(null)
 
-    const minWait = new Promise(resolve => setTimeout(resolve, 2500))
+    // Preparar reel nuevo
+    const initialItems = Array.from({ length: 150 }, () => getRandomPrize())
+    setReelItems(initialItems)
+    positionRef.current = 0
+    if (reelRef.current) {
+      reelRef.current.style.transform = 'translateX(0px)'
+    }
+
+    spinStartRef.current = Date.now()
+    phaseRef.current = 'fast'
+    rafRef.current = requestAnimationFrame(tick)
 
     try {
       const res = await tgFetch('/api/gacha/spin', { method: 'POST' })
       const data = await res.json()
 
-      await minWait
+      const elapsed = Date.now() - spinStartRef.current
+      if (elapsed < MIN_SPIN_TIME) {
+        await new Promise(r => setTimeout(r, MIN_SPIN_TIME - elapsed))
+      }
 
       if (!res.ok) {
+        phaseRef.current = 'idle'
+        cancelAnimationFrame(rafRef.current)
         setError(data.message || 'Error al girar la ruleta')
         setSpinning(false)
+        spinningRef.current = false
         return
       }
 
-      setResult(data)
-      await refresh()
-      
-      if (data.reward_type === 'gacha_character') {
-         setOwnedCharacters(prev => [...prev, data.item_key])
-      }
+      startLanding(data)
     } catch (e: any) {
-      await minWait
+      phaseRef.current = 'idle'
+      cancelAnimationFrame(rafRef.current)
       setError('Error de conexión. Intenta de nuevo.')
       setSpinning(false)
+      spinningRef.current = false
     }
   }
 
@@ -118,7 +278,7 @@ export default function GachaPage() {
 
   return (
     <div className="page" style={{ paddingBottom: 32, minHeight: '100vh', overflow: 'hidden' }}>
-      
+
       <header className="page-header" style={{ background: 'transparent', borderBottom: 'none', position: 'relative' }}>
         <button
           onClick={() => router.push('/')}
@@ -151,55 +311,121 @@ export default function GachaPage() {
         )}
       </div>
 
-      <div style={{ marginTop: 40, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-        <div style={{ position: 'absolute', width: 300, height: 300, background: 'radial-gradient(circle, rgba(236,72,153,0.2) 0%, transparent 60%)', filter: 'blur(40px)', zIndex: 0, animation: 'pulseGlow 4s infinite' }} />
+      {/* ═══════════════════ REEL SLOT MACHINE ═══════════════════ */}
+      <div style={{ marginTop: 32, padding: '0 16px' }}>
+        <div style={{ position: 'relative', maxWidth: 500, margin: '0 auto' }}>
+          {/* Glow */}
+          <div style={{
+            position: 'absolute', top: '50%', left: '50%',
+            transform: 'translate(-50%, -50%)',
+            width: 320, height: 200,
+            background: 'radial-gradient(circle, rgba(236,72,153,0.3) 0%, transparent 70%)',
+            filter: 'blur(40px)',
+            pointerEvents: 'none',
+            zIndex: 0,
+            animation: 'pulseGlow 4s infinite',
+          }} />
 
-        <div style={{
-          width: 220,
-          height: 280,
-          borderRadius: 24,
-          background: 'linear-gradient(145deg, #1f1733 0%, #150f24 100%)',
-          border: '2px solid rgba(168, 85, 247, 0.4)',
-          boxShadow: '0 20px 50px rgba(0,0,0,0.8), inset 0 0 30px rgba(168,85,247,0.2)',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          position: 'relative',
-          zIndex: 1,
-          transition: 'transform 0.2s',
-          animation: spinning ? 'shake 0.5s infinite' : 'float 3s infinite ease-in-out'
-        }}>
-          {/* ✅ IMAGEN DEL COFRE CON BORDES REDONDEADOS Y SOMBRA PREMIUM */}
-          <img 
-            src={getItemImageUrl('roulette_chest')} 
-            alt="Roulette Chest"
-            style={{ 
-              width: 150, 
-              height: 150, 
-              objectFit: 'cover',
-              borderRadius: 20, // ✅ Bordes redondeados
-              boxShadow: '0 10px 30px rgba(0,0,0,0.8), 0 0 20px rgba(236,72,153,0.6)', // ✅ Sombra 3D
-              border: '1px solid rgba(255,255,255,0.1)',
-              animation: spinning ? 'spinFast 1s infinite linear' : 'none' 
-            }}
-            onError={(e) => {
-              (e.target as HTMLImageElement).src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="140" height="140" viewBox="0 0 24 24" fill="none" stroke="%23ec4899" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>';
-            }}
-          />
-          <p style={{ color: '#f0abfc', fontWeight: 900, letterSpacing: '0.1em', marginTop: 16, fontSize: 14 }}>
-            {spinning ? 'GIRANDO...' : 'TOCA PARA GIRAR'}
-          </p>
+          <div style={{ position: 'relative', zIndex: 1 }}>
+            {/* Flecha superior */}
+            <div style={{
+              position: 'absolute', top: -4, left: '50%',
+              transform: 'translateX(-50%)',
+              width: 0, height: 0,
+              borderLeft: '10px solid transparent',
+              borderRight: '10px solid transparent',
+              borderTop: '12px solid #ec4899',
+              zIndex: 20,
+              filter: 'drop-shadow(0 0 8px #ec4899)',
+            }} />
+            {/* Flecha inferior */}
+            <div style={{
+              position: 'absolute', bottom: -4, left: '50%',
+              transform: 'translateX(-50%)',
+              width: 0, height: 0,
+              borderLeft: '10px solid transparent',
+              borderRight: '10px solid transparent',
+              borderBottom: '12px solid #ec4899',
+              zIndex: 20,
+              filter: 'drop-shadow(0 0 8px #ec4899)',
+            }} />
+
+            {/* Ventana del reel */}
+            <div ref={containerRef} style={{
+              overflow: 'hidden',
+              borderRadius: 16,
+              padding: '14px 0',
+              background: 'linear-gradient(180deg, #150f24 0%, #1f1733 50%, #150f24 100%)',
+              border: '2px solid rgba(168,85,247,0.45)',
+              boxShadow: 'inset 0 4px 20px rgba(0,0,0,0.85), 0 20px 50px rgba(0,0,0,0.6)',
+              position: 'relative',
+            }}>
+              <div ref={reelRef} style={{ display: 'flex', willChange: 'transform' }}>
+                {reelItems.map((item, i) => (
+                  <div key={i} style={{
+                    width: ITEM_WIDTH,
+                    height: ITEM_HEIGHT,
+                    padding: 5,
+                    boxSizing: 'border-box',
+                    flexShrink: 0,
+                  }}>
+                    <div style={{
+                      width: '100%',
+                      height: '100%',
+                      borderRadius: 10,
+                      background: `linear-gradient(180deg, ${item.color}25 0%, ${item.color}05 100%)`,
+                      border: `2px solid ${item.color}60`,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 4,
+                      boxShadow: `0 0 10px ${item.color}30, inset 0 0 8px ${item.color}15`,
+                    }}>
+                      <span style={{ fontSize: 30, lineHeight: 1 }}>{item.icon}</span>
+                      <span style={{
+                        fontSize: 9,
+                        fontWeight: 900,
+                        color: item.color,
+                        textAlign: 'center',
+                        textShadow: `0 0 8px ${item.color}80`,
+                        letterSpacing: '0.02em',
+                      }}>
+                        {item.label}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Línea central */}
+              <div style={{
+                position: 'absolute', top: 0, bottom: 0, left: '50%',
+                width: 2,
+                background: 'linear-gradient(180deg, transparent 0%, #ec4899 30%, #ec4899 70%, transparent 100%)',
+                transform: 'translateX(-50%)',
+                pointerEvents: 'none',
+                zIndex: 10,
+                boxShadow: '0 0 12px #ec4899',
+                opacity: 0.7,
+              }} />
+
+              {/* Fades laterales */}
+              <div style={{ position: 'absolute', top: 0, bottom: 0, left: 0, width: '12%', background: 'linear-gradient(90deg, #150f24 0%, transparent 100%)', pointerEvents: 'none', zIndex: 5 }} />
+              <div style={{ position: 'absolute', top: 0, bottom: 0, right: 0, width: '12%', background: 'linear-gradient(270deg, #150f24 0%, transparent 100%)', pointerEvents: 'none', zIndex: 5 }} />
+            </div>
+          </div>
         </div>
       </div>
 
+      {/* ═══════════════════ SPIN BUTTON ═══════════════════ */}
       <div style={{ padding: '32px 24px 0', position: 'relative', zIndex: 10 }}>
         {error && (
           <p style={{ color: '#fca5a5', fontSize: 13, textAlign: 'center', marginBottom: 12, background: 'rgba(220,38,38,0.1)', padding: 8, borderRadius: 8 }}>
             ⚠️ {error}
           </p>
         )}
-        
+
         <button
           onClick={handleSpin}
           disabled={spinning || (user.purchased_gems || 0) < COST}
@@ -222,13 +448,13 @@ export default function GachaPage() {
             gap: 8,
           }}
         >
-          {spinning ? 'Abriendo el cofre...' : (
+          {spinning ? 'Girando...' : (
             <>
               <span>🎰</span> Tirar por {COST} Gemas
             </>
           )}
         </button>
-        
+
         {!spinning && (user.purchased_gems || 0) < COST && (
           <button
             onClick={() => router.push('/shop')}
@@ -239,6 +465,7 @@ export default function GachaPage() {
         )}
       </div>
 
+      {/* ═══════════════════ TABS ═══════════════════ */}
       <div style={{ padding: '40px 24px 0', position: 'relative', zIndex: 1 }}>
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
           <button
@@ -248,7 +475,7 @@ export default function GachaPage() {
               background: activeTab === 'characters' ? 'rgba(168, 85, 247, 0.2)' : 'rgba(255,255,255,0.05)',
               color: activeTab === 'characters' ? '#f0abfc' : '#8b8b9e',
               fontWeight: 800, fontFamily: 'inherit', fontSize: 13,
-              borderBottom: activeTab === 'characters' ? '2px solid #a855f7' : '2px solid transparent'
+              borderBottom: activeTab === 'characters' ? '2px solid #a855f7' : '2px solid transparent',
             }}
           >
             👑 Personajes
@@ -260,7 +487,7 @@ export default function GachaPage() {
               background: activeTab === 'outfits' ? 'rgba(6, 182, 212, 0.2)' : 'rgba(255,255,255,0.05)',
               color: activeTab === 'outfits' ? '#06b6d4' : '#8b8b9e',
               fontWeight: 800, fontFamily: 'inherit', fontSize: 13,
-              borderBottom: activeTab === 'outfits' ? '2px solid #06b6d4' : '2px solid transparent'
+              borderBottom: activeTab === 'outfits' ? '2px solid #06b6d4' : '2px solid transparent',
             }}
           >
             👗 Outfits
@@ -274,29 +501,29 @@ export default function GachaPage() {
               const name = isFemale ? CHARACTER_NAMES_FEMALE[arch] : CHARACTER_NAMES_MALE[arch]
               const imgUrl = getCharacterImageUrl(arch, isFemale ? 'female' : 'male')
               const hasChar = ownedCharacters.includes(arch)
-              
+
               return (
-                <div key={arch} style={{ 
-                  aspectRatio: '3/4', borderRadius: 12, 
+                <div key={arch} style={{
+                  aspectRatio: '3/4', borderRadius: 12,
                   background: 'linear-gradient(180deg, rgba(31,23,51,0.8) 0%, rgba(10,5,16,0.9) 100%)',
                   border: hasChar ? '1px solid #22c55e' : '1px solid rgba(168,85,247,0.2)',
                   display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                  position: 'relative', overflow: 'hidden'
+                  position: 'relative', overflow: 'hidden',
                 }}>
                   {imgUrl && (
-                    <img 
-                      src={imgUrl} 
-                      alt={name} 
-                      style={{ 
+                    <img
+                      src={imgUrl}
+                      alt={name}
+                      style={{
                         position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top',
-                        filter: hasChar ? 'none' : 'grayscale(100%)', 
-                        opacity: hasChar ? 1 : 0.4 
-                      }} 
+                        filter: hasChar ? 'none' : 'grayscale(100%)',
+                        opacity: hasChar ? 1 : 0.4,
+                      }}
                     />
                   )}
-                  
+
                   <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(10,5,16,0.9) 0%, transparent 50%)' }} />
-                  
+
                   <div style={{ position: 'absolute', bottom: 4, width: '100%', textAlign: 'center' }}>
                     <span style={{ fontSize: 10, fontWeight: 900, color: hasChar ? '#22c55e' : '#f5f0ff', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                       {name}
@@ -315,22 +542,22 @@ export default function GachaPage() {
         {activeTab === 'outfits' && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
             {SHOWCASE_OUTFITS.map((outfit) => (
-              <div key={outfit.id} style={{ 
-                borderRadius: 12, 
-                background: 'rgba(255,255,255,0.03)', 
+              <div key={outfit.id} style={{
+                borderRadius: 12,
+                background: 'rgba(255,255,255,0.03)',
                 border: '1px solid rgba(255,255,255,0.08)',
                 overflow: 'hidden',
                 display: 'flex', flexDirection: 'column',
               }}>
-                <div style={{ 
-                  width: '100%', 
-                  aspectRatio: '3/4', 
+                <div style={{
+                  width: '100%',
+                  aspectRatio: '3/4',
                   backgroundImage: `url('${getItemImageUrl(outfit.id)}')`,
                   backgroundSize: 'cover',
                   backgroundPosition: 'center',
-                  backgroundColor: '#150f24'
+                  backgroundColor: '#150f24',
                 }} />
-                
+
                 <div style={{ padding: '10px 8px', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: '#f5f0ff' }}>{outfit.name}</div>
                   <div style={{ fontSize: 9, color: TIER_COLORS[outfit.rarity as keyof typeof TIER_COLORS].color, fontWeight: 800 }}>
@@ -343,7 +570,7 @@ export default function GachaPage() {
         )}
       </div>
 
-      {/* ✅ SECCIÓN DE INFORMACIÓN ACTUALIZADA */}
+      {/* ═══════════════════ INFO ═══════════════════ */}
       <div style={{ padding: '40px 24px 0', position: 'relative', zIndex: 1 }}>
         <div style={{ padding: 16, borderRadius: 16, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
           <h3 style={{ fontSize: 14, fontWeight: 800, color: '#f0abfc', margin: '0 0 12px 0', textAlign: 'center' }}>
@@ -360,20 +587,21 @@ export default function GachaPage() {
         </div>
       </div>
 
+      {/* ═══════════════════ RESULT MODAL ═══════════════════ */}
       {result && (
         <div className="modal-backdrop" style={{ zIndex: 9999, background: 'rgba(5, 2, 10, 0.95)', backdropFilter: 'blur(10px)' }}>
-          <div 
-            className="modal-box level-up-modal" 
-            style={{ 
-              textAlign: 'center', 
+          <div
+            className="modal-box level-up-modal"
+            style={{
+              textAlign: 'center',
               border: `2px solid ${TIER_COLORS[result.tier as keyof typeof TIER_COLORS].color}`,
-              boxShadow: `0 0 40px ${TIER_COLORS[result.tier as keyof typeof TIER_COLORS].color}40`
+              boxShadow: `0 0 40px ${TIER_COLORS[result.tier as keyof typeof TIER_COLORS].color}40`,
             }}
           >
             <div style={{ fontSize: 64, marginBottom: 16, animation: 'levelUpSparkle 1.5s infinite' }}>
               {result.tier === 'common' ? '💬' : result.tier === 'rare' ? '📸' : result.tier === 'epic' ? '🎟️' : result.tier === 'legendary' ? '👑' : '🔥'}
             </div>
-            
+
             <p style={{ fontSize: 12, fontWeight: 900, letterSpacing: '0.2em', color: TIER_COLORS[result.tier as keyof typeof TIER_COLORS].color, margin: 0, textShadow: `0 0 10px ${TIER_COLORS[result.tier as keyof typeof TIER_COLORS].color}` }}>
               ¡HAS OBTENIDO UN PREMIO {TIER_COLORS[result.tier as keyof typeof TIER_COLORS].label}!
             </p>
@@ -400,23 +628,9 @@ export default function GachaPage() {
       )}
 
       <style jsx>{`
-        @keyframes shake {
-          0% { transform: translate(1px, 1px) rotate(0deg); }
-          10% { transform: translate(-1px, -2px) rotate(-1deg); }
-          20% { transform: translate(-3px, 0px) rotate(1deg); }
-          30% { transform: translate(3px, 2px) rotate(0deg); }
-          40% { transform: translate(1px, -1px) rotate(1deg); }
-          50% { transform: translate(-1px, 2px) rotate(-1deg); }
-          60% { transform: translate(-3px, 1px) rotate(0deg); }
-          70% { transform: translate(3px, 1px) rotate(-1deg); }
-          80% { transform: translate(-1px, -1px) rotate(1deg); }
-          90% { transform: translate(1px, 2px) rotate(0deg); }
-          100% { transform: translate(1px, -2px) rotate(-1deg); }
-        }
-        @keyframes spinFast {
-          0% { transform: rotate(0deg) scale(1); }
-          50% { transform: rotate(180deg) scale(1.1); }
-          100% { transform: rotate(360deg) scale(1); }
+        @keyframes pulseGlow {
+          0%, 100% { opacity: 0.5; transform: translate(-50%, -50%) scale(1); }
+          50% { opacity: 0.8; transform: translate(-50%, -50%) scale(1.15); }
         }
       `}</style>
     </div>
