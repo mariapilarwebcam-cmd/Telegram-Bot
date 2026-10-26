@@ -6,7 +6,7 @@ import { useUser } from '@/lib/UserContext'
 import { tgFetch } from '@/lib/telegram-fetch'
 import { getTranslations } from '@/lib/i18n'
 import { AnimatedNumber } from '@/components/AnimatedNumber'
-import { GACHA_ARCHETYPES, CHARACTER_NAMES_FEMALE, CHARACTER_NAMES_MALE } from '@/lib/constants'
+import { GACHA_ARCHETYPES, CHARACTER_NAMES_FEMALE, CHARACTER_NAMES_MALE, getCharacterImageUrl } from '@/lib/constants'
 
 const TIER_COLORS = {
   common: { color: '#a395c9', bg: 'rgba(163, 149, 201, 0.1)', border: 'rgba(163, 149, 201, 0.3)', label: 'COMÚN' },
@@ -18,14 +18,18 @@ const TIER_COLORS = {
 
 const COST = 50
 
-// ✅ Función para obtener la imagen del R2
+// ✅ FIX: Función corregida para usar la carpeta 'item/' y manejar .png / .jpg
 const getItemImageUrl = (itemId: string) => {
   const base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL
   if (!base) return ''
-  return `${base.replace(/\/$/, '')}/items/${itemId}.jpg`
+  
+  // Si es el cofre, es .png. Si es un outfit, es .jpg
+  const ext = itemId === 'roulette_chest' ? 'png' : 'jpg'
+  
+  return `${base.replace(/\/$/, '')}/item/${itemId}.${ext}`
 }
 
-// ✅ Lista completa de Outfits (11 femeninos + 4 masculinos)
+// ✅ Lista completa de Outfits (11 femeninos + 5 masculinos)
 const SHOWCASE_OUTFITS = [
   // 👩 Femeninos
   { id: 'outfit_red_lace', name: 'Encaje Rojo', rarity: 'epic' },
@@ -40,10 +44,11 @@ const SHOWCASE_OUTFITS = [
   { id: 'outfit_nurse', name: 'Enfermera', rarity: 'rare' },
   { id: 'outfit_police', name: 'Policía Sexy', rarity: 'rare' },
 
-  // 👨 Masculinos
+  // 👨 Masculinos (Incluye al Bailarín ✅)
   { id: 'outfit_male_pirate', name: 'Pirata', rarity: 'epic' },
   { id: 'outfit_male_firefighter', name: 'Bombero', rarity: 'epic' },
   { id: 'outfit_male_gladiator', name: 'Gladiador', rarity: 'legendary' },
+  { id: 'outfit_male_dancer', name: 'Bailarín', rarity: 'legendary' },
   { id: 'outfit_male_towel', name: 'Toalla de Baño', rarity: 'rare' },
 ]
 
@@ -56,6 +61,23 @@ export default function GachaPage() {
   const [result, setResult] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'characters' | 'outfits'>('characters')
+  
+  // ✅ Estado para saber qué personajes Gacha tiene el usuario
+  const [ownedCharacters, setOwnedCharacters] = useState<string[]>([])
+  const [loadingChars, setLoadingChars] = useState(true)
+
+  useEffect(() => {
+    if (!user?.telegram_id) return
+    tgFetch('/api/characters')
+      .then(res => res.json())
+      .then(data => {
+        if (data.characters) {
+          setOwnedCharacters(data.characters.map((c: any) => c.archetype))
+        }
+      })
+      .catch(console.error)
+      .finally(() => setLoadingChars(false))
+  }, [user?.telegram_id])
 
   const handleSpin = async () => {
     if (!user || spinning) return
@@ -68,14 +90,13 @@ export default function GachaPage() {
     setResult(null)
     setError(null)
 
-    // Simulamos una animación de 2.5 segundos para generar emoción
     const minWait = new Promise(resolve => setTimeout(resolve, 2500))
 
     try {
       const res = await tgFetch('/api/gacha/spin', { method: 'POST' })
       const data = await res.json()
 
-      await minWait // Esperamos a que termine la animación
+      await minWait
 
       if (!res.ok) {
         setError(data.message || 'Error al girar la ruleta')
@@ -84,7 +105,12 @@ export default function GachaPage() {
       }
 
       setResult(data)
-      await refresh() // Actualizamos las gemas del usuario
+      await refresh()
+      
+      // Si ganó un personaje, lo agregamos a la lista local
+      if (data.reward_type === 'gacha_character') {
+         setOwnedCharacters(prev => [...prev, data.item_key])
+      }
     } catch (e: any) {
       await minWait
       setError('Error de conexión. Intenta de nuevo.')
@@ -92,7 +118,6 @@ export default function GachaPage() {
     }
   }
 
-  // Si el usuario no ha cargado
   if (userLoading || !user) {
     return (
       <div className="spinner-full">
@@ -138,7 +163,7 @@ export default function GachaPage() {
         )}
       </div>
 
-      {/* LA MÁQUINA / CAJA FUERTE */}
+      {/* LA MÁQUINA / CAJA FUERTE (CON IMAGEN DE R2) */}
       <div style={{ 
         marginTop: 40, 
         display: 'flex', 
@@ -147,7 +172,6 @@ export default function GachaPage() {
         justifyContent: 'center',
         position: 'relative'
       }}>
-        {/* Efectos de luces de fondo */}
         <div style={{ position: 'absolute', width: 300, height: 300, background: 'radial-gradient(circle, rgba(236,72,153,0.2) 0%, transparent 60%)', filter: 'blur(40px)', zIndex: 0, animation: 'pulseGlow 4s infinite' }} />
 
         <div style={{
@@ -166,9 +190,21 @@ export default function GachaPage() {
           transition: 'transform 0.2s',
           animation: spinning ? 'shake 0.5s infinite' : 'float 3s infinite ease-in-out'
         }}>
-          <div style={{ fontSize: 80, filter: 'drop-shadow(0 0 20px rgba(236,72,153,0.8))', animation: spinning ? 'spinFast 1s infinite linear' : 'none' }}>
-            {spinning ? '🎰' : '🎁'}
-          </div>
+          {/* ✅ IMAGEN DEL COFRE DESDE R2 */}
+          <img 
+            src={getItemImageUrl('roulette_chest')} 
+            alt="Roulette Chest"
+            style={{ 
+              width: 140, 
+              height: 140, 
+              objectFit: 'contain',
+              filter: 'drop-shadow(0 0 20px rgba(236,72,153,0.8))', 
+              animation: spinning ? 'spinFast 1s infinite linear' : 'none' 
+            }}
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="140" height="140" viewBox="0 0 24 24" fill="none" stroke="%23ec4899" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>';
+            }}
+          />
           <p style={{ color: '#f0abfc', fontWeight: 900, letterSpacing: '0.1em', marginTop: 16, fontSize: 14 }}>
             {spinning ? 'GIRANDO...' : 'TOCA PARA GIRAR'}
           </p>
@@ -251,34 +287,57 @@ export default function GachaPage() {
           </button>
         </div>
 
-        {/* VITRINA: PERSONAJES */}
+        {/* ✅ VITRINA: PERSONAJES (Grises si no los tienes, a color si sí) */}
         {activeTab === 'characters' && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
             {GACHA_ARCHETYPES.map((arch) => {
               const isFemale = arch === 'succubus' || arch === 'fallen_angel' || arch === 'werewolf_f' || arch === 'cyborg_assassin'
               const name = isFemale ? CHARACTER_NAMES_FEMALE[arch] : CHARACTER_NAMES_MALE[arch]
+              const imgUrl = getCharacterImageUrl(arch, isFemale ? 'female' : 'male')
+              const hasChar = ownedCharacters.includes(arch)
               
               return (
                 <div key={arch} style={{ 
                   aspectRatio: '3/4', borderRadius: 12, 
                   background: 'linear-gradient(180deg, rgba(31,23,51,0.8) 0%, rgba(10,5,16,0.9) 100%)',
-                  border: '1px solid rgba(168,85,247,0.2)',
+                  border: hasChar ? '1px solid #22c55e' : '1px solid rgba(168,85,247,0.2)',
                   display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                   position: 'relative', overflow: 'hidden'
                 }}>
-                  <div style={{ fontSize: 24, opacity: 0.2, filter: 'grayscale(1)' }}>👤</div>
-                  <div style={{ position: 'absolute', inset: 0, background: 'rgba(10,5,16,0.6)', backdropFilter: 'blur(2px)' }} />
-                  <div style={{ position: 'absolute', fontSize: 18, fontWeight: 900, color: 'rgba(255,255,255,0.7)' }}>?</div>
+                  {/* Imagen del personaje */}
+                  {imgUrl && (
+                    <img 
+                      src={imgUrl} 
+                      alt={name} 
+                      style={{ 
+                        position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top',
+                        filter: hasChar ? 'none' : 'grayscale(100%)', 
+                        opacity: hasChar ? 1 : 0.4 
+                      }} 
+                    />
+                  )}
+                  
+                  {/* Capa oscura para legibilidad del texto */}
+                  <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(10,5,16,0.9) 0%, transparent 50%)' }} />
+                  
+                  {/* Nombre del personaje */}
                   <div style={{ position: 'absolute', bottom: 4, width: '100%', textAlign: 'center' }}>
-                    <span style={{ fontSize: 8, fontWeight: 800, color: '#fbbf24', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Exclusivo</span>
+                    <span style={{ fontSize: 10, fontWeight: 900, color: hasChar ? '#22c55e' : '#f5f0ff', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      {name}
+                    </span>
                   </div>
+
+                  {/* Si ya lo tiene, ponemos un check */}
+                  {hasChar && (
+                    <div style={{ position: 'absolute', top: 4, right: 4, fontSize: 12 }}>✅</div>
+                  )}
                 </div>
               )
             })}
           </div>
         )}
 
-        {/* ✅ VITRINA: OUTFITS CON IMÁGENES */}
+        {/* VITRINA: OUTFITS CON IMÁGENES */}
         {activeTab === 'outfits' && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
             {SHOWCASE_OUTFITS.map((outfit) => (
@@ -289,7 +348,6 @@ export default function GachaPage() {
                 overflow: 'hidden',
                 display: 'flex', flexDirection: 'column',
               }}>
-                {/* Imagen real desde R2 */}
                 <div style={{ 
                   width: '100%', 
                   aspectRatio: '3/4', 
@@ -299,7 +357,6 @@ export default function GachaPage() {
                   backgroundColor: '#150f24'
                 }} />
                 
-                {/* Texto y rareza */}
                 <div style={{ padding: '10px 8px', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: '#f5f0ff' }}>{outfit.name}</div>
                   <div style={{ fontSize: 9, color: TIER_COLORS[outfit.rarity as keyof typeof TIER_COLORS].color, fontWeight: 800 }}>
@@ -310,6 +367,22 @@ export default function GachaPage() {
             ))}
           </div>
         )}
+      </div>
+
+      {/* ✅ NUEVA SECCIÓN: INFORMACIÓN DE LA RULETA */}
+      <div style={{ padding: '40px 24px 0', position: 'relative', zIndex: 1 }}>
+        <div style={{ padding: 16, borderRadius: 16, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
+          <h3 style={{ fontSize: 14, fontWeight: 800, color: '#f0abfc', margin: '0 0 12px 0', textAlign: 'center' }}>
+            ℹ️ ¿Cómo funciona la Ruleta?
+          </h3>
+          <ul style={{ paddingLeft: 20, margin: 0, display: 'flex', flexDirection: 'column', gap: 8, fontSize: 12, color: '#c4b5fd', lineHeight: 1.5 }}>
+            <li>Cada tirada cuesta <strong>50 Gemas de Pago</strong>.</li>
+            <li>Puedes ganar <strong>Gemas de Chat</strong> (para hablar), <strong>Outfits</strong> (para regalar), o <strong>Pases de Fantasía</strong> (fotos nivel 5).</li>
+            <li>Los <strong>Personajes Exclusivos</strong> solo se pueden desbloquear aquí. Si ya los tienes, se marcan con un ✅.</li>
+            <li>Si tienes mala suerte, no te preocupes: <strong>cada 10 tiradas</strong> (500 gemas) el sistema te garantiza un premio Épico o superior.</li>
+            <li>Los Outfits que ganes se guardan en tu inventario. Puedes regalárselos a tus personajes desde la pantalla de chat.</li>
+          </ul>
+        </div>
       </div>
 
       {/* MODAL DE RESULTADO */}
