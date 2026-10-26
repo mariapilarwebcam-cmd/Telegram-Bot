@@ -40,6 +40,13 @@ function getGradient(key: string) {
   return GRADIENTS[Math.abs(h) % GRADIENTS.length]
 }
 
+// ✅ NUEVA FUNCIÓN: Obtener la imagen del outfit desde R2
+const getItemImageUrl = (itemId: string) => {
+  const base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL
+  if (!base) return ''
+  return `${base.replace(/\/$/, '')}/items/${itemId}.jpg`
+}
+
 const HOOK_ROTATIONS_ES: Array<(n: number) => string> = [
   (n) => `🎁 ${n} gratis`,
   (n) => `✨ ${n} restantes`,
@@ -1799,15 +1806,26 @@ export default function ChatPage() {
                           onClick={() => handleEquipOutfit(item.item_key)}
                           disabled={equippingOutfit}
                           style={{
-                            padding: 12, borderRadius: 12,
+                            padding: 0, borderRadius: 12,
                             background: 'rgba(168, 85, 247, 0.1)', border: '1px solid rgba(168, 85, 247, 0.3)',
                             color: '#fff', cursor: 'pointer', fontFamily: 'inherit',
-                            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6
+                            display: 'flex', flexDirection: 'column', alignItems: 'center',
+                            overflow: 'hidden'
                           }}
                         >
-                          <span style={{ fontSize: 24 }}>👗</span>
-                          <span style={{ fontSize: 12, fontWeight: 700 }}>{item.item_key}</span>
-                          <span style={{ fontSize: 10, color: '#fbbf24', fontWeight: 800 }}>REGALAR</span>
+                          <div style={{ 
+                            width: '100%', aspectRatio: '3/4', 
+                            backgroundImage: `url('${getItemImageUrl(item.item_key)}')`, 
+                            backgroundSize: 'cover', backgroundPosition: 'center' 
+                          }} />
+                          <div style={{ padding: 8, textAlign: 'center', width: '100%' }}>
+                            <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'capitalize', display: 'block' }}>
+                              {item.item_key.replace('outfit_', '').replace('_', ' ')}
+                            </span>
+                            <span style={{ fontSize: 9, color: '#fbbf24', fontWeight: 800, display: 'block', marginTop: 4 }}>
+                              REGALAR
+                            </span>
+                          </div>
                         </button>
                       ))}
                     </div>
@@ -1827,17 +1845,31 @@ export default function ChatPage() {
                           onClick={() => handleEquipOutfit(key)}
                           disabled={equippingOutfit}
                           style={{
-                            padding: 12, borderRadius: 12,
-                            background: wardrobeData.equipped === key ? 'rgba(34, 197, 94, 0.2)' : 'rgba(255, 255, 255, 0.05)',
-                            border: wardrobeData.equipped === key ? '1px solid #22c55e' : '1px solid rgba(255,255,255,0.1)',
+                            padding: 0, borderRadius: 12,
+                            background: wardrobeData.equipped === key ? 'rgba(34, 197, 94, 0.1)' : 'rgba(255, 255, 255, 0.05)',
+                            border: wardrobeData.equipped === key ? '2px solid #22c55e' : '1px solid rgba(255,255,255,0.1)',
                             color: wardrobeData.equipped === key ? '#22c55e' : '#fff',
                             cursor: 'pointer', fontFamily: 'inherit',
-                            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6
+                            display: 'flex', flexDirection: 'column', alignItems: 'center',
+                            overflow: 'hidden'
                           }}
                         >
-                          <span style={{ fontSize: 24 }}>👗</span>
-                          <span style={{ fontSize: 12, fontWeight: 700 }}>{key}</span>
-                          {wardrobeData.equipped === key && <span style={{ fontSize: 10, fontWeight: 800 }}>EQUIPADO</span>}
+                          <div style={{ 
+                            width: '100%', aspectRatio: '3/4', 
+                            backgroundImage: `url('${getItemImageUrl(key)}')`, 
+                            backgroundSize: 'cover', backgroundPosition: 'center',
+                            opacity: wardrobeData.equipped === key ? 1 : 0.7
+                          }} />
+                          <div style={{ padding: 8, textAlign: 'center', width: '100%' }}>
+                            <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'capitalize', display: 'block' }}>
+                              {key.replace('outfit_', '').replace('_', ' ')}
+                            </span>
+                            {wardrobeData.equipped === key && (
+                              <span style={{ fontSize: 9, fontWeight: 800, display: 'block', marginTop: 4 }}>
+                                EQUIPADO
+                              </span>
+                            )}
+                          </div>
                         </button>
                       ))}
                     </div>
