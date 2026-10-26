@@ -10,7 +10,7 @@ import {
   getActiveSubscription,
   ensureAudioTokensRefilled,
 } from '@/lib/db-queries'
-import { queryOne } from '@/lib/turso'
+import { queryOne, execute } from '@/lib/turso' // ✅ Añadido execute
 import { generateShortAudioLine, generateAudio } from '@/lib/ai'
 import { getLevelFromMessages, getAudioCost } from '@/lib/levels'
 import { getLevelPersonality } from '@/lib/constants'
@@ -46,15 +46,25 @@ export async function POST(request: Request) {
     const isVip = !!vipSub
 
     // ═══════════════════════════════════════════════════════════
-    // PASO 1 — COBRO ATÓMICO ANTICIPADO (Previene DoS)
+    // PASO 1 — COBRO (Prioridad: Audio Gratis > VIP > Gemas)
     // ═══════════════════════════════════════════════════════════
-    let paymentMode: 'vip_token' | 'gems' = 'gems'
+    let paymentMode: 'free_token' | 'vip_token' | 'gems' = 'gems'
     let availableTokens = 0
 
-    if (isVip) {
+    // 1. Revisar si tiene un Audio Gratis de la Ruleta
+    const freeToken = await queryOne<{ id: number }>(
+      `SELECT id FROM user_inventory WHERE user_id = ? AND item_type = 'audio_token' LIMIT 1`,
+      [tid]
+    )
+    
+    if (freeToken) {
+      // Consumir el token del inventario
+      await execute(`DELETE FROM user_inventory WHERE id = ?`, [freeToken.id])
+      paymentMode = 'free_token'
+    } else if (isVip) {
+      // 2. Revisar Tokens VIP
       availableTokens = await ensureAudioTokensRefilled(tid)
       if (availableTokens > 0) {
-        // Descontar token de forma atómica (solo si tiene > 0)
         const tokenDeducted = await queryOne<{ audio_tokens: number }>(
           `UPDATE users SET audio_tokens = audio_tokens - 1 WHERE telegram_id = ? AND audio_tokens > 0 RETURNING audio_tokens`,
           [tid]
@@ -65,8 +75,8 @@ export async function POST(request: Request) {
       }
     }
 
+    // 3. Si no hay tokens ni VIP, cobrar gemas
     if (paymentMode === 'gems') {
-      // Descontar gemas de forma atómica (solo si tiene saldo suficiente)
       const gemDeducted = await queryOne<{ purchased_gems: number, gems: number }>(
         `UPDATE users 
          SET purchased_gems = purchased_gems - ?, 
@@ -95,10 +105,13 @@ export async function POST(request: Request) {
     // Función interna para reembolsar si la IA falla
     // ═══════════════════════════════════════════════════════════
     const refund = async () => {
-      if (paymentMode === 'vip_token') {
-        await queryOne(`UPDATE users SET audio_tokens = audio_tokens + 1 WHERE telegram_id = ?`, [tid])
-      } else {
-        await queryOne(
+      if (paymentMode === 'free_token') {
+        // Devolver el audio gratis al inventario
+        await execute(`INSERT INTO user_inventory (user_id, item_type, item_key) VALUES (?, 'audio_token', 'free')`, [tid])
+      } else if (paymentMode === 'vip_token') {
+        await execute(`UPDATE users SET audio_tokens = audio_tokens + 1 WHERE telegram_id = ?`, [tid])
+      } else if (paymentMode === 'gems') {
+        await execute(
           `UPDATE users SET purchased_gems = purchased_gems + ?, gems = gems + ? WHERE telegram_id = ?`,
           [audioCost, audioCost, tid]
         )
@@ -164,9 +177,10 @@ export async function POST(request: Request) {
         transaction_type: 'audio',
         description: `Audio TTS nivel ${level.level} (${generatedLine.emotion})`,
       })
-    } else {
-      // Para VIP token, restamos 1 token visualmente pero no gemas
+    } else if (paymentMode === 'vip_token') {
       console.log(`[generate-audio] 🎫 VIP token consumed (was ${availableTokens})`)
+    } else if (paymentMode === 'free_token') {
+      console.log(`[generate-audio] 🎟️ Gacha free audio token consumed`)
     }
 
     return NextResponse.json({
@@ -176,8 +190,9 @@ export async function POST(request: Request) {
       remaining_gems: newGems,
       remaining_purchased_gems: newPurchasedGems,
       level: level.level,
-      cost: paymentMode === 'vip_token' ? 0 : audioCost,
+      cost: paymentMode === 'gems' ? audioCost : 0,
       vip_token_used: paymentMode === 'vip_token',
+      free_token_used: paymentMode === 'free_token', // ✅ Añadido para el frontend
     })
 
   } catch (error: any) {
