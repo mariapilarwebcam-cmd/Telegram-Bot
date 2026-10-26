@@ -10,7 +10,8 @@ import {
   FANTASY_ARCHETYPES,
   isVipArchetype,
   VIP_PLANS,
-  sortByPopularity, // ✅ NUEVO: Importado
+  GACHA_ARCHETYPES, // ✅ NUEVO
+  sortByPopularity,
 } from '@/lib/constants'
 import { getTranslations } from '@/lib/i18n'
 import { useUser } from '@/lib/UserContext'
@@ -46,7 +47,7 @@ function getGradient(key: string): string {
   return GRADIENTS[Math.abs(hash) % GRADIENTS.length]
 }
 
-// ✅ DISMISSABLE: claves de localStorage para recordar qué banners descartó el usuario
+// ✅ DISMISSABLE: claves de localStorage
 const LS_KEY_VIP_DISMISSED = 'taboo_banner_vip_dismissed'
 const LS_KEY_INVITE_DISMISSED = 'taboo_banner_invite_dismissed'
 
@@ -56,7 +57,7 @@ export default function HomePage() {
 
   const [activeChar, setActiveChar] = useState<any>(null)
   const [search, setSearch] = useState('')
-  const [tab, setTab] = useState<'all' | 'male' | 'female' | 'fantasy'>('all')
+  const [tab, setTab] = useState<'all' | 'male' | 'female' | 'vip' | 'gacha'>('all')
   const [creating, setCreating] = useState<string | null>(null)
   const tabInitialized = useRef(false)
 
@@ -65,11 +66,13 @@ export default function HomePage() {
   const [showVipModal, setShowVipModal] = useState(false)
   const [vipBlockedChar, setVipBlockedChar] = useState<Char | null>(null)
 
-  // ✅ DISMISSABLE: estado de visibilidad de los banners
+  // ✅ NUEVO: Modal de Gacha
+  const [showGachaModal, setShowGachaModal] = useState(false)
+  const [gachaBlockedChar, setGachaBlockedChar] = useState<Char | null>(null)
+
   const [vipBannerVisible, setVipBannerVisible] = useState(false)
   const [inviteBannerVisible, setInviteBannerVisible] = useState(false)
 
-  // ✅ DISMISSABLE: cargar preferencias de localStorage al montar
   useEffect(() => {
     if (typeof window === 'undefined') return
     try {
@@ -78,25 +81,19 @@ export default function HomePage() {
       setVipBannerVisible(vipDismissed !== '1')
       setInviteBannerVisible(inviteDismissed !== '1')
     } catch {
-      // localStorage no disponible → mostrar por defecto
       setVipBannerVisible(true)
       setInviteBannerVisible(true)
     }
   }, [])
 
-  // ✅ DISMISSABLE: funciones para descartar
   const dismissVipBanner = () => {
     setVipBannerVisible(false)
-    try {
-      localStorage.setItem(LS_KEY_VIP_DISMISSED, '1')
-    } catch {}
+    try { localStorage.setItem(LS_KEY_VIP_DISMISSED, '1') } catch {}
   }
 
   const dismissInviteBanner = () => {
     setInviteBannerVisible(false)
-    try {
-      localStorage.setItem(LS_KEY_INVITE_DISMISSED, '1')
-    } catch {}
+    try { localStorage.setItem(LS_KEY_INVITE_DISMISSED, '1') } catch {}
   }
 
   useEffect(() => {
@@ -170,9 +167,15 @@ export default function HomePage() {
 
   const filtered = all
     .filter((c) => {
-      const isFantasy = FANTASY_ARCHETYPES.includes(c.archetype)
-      if (tab === 'fantasy') return isFantasy
-      if (isFantasy) return false
+      const isVipChar = isVipArchetype(c.archetype)
+      const isGachaChar = GACHA_ARCHETYPES.includes(c.archetype)
+
+      if (tab === 'vip') return isVipChar && !isGachaChar
+      if (tab === 'gacha') return isGachaChar
+      
+      // En "all", "male" y "female" ocultamos los de la ruleta
+      if (isGachaChar) return false
+
       if (tab === 'all') return true
       return c.gender === tab
     })
@@ -182,7 +185,7 @@ export default function HomePage() {
         c.name.toLowerCase().includes(search.toLowerCase()) ||
         c.role.toLowerCase().includes(search.toLowerCase())
     )
-    .sort(sortByPopularity) // ✅ NUEVO: Ordena por popularidad
+    .sort(sortByPopularity)
 
   const pick = async (c: Char) => {
     if (!user) {
@@ -191,7 +194,18 @@ export default function HomePage() {
     }
     if (creating !== null) return
 
-    if (isVipArchetype(c.archetype) && !isVip) {
+    const isVipChar = isVipArchetype(c.archetype)
+    const isGachaChar = GACHA_ARCHETYPES.includes(c.archetype)
+
+    // ✅ 1. Validar si es de la Ruleta
+    if (isGachaChar) {
+      setGachaBlockedChar(c)
+      setShowGachaModal(true)
+      return
+    }
+
+    // ✅ 2. Validar si es VIP
+    if (isVipChar && !isVip) {
       setVipBlockedChar(c)
       setShowVipModal(true)
       return
@@ -203,7 +217,7 @@ export default function HomePage() {
     Analytics.characterSelected({
       archetype: c.archetype,
       gender: c.gender,
-      is_vip_archetype: isVipArchetype(c.archetype),
+      is_vip_archetype: isVipChar,
     })
 
     try {
@@ -292,7 +306,6 @@ export default function HomePage() {
   const gems = user?.gems || 0
   const hookRemaining = user?.hook_messages_remaining || 0
 
-  // ✅ DISMISSABLE: decidir si mostrar el banner VIP
   const shouldShowVipBanner = vipChecked && !isVip && vipBannerVisible
   const shouldShowInviteBanner = !!user && inviteBannerVisible
 
@@ -446,7 +459,6 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* ✅ DISMISSABLE: Banner VIP con botón X */}
       {shouldShowVipBanner && (
         <section style={{ padding: '12px 16px 0', position: 'relative' }}>
           <button
@@ -521,8 +533,8 @@ export default function HomePage() {
                 }}
               >
                 {lang === 'es'
-                  ? 'Mensajes ilimitados · Imágenes gratis · 18 personajes exclusivos'
-                  : 'Unlimited messages · Free images · 18 exclusive characters'}
+                  ? 'Mensajes ilimitados · Imágenes gratis · 12 personajes exclusivos'
+                  : 'Unlimited messages · Free images · 12 exclusive characters'}
               </p>
             </div>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
@@ -530,7 +542,6 @@ export default function HomePage() {
             </svg>
           </button>
 
-          {/* ✅ DISMISSABLE: botón X del banner VIP */}
           <button
             onClick={dismissVipBanner}
             aria-label="Cerrar"
@@ -671,7 +682,6 @@ export default function HomePage() {
         </section>
       )}
 
-      {/* ✅ DISMISSABLE: Banner Invite con botón X */}
       {shouldShowInviteBanner && (
         <section style={{ padding: '12px 16px 0', position: 'relative' }}>
           <button
@@ -744,7 +754,6 @@ export default function HomePage() {
             </div>
           </button>
 
-          {/* ✅ DISMISSABLE: botón X del banner Invite */}
           <button
             onClick={dismissInviteBanner}
             aria-label="Cerrar"
@@ -778,12 +787,14 @@ export default function HomePage() {
         </section>
       )}
 
+      {/* ✅ PESTAÑAS ACTUALIZADAS CON VIP Y GACHA */}
       <div className="tabs">
         {[
           { id: 'all', label: t.all },
           { id: 'female', label: t.female },
           { id: 'male', label: t.male },
-          { id: 'fantasy', label: `✨ ${t.fantasy}` },
+          { id: 'vip', label: `👑 ${lang === 'es' ? 'VIP' : 'VIP'}` },
+          { id: 'gacha', label: `🎰 ${lang === 'es' ? 'Ruleta' : 'Gacha'}` },
         ].map((x) => (
           <button
             key={x.id}
@@ -801,7 +812,10 @@ export default function HomePage() {
           const imageUrl = getCharacterImageUrl(c.archetype, c.gender)
           const isCreating = creating === key
           const isVipChar = isVipArchetype(c.archetype)
-          const isLocked = isVipChar && !isVip
+          const isGachaChar = GACHA_ARCHETYPES.includes(c.archetype)
+          
+          const isLockedVip = isVipChar && !isVip && !isGachaChar
+          const isLockedGacha = isGachaChar
 
           return (
             <button
@@ -823,7 +837,8 @@ export default function HomePage() {
                   />
                 )}
 
-                {isLocked && (
+                {/* ✅ CANDADO VIP */}
+                {isLockedVip && (
                   <div
                     style={{
                       position: 'absolute',
@@ -839,14 +854,7 @@ export default function HomePage() {
                       zIndex: 3,
                     }}
                   >
-                    <span
-                      style={{
-                        fontSize: 32,
-                        filter: 'drop-shadow(0 0 12px rgba(251, 191, 36, 0.9))',
-                      }}
-                    >
-                      🔒
-                    </span>
+                    <span style={{ fontSize: 32, filter: 'drop-shadow(0 0 12px rgba(251, 191, 36, 0.9))' }}>🔒</span>
                     <span
                       style={{
                         fontSize: 10,
@@ -865,7 +873,43 @@ export default function HomePage() {
                   </div>
                 )}
 
-                {isVipChar && isVip && (
+                {/* ✅ CANDADO GACHA */}
+                {isLockedGacha && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      background: 'rgba(10, 5, 16, 0.65)',
+                      backdropFilter: 'blur(8px)',
+                      WebkitBackdropFilter: 'blur(8px)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                      zIndex: 3,
+                    }}
+                  >
+                    <span style={{ fontSize: 32, filter: 'drop-shadow(0 0 12px rgba(236, 72, 153, 0.9))' }}>🎰</span>
+                    <span
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 900,
+                        letterSpacing: '0.08em',
+                        color: '#ec4899',
+                        background: 'rgba(236, 72, 153, 0.15)',
+                        border: '1px solid rgba(236, 72, 153, 0.5)',
+                        padding: '3px 8px',
+                        borderRadius: 6,
+                        textShadow: '0 0 6px rgba(236, 72, 153, 0.5)',
+                      }}
+                    >
+                      🎰 RULETA
+                    </span>
+                  </div>
+                )}
+
+                {isVipChar && isVip && !isGachaChar && (
                   <div
                     style={{
                       position: 'absolute',
@@ -911,6 +955,7 @@ export default function HomePage() {
         })}
       </div>
 
+      {/* ✅ MODAL DE VIP */}
       {showVipModal && vipBlockedChar && (
         <div
           className="modal-backdrop"
@@ -961,7 +1006,7 @@ export default function HomePage() {
                   textShadow: '0 0 12px rgba(251, 191, 36, 0.5)',
                 }}
               >
-                {lang === 'es' ? 'PERSONAJE EXCLUSIVO' : 'EXCLUSIVE CHARACTER'}
+                {lang === 'es' ? 'PERSONAJE VIP EXCLUSIVO' : 'EXCLUSIVE VIP CHARACTER'}
               </p>
 
               <h2
@@ -999,57 +1044,10 @@ export default function HomePage() {
                   }}
                 >
                   {lang === 'es'
-                    ? `${vipBlockedChar.name} es parte de nuestra colección VIP exclusiva. Hazte VIP para desbloquear este y otros 17 personajes únicos.`
-                    : `${vipBlockedChar.name} is part of our exclusive VIP collection. Go VIP to unlock this and 17 other unique characters.`}
+                    ? `${vipBlockedChar.name} es parte de nuestra colección VIP exclusiva. Hazte VIP para desbloquear este y otros 11 personajes únicos.`
+                    : `${vipBlockedChar.name} is part of our exclusive VIP collection. Go VIP to unlock this and 11 other unique characters.`}
                 </p>
               </div>
-
-              <div
-                style={{
-                  marginTop: 14,
-                  padding: 14,
-                  borderRadius: 12,
-                  background: 'rgba(255, 255, 255, 0.03)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 8,
-                }}
-              >
-               {[
-  lang === 'es' ? '📨 6.000 mensajes al mes' : '📨 6,000 messages/month',
-  lang === 'es' ? '📸 Imágenes gratis diarias' : '📸 Free daily images',
-  lang === 'es' ? '👑 18 personajes exclusivos' : '👑 18 exclusive characters',
-  lang === 'es' ? '⚡ Sin esperas molestas' : '⚡ No annoying waits',
-].map((benefit, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      fontSize: 12,
-                      color: '#c4b5fd',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                    }}
-                  >
-                    {benefit}
-                  </div>
-                ))}
-              </div>
-
-              <p
-                style={{
-                  fontSize: 11,
-                  color: '#8b8b9e',
-                  textAlign: 'center',
-                  margin: '14px 0 0 0',
-                }}
-              >
-                {lang === 'es' ? 'Desde' : 'From'}{' '}
-                <span style={{ color: '#fbbf24', fontWeight: 800, fontSize: 13 }}>
-                  {VIP_PLANS[0].price[lang === 'es' ? 'es' : 'en']}
-                </span>{' '}
-                {lang === 'es' ? '/ semana' : '/ week'}
-              </p>
 
               <div className="modal-btn-row" style={{ marginTop: 18 }}>
                 <button
@@ -1074,6 +1072,130 @@ export default function HomePage() {
                   }}
                 >
                   👑 {lang === 'es' ? 'Ver planes' : 'See plans'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ MODAL DE GACHA */}
+      {showGachaModal && gachaBlockedChar && (
+        <div
+          className="modal-backdrop"
+          onClick={() => {
+            setShowGachaModal(false)
+            setGachaBlockedChar(null)
+          }}
+        >
+          <div
+            className="modal-box level-up-modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{ position: 'relative' }}
+          >
+            <div
+              style={{
+                position: 'absolute',
+                top: -20,
+                right: -20,
+                fontSize: 140,
+                opacity: 0.08,
+                pointerEvents: 'none',
+                zIndex: 0,
+              }}
+            >
+              🎰
+            </div>
+
+            <div style={{ position: 'relative', zIndex: 1 }}>
+              <div style={{ textAlign: 'center', marginBottom: 12 }}>
+                <span
+                  style={{
+                    fontSize: 56,
+                    filter: 'drop-shadow(0 0 20px rgba(236, 72, 153, 0.9))',
+                  }}
+                >
+                  🎰
+                </span>
+              </div>
+
+              <p
+                style={{
+                  fontSize: 10,
+                  fontWeight: 900,
+                  letterSpacing: '0.18em',
+                  color: '#ec4899',
+                  textAlign: 'center',
+                  margin: 0,
+                  textShadow: '0 0 12px rgba(236, 72, 153, 0.5)',
+                }}
+              >
+                {lang === 'es' ? 'PREMIO LEGENDARIO' : 'LEGENDARY PRIZE'}
+              </p>
+
+              <h2
+                className="modal-title"
+                style={{
+                  textAlign: 'center',
+                  fontSize: 24,
+                  marginTop: 6,
+                  marginBottom: 0,
+                  background: 'linear-gradient(135deg, #ec4899, #a855f7)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  backgroundClip: 'text',
+                }}
+              >
+                {gachaBlockedChar.name}
+              </h2>
+
+              <div
+                style={{
+                  marginTop: 20,
+                  padding: 16,
+                  borderRadius: 14,
+                  background: 'rgba(236, 72, 153, 0.1)',
+                  border: '1px solid rgba(236, 72, 153, 0.3)',
+                }}
+              >
+                <p
+                  style={{
+                    fontSize: 14,
+                    color: '#f5f0ff',
+                    margin: 0,
+                    textAlign: 'center',
+                    lineHeight: 1.6,
+                  }}
+                >
+                  {lang === 'es'
+                    ? `${gachaBlockedChar.name} es un personaje ultra-exclusivo de la Ruleta de lo Prohibido. ¡Tira de la palanca para ver si tienes suerte!`
+                    : `${gachaBlockedChar.name} is an ultra-exclusive character from the Roulette of the Forbidden. Pull the lever to see if you get lucky!`}
+                </p>
+              </div>
+
+              <div className="modal-btn-row" style={{ marginTop: 18 }}>
+                <button
+                  onClick={() => {
+                    setShowGachaModal(false)
+                    setGachaBlockedChar(null)
+                  }}
+                  className="modal-btn secondary"
+                >
+                  {lang === 'es' ? 'Cerrar' : 'Close'}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowGachaModal(false)
+                    setGachaBlockedChar(null)
+                    router.push('/gacha')
+                  }}
+                  className="modal-btn primary"
+                  style={{
+                    background: 'linear-gradient(135deg, #ec4899 0%, #a855f7 100%)',
+                    boxShadow: '0 4px 24px rgba(236, 72, 153, 0.6)',
+                  }}
+                >
+                  🎰 {lang === 'es' ? 'Ir a la Ruleta' : 'Go to Roulette'}
                 </button>
               </div>
             </div>
