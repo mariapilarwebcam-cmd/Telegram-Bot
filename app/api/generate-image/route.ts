@@ -680,6 +680,12 @@ export async function POST(request: Request) {
             await incrementGems(tid, imageCost)
             await insertGemTransaction({ telegram_id: tid, amount: imageCost, transaction_type: 'refund', description: 'Reembolso por fallo en generación' })
           }
+          
+          // ✅ FIX: Reembolsar el token VIP si se consumió
+          if (useVipQuota) {
+            await execute(`UPDATE users SET photo_tokens = photo_tokens + 1 WHERE telegram_id = ?`, [tid])
+          }
+
           // ✅ Si falla, devolvemos el Pase de Fantasía
           if (isFantasyPass && fantasyPassId) {
             await execute(`INSERT INTO user_inventory (user_id, item_type, item_key) VALUES (?, 'fantasy_pass', 'level_5')`, [tid])
