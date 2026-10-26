@@ -145,13 +145,18 @@ export async function unlockOffer(userId: string, offerId: number) {
     await tx.commit()
 
     // ✅ 6. LÓGICA RECUPERADA: Sumar al Freno de Mano y Aprender Etiquetas
-    // (Esto va FUERA de la transacción para no bloquear la base de datos)
+    // FIX: Envuelto en try/catch porque la transacción YA se guardó. Si esto falla, 
+    // no debe afectar la respuesta al usuario ni intentar rollback.
     if (!wasAlreadyUnlocked) {
-      if (paidWithMode === 'gems' && pricePaid > 0) {
-        await updateSpendState(userId, pricePaid)
+      try {
+        if (paidWithMode === 'gems' && pricePaid > 0) {
+          await updateSpendState(userId, pricePaid)
+        }
+        // El bot aprende de la foto (le sumamos 3 puntos a sus gustos)
+        await rewardUserTags(userId, imageIdToReward, 3)
+      } catch (postErr) {
+        console.warn('[unlock-engine] Error en efectos secundarios post-compra:', postErr)
       }
-      // El bot aprende de la foto (le sumamos 3 puntos a sus gustos)
-      await rewardUserTags(userId, imageIdToReward, 3)
     }
 
     const imgRes = await db.execute({
