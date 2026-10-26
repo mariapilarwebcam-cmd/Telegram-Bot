@@ -111,6 +111,9 @@ export default function GachaPage() {
   const [tierColor, setTierColor] = useState('')
   const [glowClass, setGlowClass] = useState('')
   const [isShaking, setIsShaking] = useState(false)
+  
+  // ✅ NUEVO ESTADO: Para el toggle de animación rápida
+  const [instantSpin, setInstantSpin] = useState(false)
 
   const reelRef = useRef<HTMLDivElement>(null)
   const reelWindowRef = useRef<HTMLDivElement>(null)
@@ -316,24 +319,37 @@ export default function GachaPage() {
         reelRef.current.style.transform = 'translateX(0px)'
       }
 
-      setTimeout(() => {
-        const cw = reelWindowRef.current?.offsetWidth || 340
-        targetPos.current = (cw / 2) - (WIN_INDEX * ITEM_WIDTH + ITEM_WIDTH / 2)
-        startPos.current = 0
-
-        animStart.current = performance.now()
-        rafId.current = requestAnimationFrame(frame)
-        setShowSkip(true)
-        
-        setTimeout(() => {
-          if (spinning) finishSpin()
-        }, SPIN_DURATION + 1000)
-      }, 50)
-
       refresh().catch(() => {})
       if (data.reward_type === 'gacha_character') {
         setOwnedCharacters(prev => [...prev, data.item_key])
       }
+
+      // ✅ LÓGICA DEL NUEVO TOGGLE: MODO RÁPIDO vs ANIMACIÓN NORMAL
+      if (instantSpin) {
+        setTimeout(() => {
+          const cw = reelWindowRef.current?.offsetWidth || 340
+          targetPos.current = (cw / 2) - (WIN_INDEX * ITEM_WIDTH + ITEM_WIDTH / 2)
+          if (reelRef.current) {
+            reelRef.current.style.transform = `translateX(${targetPos.current}px)`
+          }
+          finishSpin()
+        }, 100) // Pequeño delay para que React pinte el nuevo rodillo
+      } else {
+        setTimeout(() => {
+          const cw = reelWindowRef.current?.offsetWidth || 340
+          targetPos.current = (cw / 2) - (WIN_INDEX * ITEM_WIDTH + ITEM_WIDTH / 2)
+          startPos.current = 0
+
+          animStart.current = performance.now()
+          rafId.current = requestAnimationFrame(frame)
+          setShowSkip(true)
+          
+          setTimeout(() => {
+            if (spinning) finishSpin()
+          }, SPIN_DURATION + 1000)
+        }, 50)
+      }
+
     } catch (e) {
       setSpinning(false)
       setError('Error de conexión')
@@ -364,10 +380,8 @@ export default function GachaPage() {
         </div>
       </div>
 
-      {/* CONTENEDOR CENTRAL DE LA MÁQUINA */}
       <div style={{ position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'center', marginTop: 24, padding: '0 16px' }}>
         
-        {/* PALANCA (Posicionada a la derecha sin descuadrar) */}
         <div className="lever-wrap" ref={leverRef} onClick={handleSpin} style={{ position: 'absolute', right: '10px', bottom: '20px' }}>
           <div className="lever-rail"></div>
           <div className="lever-arm"><div className="lever-ball"></div></div>
@@ -375,10 +389,7 @@ export default function GachaPage() {
           <span className="lever-tag">PULL</span>
         </div>
 
-        {/* MÁQUINA */}
-        <div className={`cabinet ${isShaking ? 'shaking' : ''}`} style={{ marginRight: '40px' /* Espacio para la palanca */ }}>
-          
-          {/* Marquesina 3D */}
+        <div className={`cabinet ${isShaking ? 'shaking' : ''}`} style={{ marginRight: '40px' }}>
           <div className="marquee">
             <div className="marquee-body">
               <p className="marquee-title">Taboo Realm</p>
@@ -389,9 +400,7 @@ export default function GachaPage() {
             </div>
           </div>
 
-          {/* Cuerpo Central */}
           <div className="cab-body">
-            {/* PANTALLA (Cristal, profundidad, marco grueso) */}
             <div className="screen-frame">
               <div className={`reel-panel ${glowClass}`} ref={reelWindowRef}>
                 <div className="reel-inner">
@@ -448,7 +457,6 @@ export default function GachaPage() {
             </div>
           </div>
 
-          {/* Panel de Control (Botón Gigante) */}
           <div className="control-panel">
             <button className="spin-btn" onClick={handleSpin} disabled={spinning}>
               {spinning ? '✦ GIRANDO...' : '⚡ GIRAR'}
@@ -459,11 +467,46 @@ export default function GachaPage() {
         </div>
       </div>
 
-      {showSkip && <button className="skip-btn visible" onClick={skipAnim}>⏭ SALTAR</button>}
+      {/* ✅ NUEVO BOTÓN TOGGLE PARA SALTAR ANIMACIÓN */}
+      <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16, position: 'relative', zIndex: 10 }}>
+        <button
+          onClick={() => setInstantSpin(!instantSpin)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            background: 'rgba(255,255,255,0.03)',
+            border: '1px solid rgba(168, 85, 247, 0.2)',
+            padding: '6px 12px',
+            borderRadius: 20,
+            cursor: 'pointer',
+            transition: 'all 0.2s ease'
+          }}
+        >
+          <span style={{ fontSize: 11, color: instantSpin ? '#22c55e' : '#8b8b9e', fontWeight: 700, letterSpacing: '0.05em' }}>
+            {instantSpin ? 'MODO RÁPIDO ON' : 'MODO RÁPIDO OFF'}
+          </span>
+          <div style={{ 
+            width: 36, height: 20, borderRadius: 10, 
+            background: instantSpin ? '#22c55e' : '#1f1733', 
+            position: 'relative', 
+            transition: 'background 0.2s',
+            boxShadow: instantSpin ? '0 0 10px rgba(34, 197, 94, 0.5)' : 'none'
+          }}>
+            <div style={{ 
+              width: 16, height: 16, borderRadius: '50%', background: '#fff', 
+              position: 'absolute', top: 2, left: instantSpin ? 18 : 2, 
+              transition: 'left 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.4)'
+            }} />
+          </div>
+        </button>
+      </div>
+
+      {showSkip && !instantSpin && <button className="skip-btn visible" onClick={skipAnim}>⏭ SALTAR</button>}
 
       {error && <p style={{ color: '#fca5a5', fontSize: 13, textAlign: 'center', marginTop: 12, position: 'relative', zIndex: 10 }}>⚠️ {error}</p>}
 
-      {/* TABS Y GRILLAS (Sin cambios, se ven preciosas) */}
       <div style={{ padding: '40px 24px 0', position: 'relative', zIndex: 10 }}>
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
           <button
@@ -572,9 +615,6 @@ export default function GachaPage() {
       )}
 
       <style jsx>{`
-        /* =========================================
-           NUEVO CSS PREMIUM CON VOLUMEN Y CRISTAL
-        ========================================= */
         .cabinet { 
           position: relative; 
           width: 100%; 
@@ -582,7 +622,6 @@ export default function GachaPage() {
           display: flex; 
           flex-direction: column; 
           align-items: center; 
-          /* Sombra pesada para dar volumen 3D */
           filter: drop-shadow(0 25px 35px rgba(0,0,0,0.9)) drop-shadow(0 0 40px rgba(168,85,247,0.2)); 
           transition: transform 0.1s; 
           z-index: 2;
@@ -597,7 +636,6 @@ export default function GachaPage() {
           80%{transform:translateX(3px);} 
         }
 
-        /* Marquesina con Efecto Cristal */
         .marquee { width: 100%; position: relative; margin-bottom: -2px; z-index: 3; }
         .marquee-body { 
           position: relative; 
@@ -627,7 +665,6 @@ export default function GachaPage() {
         .mlight:nth-child(3n) { background: #a855f7; box-shadow: 0 0 10px #a855f7; animation-delay: .4s; }
         @keyframes mflicker { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
 
-        /* Cuerpo Central Metálico */
         .cab-body { 
           width: 100%; 
           position: relative; 
@@ -639,10 +676,8 @@ export default function GachaPage() {
           box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
         }
 
-        /* El Monitor (Ventana de la Ruleta) */
         .screen-frame {
           width: 100%;
-          /* Borde metálico grueso simulando la pantalla */
           border: 3px solid #b8860b;
           border-radius: 8px;
           background: #060514;
@@ -684,7 +719,6 @@ export default function GachaPage() {
         .vents { display: flex; gap: 3px; }
         .vent { width: 2px; height: 10px; border-radius: 1px; background: rgba(255,224,102,0.15); }
 
-        /* Panel de control (Botón centrado y grande) */
         .control-panel { 
           background: linear-gradient(180deg, #150f24 0%, #0a0510 100%); 
           border-left: 4px solid #7a4f10; 
@@ -728,7 +762,6 @@ export default function GachaPage() {
           box-shadow: 0 10px 20px rgba(0,0,0,0.9);
         }
 
-        /* PALANCA (Rediseñada Premium) */
         .lever-wrap { 
           position: absolute; 
           right: 0px; 
@@ -811,7 +844,6 @@ export default function GachaPage() {
         .lever-wrap.releasing .lever-arm { transform: translateX(-50%) rotate(-5deg); transition: transform 0.2s ease-out; }
         .lever-wrap.back .lever-arm { transform: translateX(-50%) rotate(0deg); transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1); }
 
-        /* Glow Reactivo */
         .glow-common { box-shadow: inset 0 0 30px rgba(129,140,248,0.3), 0 0 20px rgba(129,140,248,0.4); }
         .glow-rare { box-shadow: inset 0 0 30px rgba(6,182,212,0.5), 0 0 30px rgba(6,182,212,0.6); }
         .glow-epic { box-shadow: inset 0 0 40px rgba(168,85,247,0.7), 0 0 40px rgba(168,85,247,0.8); }
@@ -820,11 +852,6 @@ export default function GachaPage() {
 
         .skip-btn { position: fixed; bottom: 24px; right: 24px; z-index: 200; padding: 8px 16px; border-radius: 8px; border: 1px solid rgba(129,140,248,0.4); background: rgba(7,6,26,0.85); color: rgba(196,181,253,0.8); font-size: 11px; font-weight: 700; cursor: pointer; backdrop-filter: blur(4px); transition: opacity 0.2s; }
         .skip-btn:hover { border-color: rgba(34,211,238,0.6); color: #22d3ee; }
-        
-        @keyframes pulseGlow {
-          0%, 100% { opacity: 0.5; transform: translate(-50%, -50%) scale(1); }
-          50% { opacity: 0.8; transform: translate(-50%, -50%) scale(1.15); }
-        }
       `}</style>
     </div>
   )
