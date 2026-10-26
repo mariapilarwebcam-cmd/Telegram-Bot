@@ -29,89 +29,87 @@ export default function BottomNav() {
   const items = [
     { href: '/', label: t.home, icon: HomeIcon },
     { href: '/chats', label: t.chats, icon: ChatIcon },
-    { href: '/gacha', label: lang === 'es' ? 'Ruleta' : 'Gacha', icon: DiceIcon, isGacha: true }, // ✅ NUEVO
+    { href: '/gacha', label: lang === 'es' ? 'Ruleta' : 'Gacha', icon: DiceIcon, isGacha: true },
     { href: '/invite', label: t.rewardsNav, icon: GiftIcon },
     { href: '/shop', label: t.shop, icon: DiamondIcon },
   ]
 
   return (
-    <nav
-      className="bottom-nav"
-      style={{
-        position: 'fixed',
-        bottom: 0,
-        left: '50%',
-        transform: 'translateX(-50%)',
-        width: '100%',
-        maxWidth: 480,
-        zIndex: 999,
-        background: 'rgba(10, 5, 16, 0.94)',
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
-        borderTop: '1px solid rgba(168, 85, 247, 0.2)',
-        boxShadow: '0 -8px 32px rgba(168, 85, 247, 0.15)',
-      }}
-    >
-      <div className="bottom-nav-inner" style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center', height: 68, padding: '0 8px' }}>
-        {items.map((item) => {
-          const active =
-            pathname === item.href ||
-            (item.href !== '/' && pathname?.startsWith(item.href))
-          const Icon = item.icon
-          
-          // ✅ Estilo especial para el botón de la Ruleta (que brille)
-          const isGacha = item.isGacha
-          
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              prefetch={true}
-              className={`bottom-nav-item ${active ? 'active' : ''}`}
-              style={{
-                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                gap: 3, flex: 1, padding: '8px 0', textDecoration: 'none',
-                color: active ? '#f0abfc' : (isGacha ? '#fbbf24' : '#6b5b8e'),
-                filter: isGacha ? 'drop-shadow(0 0 8px rgba(251, 191, 36, 0.6))' : (active ? 'drop-shadow(0 0 8px rgba(236, 72, 153, 0.7))' : 'none'),
-                transition: 'all 0.2s ease',
-                position: 'relative',
-              }}
-            >
-              <Icon active={active} />
-              <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.02em' }}>
-                {item.label}
-              </span>
-              
-              {/* Pequeño punto rojo indicando "Nuevo" o "Emoción" en la ruleta */}
-              {isGacha && !active && (
-                <div style={{
-                  position: 'absolute', top: 6, right: '25%',
-                  width: 6, height: 6, borderRadius: '50%', background: '#ec4899',
-                  boxShadow: '0 0 8px #ec4899', animation: 'pulse 2s infinite'
-                }} />
-              )}
-            </Link>
-          )
-        })}
-      </div>
-    </nav>
+    <>
+      <nav
+        className="bottom-nav"
+        style={{
+          position: 'fixed',
+          bottom: 0,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          width: '100%',
+          maxWidth: 480,
+          zIndex: 999,
+          background: 'rgba(10, 5, 16, 0.94)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          borderTop: '1px solid rgba(168, 85, 247, 0.2)',
+          boxShadow: '0 -8px 32px rgba(168, 85, 247, 0.15)',
+        }}
+      >
+        <div className="bottom-nav-inner" style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center', height: 68, padding: '0 8px' }}>
+          {items.map((item) => {
+            const active =
+              pathname === item.href ||
+              (item.href !== '/' && pathname?.startsWith(item.href))
+            const Icon = item.icon
+            const isGacha = item.isGacha
+            
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                prefetch={true}
+                className={`bottom-nav-item ${active ? 'active' : ''}`}
+                style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  gap: 3, flex: 1, padding: '8px 0', textDecoration: 'none',
+                  color: active ? '#f0abfc' : (isGacha ? '#fbbf24' : '#6b5b8e'),
+                  filter: isGacha ? 'drop-shadow(0 0 8px rgba(251, 191, 36, 0.6))' : (active ? 'drop-shadow(0 0 8px rgba(236, 72, 153, 0.7))' : 'none'),
+                  transition: 'all 0.2s ease',
+                  position: 'relative',
+                }}
+              >
+                <Icon active={active} />
+                <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.02em' }}>
+                  {item.label}
+                </span>
+                
+                {isGacha && !active && (
+                  <div style={{
+                    position: 'absolute', top: 6, right: '25%',
+                    width: 6, height: 6, borderRadius: '50%', background: '#ec4899',
+                    boxShadow: '0 0 8px #ec4899', animation: 'navPulse 2s infinite'
+                  }} />
+                )}
+              </Link>
+            )
+          })}
+        </div>
+      </nav>
+
+      {/* ✅ FIX: Añadida la animación navPulse que faltaba */}
+      <style jsx global>{`
+        @keyframes navPulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.5; transform: scale(1.3); }
+        }
+      `}</style>
+    </>
   )
 }
 
 // ─── ICONOS ───
-
 function HomeIcon({ active }: { active: boolean }) {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-      <path
-        d="M3 10.5L12 3l9 7.5V21a1 1 0 0 1-1 1h-5v-7h-6v7H4a1 1 0 0 1-1-1V10.5z"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill={active ? 'currentColor' : 'none'}
-        fillOpacity={active ? 0.15 : 0}
-      />
+      <path d="M3 10.5L12 3l9 7.5V21a1 1 0 0 1-1 1h-5v-7h-6v7H4a1 1 0 0 1-1-1V10.5z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill={active ? 'currentColor' : 'none'} fillOpacity={active ? 0.15 : 0} />
     </svg>
   )
 }
@@ -119,20 +117,11 @@ function HomeIcon({ active }: { active: boolean }) {
 function ChatIcon({ active }: { active: boolean }) {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-      <path
-        d="M21 12a8 8 0 0 1-8 8H7l-4 3v-6.5A8 8 0 0 1 3 12a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8z"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill={active ? 'currentColor' : 'none'}
-        fillOpacity={active ? 0.15 : 0}
-      />
+      <path d="M21 12a8 8 0 0 1-8 8H7l-4 3v-6.5A8 8 0 0 1 3 12a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill={active ? 'currentColor' : 'none'} fillOpacity={active ? 0.15 : 0} />
     </svg>
   )
 }
 
-// ✅ NUEVO ICONO: Dado (Para la Ruleta)
 function DiceIcon({ active }: { active: boolean }) {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
@@ -149,15 +138,7 @@ function DiceIcon({ active }: { active: boolean }) {
 function GiftIcon({ active }: { active: boolean }) {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-      <path
-        d="M20 12v9H4v-9M2 7h20v5H2zM12 22V7M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7zM12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill={active ? 'currentColor' : 'none'}
-        fillOpacity={active ? 0.15 : 0}
-      />
+      <path d="M20 12v9H4v-9M2 7h20v5H2zM12 22V7M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7zM12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill={active ? 'currentColor' : 'none'} fillOpacity={active ? 0.15 : 0} />
     </svg>
   )
 }
@@ -165,14 +146,7 @@ function GiftIcon({ active }: { active: boolean }) {
 function DiamondIcon({ active }: { active: boolean }) {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-      <path
-        d="M12 3l3 5h5l-8 13L4 8h5l3-5z"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinejoin="round"
-        fill={active ? 'currentColor' : 'none'}
-        fillOpacity={active ? 0.15 : 0}
-      />
+      <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" fill={active ? 'currentColor' : 'none'} fillOpacity={active ? 0.15 : 0} />
     </svg>
   )
 }
