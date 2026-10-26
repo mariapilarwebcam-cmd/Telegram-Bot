@@ -12,7 +12,7 @@ import {
   REFERRAL_TOP_TIER_PCT,
   REFERRAL_ELITE_TIER_THRESHOLD,
   REFERRAL_ELITE_TIER_PCT,
-  REFERRAL_MIN_MESSAGES, // ✅ AÑADIDO: Importamos la constante
+  REFERRAL_MIN_MESSAGES,
 } from '@/lib/constants'
 import { Analytics } from '@/lib/posthog'
 
@@ -48,11 +48,20 @@ export default function RewardsPage() {
     if (!user.last_daily_claim) {
       return { canClaim: true, hoursRemaining: 0, minutesRemaining: 0 }
     }
-    const hoursSince =
-      (now - new Date(user.last_daily_claim).getTime()) / 3_600_000
+    
+    // ✅ FIX: Parseo seguro para Safari (SQLite usa "YYYY-MM-DD HH:MM:SS")
+    const safeIso = user.last_daily_claim.includes('T') ? user.last_daily_claim : user.last_daily_claim.replace(' ', 'T') + 'Z'
+    const lastClaimTime = new Date(safeIso).getTime()
+    
+    if (isNaN(lastClaimTime)) {
+      return { canClaim: true, hoursRemaining: 0, minutesRemaining: 0 }
+    }
+
+    const hoursSince = (now - lastClaimTime) / 3_600_000
     if (hoursSince >= 24) {
       return { canClaim: true, hoursRemaining: 0, minutesRemaining: 0 }
     }
+    
     const totalMinutes = Math.ceil((24 - hoursSince) * 60)
     return {
       canClaim: false,
@@ -115,7 +124,6 @@ export default function RewardsPage() {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
 
-      // ✅ PostHog: referido compartido (copiar)
       Analytics.referralShared({ channel: 'copy' })
     } catch {
       alert(t.errorConnection)
@@ -135,7 +143,6 @@ export default function RewardsPage() {
       referralLink
     )}&text=${encodeURIComponent(shareText)}`
 
-    // ✅ PostHog: referido compartido (share)
     Analytics.referralShared({ channel: 'share' })
 
     import('@twa-dev/sdk')
@@ -795,7 +802,6 @@ export default function RewardsPage() {
               },
               {
                 n: '2',
-                // ✅ FIX: Usa la constante dinámica en lugar de "3"
                 text: lang === 'es'
                   ? `Tu amigo abre el link y chatea ${REFERRAL_MIN_MESSAGES} mensajes`
                   : `Your friend opens the link and sends ${REFERRAL_MIN_MESSAGES} messages`,
