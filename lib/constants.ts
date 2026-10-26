@@ -58,14 +58,14 @@ export const CHARACTER_NAMES_FEMALE: Record<string, string> = {
   maid: "Aiko",
   goth_dom: "Scarlet",
   vampire_lady: "Seraphina",
-  succubus: "Lilith", // ✅ Reemplaza a demon_girl
+  succubus: "Lilith",
   werewolf_f: "Freya",
   fallen_angel: "Ariel",
   kitsune: "Yuki",
   elf: "Yvaine",
   witch: "Morgana",
   nun_fantasy: "Celeste",
-  cyborg_assassin: "Nova", // ✅ NUEVA
+  cyborg_assassin: "Nova",
   best_friends_gf: "Elena",
   best_friends_sister: "Camila",
   foot_fetish_girl: "Natalia",
@@ -105,7 +105,7 @@ export const CHARACTER_NAMES_MALE: Record<string, string> = {
   oni_male: "Raiden",
   knight: "Roland",
   angel_m: "Cassiel",
-  incubus_lord: "Zephyr", // ✅ NUEVO
+  incubus_lord: "Zephyr",
   best_friends_bf: "Adrián",
   best_friends_brother: "Diego",
   psycho: "Silas",
@@ -148,7 +148,7 @@ export const ARCHETYPES_MALE = {
     knight: "Caballero",
     elf_prince: "Príncipe Elfo",
     angel_m: "Ángel Celestial",
-    incubus_lord: "Señor Íncubo", // ✅ NUEVO
+    incubus_lord: "Señor Íncubo",
     best_friends_bf: "Novio de tu mejor amiga",
     best_friends_brother: "Hermano de tu mejor amiga",
     psycho: "Posesivo Oscuro",
@@ -186,7 +186,7 @@ export const ARCHETYPES_MALE = {
     knight: "Knight",
     elf_prince: "Elf Prince",
     angel_m: "Celestial Angel",
-    incubus_lord: "Incubus Lord", // ✅ NUEVO
+    incubus_lord: "Incubus Lord",
     best_friends_bf: "Best Friend's Boyfriend",
     best_friends_brother: "Best Friend's Brother",
     psycho: "Dark Possessive",
@@ -221,7 +221,7 @@ export const ARCHETYPES_FEMALE = {
     yoga_instructor: "Instructora de yoga",
     surfer_f: "Surfista",
     goth_dom: "Gótica Dominante",
-    succubus: "Súcubo", // ✅ Reemplaza a demon_girl
+    succubus: "Súcubo",
     vampire_lady: "Condesa Vampira",
     kitsune: "Kitsune",
     witch: "Bruja",
@@ -229,7 +229,7 @@ export const ARCHETYPES_FEMALE = {
     werewolf_f: "Alfa Licántropa",
     fallen_angel: "Ángel Caído",
     nun_fantasy: "Monja",
-    cyborg_assassin: "Asesina Cyborg", // ✅ NUEVA
+    cyborg_assassin: "Asesina Cyborg",
     best_friends_gf: "Novia de tu mejor amigo",
     best_friends_sister: "Hermana de tu mejor amigo",
     foot_fetish_girl: "Modelo de pies",
@@ -259,7 +259,7 @@ export const ARCHETYPES_FEMALE = {
     yoga_instructor: "Yoga Instructor",
     surfer_f: "Surfer",
     goth_dom: "Goth Dominant",
-    succubus: "Succubus", // ✅ Reemplaza a demon_girl
+    succubus: "Succubus",
     vampire_lady: "Vampire Countess",
     kitsune: "Kitsune",
     witch: "Witch",
@@ -267,7 +267,7 @@ export const ARCHETYPES_FEMALE = {
     werewolf_f: "Alpha Werewolf",
     fallen_angel: "Fallen Angel",
     nun_fantasy: "Nun",
-    cyborg_assassin: "Cyborg Assassin", // ✅ NUEVA
+    cyborg_assassin: "Cyborg Assassin",
     best_friends_gf: "Best Friend's Girlfriend",
     best_friends_sister: "Best Friend's Sister",
     foot_fetish_girl: "Foot Model",
@@ -310,7 +310,10 @@ export const CHARACTER_FACES: Record<string, string> = {
   female_elf: "anime woman, elegant high elf archer, long flowing golden blonde hair, bright emerald green eyes with subtle inner glow, pointed elf ears, serene noble expression, elegant emerald green and silver woodland outfit with leaf motifs, silver arm guard on left forearm, ornate silver circlet with a gem on her forehead, elegant silver bow slung over her shoulder, standing in an ancient enchanted forest with glowing fireflies and ancient trees softly blurred behind her, cel shading, detailed anime eyes, magical green and golden natural lighting, vibrant colors",
   female_witch: "anime woman, seductive witch sorceress, long wavy midnight-black hair with purple streaks, sharp violet eyes with mysterious spark, subtle black pointed witch hat tilted, elegant dark purple and black lace corset dress with high slit, black choker with a small crystal, ornate silver rings on fingers, a large black raven perched on her shoulder, holding a glowing purple potion vial, standing in a misty forest glade at night with floating magical runes, cel shading, detailed anime eyes, mysterious purple and green magical lighting, vibrant colors",
   female_nun_fantasy: "anime woman, devoted nun in fantasy setting, long dark brown hair mostly hidden under a white coif, gentle conflicted blue eyes, soft rosy cheeks with a subtle blush, classic black and white nun habit with silver cross pendant, holding a small worn bible against her chest, delicate silver rosary around her wrist, standing in a dimly lit gothic chapel with tall arched windows and candles softly blurred behind her, cel shading, detailed anime eyes, warm candlelight with soft blue shadows, vibrant colors",
-  female_cyborg_assassin: "anime woman, high-tech cyborg assassin, short white hair, one glowing red robotic eye, sleek black and neon-cyan tactical suit, mechanical arm, cyberpunk aesthetic, serious confident expression, neon city lights reflecting on metal, cel shading, detailed anime eyes, vibrant colors",
+  
+  // ✅ CYBORG ACTUALIZADA (Basada exactamente en tu imagen)
+  female_cyborg_assassin: "anime woman, beautiful female cyborg assassin, short messy white hair, one glowing red robotic eye, black high-tech tactical suit with exposed cleavage, mechanical robotic left arm with glowing cyan lines, holding a futuristic rifle, cyberpunk city background, cel shading, detailed anime eyes, vibrant colors",
+  
   female_best_friends_gf: "anime woman, 24 years old, long wavy brunette hair, seductive brown eyes, wearing a tight summer dress, guilty but alluring smile, cel shading, detailed anime eyes",
   female_best_friends_sister: "anime woman, 22 years old, beautiful face, long straight black hair, expressive brown eyes, wearing a fitted sweater, adult elegant look, cel shading, detailed anime eyes",
   female_foot_fetish_girl: "anime woman, 22 years old, elegant long hair, beautiful face, sitting down with bare feet in clear view, red painted toenails, elegant high heels discarded nearby, showing off smooth legs, seductive teasing smile, cel shading",
@@ -348,7 +351,10 @@ export const CHARACTER_FACES: Record<string, string> = {
   male_oni_male: "anime man, powerful oni demon warrior, muscular imposing build, wild short dark red hair with a topknot, glowing molten gold eyes, two sharp black horns emerging from his head, subtle red tiger-stripe markings on his forearms and shoulders, sharp fangs in a confident grin, traditional short dark red kimono open at the chest showing muscular torso, red rope belt, carrying a large black kanabo club over one shoulder, standing in a mountain shrine at night with red lanterns and cherry blossoms falling, cel shading, detailed anime eyes, dramatic red and gold lantern lighting, vibrant colors",
   male_knight: "anime man, noble knight, wavy shoulder-length chestnut hair, kind blue-grey eyes, strong square jaw with light stubble, polished silver plate armor with gold accents and a red cape draped over one shoulder, engraved knight's oath on the chest plate, holding a silver longsword pointed down in a ceremonial stance, ornate silver cross pendant, standing in a stone castle hall with banners and candlelight softly blurred behind him, cel shading, detailed anime eyes, warm torchlight with silver rim lighting, vibrant colors",
   male_angel_m: "anime man, celestial angel, long flowing golden-blonde hair, luminous pale blue eyes with a soft gentle glow, perfect serene features, glowing golden halo floating above his head, large pristine white feathered wings spread elegantly behind him, elegant flowing white and gold celestial robe with subtle sacred engravings, golden bracers on both wrists, warm divine light surrounding him, standing among clouds in a heavenly realm with golden rays and floating feathers, cel shading, detailed anime eyes, warm golden divine lighting, vibrant colors",
-  male_incubus_lord: "anime man, powerful incubus lord, long dark hair, glowing crimson eyes, large black bat wings, sharp fangs, seductive and dominant smirk, elegant dark aristocratic clothes, ambient hellish red glow, cel shading, detailed anime eyes, dark seductive lighting, vibrant colors",
+  
+  // ✅ INCUBUS ACTUALIZADO (Basado exactamente en tu imagen)
+  male_incubus_lord: "anime man, dangerously handsome male demon lord, long dark hair, glowing red eyes, large black demon horns, large bat wings, sharp fangs, black and red unbuttoned aristocratic shirt showing muscular chest, dark hellish background, cel shading, detailed anime eyes, vibrant colors",
+  
   male_best_friends_bf: "anime man, 26 years old, athletic build, short dark hair, piercing blue eyes, casual shirt with rolled-up sleeves, confident smirk, cel shading",
   male_best_friends_brother: "anime man, 28 years old, tall, muscular, short messy hair, dark intense eyes, protective stance, cross necklace, cel shading",
   male_psycho: "anime man, 28 years old, dangerously handsome, elegant dark suit, perfectly styled hair, cold piercing dark eyes that seem to stare into your soul, subtle terrifying smirk, wearing black leather gloves, standing in a dark luxury penthouse, cel shading, detailed anime eyes, dramatic shadowy lighting, vibrant colors",
