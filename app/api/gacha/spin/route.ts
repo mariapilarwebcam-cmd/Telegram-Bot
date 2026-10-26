@@ -80,14 +80,32 @@ export async function POST(request: Request) {
         const pool = isFemale ? GACHA_CHARACTERS_FEMALE : GACHA_CHARACTERS_MALE
         const char = pool[Math.floor(Math.random() * pool.length)]
 
-        await tx.execute({
-          sql: `INSERT INTO user_inventory (user_id, item_type, item_key) VALUES (?, 'gacha_character', ?)`,
+        // ✅ FIX: Verificar si ya tiene este personaje
+        const alreadyOwned = await tx.execute({
+          sql: `SELECT id FROM user_inventory WHERE user_id = ? AND item_type = 'gacha_character' AND item_key = ? LIMIT 1`,
           args: [tid, char]
         })
 
-        rewardType = 'gacha_character'
-        rewardDetails = `¡Has desbloqueado al personaje exclusivo ${char}!`
-        itemKey = char
+        if (alreadyOwned.rows.length > 0) {
+          // Ya lo tiene: Le damos una compensación de 100 Gemas de Chat
+          const compensation = 100 
+          await tx.execute({
+            sql: `UPDATE users SET bonus_gems = COALESCE(bonus_gems, 0) + ? WHERE telegram_id = ?`,
+            args: [compensation, tid]
+          })
+          rewardType = 'bonus_gems'
+          rewardDetails = `¡Ya tenías a ${char}! Te compensamos con ${compensation} Mensajes de Chat.`
+          itemKey = String(compensation)
+        } else {
+          // Es nuevo: Lo guardamos
+          await tx.execute({
+            sql: `INSERT INTO user_inventory (user_id, item_type, item_key) VALUES (?, 'gacha_character', ?)`,
+            args: [tid, char]
+          })
+          rewardType = 'gacha_character'
+          rewardDetails = `¡Has desbloqueado al personaje exclusivo ${char}!`
+          itemKey = char
+        }
 
       } else if (tier === 'epic') {
         const isFantasyPass = Math.random() < 0.5
@@ -102,20 +120,17 @@ export async function POST(request: Request) {
           itemKey = 'level_5'
         } else {
           // ✅ OUTFIT PONDERADO POR RAREZA (Usando la DB)
-          // 5% legendary | 15% epic | 80% rare
           const outfitRoll = Math.random() * 100
           let targetRarity: 'rare' | 'epic' | 'legendary'
           if (outfitRoll < 5) targetRarity = 'legendary'
           else if (outfitRoll < 20) targetRarity = 'epic'
           else targetRarity = 'rare'
 
-          // Buscar un outfit de esa rareza al azar
           let outfit = await tx.execute({
             sql: `SELECT id, name FROM gacha_outfits WHERE rarity = ? ORDER BY RANDOM() LIMIT 1`,
             args: [targetRarity]
           })
 
-          // Fallback: Si por alguna razón la DB no tiene ese tier, elige uno al azar
           if (outfit.rows.length === 0) {
             outfit = await tx.execute({
               sql: `SELECT id, name FROM gacha_outfits ORDER BY RANDOM() LIMIT 1`,
@@ -125,18 +140,39 @@ export async function POST(request: Request) {
 
           if (outfit.rows.length > 0) {
             const o = outfit.rows[0]
-            await tx.execute({
-              sql: `INSERT INTO user_inventory (user_id, item_type, item_key) VALUES (?, 'outfit', ?)`,
-              args: [tid, String(o.id)]
+            const outfitId = String(o.id)
+
+            // ✅ FIX: Verificar si ya tiene este outfit
+            const alreadyOwnedOutfit = await tx.execute({
+              sql: `SELECT id FROM user_inventory WHERE user_id = ? AND item_type = 'outfit' AND item_key = ? LIMIT 1`,
+              args: [tid, outfitId]
             })
 
-            const rarityPrefix =
-              targetRarity === 'legendary' ? '🔥 ¡OUTFIT LEGENDARIO! ' :
-              targetRarity === 'epic'      ? '💜 ' : ''
+            if (alreadyOwnedOutfit.rows.length > 0) {
+              // Ya lo tiene: Compensación de 40 Gemas de Chat
+              const compensation = 40 
+              await tx.execute({
+                sql: `UPDATE users SET bonus_gems = COALESCE(bonus_gems, 0) + ? WHERE telegram_id = ?`,
+                args: [compensation, tid]
+              })
+              rewardType = 'bonus_gems'
+              rewardDetails = `¡Ya tenías el Outfit "${o.name}"! Te compensamos con ${compensation} Mensajes de Chat.`
+              itemKey = String(compensation)
+            } else {
+              // Es nuevo: Lo guardamos
+              await tx.execute({
+                sql: `INSERT INTO user_inventory (user_id, item_type, item_key) VALUES (?, 'outfit', ?)`,
+                args: [tid, outfitId]
+              })
 
-            rewardType = 'outfit'
-            rewardDetails = `${rarityPrefix}¡${o.name}!`
-            itemKey = String(o.id)
+              const rarityPrefix =
+                targetRarity === 'legendary' ? '🔥 ¡OUTFIT LEGENDARIO! ' :
+                targetRarity === 'epic'      ? '💜 ' : ''
+
+              rewardType = 'outfit'
+              rewardDetails = `${rarityPrefix}¡${o.name}!`
+              itemKey = outfitId
+            }
           } else {
             // Fallback final si la tabla gacha_outfits está vacía
             await tx.execute({
@@ -172,22 +208,18 @@ export async function POST(request: Request) {
           rewardType = 'audio_token'
           rewardDetails = `¡Has ganado ${audioAmount} Audio(s) Gratis!`
         } else {
-          // 34% Gemas de Chat (Con la distribución exacta que pediste)
+          // 34% Gemas de Chat
           let randomMsg = 15
           const gemRoll = Math.random() * 100
           
           if (gemRoll < 80) {
-            // 80%: 15, 20, 25 o 30
             const opts = [15, 20, 25, 30]
             randomMsg = opts[Math.floor(Math.random() * opts.length)]
           } else if (gemRoll < 94) {
-            // 14%: 35 o 40
             randomMsg = Math.random() < 0.5 ? 35 : 40
           } else if (gemRoll < 99) {
-            // 5%: 45 exactas
             randomMsg = 45
           } else {
-            // 1%: 50, 60 o 75 (Jackpot de chat)
             const opts = [50, 60, 75]
             randomMsg = opts[Math.floor(Math.random() * opts.length)]
           }
@@ -202,7 +234,7 @@ export async function POST(request: Request) {
         }
 
       } else {
-        // Común: 15 a 50 Gemas de Chat (Sesgado a lo bajo)
+        // Común: 15 a 50 Gemas de Chat
         let bonus = 15
         const cRoll = Math.random() * 100
         if (cRoll > 95) bonus = 50
