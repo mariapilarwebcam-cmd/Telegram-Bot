@@ -57,7 +57,10 @@ const CHARACTER_DNA: Record<string, string> = {
   female_elf: "elegant high elf archer, long golden blonde hair, emerald green eyes, elf ears",
   female_witch: "mysterious witch, long midnight-black hair with purple streaks, violet eyes",
   female_nun_fantasy: "devoted fantasy nun, dark brown hair under white coif, blue eyes",
-  female_demon_girl: "playful demon girl, short red hair with black tips, amber eyes, demon horns",
+  
+  // ✅ CYBORG ACTUALIZADA (Basada en tu imagen)
+  female_cyborg_assassin: "beautiful female cyborg assassin, short messy white hair, one glowing red robotic eye, black high-tech tactical suit with exposed cleavage, mechanical robotic left arm with glowing cyan lines, holding a futuristic rifle, cyberpunk city background",
+  
   female_best_friends_gf: "young woman, long wavy brunette hair, brown eyes, tight summer dress",
   female_best_friends_sister: "adult young woman, long straight black hair, expressive brown eyes, fitted sweater",
   female_foot_fetish_girl: "beautiful woman, long elegant hair, stunning bare feet, red toenails, elegant legs",
@@ -95,6 +98,10 @@ const CHARACTER_DNA: Record<string, string> = {
   male_oni_male: "powerful oni warrior, muscular imposing build, dark red hair, black horns",
   male_knight: "noble knight, wavy shoulder-length chestnut hair, blue-grey eyes, silver armor",
   male_angel_m: "celestial angel, long golden-blonde hair, pale blue eyes, white feathered wings",
+  
+  // ✅ INCUBUS ACTUALIZADO (Basado en tu imagen)
+  male_incubus_lord: "dangerously handsome male demon lord, long dark hair, glowing red eyes, large black demon horns, large bat wings, sharp fangs, black and red unbuttoned aristocratic shirt showing muscular chest, dark hellish background",
+  
   male_best_friends_bf: "athletic man, short dark hair, blue eyes, confident smirk",
   male_best_friends_brother: "tall muscular man, messy hair, dark eyes, protective",
   male_psycho: "dangerously handsome man, elegant dark suit, cold piercing dark eyes, terrifying smirk, black leather gloves",
@@ -132,7 +139,7 @@ const ARCHETYPE_IMAGE_HINTS: Record<string, string> = {
   female_elf: 'enchanted forest, moonlight through leaves, ethereal beauty',
   female_witch: 'candlelit coven, magical runes floating, mystical seduction',
   female_nun_fantasy: 'dim chapel, candlelight, sacred and forbidden conflict',
-  female_demon_girl: 'hellish flame, playful teasing, chaotic energy, red glow',
+  female_cyborg_assassin: 'neon cyberpunk city, glowing cyan mechanical arm, tactical suit, futuristic assassin',
   female_best_friends_gf: 'guilty pleasure, forbidden tension, looking over shoulder, intimate home setting',
   female_best_friends_sister: 'confident and slightly playful smile, adult elegant look, sitting gracefully on a couch',
   female_foot_fetish_girl: 'focus on foreground bare feet, perfect foot anatomy, five distinct toes, clean smooth soles, high arches, perfectly placed painted toenails on toes, delicate gold anklets, dangling heels, elegant legs crossed, foot fetish aesthetic',
@@ -170,6 +177,7 @@ const ARCHETYPE_IMAGE_HINTS: Record<string, string> = {
   male_oni_male: 'mountain shrine, red lanterns, primal demonic strength',
   male_knight: 'castle chamber, armor removed, honor and heat',
   male_angel_m: 'celestial clouds, divine golden light, sacred intimacy',
+  male_incubus_lord: 'hellish red glow, dark aristocratic clothes, demonic wings, dominant presence',
   male_best_friends_bf: 'arrogant smirk, leaning against a wall, dominant energy, expensive clothes',
   male_best_friends_brother: 'protective older brother vibe, intense stare, muscular arms crossed',
   male_psycho: 'dominant vibe, slowly loosening his tie or adjusting his black leather gloves, looking down at the viewer with a terrifying calmness, dark luxury penthouse, shadowy lighting, possessive controlling aura',
@@ -632,7 +640,8 @@ export async function POST(request: Request) {
             [character.equipped_outfit]
           )
           if (outfitData) {
-            outfitPrompt = `wearing ${outfitData.prompt_tag}, `
+            // ✅ FIX: Evitamos duplicar la palabra "wearing"
+            outfitPrompt = `${outfitData.prompt_tag}, `
           }
         }
 
