@@ -3,18 +3,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 
-// ═══════════════════════════════════════════════════════════════
-// ✅ Swipe-back estilo iOS/Android con navegación determinista
-//
-// REGLA DE NAVEGACIÓN (no depende del historial):
-//   /chat/*     → /chats
-//   /chats      → /
-//   /settings   → /
-//   /shop       → /
-//   /invite     → /
-//   /           → cerrar Mini App
-// ═══════════════════════════════════════════════════════════════
-
 const EDGE_ZONE_PX = 50
 const SWIPE_THRESHOLD_PX = 80
 const FLICK_THRESHOLD_PX = 35
@@ -32,6 +20,7 @@ function getBackDestination(path: string): string | 'close' {
   if (path.startsWith('/shop')) return '/'
   if (path.startsWith('/invite')) return '/'
   if (path.startsWith('/rewards')) return '/'
+  if (path.startsWith('/gacha')) return '/' // ✅ FIX: Añadido soporte para volver de la Ruleta
   return '/'
 }
 
@@ -47,9 +36,6 @@ export default function SwipeBack() {
   const isActive = useRef(false)
   const offsetRef = useRef(0)
 
-  // ═══════════════════════════════════════════════════════════════
-  // BackButton nativo de Telegram
-  // ═══════════════════════════════════════════════════════════════
   useEffect(() => {
     if (typeof window === 'undefined') return
     const tg = (window as any).Telegram?.WebApp
@@ -80,12 +66,8 @@ export default function SwipeBack() {
     } catch {}
   }, [pathname, router])
 
-  // ═══════════════════════════════════════════════════════════════
-  // ✅ Gesture handling
-  // ═══════════════════════════════════════════════════════════════
   useEffect(() => {
     if (typeof window === 'undefined') return
-
     const tg = (window as any).Telegram?.WebApp
     if (!tg) return
 
@@ -113,25 +95,15 @@ export default function SwipeBack() {
     }
 
     const handleTouchStart = (e: TouchEvent) => {
-      // ✅ FIX CRÍTICO: Evaluamos la ruta en el momento exacto del toque
       const currentPath = window.location.pathname
       if (DISABLED_ROUTES.some((p) => currentPath.startsWith(p))) return
 
       const touch = e.touches[0]
       if (!touch) return
-
-      // Ignorar si empieza fuera del borde izquierdo
       if (touch.clientX > EDGE_ZONE_PX) return
 
-      // Ignorar si empieza en input/textarea
       const target = e.target as HTMLElement
-      if (
-        target.tagName === 'INPUT' ||
-        target.tagName === 'TEXTAREA' ||
-        target.isContentEditable
-      ) {
-        return
-      }
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return
 
       startX.current = touch.clientX
       startY.current = touch.clientY
@@ -143,7 +115,6 @@ export default function SwipeBack() {
 
       moveHandler = (ev: TouchEvent) => {
         if (!isActive.current) return
-
         const t = ev.touches[0]
         if (!t) return
 
@@ -184,13 +155,8 @@ export default function SwipeBack() {
 
         if (finalOffset > SWIPE_THRESHOLD_PX || wasFlick) {
           const currentDest = getBackDestination(window.location.pathname)
-
           if (currentDest === 'close') {
-            try {
-              tg.close()
-            } catch (err) {
-              console.warn('[SwipeBack] close failed:', err)
-            }
+            try { tg.close() } catch (err) { console.warn('[SwipeBack] close failed:', err) }
           } else {
             router.push(currentDest)
           }
@@ -220,57 +186,28 @@ export default function SwipeBack() {
       <div
         aria-hidden
         style={{
-          position: 'fixed',
-          left: 0,
-          top: 0,
-          bottom: 0,
-          width: offset,
-          background:
-            'linear-gradient(90deg, rgba(168,85,247,0.22) 0%, rgba(236,72,153,0.12) 50%, transparent 100%)',
-          pointerEvents: 'none',
-          zIndex: 9998,
-          willChange: 'width',
+          position: 'fixed', left: 0, top: 0, bottom: 0, width: offset,
+          background: 'linear-gradient(90deg, rgba(168,85,247,0.22) 0%, rgba(236,72,153,0.12) 50%, transparent 100%)',
+          pointerEvents: 'none', zIndex: 9998, willChange: 'width',
         }}
       />
-
       <div
         aria-hidden
         style={{
-          position: 'fixed',
-          left: Math.min(offset - 22, 44),
-          top: '50%',
+          position: 'fixed', left: Math.min(offset - 22, 44), top: '50%',
           transform: `translateY(-50%) scale(${0.85 + progress * 0.25})`,
-          width: 44,
-          height: 44,
-          borderRadius: '50%',
-          background:
-            progress >= 1
-              ? 'linear-gradient(135deg, #a855f7, #ec4899)'
-              : 'rgba(168,85,247,0.35)',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
+          width: 44, height: 44, borderRadius: '50%',
+          background: progress >= 1 ? 'linear-gradient(135deg, #a855f7, #ec4899)' : 'rgba(168,85,247,0.35)',
+          backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
           border: '1px solid rgba(240,171,252,0.4)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          pointerEvents: 'none',
-          zIndex: 9999,
-          opacity: iconOpacity,
-          boxShadow:
-            progress >= 1
-              ? '0 0 24px rgba(236,72,153,0.8)'
-              : '0 0 12px rgba(168,85,247,0.4)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          pointerEvents: 'none', zIndex: 9999, opacity: iconOpacity,
+          boxShadow: progress >= 1 ? '0 0 24px rgba(236,72,153,0.8)' : '0 0 12px rgba(168,85,247,0.4)',
           transition: 'background 0.15s ease, box-shadow 0.15s ease',
         }}
       >
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-          <path
-            d="m15 18-6-6 6-6"
-            stroke="#f0abfc"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
+          <path d="m15 18-6-6 6-6" stroke="#f0abfc" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </div>
     </>
