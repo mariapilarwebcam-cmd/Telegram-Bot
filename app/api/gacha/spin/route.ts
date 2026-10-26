@@ -5,9 +5,8 @@ import { ensureUser, insertGemTransaction } from '@/lib/db-queries'
 
 const COST_GEMS = 50
 
-// Catálogo de personajes exclusivos de la ruleta
-const GACHA_CHARACTERS_FEMALE = ['succubus', 'vampire_lady', 'kitsune', 'demon_girl', 'fallen_angel', 'witch']
-const GACHA_CHARACTERS_MALE = ['vampire_lord', 'demon_lord', 'dragon_lord', 'oni_male', 'dark_hunter', 'elf_prince']
+const GACHA_CHARACTERS_FEMALE = ['succubus', 'fallen_angel', 'werewolf_f', 'cyborg_assassin']
+const GACHA_CHARACTERS_MALE = ['demon_lord', 'dragon_lord', 'werewolf_m', 'incubus_lord']
 
 export async function POST(request: Request) {
   try {
@@ -20,7 +19,7 @@ export async function POST(request: Request) {
     const tx = await db.transaction('write')
 
     try {
-      // 1. Cobrar las gemas de pago (Solo purchased_gems)
+      // 1. Cobrar las gemas
       const debit = await tx.execute({
         sql: `UPDATE users 
               SET purchased_gems = purchased_gems - ?, gems = gems - ? 
@@ -34,7 +33,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'insufficient_gems', message: 'Necesitas 50 gemas compradas.' }, { status: 402 })
       }
 
-      // 2. Verificar el Sistema de Pity (Lástima)
+      // 2. Pity System (Garantía cada 10 tiradas)
       const last9 = await tx.execute({
         sql: `SELECT reward_tier FROM gacha_history WHERE user_id = ? ORDER BY id DESC LIMIT 9`,
         args: [tid]
@@ -46,7 +45,7 @@ export async function POST(request: Request) {
         if (!hasEpic) forceEpic = true
       }
 
-      // 3. El RNG (Random Number Generator)
+      // 3. RNG Principal
       const roll = Math.random() * 100
       let tier: 'common' | 'rare' | 'epic' | 'legendary' | 'mythic' = 'common'
       let rewardType = ''
@@ -55,19 +54,19 @@ export async function POST(request: Request) {
 
       if (forceEpic) {
         tier = 'epic'
-      } else if (roll < 0.1) {
-        tier = 'mythic'
-      } else if (roll < 2.0) {
-        tier = 'legendary'
-      } else if (roll < 10.0) {
-        tier = 'epic'
-      } else if (roll < 40.0) {
-        tier = 'rare'
+      } else if (roll < 0.5) {
+        tier = 'mythic' // 0.5%
+      } else if (roll < 1.5) {
+        tier = 'legendary' // 1.0%
+      } else if (roll < 6.0) {
+        tier = 'epic' // 4.5%
+      } else if (roll < 30.0) {
+        tier = 'rare' // 24%
       } else {
-        tier = 'common'
+        tier = 'common' // 70%
       }
 
-      // 4. Asignar el Premio según la rareza
+      // 4. Asignar Premio
       if (tier === 'mythic' || tier === 'legendary') {
         const isFemale = user.interested_in !== 'male'
         const pool = isFemale ? GACHA_CHARACTERS_FEMALE : GACHA_CHARACTERS_MALE
@@ -83,7 +82,7 @@ export async function POST(request: Request) {
         itemKey = char
 
       } else if (tier === 'epic') {
-        const isFantasyPass = Math.random() < 0.6
+        const isFantasyPass = Math.random() < 0.5
 
         if (isFantasyPass) {
           await tx.execute({
@@ -94,7 +93,6 @@ export async function POST(request: Request) {
           rewardDetails = '¡Pase de Fantasía! (Foto Nivel 5 Ultra-Secreta)'
           itemKey = 'level_5'
         } else {
-          // ✅ FIX: Añadido args: []
           const outfit = await tx.execute({ 
             sql: `SELECT id, name FROM gacha_outfits ORDER BY RANDOM() LIMIT 1`,
             args: []
@@ -110,41 +108,76 @@ export async function POST(request: Request) {
         }
 
       } else if (tier === 'rare') {
-        if (Math.random() < 0.5) {
-          const expiresAt = Math.floor(Date.now() / 1000) + 86400
-          await tx.execute({
-            sql: `INSERT INTO message_passes (user_id, expires_at, messages_limit) VALUES (?, ?, 150)`,
-            args: [tid, expiresAt]
-          })
-          rewardType = 'message_pass'
-          rewardDetails = '¡Pase de 24h (150 mensajes gratis)!'
-        } else {
+        const rareRoll = Math.random() * 100
+        
+        if (rareRoll < 33) {
+          // 33% Foto Nivel 3/4
           await tx.execute({
             sql: `INSERT INTO user_inventory (user_id, item_type, item_key) VALUES (?, 'photo_token', 'level_34')`,
             args: [tid]
           })
           rewardType = 'photo_token'
           rewardDetails = '¡Foto Sorpresa (Nivel 3 o 4)!'
+        } else if (rareRoll < 66) {
+          // 33% Audio Token (1 o 2)
+          const audioAmount = Math.random() < 0.5 ? 1 : 2
+          for (let i = 0; i < audioAmount; i++) {
+            await tx.execute({
+              sql: `INSERT INTO user_inventory (user_id, item_type, item_key) VALUES (?, 'audio_token', 'free')`,
+              args: [tid]
+            })
+          }
+          rewardType = 'audio_token'
+          rewardDetails = `¡Has ganado ${audioAmount} Audio(s) Gratis!`
+        } else {
+          // 34% Gemas de Chat (Con la distribución exacta que pediste)
+          let randomMsg = 15
+          const gemRoll = Math.random() * 100
+          
+          if (gemRoll < 80) {
+            // 80%: 15, 20, 25 o 30
+            const opts = [15, 20, 25, 30]
+            randomMsg = opts[Math.floor(Math.random() * opts.length)]
+          } else if (gemRoll < 94) {
+            // 14%: 35 o 40
+            randomMsg = Math.random() < 0.5 ? 35 : 40
+          } else if (gemRoll < 99) {
+            // 5%: 45 exactas
+            randomMsg = 45
+          } else {
+            // 1%: 50, 60 o 75 (Jackpot de chat)
+            const opts = [50, 60, 75]
+            randomMsg = opts[Math.floor(Math.random() * opts.length)]
+          }
+
+          await tx.execute({
+            sql: `UPDATE users SET bonus_gems = COALESCE(bonus_gems, 0) + ? WHERE telegram_id = ?`,
+            args: [randomMsg, tid]
+          })
+          rewardType = 'bonus_gems'
+          rewardDetails = `¡Has ganado ${randomMsg} Mensajes de Chat!`
+          itemKey = String(randomMsg)
         }
 
       } else {
-        let bonus = 20
+        // Común: 15 a 50 Gemas de Chat (Sesgado a lo bajo)
+        let bonus = 15
         const cRoll = Math.random() * 100
-        if (cRoll > 98.8) bonus = 50
-        else if (cRoll > 94) bonus = 40
-        else if (cRoll > 88) bonus = 35
-        else if (cRoll > 76) bonus = 30
+        if (cRoll > 95) bonus = 50
+        else if (cRoll > 85) bonus = 40
+        else if (cRoll > 65) bonus = 30
+        else if (cRoll > 40) bonus = 25
+        else bonus = 15
 
         await tx.execute({
           sql: `UPDATE users SET bonus_gems = COALESCE(bonus_gems, 0) + ? WHERE telegram_id = ?`,
           args: [bonus, tid]
         })
         rewardType = 'bonus_gems'
-        rewardDetails = `¡Has ganado ${bonus} Mensajes de Chat gratis!`
+        rewardDetails = `¡Has ganado ${bonus} Mensajes de Chat!`
         itemKey = String(bonus)
       }
 
-      // 5. Guardar en el historial
       await tx.execute({
         sql: `INSERT INTO gacha_history (user_id, cost_gems, reward_tier, reward_details) VALUES (?, ?, ?, ?)`,
         args: [tid, COST_GEMS, tier, `${rewardType}:${rewardDetails}`]
