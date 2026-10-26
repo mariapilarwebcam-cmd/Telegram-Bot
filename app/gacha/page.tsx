@@ -28,24 +28,32 @@ const WIN_OFFSET = 24          // items adelante del actual donde se coloca el g
 
 interface Prize {
   icon: string
+  imageKey?: string
   label: string
   color: string
   tier: string
 }
 
+// ✅ Helper para las imágenes de los premios con la ruta correcta
+const getPrizeImageUrl = (imageKey: string) => {
+  const base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL
+  if (!base) return ''
+  return `${base.replace(/\/$/, '')}/item/gacha/${imageKey}.png`
+}
+
 const REEL_POOL: Prize[] = [
-  { icon: '💬', label: '+15', color: '#a395c9', tier: 'common' },
-  { icon: '💬', label: '+20', color: '#a395c9', tier: 'common' },
-  { icon: '💬', label: '+25', color: '#a395c9', tier: 'common' },
-  { icon: '💬', label: '+30', color: '#a395c9', tier: 'common' },
-  { icon: '💬', label: '+35', color: '#06b6d4', tier: 'rare' },
-  { icon: '💬', label: '+40', color: '#06b6d4', tier: 'rare' },
-  { icon: '📸', label: 'Foto', color: '#06b6d4', tier: 'rare' },
-  { icon: '🎵', label: 'Audio', color: '#06b6d4', tier: 'rare' },
-  { icon: '👗', label: 'Outfit', color: '#a855f7', tier: 'epic' },
-  { icon: '🎟️', label: 'Pase', color: '#a855f7', tier: 'epic' },
-  { icon: '👑', label: 'Personaje', color: '#fbbf24', tier: 'legendary' },
-  { icon: '🔥', label: 'Mítico', color: '#ec4899', tier: 'mythic' },
+  { icon: '💬', imageKey: 'icon_gems', label: '+15', color: '#a395c9', tier: 'common' },
+  { icon: '💬', imageKey: 'icon_gems', label: '+20', color: '#a395c9', tier: 'common' },
+  { icon: '💬', imageKey: 'icon_gems', label: '+25', color: '#a395c9', tier: 'common' },
+  { icon: '💬', imageKey: 'icon_gems', label: '+30', color: '#a395c9', tier: 'common' },
+  { icon: '💬', imageKey: 'icon_gems', label: '+35', color: '#06b6d4', tier: 'rare' },
+  { icon: '💬', imageKey: 'icon_gems', label: '+40', color: '#06b6d4', tier: 'rare' },
+  { icon: '📸', imageKey: 'icon_photo', label: 'Foto', color: '#06b6d4', tier: 'rare' },
+  { icon: '🎵', imageKey: 'icon_audio', label: 'Audio', color: '#06b6d4', tier: 'rare' },
+  { icon: '👗', imageKey: 'icon_outfit', label: 'Outfit', color: '#a855f7', tier: 'epic' },
+  { icon: '🎟️', imageKey: 'icon_pass', label: 'Pase', color: '#a855f7', tier: 'epic' },
+  { icon: '👑', imageKey: 'icon_character', label: 'Personaje', color: '#fbbf24', tier: 'legendary' },
+  { icon: '🔥', imageKey: 'icon_mythic', label: 'Mítico', color: '#ec4899', tier: 'mythic' },
 ]
 
 function getRandomPrize(): Prize {
@@ -64,13 +72,13 @@ function getResultPrize(result: any): Prize {
   const tierColor = (TIER_COLORS as any)[result.tier]?.color || '#a395c9'
   const tier = result.tier
   if (result.reward_type === 'gacha_character') {
-    return { icon: tier === 'mythic' ? '🔥' : '👑', label: 'Personaje', color: tierColor, tier }
+    return { icon: tier === 'mythic' ? '🔥' : '👑', imageKey: tier === 'mythic' ? 'icon_mythic' : 'icon_character', label: 'Personaje', color: tierColor, tier }
   }
-  if (result.reward_type === 'fantasy_pass') return { icon: '🎟️', label: 'Pase', color: tierColor, tier }
-  if (result.reward_type === 'outfit') return { icon: '👗', label: 'Outfit', color: tierColor, tier }
-  if (result.reward_type === 'photo_token') return { icon: '📸', label: 'Foto', color: tierColor, tier }
-  if (result.reward_type === 'audio_token') return { icon: '🎵', label: 'Audio', color: tierColor, tier }
-  return { icon: '💬', label: `+${result.item_key}`, color: tierColor, tier }
+  if (result.reward_type === 'fantasy_pass') return { icon: '🎟️', imageKey: 'icon_pass', label: 'Pase', color: tierColor, tier }
+  if (result.reward_type === 'outfit') return { icon: '👗', imageKey: 'icon_outfit', label: 'Outfit', color: tierColor, tier }
+  if (result.reward_type === 'photo_token') return { icon: '📸', imageKey: 'icon_photo', label: 'Foto', color: tierColor, tier }
+  if (result.reward_type === 'audio_token') return { icon: '🎵', imageKey: 'icon_audio', label: 'Audio', color: tierColor, tier }
+  return { icon: '💬', imageKey: 'icon_gems', label: `+${result.item_key}`, color: tierColor, tier }
 }
 
 const getItemImageUrl = (itemId: string) => {
@@ -81,33 +89,20 @@ const getItemImageUrl = (itemId: string) => {
 }
 
 const SHOWCASE_OUTFITS = [
-  // ─── 👩 MUJERES ───
-  // Top más buscados → LEGENDARY
   { id: 'outfit_school',          name: 'Escolar',              rarity: 'legendary' },
   { id: 'outfit_maid_sexy',       name: 'Maid Provocativa',     rarity: 'legendary' },
   { id: 'outfit_police',          name: 'Policía Sexy',         rarity: 'legendary' },
   { id: 'outfit_bunny',           name: 'Conejita',             rarity: 'legendary' },
-
-  // Deseables → EPIC
   { id: 'outfit_red_lace',        name: 'Encaje Rojo',          rarity: 'epic' },
   { id: 'outfit_sheer_white',     name: 'Vestido Transparente', rarity: 'epic' },
   { id: 'outfit_corset_red',      name: 'Corsé Rojo',           rarity: 'epic' },
-
-  // Accesibles → RARE
   { id: 'outfit_black_leather',   name: 'Cuero Negro',          rarity: 'rare' },
   { id: 'outfit_cyber_armor',     name: 'Cyberpunk',            rarity: 'rare' },
   { id: 'outfit_latex_black',     name: 'Látex Negro',          rarity: 'rare' },
   { id: 'outfit_nurse',           name: 'Enfermera',            rarity: 'rare' },
-
-  // ─── 👨 HOMBRES ───
-  // Legendary
   { id: 'outfit_male_firefighter', name: 'Bombero',      rarity: 'legendary' },
   { id: 'outfit_male_dancer',      name: 'Bailarín',     rarity: 'legendary' },
-
-  // Epic
   { id: 'outfit_male_pirate',      name: 'Pirata',       rarity: 'epic' },
-
-  // Rare
   { id: 'outfit_male_gladiator',   name: 'Gladiador',    rarity: 'rare' },
   { id: 'outfit_male_towel',       name: 'Toalla de Baño', rarity: 'rare' },
 ]
@@ -125,7 +120,6 @@ export default function GachaPage() {
   const [ownedCharacters, setOwnedCharacters] = useState<string[]>([])
   const [loadingChars, setLoadingChars] = useState(true)
 
-  // ─── Reel refs y estado ───
   const [reelItems, setReelItems] = useState<Prize[]>([])
   const reelRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -139,22 +133,18 @@ export default function GachaPage() {
   const spinningRef = useRef(false)
   const handleLandingCompleteRef = useRef<() => void>(() => {})
 
-  // Inicializar preview del reel
   useEffect(() => {
     if (reelItems.length === 0) {
       setReelItems(Array.from({ length: 20 }, () => getRandomPrize()))
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Cleanup en unmount
   useEffect(() => {
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
     }
   }, [])
 
-  // Cargar personajes poseídos
   useEffect(() => {
     if (!user?.telegram_id) return
     tgFetch('/api/characters')
@@ -168,7 +158,6 @@ export default function GachaPage() {
       .finally(() => setLoadingChars(false))
   }, [user?.telegram_id])
 
-  // ─── Animation loop ───
   const tick = (time: number) => {
     if (phaseRef.current === 'fast') {
       positionRef.current -= FAST_SPEED
@@ -181,7 +170,6 @@ export default function GachaPage() {
     if (phaseRef.current === 'landing') {
       const elapsed = time - landingStartRef.current
       const t = Math.min(1, elapsed / LANDING_DURATION)
-      // Ease-out cuadrático: la velocidad inicial coincide con la del fast spin → transición sin saltos
       const eased = 1 - (1 - t) * (1 - t)
       const pos = landingStartPosRef.current + (targetRef.current - landingStartPosRef.current) * eased
       positionRef.current = pos
@@ -212,7 +200,6 @@ export default function GachaPage() {
     const containerWidth = containerRef.current?.offsetWidth || 340
     const targetX = containerWidth / 2 - (winIndex * ITEM_WIDTH + ITEM_WIDTH / 2)
 
-    // Establecer fase y capturar posición de forma atómica (sin frames en medio)
     phaseRef.current = 'landing'
     targetRef.current = targetX
     landingStartPosRef.current = positionRef.current
@@ -241,7 +228,6 @@ export default function GachaPage() {
     setResult(null)
     setError(null)
 
-    // Preparar reel nuevo
     const initialItems = Array.from({ length: 150 }, () => getRandomPrize())
     setReelItems(initialItems)
     positionRef.current = 0
@@ -324,10 +310,8 @@ export default function GachaPage() {
         )}
       </div>
 
-      {/* ═══════════════════ REEL SLOT MACHINE ═══════════════════ */}
       <div style={{ marginTop: 32, padding: '0 16px' }}>
         <div style={{ position: 'relative', maxWidth: 500, margin: '0 auto' }}>
-          {/* Glow */}
           <div style={{
             position: 'absolute', top: '50%', left: '50%',
             transform: 'translate(-50%, -50%)',
@@ -340,7 +324,6 @@ export default function GachaPage() {
           }} />
 
           <div style={{ position: 'relative', zIndex: 1 }}>
-            {/* Flecha superior */}
             <div style={{
               position: 'absolute', top: -4, left: '50%',
               transform: 'translateX(-50%)',
@@ -351,7 +334,6 @@ export default function GachaPage() {
               zIndex: 20,
               filter: 'drop-shadow(0 0 8px #ec4899)',
             }} />
-            {/* Flecha inferior */}
             <div style={{
               position: 'absolute', bottom: -4, left: '50%',
               transform: 'translateX(-50%)',
@@ -363,7 +345,6 @@ export default function GachaPage() {
               filter: 'drop-shadow(0 0 8px #ec4899)',
             }} />
 
-            {/* Ventana del reel */}
             <div ref={containerRef} style={{
               overflow: 'hidden',
               borderRadius: 16,
@@ -394,8 +375,32 @@ export default function GachaPage() {
                       justifyContent: 'center',
                       gap: 4,
                       boxShadow: `0 0 10px ${item.color}30, inset 0 0 8px ${item.color}15`,
+                      position: 'relative',
+                      overflow: 'hidden',
                     }}>
-                      <span style={{ fontSize: 30, lineHeight: 1 }}>{item.icon}</span>
+                      {/* ✅ IMAGEN REDONDEADA PREMIUM CON FALLBACK A EMOJI */}
+                      {item.imageKey && getPrizeImageUrl(item.imageKey) ? (
+                        <img 
+                          src={getPrizeImageUrl(item.imageKey)} 
+                          alt={item.label}
+                          style={{ 
+                            width: 46, 
+                            height: 46, 
+                            objectFit: 'cover', 
+                            borderRadius: 10, // ✅ Bordes redondeados premium
+                            filter: `drop-shadow(0 0 6px ${item.color})`,
+                            zIndex: 2 
+                          }}
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none';
+                            (e.target as HTMLImageElement).nextElementSibling?.setAttribute('style', 'display: block; font-size: 30px; line-height: 1; z-index: 2;');
+                          }}
+                        />
+                      ) : null}
+
+                      {/* Fallback Emoji */}
+                      <span style={{ display: item.imageKey ? 'none' : 'block', fontSize: 30, lineHeight: 1, zIndex: 2 }}>{item.icon}</span>
+
                       <span style={{
                         fontSize: 9,
                         fontWeight: 900,
@@ -403,6 +408,8 @@ export default function GachaPage() {
                         textAlign: 'center',
                         textShadow: `0 0 8px ${item.color}80`,
                         letterSpacing: '0.02em',
+                        zIndex: 2,
+                        marginTop: 2
                       }}>
                         {item.label}
                       </span>
@@ -411,7 +418,6 @@ export default function GachaPage() {
                 ))}
               </div>
 
-              {/* Línea central */}
               <div style={{
                 position: 'absolute', top: 0, bottom: 0, left: '50%',
                 width: 2,
@@ -423,7 +429,6 @@ export default function GachaPage() {
                 opacity: 0.7,
               }} />
 
-              {/* Fades laterales */}
               <div style={{ position: 'absolute', top: 0, bottom: 0, left: 0, width: '12%', background: 'linear-gradient(90deg, #150f24 0%, transparent 100%)', pointerEvents: 'none', zIndex: 5 }} />
               <div style={{ position: 'absolute', top: 0, bottom: 0, right: 0, width: '12%', background: 'linear-gradient(270deg, #150f24 0%, transparent 100%)', pointerEvents: 'none', zIndex: 5 }} />
             </div>
@@ -431,7 +436,6 @@ export default function GachaPage() {
         </div>
       </div>
 
-      {/* ═══════════════════ SPIN BUTTON ═══════════════════ */}
       <div style={{ padding: '32px 24px 0', position: 'relative', zIndex: 10 }}>
         {error && (
           <p style={{ color: '#fca5a5', fontSize: 13, textAlign: 'center', marginBottom: 12, background: 'rgba(220,38,38,0.1)', padding: 8, borderRadius: 8 }}>
@@ -478,7 +482,6 @@ export default function GachaPage() {
         )}
       </div>
 
-      {/* ═══════════════════ TABS ═══════════════════ */}
       <div style={{ padding: '40px 24px 0', position: 'relative', zIndex: 1 }}>
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
           <button
@@ -583,7 +586,6 @@ export default function GachaPage() {
         )}
       </div>
 
-      {/* ═══════════════════ INFO ═══════════════════ */}
       <div style={{ padding: '40px 24px 0', position: 'relative', zIndex: 1 }}>
         <div style={{ padding: 16, borderRadius: 16, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
           <h3 style={{ fontSize: 14, fontWeight: 800, color: '#f0abfc', margin: '0 0 12px 0', textAlign: 'center' }}>
@@ -600,7 +602,6 @@ export default function GachaPage() {
         </div>
       </div>
 
-      {/* ═══════════════════ RESULT MODAL ═══════════════════ */}
       {result && (
         <div className="modal-backdrop" style={{ zIndex: 9999, background: 'rgba(5, 2, 10, 0.95)', backdropFilter: 'blur(10px)' }}>
           <div
