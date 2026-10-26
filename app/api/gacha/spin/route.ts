@@ -53,7 +53,15 @@ export async function POST(request: Request) {
       let itemKey = ''
 
       if (forceEpic) {
-        tier = 'epic'
+        // ✅ MEJORA PITY: En la tirada 10, aumentamos un poco la probabilidad de Legendario/Mítico
+        const pityRoll = Math.random() * 100
+        if (pityRoll < 1.5) {
+          tier = 'mythic'      // 1.5% en la tirada 10
+        } else if (pityRoll < 15.0) {
+          tier = 'legendary'   // 13.5% en la tirada 10
+        } else {
+          tier = 'epic'        // 85% en la tirada 10
+        }
       } else if (roll < 0.5) {
         tier = 'mythic' // 0.5%
       } else if (roll < 1.5) {
