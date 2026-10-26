@@ -49,9 +49,6 @@ export default function ChatsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.telegram_id, userLoading])
 
-  // ═══════════════════════════════════════════════════════════════
-  // ✅ MIGRADO: ahora carga vía /api/chat-list (Turso)
-  // ═══════════════════════════════════════════════════════════════
   const loadChats = async () => {
     try {
       const res = await tgFetch('/api/chat-list')
@@ -74,7 +71,11 @@ export default function ChatsPage() {
 
   const formatTime = (iso?: string) => {
     if (!iso) return ''
-    const d = new Date(iso)
+    // ✅ FIX: Parseo seguro para Safari (SQLite usa "YYYY-MM-DD HH:MM:SS")
+    const safeIso = iso.includes('T') ? iso : iso.replace(' ', 'T') + 'Z'
+    const d = new Date(safeIso)
+    if (isNaN(d.getTime())) return ''
+    
     const now = new Date()
     const diff = (now.getTime() - d.getTime()) / 3600000
     if (diff < 24) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
