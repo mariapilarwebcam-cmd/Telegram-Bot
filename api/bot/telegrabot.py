@@ -2,7 +2,7 @@ import os
 import random
 import string
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta  # ✅ FIX: Añadido timedelta
 from typing import Optional
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, Router, F
@@ -307,7 +307,8 @@ async def pay_referral_commission(
 
 # ==================== PURCHASE HELPERS ====================
 
-async def record_star_purchase(telegram_id: int, stars: int, gems: int, is_first_purchase: bool, charge_id: str):
+# ✅ FIX: Ahora devuelve True (éxito) o False (duplicado/error) para cortar el flujo
+async def record_star_purchase(telegram_id: int, stars: int, gems: int, is_first_purchase: bool, charge_id: str) -> bool:
     try:
         turso_execute(
             """INSERT INTO star_purchases
@@ -320,9 +321,9 @@ async def record_star_purchase(telegram_id: int, stars: int, gems: int, is_first
         err_str = str(e)
         if 'UNIQUE' in err_str or 'unique' in err_str.lower() or 'constraint' in err_str.lower():
             logger.warning(f"⚠️ Charge {charge_id} ya procesado, ignorando")
-            return
+            return False  # ❌ Detener flujo (duplicado)
         logger.error(f"Error insertando star_purchase: {err_str}")
-        return
+        return False      # ❌ Detener flujo (error)
 
     try:
         now_iso = datetime.now(timezone.utc).isoformat()
@@ -347,6 +348,7 @@ async def record_star_purchase(telegram_id: int, stars: int, gems: int, is_first
     )
 
     await pay_referral_commission(telegram_id, gems, 'stars', charge_id)
+    return True  # ✅ Éxito
 
 
 # ==================== AGE VERIFICATION ====================
@@ -938,20 +940,28 @@ async def process_successful_payment(message: Message):
                     [str(telegram_id)]
                 )
                 
-                if current_sub:
+                if current_sub and current_sub.get('expires_at'):
+                    # ✅ FIX: Cálculo matemático seguro en Python en lugar de SQL
+                    current_exp = datetime.fromisoformat(str(current_sub['expires_at']).replace('Z', '+00:00'))
+                    new_exp = current_exp + timedelta(days=days)
+                    new_exp_str = new_exp.strftime('%Y-%m-%d %H:%M:%S')
+
                     turso_execute(
                         """UPDATE subscriptions 
-                           SET expires_at = datetime(expires_at, '+' || ? || ' days'),
-                               telegram_charge_id = ?
+                           SET expires_at = ?, telegram_charge_id = ?
                            WHERE telegram_id = ? AND status = 'active'""",
-                        [days, charge_id, str(telegram_id)]
+                        [new_exp_str, charge_id, str(telegram_id)]
                     )
                 else:
+                    # ✅ FIX: También calculamos la fecha inicial en Python
+                    new_exp = datetime.now(timezone.utc) + timedelta(days=days)
+                    new_exp_str = new_exp.strftime('%Y-%m-%d %H:%M:%S')
+                    
                     turso_execute(
                         """INSERT INTO subscriptions
                           (telegram_id, plan, stars_paid, telegram_charge_id, expires_at, status)
-                         VALUES (?, ?, ?, ?, datetime('now', '+' || ? || ' days'), 'active')""",
-                        [str(telegram_id), plan_id, message.successful_payment.total_amount, charge_id, days]
+                         VALUES (?, ?, ?, ?, ?, 'active')""",
+                        [str(telegram_id), plan_id, message.successful_payment.total_amount, charge_id, new_exp_str]
                     )
                 
                 user = await get_user(telegram_id)
@@ -975,11 +985,15 @@ async def process_successful_payment(message: Message):
     pkg = STAR_PACKAGES[pkg_idx]
     gems = calc_final_gems(pkg)
 
-    await record_star_purchase(
+    # ✅ FIX: Capturamos si la compra se procesó o era un duplicado
+    success = await record_star_purchase(
         telegram_id, pkg['stars'], gems,
         pkg.get('first_time', False),
         charge_id
     )
+
+    if not success:
+        return await message.answer("⚠️ Esta compra ya fue procesada anteriormente.")
 
     user = await get_user(telegram_id)
     lang = user.get('language', 'es') if user else 'es'
