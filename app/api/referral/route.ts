@@ -39,7 +39,7 @@ export async function POST(request: Request) {
     // ✅ FIX: Verificación rápida en users antes de ir a la tabla referrals
     const currentUser = await getUser(newTid)
     if (currentUser?.referred_by) {
-      return NextResponse.json({ ok: true, already: true, paid: true }) // Asumimos que ya se procesó
+      return NextResponse.json({ ok: true, already: true, paid: true })
     }
 
     // ¿Ya está referido?
