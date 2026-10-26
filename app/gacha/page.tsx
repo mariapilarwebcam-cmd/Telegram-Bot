@@ -81,22 +81,35 @@ const getItemImageUrl = (itemId: string) => {
 }
 
 const SHOWCASE_OUTFITS = [
-  { id: 'outfit_red_lace', name: 'Encaje Rojo', rarity: 'epic' },
-  { id: 'outfit_black_leather', name: 'Cuero Negro', rarity: 'epic' },
-  { id: 'outfit_cyber_armor', name: 'Cyberpunk', rarity: 'legendary' },
-  { id: 'outfit_latex_black', name: 'Látex Negro', rarity: 'legendary' },
-  { id: 'outfit_sheer_white', name: 'Vestido Transparente', rarity: 'legendary' },
-  { id: 'outfit_bunny', name: 'Conejita', rarity: 'epic' },
-  { id: 'outfit_maid_sexy', name: 'Maid Provocativa', rarity: 'epic' },
-  { id: 'outfit_corset_red', name: 'Corsé Rojo', rarity: 'epic' },
-  { id: 'outfit_school', name: 'Escolar', rarity: 'rare' },
-  { id: 'outfit_nurse', name: 'Enfermera', rarity: 'rare' },
-  { id: 'outfit_police', name: 'Policía Sexy', rarity: 'rare' },
-  { id: 'outfit_male_pirate', name: 'Pirata', rarity: 'epic' },
-  { id: 'outfit_male_firefighter', name: 'Bombero', rarity: 'epic' },
-  { id: 'outfit_male_gladiator', name: 'Gladiador', rarity: 'legendary' },
-  { id: 'outfit_male_dancer', name: 'Bailarín', rarity: 'legendary' },
-  { id: 'outfit_male_towel', name: 'Toalla de Baño', rarity: 'rare' },
+  // ─── 👩 MUJERES ───
+  // Top más buscados → LEGENDARY
+  { id: 'outfit_school',          name: 'Escolar',              rarity: 'legendary' },
+  { id: 'outfit_maid_sexy',       name: 'Maid Provocativa',     rarity: 'legendary' },
+  { id: 'outfit_police',          name: 'Policía Sexy',         rarity: 'legendary' },
+  { id: 'outfit_bunny',           name: 'Conejita',             rarity: 'legendary' },
+
+  // Deseables → EPIC
+  { id: 'outfit_red_lace',        name: 'Encaje Rojo',          rarity: 'epic' },
+  { id: 'outfit_sheer_white',     name: 'Vestido Transparente', rarity: 'epic' },
+  { id: 'outfit_corset_red',      name: 'Corsé Rojo',           rarity: 'epic' },
+
+  // Accesibles → RARE
+  { id: 'outfit_black_leather',   name: 'Cuero Negro',          rarity: 'rare' },
+  { id: 'outfit_cyber_armor',     name: 'Cyberpunk',            rarity: 'rare' },
+  { id: 'outfit_latex_black',     name: 'Látex Negro',          rarity: 'rare' },
+  { id: 'outfit_nurse',           name: 'Enfermera',            rarity: 'rare' },
+
+  // ─── 👨 HOMBRES ───
+  // Legendary
+  { id: 'outfit_male_firefighter', name: 'Bombero',      rarity: 'legendary' },
+  { id: 'outfit_male_dancer',      name: 'Bailarín',     rarity: 'legendary' },
+
+  // Epic
+  { id: 'outfit_male_pirate',      name: 'Pirata',       rarity: 'epic' },
+
+  // Rare
+  { id: 'outfit_male_gladiator',   name: 'Gladiador',    rarity: 'rare' },
+  { id: 'outfit_male_towel',       name: 'Toalla de Baño', rarity: 'rare' },
 ]
 
 export default function GachaPage() {
