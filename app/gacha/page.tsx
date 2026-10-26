@@ -194,6 +194,17 @@ export default function GachaPage() {
     while (items.length <= winIndex + 3) {
       items.push(getRandomPrize())
     }
+
+    // ✅ NUEVO: INYECTAR PREMIO SEÑUELO (El "Casi lo consigo")
+    // Ponemos un Legendario o Mítico exactamente 2 espacios antes del ganador real
+    const decoyIndex = winIndex - 2
+    if (decoyIndex >= 0) {
+      const highTierPool = REEL_POOL.filter(p => p.tier === 'legendary' || p.tier === 'mythic')
+      if (highTierPool.length > 0) {
+        items[decoyIndex] = { ...highTierPool[Math.floor(Math.random() * highTierPool.length)] }
+      }
+    }
+
     items[winIndex] = getResultPrize(resultData)
     setReelItems(items)
 
@@ -387,7 +398,7 @@ export default function GachaPage() {
                             width: 46, 
                             height: 46, 
                             objectFit: 'cover', 
-                            borderRadius: 10, // ✅ Bordes redondeados premium
+                            borderRadius: 10, 
                             filter: `drop-shadow(0 0 6px ${item.color})`,
                             zIndex: 2 
                           }}
