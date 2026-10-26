@@ -18,12 +18,33 @@ const TIER_COLORS = {
 
 const COST = 50
 
-// Outfits estáticos para la vitrina (luego puedes traerlos de la base de datos)
+// ✅ Función para obtener la imagen del R2
+const getItemImageUrl = (itemId: string) => {
+  const base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL
+  if (!base) return ''
+  return `${base.replace(/\/$/, '')}/items/${itemId}.jpg`
+}
+
+// ✅ Lista completa de Outfits (11 femeninos + 4 masculinos)
 const SHOWCASE_OUTFITS = [
-  { id: 'outfit_red_lace', name: 'Encaje Rojo', emoji: '👠', rarity: 'epic' },
-  { id: 'outfit_black_leather', name: 'Cuero Negro', emoji: '🖤', rarity: 'epic' },
-  { id: 'outfit_school', name: 'Escolar', emoji: '🎒', rarity: 'rare' },
-  { id: 'outfit_cyber_armor', name: 'Cyberpunk', emoji: '🤖', rarity: 'legendary' },
+  // 👩 Femeninos
+  { id: 'outfit_red_lace', name: 'Encaje Rojo', rarity: 'epic' },
+  { id: 'outfit_black_leather', name: 'Cuero Negro', rarity: 'epic' },
+  { id: 'outfit_cyber_armor', name: 'Cyberpunk', rarity: 'legendary' },
+  { id: 'outfit_latex_black', name: 'Látex Negro', rarity: 'legendary' },
+  { id: 'outfit_sheer_white', name: 'Vestido Transparente', rarity: 'legendary' },
+  { id: 'outfit_bunny', name: 'Conejita', rarity: 'epic' },
+  { id: 'outfit_maid_sexy', name: 'Maid Provocativa', rarity: 'epic' },
+  { id: 'outfit_corset_red', name: 'Corsé Rojo', rarity: 'epic' },
+  { id: 'outfit_school', name: 'Escolar', rarity: 'rare' },
+  { id: 'outfit_nurse', name: 'Enfermera', rarity: 'rare' },
+  { id: 'outfit_police', name: 'Policía Sexy', rarity: 'rare' },
+
+  // 👨 Masculinos
+  { id: 'outfit_male_pirate', name: 'Pirata', rarity: 'epic' },
+  { id: 'outfit_male_firefighter', name: 'Bombero', rarity: 'epic' },
+  { id: 'outfit_male_gladiator', name: 'Gladiador', rarity: 'legendary' },
+  { id: 'outfit_male_towel', name: 'Toalla de Baño', rarity: 'rare' },
 ]
 
 export default function GachaPage() {
@@ -214,7 +235,7 @@ export default function GachaPage() {
               borderBottom: activeTab === 'characters' ? '2px solid #a855f7' : '2px solid transparent'
             }}
           >
-            👑 Personajes Exclusivos
+            👑 Personajes
           </button>
           <button
             onClick={() => setActiveTab('outfits')}
@@ -226,7 +247,7 @@ export default function GachaPage() {
               borderBottom: activeTab === 'outfits' ? '2px solid #06b6d4' : '2px solid transparent'
             }}
           >
-            👗 Outfits Permanentes
+            👗 Outfits
           </button>
         </div>
 
@@ -257,20 +278,33 @@ export default function GachaPage() {
           </div>
         )}
 
-        {/* VITRINA: OUTFITS */}
+        {/* ✅ VITRINA: OUTFITS CON IMÁGENES */}
         {activeTab === 'outfits' && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
             {SHOWCASE_OUTFITS.map((outfit) => (
               <div key={outfit.id} style={{ 
-                padding: 12, borderRadius: 12, 
+                borderRadius: 12, 
                 background: 'rgba(255,255,255,0.03)', 
                 border: '1px solid rgba(255,255,255,0.08)',
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6
+                overflow: 'hidden',
+                display: 'flex', flexDirection: 'column',
               }}>
-                <div style={{ fontSize: 28 }}>{outfit.emoji}</div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#f5f0ff' }}>{outfit.name}</div>
-                <div style={{ fontSize: 9, color: TIER_COLORS[outfit.rarity as keyof typeof TIER_COLORS].color, fontWeight: 800 }}>
-                  {TIER_COLORS[outfit.rarity as keyof typeof TIER_COLORS].label}
+                {/* Imagen real desde R2 */}
+                <div style={{ 
+                  width: '100%', 
+                  aspectRatio: '3/4', 
+                  backgroundImage: `url('${getItemImageUrl(outfit.id)}')`,
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                  backgroundColor: '#150f24'
+                }} />
+                
+                {/* Texto y rareza */}
+                <div style={{ padding: '10px 8px', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#f5f0ff' }}>{outfit.name}</div>
+                  <div style={{ fontSize: 9, color: TIER_COLORS[outfit.rarity as keyof typeof TIER_COLORS].color, fontWeight: 800 }}>
+                    {TIER_COLORS[outfit.rarity as keyof typeof TIER_COLORS].label}
+                  </div>
                 </div>
               </div>
             ))}
