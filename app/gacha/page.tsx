@@ -1,11 +1,12 @@
 "use client"
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useUser } from '@/lib/UserContext'
 import { tgFetch } from '@/lib/telegram-fetch'
 import { getTranslations } from '@/lib/i18n'
 import { AnimatedNumber } from '@/components/AnimatedNumber'
+import { GACHA_ARCHETYPES, CHARACTER_NAMES_FEMALE, CHARACTER_NAMES_MALE } from '@/lib/constants'
 
 const TIER_COLORS = {
   common: { color: '#a395c9', bg: 'rgba(163, 149, 201, 0.1)', border: 'rgba(163, 149, 201, 0.3)', label: 'COMÚN' },
@@ -17,6 +18,14 @@ const TIER_COLORS = {
 
 const COST = 50
 
+// Outfits estáticos para la vitrina (luego puedes traerlos de la base de datos)
+const SHOWCASE_OUTFITS = [
+  { id: 'outfit_red_lace', name: 'Encaje Rojo', emoji: '👠', rarity: 'epic' },
+  { id: 'outfit_black_leather', name: 'Cuero Negro', emoji: '🖤', rarity: 'epic' },
+  { id: 'outfit_school', name: 'Escolar', emoji: '🎒', rarity: 'rare' },
+  { id: 'outfit_cyber_armor', name: 'Cyberpunk', emoji: '🤖', rarity: 'legendary' },
+]
+
 export default function GachaPage() {
   const router = useRouter()
   const { user, loading: userLoading, lang, refresh } = useUser()
@@ -25,11 +34,12 @@ export default function GachaPage() {
   const [spinning, setSpinning] = useState(false)
   const [result, setResult] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<'characters' | 'outfits'>('characters')
 
   const handleSpin = async () => {
     if (!user || spinning) return
     if ((user.purchased_gems || 0) < COST) {
-      setError('Necesitas 50 gemas compradas para tirar de la ruleta.')
+      setError(lang === 'es' ? 'Necesitas 50 gemas compradas para tirar.' : 'You need 50 purchased gems to spin.')
       return
     }
 
@@ -37,7 +47,7 @@ export default function GachaPage() {
     setResult(null)
     setError(null)
 
-    // Simulamos una animación de 2 segundos para generar emoción
+    // Simulamos una animación de 2.5 segundos para generar emoción
     const minWait = new Promise(resolve => setTimeout(resolve, 2500))
 
     try {
@@ -61,6 +71,7 @@ export default function GachaPage() {
     }
   }
 
+  // Si el usuario no ha cargado
   if (userLoading || !user) {
     return (
       <div className="spinner-full">
@@ -119,8 +130,8 @@ export default function GachaPage() {
         <div style={{ position: 'absolute', width: 300, height: 300, background: 'radial-gradient(circle, rgba(236,72,153,0.2) 0%, transparent 60%)', filter: 'blur(40px)', zIndex: 0, animation: 'pulseGlow 4s infinite' }} />
 
         <div style={{
-          width: 200,
-          height: 260,
+          width: 220,
+          height: 280,
           borderRadius: 24,
           background: 'linear-gradient(145deg, #1f1733 0%, #150f24 100%)',
           border: '2px solid rgba(168, 85, 247, 0.4)',
@@ -134,24 +145,12 @@ export default function GachaPage() {
           transition: 'transform 0.2s',
           animation: spinning ? 'shake 0.5s infinite' : 'float 3s infinite ease-in-out'
         }}>
-          <div style={{ fontSize: 72, filter: 'drop-shadow(0 0 20px rgba(236,72,153,0.8))', animation: spinning ? 'spinFast 1s infinite linear' : 'none' }}>
+          <div style={{ fontSize: 80, filter: 'drop-shadow(0 0 20px rgba(236,72,153,0.8))', animation: spinning ? 'spinFast 1s infinite linear' : 'none' }}>
             {spinning ? '🎰' : '🎁'}
           </div>
           <p style={{ color: '#f0abfc', fontWeight: 900, letterSpacing: '0.1em', marginTop: 16, fontSize: 14 }}>
             {spinning ? 'GIRANDO...' : 'TOCA PARA GIRAR'}
           </p>
-        </div>
-
-        {/* CONTADOR DE PITY (Lástima) */}
-        <div style={{ marginTop: 24, zIndex: 1, textAlign: 'center' }}>
-          <p style={{ fontSize: 11, color: '#8b8b9e', margin: 0, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-            Garantía de Épico o superior
-          </p>
-          <div style={{ display: 'flex', gap: 4, marginTop: 8, justifyContent: 'center' }}>
-            {[...Array(10)].map((_, i) => (
-              <div key={i} style={{ width: 12, height: 12, borderRadius: '50%', background: i < ((user as any).pity_counter || 0) ? '#ec4899' : 'rgba(168,85,247,0.2)', border: '1px solid rgba(168,85,247,0.4)' }} />
-            ))}
-          </div>
         </div>
       </div>
 
@@ -202,29 +201,81 @@ export default function GachaPage() {
         )}
       </div>
 
-      {/* VITRINA DE PREMIOS */}
+      {/* VITRINA DE PREMIOS (TABS) */}
       <div style={{ padding: '40px 24px 0', position: 'relative', zIndex: 1 }}>
-        <p style={{ fontSize: 12, fontWeight: 800, color: '#8b8b9e', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 12 }}>
-          Premios Disponibles
-        </p>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-          <div style={{ background: 'rgba(163,149,201,0.05)', padding: 12, borderRadius: 12, border: '1px solid rgba(163,149,201,0.2)' }}>
-            <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: '#a395c9' }}>Mensajes de Chat</p>
-            <p style={{ margin: '4px 0 0', fontSize: 10, color: '#8b8b9e' }}>Gana entre 20 y 50 gemas de chat</p>
-          </div>
-          <div style={{ background: 'rgba(6,182,212,0.05)', padding: 12, borderRadius: 12, border: '1px solid rgba(6,182,212,0.2)' }}>
-            <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: '#06b6d4' }}>Fotos y Pases</p>
-            <p style={{ margin: '4px 0 0', fontSize: 10, color: '#8b8b9e' }}>Fotos nivel 3, 4 o Pases Nivel 5</p>
-          </div>
-          <div style={{ background: 'rgba(168,85,247,0.05)', padding: 12, borderRadius: 12, border: '1px solid rgba(168,85,247,0.2)' }}>
-            <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: '#a855f7' }}>Outfits Exclusivos</p>
-            <p style={{ margin: '4px 0 0', fontSize: 10, color: '#8b8b9e' }}>Lencería y conjuntos permanentes</p>
-          </div>
-          <div style={{ background: 'rgba(251,191,36,0.05)', padding: 12, borderRadius: 12, border: '1px solid rgba(251,191,36,0.2)' }}>
-            <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: '#fbbf24' }}>Personajes Ocultos</p>
-            <p style={{ margin: '4px 0 0', fontSize: 10, color: '#8b8b9e' }}>Desbloquea arquetipos únicos</p>
-          </div>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+          <button
+            onClick={() => setActiveTab('characters')}
+            style={{
+              flex: 1, padding: '10px', borderRadius: 12, border: 'none', cursor: 'pointer',
+              background: activeTab === 'characters' ? 'rgba(168, 85, 247, 0.2)' : 'rgba(255,255,255,0.05)',
+              color: activeTab === 'characters' ? '#f0abfc' : '#8b8b9e',
+              fontWeight: 800, fontFamily: 'inherit', fontSize: 13,
+              borderBottom: activeTab === 'characters' ? '2px solid #a855f7' : '2px solid transparent'
+            }}
+          >
+            👑 Personajes Exclusivos
+          </button>
+          <button
+            onClick={() => setActiveTab('outfits')}
+            style={{
+              flex: 1, padding: '10px', borderRadius: 12, border: 'none', cursor: 'pointer',
+              background: activeTab === 'outfits' ? 'rgba(6, 182, 212, 0.2)' : 'rgba(255,255,255,0.05)',
+              color: activeTab === 'outfits' ? '#06b6d4' : '#8b8b9e',
+              fontWeight: 800, fontFamily: 'inherit', fontSize: 13,
+              borderBottom: activeTab === 'outfits' ? '2px solid #06b6d4' : '2px solid transparent'
+            }}
+          >
+            👗 Outfits Permanentes
+          </button>
         </div>
+
+        {/* VITRINA: PERSONAJES */}
+        {activeTab === 'characters' && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+            {GACHA_ARCHETYPES.map((arch) => {
+              const isFemale = arch === 'succubus' || arch === 'fallen_angel' || arch === 'werewolf_f' || arch === 'cyborg_assassin'
+              const name = isFemale ? CHARACTER_NAMES_FEMALE[arch] : CHARACTER_NAMES_MALE[arch]
+              
+              return (
+                <div key={arch} style={{ 
+                  aspectRatio: '3/4', borderRadius: 12, 
+                  background: 'linear-gradient(180deg, rgba(31,23,51,0.8) 0%, rgba(10,5,16,0.9) 100%)',
+                  border: '1px solid rgba(168,85,247,0.2)',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  position: 'relative', overflow: 'hidden'
+                }}>
+                  <div style={{ fontSize: 24, opacity: 0.2, filter: 'grayscale(1)' }}>👤</div>
+                  <div style={{ position: 'absolute', inset: 0, background: 'rgba(10,5,16,0.6)', backdropFilter: 'blur(2px)' }} />
+                  <div style={{ position: 'absolute', fontSize: 18, fontWeight: 900, color: 'rgba(255,255,255,0.7)' }}>?</div>
+                  <div style={{ position: 'absolute', bottom: 4, width: '100%', textAlign: 'center' }}>
+                    <span style={{ fontSize: 8, fontWeight: 800, color: '#fbbf24', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Exclusivo</span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {/* VITRINA: OUTFITS */}
+        {activeTab === 'outfits' && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+            {SHOWCASE_OUTFITS.map((outfit) => (
+              <div key={outfit.id} style={{ 
+                padding: 12, borderRadius: 12, 
+                background: 'rgba(255,255,255,0.03)', 
+                border: '1px solid rgba(255,255,255,0.08)',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6
+              }}>
+                <div style={{ fontSize: 28 }}>{outfit.emoji}</div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#f5f0ff' }}>{outfit.name}</div>
+                <div style={{ fontSize: 9, color: TIER_COLORS[outfit.rarity as keyof typeof TIER_COLORS].color, fontWeight: 800 }}>
+                  {TIER_COLORS[outfit.rarity as keyof typeof TIER_COLORS].label}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* MODAL DE RESULTADO */}
