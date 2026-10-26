@@ -1,17 +1,19 @@
 "use client"
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 
 export function AnimatedNumber({ value }: { value: number }) {
   const [displayValue, setDisplayValue] = useState(value)
+  const displayRef = useRef(value)
 
   useEffect(() => {
-    let start = displayValue
+    let start = displayRef.current
     const end = value
     if (start === end) return
 
     const duration = 1000 // 1 segundo de animación
     const startTime = performance.now()
+    let animationFrame: number
 
     const animate = (currentTime: number) => {
       const elapsed = currentTime - startTime
@@ -22,14 +24,17 @@ export function AnimatedNumber({ value }: { value: number }) {
       
       const current = Math.round(start + (end - start) * easeOut)
       setDisplayValue(current)
+      displayRef.current = current
 
       if (progress < 1) {
-        requestAnimationFrame(animate)
+        animationFrame = requestAnimationFrame(animate)
       }
     }
 
-    requestAnimationFrame(animate)
-  }, [value, displayValue])
+    animationFrame = requestAnimationFrame(animate)
+
+    return () => cancelAnimationFrame(animationFrame)
+  }, [value])
 
   return <span>{displayValue}</span>
 }
