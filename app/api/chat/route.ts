@@ -33,6 +33,7 @@ import {
   LOW_GEMS_THRESHOLD,
   getLevelPersonality,
   VIP_DAILY_MESSAGE_LIMIT,
+  isVipArchetype // ✅ IMPORTAMOS LA FUNCIÓN
 } from '@/lib/constants'
 import {
   getLevelFromMessages,
@@ -206,9 +207,20 @@ export async function POST(request: Request) {
     const vipSub = await getActiveSubscription(tid)
     const isVip = !!vipSub
 
+    // ✅ BUG FIX VIP: Bloquear el chat si el personaje es VIP y la suscripción expiró
+    if (isVipArchetype(character.archetype) && !isVip) {
+      return NextResponse.json({
+        blocked: true,
+        vip_expired: true,
+        response: lang === 'es'
+          ? `*${character.character_name} te mira con tristeza y aparta la mirada*\n\n"Lo siento... mi tiempo contigo se ha agotado. Si quieres seguir viéndome, tendrás que renovar tu acceso VIP."`
+          : `*${character.character_name} looks at you sadly and looks away*\n\n"I'm sorry... our time together has run out. If you want to see me again, you'll need to renew your VIP access."`
+      }, { status: 403 })
+    }
+
     let vipMessagesToday = 0
     let newGems = user.gems || 0
-    let newBonusGems = user.bonus_gems || 0 // ✅ NUEVO: Saldo de gemas bonus
+    let newBonusGems = user.bonus_gems || 0
     let newHookRemaining = user.hook_messages_remaining || 0
     let newHookUsed = !!user.hook_used
 
@@ -256,7 +268,6 @@ export async function POST(request: Request) {
       const hookUsed = !!user.hook_used
       const totalCost = GEM_COSTS.message + penaltyGems
       
-      // ✅ NUEVO: Verificamos si tiene saldo total (bonus + reales) para no bloquearlo antes de tiempo
       const hasTotalGems = (newBonusGems + newGems) >= totalCost
 
       if (!hasTotalGems && hookRemaining <= 0 && hookUsed) {
@@ -276,7 +287,6 @@ export async function POST(request: Request) {
 
       let charged = false
       
-      // ✅ 1. Intentar cobrar de las Gemas de Chat (Bonus)
       if (newBonusGems >= totalCost) {
         const bonusResult = await queryOne<{ bonus_gems: number }>(
           `UPDATE users SET bonus_gems = bonus_gems - ? WHERE telegram_id = ? AND bonus_gems >= ? RETURNING bonus_gems`,
@@ -285,11 +295,9 @@ export async function POST(request: Request) {
         if (bonusResult) {
           newBonusGems = bonusResult.bonus_gems
           charged = true
-          // No registramos transacción de gema real porque son bonus
         }
       }
 
-      // ✅ 2. Si no le alcanzó con las Bonus, cobrar de las Reales
       if (!charged) {
         const chargeResult = await queryOne<{ gems: number }>(
           `UPDATE users SET gems = gems - ? WHERE telegram_id = ? AND gems >= ? RETURNING gems`,
@@ -510,7 +518,7 @@ ${learned.heat.length > 0 ? `- The system learned users love these words: ${lear
       user_message_id: userMessageId,          
       assistant_message_id: assistantMessageId, 
       remaining_gems: newGems,
-      remaining_bonus_gems: newBonusGems, // ✅ NUEVO: Enviamos el saldo de bonus al frontend
+      remaining_bonus_gems: newBonusGems, 
       hook_messages_remaining: newHookRemaining,
       is_hook_mode: isHookModeAfter,
       is_vip: isVip,
