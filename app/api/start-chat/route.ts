@@ -7,9 +7,10 @@ import {
   hasAnyMessage,
   insertMessage,
   insertGemTransaction,
+  getActiveSubscription, // ✅ IMPORTAMOS ESTO
 } from '@/lib/db-queries'
-import { queryOne } from '@/lib/turso' // ✅ Importamos queryOne para el UPDATE atómico
-import { OPENING_LINES, GEM_COSTS } from '@/lib/constants'
+import { queryOne } from '@/lib/turso' 
+import { OPENING_LINES, GEM_COSTS, isVipArchetype } from '@/lib/constants' // ✅ IMPORTAMOS isVipArchetype
 
 export async function POST(request: Request) {
   try {
@@ -31,8 +32,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Personaje no encontrado' }, { status: 404 })
     }
 
+    // ✅ BUG FIX VIP: Bloquear el inicio de chat si el personaje es VIP y el usuario no lo es
+    const vipSub = await getActiveSubscription(tid)
+    const isVip = !!vipSub
+
+    if (isVipArchetype(character.archetype) && !isVip) {
+      return NextResponse.json({ 
+        blocked: true, 
+        vip_expired: true,
+        response: 'Este personaje es exclusivo VIP. Renueva tu suscripción para hablar con él.' 
+      }, { status: 403 })
+    }
+
     // 🛡️ FIX CRÍTICO: COBRO ATÓMICO Y VERIFICACIÓN EN UN SOLO PASO
-    // Solo resta 1 gema SI el usuario tiene saldo Y NO tiene historial previo.
     const charged = await queryOne<{ gems: number }>(
       `UPDATE users
        SET gems = gems - ?
@@ -46,12 +58,10 @@ export async function POST(request: Request) {
     )
 
     if (!charged) {
-      // Si falló el UPDATE, verificamos por qué para dar el mensaje correcto
       const alreadyStarted = await hasAnyMessage(tid, character_id)
       if (alreadyStarted) {
         return NextResponse.json({ already_started: true })
       }
-      // Si no ha empezado, es porque no tiene gemas
       return NextResponse.json({
         blocked: true,
         response: '',
@@ -59,7 +69,6 @@ export async function POST(request: Request) {
       })
     }
 
-    // El usuario ya fue cobrado exitosamente de forma segura
     await insertGemTransaction({
       telegram_id: tid,
       amount: -GEM_COSTS.message,
@@ -76,7 +85,6 @@ export async function POST(request: Request) {
     const template = openingTemplate ? openingTemplate[lang] : fallback
     const openingMessage = template.replace(/{name}/g, character.character_name)
 
-    // ✅ INTEGRACIÓN: Capturamos el ID del mensaje insertado
     const insertedMsg = await insertMessage({
       telegram_id: tid,
       character_id,
@@ -86,8 +94,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       response: openingMessage,
-      assistant_message_id: insertedMsg?.id, // ✅ AÑADIDO
-      remaining_gems: charged.gems, // Usamos las gemas devueltas por la DB
+      assistant_message_id: insertedMsg?.id,
+      remaining_gems: charged.gems,
     })
   } catch (e: any) {
     console.error('Error en start-chat:', e)
