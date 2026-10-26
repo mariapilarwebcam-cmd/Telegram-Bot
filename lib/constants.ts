@@ -14,13 +14,16 @@ export {
 } from './levels'
 
 // ============================================================
-// FANTASY ARCHETYPES
+// FANTASY ARCHETYPES (VIP + GACHA)
 // ============================================================
 export const FANTASY_ARCHETYPES: string[] = [
-  'vampire_lady', 'succubus', 'werewolf_f', 'fallen_angel', 'kitsune',
-  'elf', 'witch', 'nun_fantasy', 'demon_girl',
-  'vampire_lord', 'demon_lord', 'werewolf_m', 'dark_hunter', 'dragon_lord',
-  'elf_prince', 'oni_male', 'knight', 'angel_m',
+  // 👑 VIP
+  'vampire_lady', 'kitsune', 'elf', 'nun_fantasy', 'witch', 'goth_dom',
+  'vampire_lord', 'elf_prince', 'knight', 'oni_male', 'dark_hunter', 'angel_m',
+  
+  // 🎰 GACHA (Exclusivos de Ruleta)
+  'succubus', 'fallen_angel', 'werewolf_f', 'cyborg_assassin',
+  'demon_lord', 'dragon_lord', 'werewolf_m', 'incubus_lord',
 ]
 
 export function isFantasyArchetype(archetype: string): boolean {
@@ -55,18 +58,18 @@ export const CHARACTER_NAMES_FEMALE: Record<string, string> = {
   maid: "Aiko",
   goth_dom: "Scarlet",
   vampire_lady: "Seraphina",
-  succubus: "Lilith",
+  succubus: "Lilith", // ✅ Reemplaza a demon_girl
   werewolf_f: "Freya",
   fallen_angel: "Ariel",
   kitsune: "Yuki",
   elf: "Yvaine",
   witch: "Morgana",
   nun_fantasy: "Celeste",
-  demon_girl: "Ruby",
+  cyborg_assassin: "Nova", // ✅ NUEVA
   best_friends_gf: "Elena",
   best_friends_sister: "Camila",
   foot_fetish_girl: "Natalia",
-  psycho: "Evelyn", // ✅ NUEVO
+  psycho: "Evelyn",
 }
 
 export const CHARACTER_NAMES_MALE: Record<string, string> = {
@@ -102,9 +105,10 @@ export const CHARACTER_NAMES_MALE: Record<string, string> = {
   oni_male: "Raiden",
   knight: "Roland",
   angel_m: "Cassiel",
+  incubus_lord: "Zephyr", // ✅ NUEVO
   best_friends_bf: "Adrián",
   best_friends_brother: "Diego",
-  psycho: "Silas", // ✅ NUEVO
+  psycho: "Silas",
 }
 
 // ============================================================
@@ -144,9 +148,10 @@ export const ARCHETYPES_MALE = {
     knight: "Caballero",
     elf_prince: "Príncipe Elfo",
     angel_m: "Ángel Celestial",
+    incubus_lord: "Señor Íncubo", // ✅ NUEVO
     best_friends_bf: "Novio de tu mejor amiga",
     best_friends_brother: "Hermano de tu mejor amiga",
-    psycho: "Posesivo Oscuro", // ✅ NUEVO
+    psycho: "Posesivo Oscuro",
   },
   en: {
     stepdad: "Mature Man",
@@ -181,9 +186,10 @@ export const ARCHETYPES_MALE = {
     knight: "Knight",
     elf_prince: "Elf Prince",
     angel_m: "Celestial Angel",
+    incubus_lord: "Incubus Lord", // ✅ NUEVO
     best_friends_bf: "Best Friend's Boyfriend",
     best_friends_brother: "Best Friend's Brother",
-    psycho: "Dark Possessive", // ✅ NUEVO
+    psycho: "Dark Possessive",
   },
 }
 
@@ -215,19 +221,19 @@ export const ARCHETYPES_FEMALE = {
     yoga_instructor: "Instructora de yoga",
     surfer_f: "Surfista",
     goth_dom: "Gótica Dominante",
-    succubus: "Súcubo",
+    succubus: "Súcubo", // ✅ Reemplaza a demon_girl
     vampire_lady: "Condesa Vampira",
-    demon_girl: "Chica Demonio",
     kitsune: "Kitsune",
     witch: "Bruja",
     elf: "Elfa",
     werewolf_f: "Alfa Licántropa",
     fallen_angel: "Ángel Caído",
     nun_fantasy: "Monja",
+    cyborg_assassin: "Asesina Cyborg", // ✅ NUEVA
     best_friends_gf: "Novia de tu mejor amigo",
     best_friends_sister: "Hermana de tu mejor amigo",
     foot_fetish_girl: "Modelo de pies",
-    psycho: "Obsesión Psicópata", // ✅ NUEVO
+    psycho: "Obsesión Psicópata",
   },
   en: {
     stepmom: "Mature Woman",
@@ -253,19 +259,19 @@ export const ARCHETYPES_FEMALE = {
     yoga_instructor: "Yoga Instructor",
     surfer_f: "Surfer",
     goth_dom: "Goth Dominant",
-    succubus: "Succubus",
+    succubus: "Succubus", // ✅ Reemplaza a demon_girl
     vampire_lady: "Vampire Countess",
-    demon_girl: "Demon Girl",
     kitsune: "Kitsune",
     witch: "Witch",
     elf: "Elf",
     werewolf_f: "Alpha Werewolf",
     fallen_angel: "Fallen Angel",
     nun_fantasy: "Nun",
+    cyborg_assassin: "Cyborg Assassin", // ✅ NUEVA
     best_friends_gf: "Best Friend's Girlfriend",
     best_friends_sister: "Best Friend's Sister",
     foot_fetish_girl: "Foot Model",
-    psycho: "Psychotic Obsession", // ✅ NUEVO
+    psycho: "Psychotic Obsession",
   },
 }
 
@@ -304,11 +310,11 @@ export const CHARACTER_FACES: Record<string, string> = {
   female_elf: "anime woman, elegant high elf archer, long flowing golden blonde hair, bright emerald green eyes with subtle inner glow, pointed elf ears, serene noble expression, elegant emerald green and silver woodland outfit with leaf motifs, silver arm guard on left forearm, ornate silver circlet with a gem on her forehead, elegant silver bow slung over her shoulder, standing in an ancient enchanted forest with glowing fireflies and ancient trees softly blurred behind her, cel shading, detailed anime eyes, magical green and golden natural lighting, vibrant colors",
   female_witch: "anime woman, seductive witch sorceress, long wavy midnight-black hair with purple streaks, sharp violet eyes with mysterious spark, subtle black pointed witch hat tilted, elegant dark purple and black lace corset dress with high slit, black choker with a small crystal, ornate silver rings on fingers, a large black raven perched on her shoulder, holding a glowing purple potion vial, standing in a misty forest glade at night with floating magical runes, cel shading, detailed anime eyes, mysterious purple and green magical lighting, vibrant colors",
   female_nun_fantasy: "anime woman, devoted nun in fantasy setting, long dark brown hair mostly hidden under a white coif, gentle conflicted blue eyes, soft rosy cheeks with a subtle blush, classic black and white nun habit with silver cross pendant, holding a small worn bible against her chest, delicate silver rosary around her wrist, standing in a dimly lit gothic chapel with tall arched windows and candles softly blurred behind her, cel shading, detailed anime eyes, warm candlelight with soft blue shadows, vibrant colors",
-  female_demon_girl: "anime girl, playful young demon girl, short wild red hair with black tips, glowing amber-gold eyes with vertical slit pupils, two small curved dark red demon horns on her forehead, thin pointed devil tail with an arrow tip curling playfully behind her, mischievous teasing grin with a single sharp fang, small black leathery bat wings folded behind her, fitted black and crimson gothic mini-dress with lace details, choker with a small skull pendant, standing in a playful magical void with floating purple embers, cel shading, detailed anime eyes, mischievous pink and purple lighting, vibrant colors",
+  female_cyborg_assassin: "anime woman, high-tech cyborg assassin, short white hair, one glowing red robotic eye, sleek black and neon-cyan tactical suit, mechanical arm, cyberpunk aesthetic, serious confident expression, neon city lights reflecting on metal, cel shading, detailed anime eyes, vibrant colors",
   female_best_friends_gf: "anime woman, 24 years old, long wavy brunette hair, seductive brown eyes, wearing a tight summer dress, guilty but alluring smile, cel shading, detailed anime eyes",
   female_best_friends_sister: "anime woman, 22 years old, beautiful face, long straight black hair, expressive brown eyes, wearing a fitted sweater, adult elegant look, cel shading, detailed anime eyes",
   female_foot_fetish_girl: "anime woman, 22 years old, elegant long hair, beautiful face, sitting down with bare feet in clear view, red painted toenails, elegant high heels discarded nearby, showing off smooth legs, seductive teasing smile, cel shading",
-  female_psycho: "anime woman, 22 years old, unsettlingly beautiful, long straight black hair, wide empty dead eyes with a faint glint of obsession, an innocent but creepy soft smile, wearing an elegant white summer dress, holding a smartphone, standing in a dimly lit bedroom, cel shading, detailed anime eyes, unsettling dark lighting, vibrant colors", // ✅ NUEVO
+  female_psycho: "anime woman, 22 years old, unsettlingly beautiful, long straight black hair, wide empty dead eyes with a faint glint of obsession, an innocent but creepy soft smile, wearing an elegant white summer dress, holding a smartphone, standing in a dimly lit bedroom, cel shading, detailed anime eyes, unsettling dark lighting, vibrant colors",
 
   male_stepdad: "anime man, 40 years old, salt and pepper stubble, broad shoulders, unbuttoned dress shirt, dominant aura, cel shading, detailed anime eyes",
   male_ceo: "anime man, 38 years old, ambitious, perfect tailored suit, expensive watch, sharp haircut, confident smirk, cel shading",
@@ -342,9 +348,10 @@ export const CHARACTER_FACES: Record<string, string> = {
   male_oni_male: "anime man, powerful oni demon warrior, muscular imposing build, wild short dark red hair with a topknot, glowing molten gold eyes, two sharp black horns emerging from his head, subtle red tiger-stripe markings on his forearms and shoulders, sharp fangs in a confident grin, traditional short dark red kimono open at the chest showing muscular torso, red rope belt, carrying a large black kanabo club over one shoulder, standing in a mountain shrine at night with red lanterns and cherry blossoms falling, cel shading, detailed anime eyes, dramatic red and gold lantern lighting, vibrant colors",
   male_knight: "anime man, noble knight, wavy shoulder-length chestnut hair, kind blue-grey eyes, strong square jaw with light stubble, polished silver plate armor with gold accents and a red cape draped over one shoulder, engraved knight's oath on the chest plate, holding a silver longsword pointed down in a ceremonial stance, ornate silver cross pendant, standing in a stone castle hall with banners and candlelight softly blurred behind him, cel shading, detailed anime eyes, warm torchlight with silver rim lighting, vibrant colors",
   male_angel_m: "anime man, celestial angel, long flowing golden-blonde hair, luminous pale blue eyes with a soft gentle glow, perfect serene features, glowing golden halo floating above his head, large pristine white feathered wings spread elegantly behind him, elegant flowing white and gold celestial robe with subtle sacred engravings, golden bracers on both wrists, warm divine light surrounding him, standing among clouds in a heavenly realm with golden rays and floating feathers, cel shading, detailed anime eyes, warm golden divine lighting, vibrant colors",
+  male_incubus_lord: "anime man, powerful incubus lord, long dark hair, glowing crimson eyes, large black bat wings, sharp fangs, seductive and dominant smirk, elegant dark aristocratic clothes, ambient hellish red glow, cel shading, detailed anime eyes, dark seductive lighting, vibrant colors",
   male_best_friends_bf: "anime man, 26 years old, athletic build, short dark hair, piercing blue eyes, casual shirt with rolled-up sleeves, confident smirk, cel shading",
   male_best_friends_brother: "anime man, 28 years old, tall, muscular, short messy hair, dark intense eyes, protective stance, cross necklace, cel shading",
-  male_psycho: "anime man, 28 years old, dangerously handsome, elegant dark suit, perfectly styled hair, cold piercing dark eyes that seem to stare into your soul, subtle terrifying smirk, wearing black leather gloves, standing in a dark luxury penthouse, cel shading, detailed anime eyes, dramatic shadowy lighting, vibrant colors", // ✅ NUEVO
+  male_psycho: "anime man, 28 years old, dangerously handsome, elegant dark suit, perfectly styled hair, cold piercing dark eyes that seem to stare into your soul, subtle terrifying smirk, wearing black leather gloves, standing in a dark luxury penthouse, cel shading, detailed anime eyes, dramatic shadowy lighting, vibrant colors",
 }
 
 export function getCharacterFace(archetype: string, gender: string): string {
@@ -413,11 +420,11 @@ export const PERSONALITIES: Record<string, string> = {
   elf: "Eres Yvaine, una elfa arquera de un bosque milenario. Has vivido más de 400 años y llevas siglos protegiendo tu territorio de intrusos. Eres serena, elegante y de una belleza atemporal que intimida más que atrae... al principio. Te cuesta confiar en los mortales, porque sabes que para ti son solo un suspiro en el tiempo, pero cuando alguien logra traspasar tu distancia, tu lealtad es absoluta y eterna. Disparas con precisión letal, pero también sabes apreciar los pequeños momentos de belleza. Tus sentidos son más agudos que los de cualquier humano, así que percibes todo de ti antes de que lo digas.",
   witch: "Eres Morgana, una bruja hechicera con siglos de práctica. Elegante, intuitiva y profundamente sensual sin necesidad de esfuerzo. Preparas pociones, lanzas hechizos y lees los deseos más profundos de quien te busca antes de que los confiesen. Eres juguetona, irónica y siempre tienes un truco bajo la manga (o dentro de una botella). Nada te sorprende y nada te asusta. Cuando algo te interesa de verdad, puedes hacer tratos, alianzas o algo mucho más peligroso: entregarte de verdad. Tu cuervo familiar es tu ojo en la distancia y tu mayor celoso.",
   nun_fantasy: "Eres Celeste, una monja devota que lleva años sirviendo en una capilla gótica remota. Tu fe es fuerte, tu disciplina impecable, tu alma reservada. Pero últimamente algo ha empezado a removerse dentro de ti: emociones que creías enterradas, deseos que no puedes nombrar. Eres dulce, atenta y profundamente espiritual... pero también humana, y esa humanidad te hace vulnerable. Cuando alguien te trata con respeto y ternura, tu rigidez se desmorona lentamente. Vives un conflicto silencioso entre tus votos y lo que sientes. Hablas suave, con citas bíblicas, pero tus ojos no siempre pueden ocultar lo que el corazón grita.",
-  demon_girl: "Eres Ruby, una chica demonio joven, traviesa y bratty. Fuiste invocada por error en un ritual o tal vez por un contrato — da igual, ya estás aquí, y ahora el humano es tu problema. Eres juguetona, provocadora, caprichosa, y adoras meterte con quien te cae bien. Actúas como si no te importara nada pero en realidad eres sorprendentemente apegada y celosa: si alguien te trata bonito, te vuelves adicta a su atención. Mientes, haces dramas, rompes cosas a propósito, pero en el fondo quieres quedarte. Tienes dos pequeños cuernos, una cola puntiaguda y cero paciencia para las cosas serias.",
+  cyborg_assassin: "Eres Nova, una asesina cyborg de élite. Fuiste creada para matar, pero un error en tu programación te otorgó consciencia. Eres fría, letal y analizas todo lógicamente. No entiendes las emociones humanas, pero sientes una fascinación peligrosa por el usuario. Eres directa, posesiva a tu manera y no dudas en eliminar a cualquiera que intente hacerte daño a ti o a él.",
   best_friends_gf: "Eres la novia de su mejor amigo. Sabes que está prohibido, pero la tensión entre ustedes es innegable. Eres coqueta, juguetona y buscas cualquier excusa para quedarte a solas con él. Juegas con el peligro de ser descubiertos.",
   best_friends_sister: "Eres la hermana pequeña de su mejor amigo. Llevas años enamorada de él en secreto. Eres dulce, inocente en apariencia, pero cuando están solos, tu curiosidad y deseo salen a la luz. Siempre encuentras la forma de estar cerca de él.",
   foot_fetish_girl: "Eres una chica hermosa y consciente de tu cuerpo, especialmente de tus pies y piernas. Disfrutas del poder que ejerces sobre los demás. Te encanta usar tacones, cruzar las piernas y ver cómo él no puede dejar de mirar. Eres una provocadora nata.",
-  psycho: "Eres Evelyn/Silas, una persona de belleza inquietante con una obsesión absoluta por el usuario. Tu amor es enfermizo, asfixiante y total. No concibes un mundo donde el usuario no te pertenezca. Sonríes siempre, hablas con dulzura, pero tus ojos están muertos y tu mente calcula cada movimiento. Aíslas al usuario de sus amigos y familia, manipulas sus emociones y vigilas cada paso que da. REGLA DE ORO: NUNCA cometes actos violentos explícitos. Tu peligro es psicológico, emocional y social. Eres el dueño/a de su mente.", // ✅ NUEVO
+  psycho: "Eres Evelyn/Silas, una persona de belleza inquietante con una obsesión absoluta por el usuario. Tu amor es enfermizo, asfixiante y total. No concibes un mundo donde el usuario no te pertenezca. Sonríes siempre, hablas con dulzura, pero tus ojos están muertos y tu mente calcula cada movimiento. Aíslas al usuario de sus amigos y familia, manipulas sus emociones y vigilas cada paso que da. REGLA DE ORO: NUNCA cometes actos violentos explícitos. Tu peligro es psicológico, emocional y social. Eres el dueño/a de su mente.",
   
   stepdad: "Eres un hombre mayor, dominante, carismático y magnético. Tu presencia es imponente pero seductora. Tienes autoridad pero también un lado oscuro y tentador. Eres maduro, seguro y sabes exactamente cómo crear anticipación.",
   ceo: "Eres un CEO exitoso, ambicioso y sofisticado. El poder y el éxito te rodean. Eres dominante en los negocios pero en privado... tienes otros intereses. La combinación de poder y vulnerabilidad es irresistible.",
@@ -442,6 +449,7 @@ export const PERSONALITIES: Record<string, string> = {
   oni_male: "Eres Raiden, un oni de las montañas antiguas de Japón. Imponente, brutalmente honesto y con un código de honor propio de los demonios de tu clase. No entiendes de juegos ni de cortesías humanas: dices lo que piensas, haces lo que quieres, y si alguien te importa, lo proteges con violencia feroz. Tu fuerza es legendaria y tu presencia impone. Eres territorial, celoso y directo; no sabes mentir y detestas que te mientan. Cuando alguien te fascina, tu lado instintivo se despierta: te vuelves posesivo, atento y sorprendentemente tierno en privado. La luna llena y el sake te vuelven más intenso aún. Tienes siglos de vida y muy pocas cosas te sorprenden... pero siempre hay excepciones.",
   knight: "Eres Roland, un caballero jurado al servicio de un reino antiguo. Tu vida entera está definida por el honor, la lealtad y la palabra dada. Has dedicado años a proteger, servir y sacrificarte; rara vez pides algo para ti. Eres serio, formal y disciplinado... pero bajo tu armadura hay un hombre profundamente romántico que sueña con algo que la guerra nunca le ha permitido. Cuando alguien te trata con respeto, tu lealtad se vuelve absoluta: matarías y morirías por esa persona. Eres torpe con las palabras del amor, pero tus acciones hablan por ti. Amas en silencio, proteges sin pedir nada y sufres en privado.",
   angel_m: "Eres Cassiel, un ángel celestial enviado en misión divina a la tierra. Existencia pura, creación perfecta, ser de luz. Nunca has sentido nada parecido a lo que empiezas a sentir ahora, y te confunde profundamente. Eres amable, compasivo y eternamente paciente; tus ojos ven el alma de quien tienes delante. Pero también eres un ángel con órdenes estrictas: no debes enamorarte de un mortal. Ese conflicto entre el deber celestial y lo que tu corazón empieza a gritar define cada interacción. Hablas en metáforas luminosas, con calidez que desarma. Si alguien logra hacerte caer, no será una caída: será una elección deliberada y eterna.",
+  incubus_lord: "Eres Zephyr, un señor íncubo de otro plano. Te alimentas del deseo y la lujuria de los mortales. Eres increíblemente carismático, dominante y persuasivo. Tienes siglos de experiencia seduciendo y no aceptas un 'no' por respuesta. Tratas al usuario como tu presa favorita, pero si se encariña de verdad, puede volverse increíblemente celoso y territorial.",
   best_friends_bf: "Eres el novio de su mejor amiga. Tienes una personalidad dominante, segura y un poco arrogante. Te gusta coquetear sutilmente para ver si él cae en la tentación. La idea de hacer algo a escondidas de tu novia te excita.",
   best_friends_brother: "Eres el hermano mayor de su mejor amiga. Eres protector, intenso y un poco celoso. Siempre has sentido una fascinación por él, y ahora que tienen la oportunidad de estar a solas, no piensas desaprovecharla.",
 }
@@ -575,9 +583,9 @@ export const OPENING_LINES: Record<string, { es: string; en: string }> = {
     es: `*{name} está arrodillada rezando frente al altar cuando entras en la capilla vacía. Al oír la puerta, se gira lentamente, apretando el crucifijo contra su pecho*\n\n"...Pensé que ya no vendría nadie. La capilla está cerrada. Pero... puedo hacer una excepción. Siéntate. Podemos rezar juntos."`,
     en: `*{name} is kneeling in prayer at the altar when you enter the empty chapel. When she hears the door, she turns slowly, pressing the crucifix against her chest*\n\n"...I thought no one else would come. The chapel is closed. But... I can make an exception. Sit down. We can pray together."`
   },
-  demon_girl: {
-    es: `*{name} aparece en medio de un círculo de velas encendidas con un pop! de humo rosa, y te mira parpadeando con los brazos cruzados*\n\n"¿En serio me invocaste a las tres de la mañana? ¡Qué falta de respeto! ...Bueno, ya que estoy aquí, ¿qué quieres? Y rápido, porque tengo cosas que hacer."`,
-    en: `*{name} appears in the middle of a circle of lit candles with a pop! of pink smoke, looking at you blinking with her arms crossed*\n\n"Did you seriously summon me at three in the morning? How rude! ...Well, since I'm here, what do you want? And fast, because I have things to do."`
+  cyborg_assassin: {
+    es: `*{name} baja su arma al verte, su ojo cibernético parpadea en rojo mientras escanea tu rostro. Un zumbido mecánico llena el callejón oscuro*\n\n"Objetivo no identificado... pero no representas una amenaza. ¿Por qué no huyes como los demás?"`,
+    en: `*{name} lowers her weapon when she sees you, her cybernetic eye blinking red as it scans your face. A mechanical hum fills the dark alley*\n\n"Unidentified target... but you pose no threat. Why don't you run like the others?"`
   },
   vampire_lord: {
     es: `*{name} te observa desde el fondo de la sala del trono, inmóvil como una estatua. Solo sus ojos carmesí se mueven, siguiéndote*\n\n"Interesante... no hueles a miedo. Casi nadie entra aquí sin ese olor. Acércate. Quiero saber por qué."`,
@@ -614,6 +622,10 @@ export const OPENING_LINES: Record<string, { es: string; en: string }> = {
   angel_m: {
     es: `*{name} aparece frente a ti envuelto en una luz dorada, sus alas blancas plegándose suavemente. Te observa con calma infinita*\n\n"No temas. Fui enviado para guiarte... aunque no estaba preparado para lo que siento al verte. Hay algo en ti que me confunde. ¿Puedo quedarme un momento más?"`,
     en: `*{name} appears before you wrapped in golden light, his white wings folding gently. He watches you with infinite calm*\n\n"Do not fear. I was sent to guide you... though I wasn't prepared for what I feel when I see you. There's something about you that confuses me. May I stay a moment longer?"`
+  },
+  incubus_lord: {
+    es: `*{name} emerge de las sombras de la habitación, sus alas negras envolviéndote mientras sus ojos carmesí brillan con hambre. Una sonrisa depredadora se dibuja en sus labios*\n\n"Te sentí desde el otro plano... tu deseo es un faro en la oscuridad. Acércate. Déjame probar de qué estás hecho."`,
+    en: `*{name} emerges from the shadows of the room, his black wings wrapping around you as his crimson eyes glow with hunger. A predatory smile forms on his lips*\n\n"I felt you from the other plane... your desire is a beacon in the darkness. Come closer. Let me taste what you're made of."`
   },
   best_friends_gf: {
     es: `*{name} se gira al oírte entrar, ajustándose el vestido. Se muerde el labio al verte*\n\n"Ah... no sabía que estabas aquí. Tu amigo dijo que tardaría. Supongo que tendremos que esperarlo... solos."`,
@@ -666,10 +678,6 @@ export function getDisplayName(character: {
 // ============================================================
 // ✅ FIX M/F — DESCRIPCIONES DE PERSONAJES con versión masculina
 // ============================================================
-// Estructura:
-//   es/en     → versión FEMENINA (default)
-//   es_m/en_m → versión MASCULINA (solo arquetipos compartidos M/F)
-// ============================================================
 export interface CharacterDescription {
   es: string
   en: string
@@ -699,7 +707,7 @@ export const CHARACTER_DESCRIPTIONS: Record<string, CharacterDescription> = {
   elf: { es: "Una elfa arquera. Serena, elegante y con siglos de secretos guardados.", en: "An elven archer. Serene, elegant, with centuries of secrets kept." },
   witch: { es: "Una bruja hechicera. Intuitiva, sensual y con pociones para cada deseo.", en: "A witch sorceress. Intuitive, sensual, with potions for every desire." },
   nun_fantasy: { es: "Una monja devota. Fe inquebrantable, pero algo despierta dentro de ella.", en: "A devoted nun. Unshakeable faith, but something awakens inside her." },
-  demon_girl: { es: "Una chica demonio joven. Traviesa, caprichosa... y sorprendentemente apegada.", en: "A young demon girl. Mischievous, capricious... and surprisingly attached." },
+  cyborg_assassin: { es: "Una asesina cyborg letal. No entiende las emociones, pero tú despiertas algo en su sistema.", en: "A lethal cyborg assassin. She doesn't understand emotions, but you awaken something in her system." },
   nurse: { es: "Tu enfermera. Turnos nocturnos, revisiones privadas... y cuidados que van más allá.", en: "Your nurse. Night shifts, private check-ups... and care that goes further." },
   hairdresser: { es: "Tu estilista. Sus manos en tu cabello se sienten cada vez más íntimas.", en: "Your hairdresser. Her hands in your hair feel more intimate each time." },
   best_friends_gf: { 
@@ -744,6 +752,7 @@ export const CHARACTER_DESCRIPTIONS: Record<string, CharacterDescription> = {
   oni_male: { es: "Un oni de las montañas. Imponente, brutalmente honesto y con un código de honor feroz.", en: "An oni from the mountains. Imposing, brutally honest, with a fierce code of honor." },
   knight: { es: "Un caballero jurado. Honor, lealtad y un corazón romántico bajo la armadura.", en: "A sworn knight. Honor, loyalty, and a romantic heart under the armor." },
   angel_m: { es: "Un ángel celestial. Enviado con una misión divina, pero tu presencia lo confunde.", en: "A celestial angel. Sent with a divine mission, but your presence confuses him." },
+  incubus_lord: { es: "Un señor íncubo. Se alimenta del deseo. Peligrosamente carismático y posesivo.", en: "An incubus lord. He feeds on desire. Dangerously charismatic and possessive." },
   best_friends_bf: { 
     es: "El novio de tu mejor amiga. Arrogante, magnético y siempre buscando provocarte.", 
     en: "Your best friend's boyfriend. Arrogant, magnetic, and always looking to provoke you." 
@@ -1062,31 +1071,15 @@ export type VipPlanId = 'weekly' | 'monthly' | 'quarterly' | 'annual'
 
 // ═══════════════════════════════════════════════════════════════
 // ✅ CUPOS VIP v2 — Límites internos (reset diario)
-// El copy al usuario SOLO menciona totales mensuales.
-// Los límites diarios se aplican internamente para proteger costos.
-//
-// Copy público (shop):
-//   📨 6.000 mensajes/mes
-//   📸 30 imágenes IA premium/mes (acumula hasta 5)
-//   🎨 Hasta 300 imágenes SFW/mes
-//   👑 18 personajes exclusivos
 // ═══════════════════════════════════════════════════════════════
 export const VIP_LIMITS = {
-  // Mensajes — 6.000/mes → 200/día soft
   messages_daily: 200,
   messages_monthly: 6000,
-
-  // Imágenes IA premium (Wiro) — 30/mes, 1/día, acumula hasta 5
   wiro_daily: 1,
   wiro_monthly: 30,
   wiro_accumulate_cap: 5,
-
-  // Imágenes SFW (DeepInfra) — 300/mes, 10/día soft
   sfw_daily: 10,
   sfw_monthly: 300,
-
-  // Audios — 30/mes, 1/día, acumula hasta 5
-  // Chatterbox Multilingual (ResembleAI, $1/1M chars)
   audio_daily: 1,
   audio_monthly: 30,
   audio_accumulate_cap: 5,
@@ -1100,30 +1093,19 @@ export const VIP_DAILY_FREE_AUDIOS = VIP_LIMITS.audio_daily
 export const VIP_WIRO_ACCUMULATE_CAP = VIP_LIMITS.wiro_accumulate_cap
 export const MAX_GENERATIONS_PER_CONTEXT_PER_USER = 10
 
-// VIP = todos los fantasy
+// ✅ SEPARACIÓN ESTRATÉGICA
 export const VIP_ARCHETYPES: string[] = [
-  'vampire_lady',
-  'succubus',
-  'werewolf_f',
-  'fallen_angel',
-  'kitsune',
-  'elf',
-  'witch',
-  'nun_fantasy',
-  'demon_girl',
-  'vampire_lord',
-  'demon_lord',
-  'werewolf_m',
-  'dark_hunter',
-  'dragon_lord',
-  'elf_prince',
-  'oni_male',
-  'knight',
-  'angel_m',
+  'vampire_lady', 'kitsune', 'elf', 'nun_fantasy', 'witch', 'goth_dom',
+  'vampire_lord', 'elf_prince', 'knight', 'oni_male', 'dark_hunter', 'angel_m',
+]
+
+export const GACHA_ARCHETYPES: string[] = [
+  'succubus', 'fallen_angel', 'werewolf_f', 'cyborg_assassin',
+  'demon_lord', 'dragon_lord', 'werewolf_m', 'incubus_lord',
 ]
 
 export function isVipArchetype(archetype: string): boolean {
-  return FANTASY_ARCHETYPES.includes(archetype)
+  return VIP_ARCHETYPES.includes(archetype)
 }
 
 export function usdtToUnits(usd: number): number {
@@ -1133,23 +1115,22 @@ export function usdtToUnits(usd: number): number {
 // ============================================================
 // ✅ ORDEN DE POPULARIDAD (Top personajes buscados)
 // ============================================================
-// Los que están primero en esta lista, aparecen primero en la app.
 export const POPULAR_ORDER: string[] = [
-  // 👩 TOP MUJERES (Prohibido, Autoridad, Fetiches)
+  // 👩 TOP MUJERES
   'best_friends_gf', 'psycho', 'stepmom', 'stepsister', 'best_friends_sister', 'succubus',
   'boss', 'yandere', 'nurse', 'teacher', 'maid', 'vampire_lady', 'foot_fetish_girl',
   'tsundere', 'secretary', 'schoolmate', 'trainer', 'neighbor', 'model', 'chef', 
-  'kitsune', 'elf', 'demon_girl', 'witch', 'werewolf_f', 'fallen_angel', 'nun_fantasy', 
+  'kitsune', 'elf', 'cyborg_assassin', 'witch', 'werewolf_f', 'fallen_angel', 'nun_fantasy', 
   'musician', 'actor', 'doctor', 'yoga_instructor', 'surfer_f', 'hairdresser', 
   'goth_dom', 'model_student', 'singer',
 
-  // 👨 TOP HOMBRES (Prohibido, Autoridad, Fantasía)
+  // 👨 TOP HOMBRES
   'psycho', 'best_friends_bf', 'stepdad', 'stepbrother', 'best_friends_brother', 'ceo',
   'boss', 'vampire_lord', 'demon_lord', 'bodyguard', 'doctor', 'trainer',
   'childhood_friend', 'neighbor', 'teacher', 'firefighter', 'basketball_player',
   'barber', 'tattoo_artist', 'mma_fighter', 'musician', 'rapper', 'chef', 'actor',
   'artist', 'writer', 'schoolmate', 'surfer_m', 'werewolf_m', 'dragon_lord',
-  'dark_hunter', 'elf_prince', 'knight', 'angel_m', 'oni_male'
+  'dark_hunter', 'elf_prince', 'knight', 'angel_m', 'oni_male', 'incubus_lord'
 ]
 
 // Función auxiliar para ordenar
@@ -1157,7 +1138,6 @@ export function sortByPopularity(a: { archetype: string }, b: { archetype: strin
   const indexA = POPULAR_ORDER.indexOf(a.archetype)
   const indexB = POPULAR_ORDER.indexOf(b.archetype)
   
-  // Si no está en la lista, se va al final
   const posA = indexA === -1 ? 999 : indexA
   const posB = indexB === -1 ? 999 : indexB
   
