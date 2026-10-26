@@ -208,7 +208,9 @@ export async function POST(request: Request) {
         [telegramId]
       )
       if (prev) {
-        return NextResponse.json({ status: 'pending', reason: 'first_time_used' })
+        // ✅ FIX: Cambiado de 'pending' a 'error' para que el frontend deje de esperar y le avise al usuario
+        console.error('[check-crypto-payment] ❌ first_time_used:', { telegramId, reference })
+        return NextResponse.json({ status: 'error', reason: 'first_time_used' })
       }
     }
 
