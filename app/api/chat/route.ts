@@ -24,7 +24,7 @@ import {
   getSpendState,
   grantPass
 } from '@/lib/db-queries'
-import { queryOne, query } from '@/lib/turso'
+import { queryOne, query, execute } from '@/lib/turso' // ✅ Añadido execute
 import {
   GEM_COSTS,
   HOOK_MODE_MESSAGES,
@@ -33,7 +33,7 @@ import {
   LOW_GEMS_THRESHOLD,
   getLevelPersonality,
   VIP_DAILY_MESSAGE_LIMIT,
-  isVipArchetype // ✅ IMPORTAMOS LA FUNCIÓN
+  isVipArchetype 
 } from '@/lib/constants'
 import {
   getLevelFromMessages,
@@ -207,7 +207,6 @@ export async function POST(request: Request) {
     const vipSub = await getActiveSubscription(tid)
     const isVip = !!vipSub
 
-    // ✅ BUG FIX VIP: Bloquear el chat si el personaje es VIP y la suscripción expiró
     if (isVipArchetype(character.archetype) && !isVip) {
       return NextResponse.json({
         blocked: true,
@@ -446,10 +445,18 @@ ${learned.heat.length > 0 ? `- The system learned users love these words: ${lear
     try {
       responseText = await generateAIResponse(messages, systemPrompt, intensity)
     } catch (aiError: any) {
+      // ✅ FIX: Reembolsar correctamente si usó Gemas de Chat o Reales
       if (!isVip && !usedPass) {
-        if (newGems < (user.gems || 0)) {
-           await incrementGems(tid, GEM_COSTS.message + penaltyGems)
+        const spentBonus = (user.bonus_gems || 0) - newBonusGems
+        const spentReal = (user.gems || 0) - newGems
+
+        if (spentBonus > 0) {
+          await execute(`UPDATE users SET bonus_gems = bonus_gems + ? WHERE telegram_id = ?`, [spentBonus, tid])
         }
+        if (spentReal > 0) {
+          await incrementGems(tid, spentReal)
+        }
+        
         await setHookRemaining(tid, user.hook_messages_remaining || 0)
         await setHookUsed(tid, !!user.hook_used)
       } else if (penaltyGems > 0) {
