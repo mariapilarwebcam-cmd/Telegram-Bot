@@ -431,6 +431,7 @@ export async function POST(request: Request) {
 
     const isDirectRequest = body?.is_direct_request === true
     const isFantasyPass = body?.is_fantasy_pass === true // ✅ NUEVO: Detectar Pase de Fantasía
+    const isGiftPhoto = body?.is_gift_photo === true // ✅ NUEVO: Foto de agradecimiento por outfit
 
     const user = await ensureUser(tid)
     if (!user) return NextResponse.json({ error: 'Error cargando tu cuenta' }, { status: 500 })
@@ -524,8 +525,8 @@ export async function POST(request: Request) {
     let useVipQuota = false
     let gemsCharged = false
 
-    if (isFantasyPass) {
-      // El pase anula cualquier cobro
+    if (isFantasyPass || isGiftPhoto) {
+      // El pase o la foto de regalo anulan cualquier cobro
       isFree = true
       useVipQuota = false
     } else {
@@ -573,7 +574,7 @@ export async function POST(request: Request) {
       try { await markImageSeen(tid, character_id, r2Index!, false) } catch (markErr) {}
     } else {
       let poolHit = false
-      const usePool = !userHint && !!mood && r2Available && !isFantasyPass // El pase no usa el pool
+      const usePool = !userHint && !!mood && r2Available && !isFantasyPass && !isGiftPhoto // El pase o regalo no usan el pool
 
       if (usePool) {
         try {
@@ -623,13 +624,25 @@ export async function POST(request: Request) {
         const genderTag = character.gender === 'male' ? '1boy, male' : '1girl, female'
         const QUALITY_CONTROL_PROMPT = `(masterpiece, best quality, highres:1.2), solo, single character, ${genderTag}, only one person in frame, perfect anatomy, perfect hands, five fingers, correct proportions, no mutations, no extra limbs, no missing limbs, no multiple people, no deformed hands, no extra fingers, perfectly sized hands, correct hand size, hand in mid-ground, no giant hands touching the lens, natural pose`
 
+        // ✅ NUEVO: Inyectar Outfit si el personaje tiene uno equipado
+        let outfitPrompt = ''
+        if (character.equipped_outfit) {
+          const outfitData = await queryOne<{ prompt_tag: string }>(
+            `SELECT prompt_tag FROM gacha_outfits WHERE id = ?`,
+            [character.equipped_outfit]
+          )
+          if (outfitData) {
+            outfitPrompt = `wearing ${outfitData.prompt_tag}, `
+          }
+        }
+
         if (level.level <= 3) {
           const dna = CHARACTER_DNA[`${character.gender}_${character.archetype}`] || 'anime character'
           const scene = SFW_SCENE_PROMPTS[level.level] || SFW_SCENE_PROMPTS[1]
           let faceRule = ''
           if (faceVisibility === 'hidden') faceRule = FACE_HIDDEN_FRAGMENT
           else if (faceVisibility === 'partial') faceRule = FACE_PARTIAL_FRAGMENT
-          imagePrompt = [QUALITY_CONTROL_PROMPT, `[CHARACTER: ${dna}]`, 'highly detailed anime illustration, cel shading, soft cinematic lighting', scene, sceneHint, faceRule, userTopTagsPrompt, 'muted color palette, elegant composition, best quality, masterpiece', 'safe for work, no nudity, no explicit content'].filter((s) => s && s.length > 0).join(', ')
+          imagePrompt = [QUALITY_CONTROL_PROMPT, outfitPrompt, `[CHARACTER: ${dna}]`, 'highly detailed anime illustration, cel shading, soft cinematic lighting', scene, sceneHint, faceRule, userTopTagsPrompt, 'muted color palette, elegant composition, best quality, masterpiece', 'safe for work, no nudity, no explicit content'].filter((s) => s && s.length > 0).join(', ')
         } else {
           const facePrompt = getCharacterFace(character.archetype, character.gender)
           const clothing = getClothingLevel(level.level)
@@ -637,12 +650,14 @@ export async function POST(request: Request) {
           const archetypeHint = ARCHETYPE_IMAGE_HINTS[`${character.gender}_${character.archetype}`] || ''
           const moodFragment = mood ? MOOD_FRAGMENTS[mood] || '' : ''
           
-          // ✅ PROMPT ESPECIAL PARA EL PASE DE FANTASÍA
+          // ✅ PROMPT ESPECIAL PARA EL PASE DE FANTASÍA O FOTO DE REGALO
           const fantasyPrefix = isFantasyPass 
             ? 'ultra rare secret intimate moment, highly exclusive fantasy scene, ultimate seduction, peak desire, cinematic masterpiece, ' 
-            : ''
+            : isGiftPhoto 
+              ? 'thankful expression, showing off new clothes, exclusive gift, ' 
+              : ''
 
-          imagePrompt = [QUALITY_CONTROL_PROMPT, fantasyPrefix, facePrompt, 'anime style, cel shading, moody atmospheric lighting, deep shadows, muted color palette, cinematic dark tones, detailed anime eyes', clothing, scene, archetypeHint, moodFragment, sceneHint, userTopTagsPrompt, NO_GENITALIA, 'beautiful cinematic lighting, 2D illustration, best quality'].filter((s) => s && s.length > 0).join(', ')
+          imagePrompt = [QUALITY_CONTROL_PROMPT, fantasyPrefix, outfitPrompt, facePrompt, 'anime style, cel shading, moody atmospheric lighting, deep shadows, muted color palette, cinematic dark tones, detailed anime eyes', clothing, scene, archetypeHint, moodFragment, sceneHint, userTopTagsPrompt, NO_GENITALIA, 'beautiful cinematic lighting, 2D illustration, best quality'].filter((s) => s && s.length > 0).join(', ')
         }
 
         promptUsed = imagePrompt
@@ -697,12 +712,12 @@ export async function POST(request: Request) {
     let offerId: number | null = null
     let publicBlurUrl = ''
 
-    if (isDirectRequest || isFantasyPass) {
+    if (isDirectRequest || isFantasyPass || isGiftPhoto) {
       if (gemsCharged) {
         newGems -= imageCost
         newPurchasedGems -= imageCost
       }
-      // Si es pase, no creamos oferta, se muestra nítida directamente
+      // Si es pase o regalo, no creamos oferta, se muestra nítida directamente
     } else {
       const offerPrice = isFree || useVipQuota ? 0 : imageCost
       const base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || ''
@@ -737,7 +752,7 @@ export async function POST(request: Request) {
       const fullOrigUrl = `${base.replace(/\/$/, '')}/${imageUrl}`
       
       // ✅ FORMATO DE MENSAJE: locked:ID@URL_BLUR
-      const imageMessageContent = (offerId && !isDirectRequest && !isFantasyPass)
+      const imageMessageContent = (offerId && !isDirectRequest && !isFantasyPass && !isGiftPhoto)
         ? `*${character.character_name} te envía una foto*\n\n![Selfie](locked:${offerId}@${publicBlurUrl})`
         : `*${character.character_name} te envía una foto*\n\n![Selfie](${fullOrigUrl})`
 
@@ -760,10 +775,10 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({
-      is_locked: !!offerId && !isDirectRequest && !isFantasyPass,
+      is_locked: !!offerId && !isDirectRequest && !isFantasyPass && !isGiftPhoto,
       offer_id: offerId,
       blur_url: (offerId && !isDirectRequest) ? publicBlurUrl : undefined,
-      image_url: (!offerId || isDirectRequest || isFantasyPass) ? `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL?.replace(/\/$/, '')}/${imageUrl}` : undefined,
+      image_url: (!offerId || isDirectRequest || isFantasyPass || isGiftPhoto) ? `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL?.replace(/\/$/, '')}/${imageUrl}` : undefined,
       remaining_gems: newGems, 
       remaining_purchased_gems: newPurchasedGems,
       level: level.level,
@@ -771,6 +786,7 @@ export async function POST(request: Request) {
       free: isFree,
       vip_quota: useVipQuota,
       fantasy_pass_used: isFantasyPass, // ✅ Indicamos que se usó
+      gift_photo_used: isGiftPhoto, // ✅ Indicamos que fue regalo
       source,
       image_index: r2Index,
       face_visibility: faceVisibility,
