@@ -6,6 +6,7 @@ import {
   getReferralByReferred,
   insertReferral,
   setReferredBy,
+  getUser, // ✅ FIX: Importamos getUser
 } from '@/lib/db-queries'
 
 export async function POST(request: Request) {
@@ -33,6 +34,12 @@ export async function POST(request: Request) {
         { error: 'No puedes referirte a ti mismo' },
         { status: 400 }
       )
+    }
+
+    // ✅ FIX: Verificación rápida en users antes de ir a la tabla referrals
+    const currentUser = await getUser(newTid)
+    if (currentUser?.referred_by) {
+      return NextResponse.json({ ok: true, already: true, paid: true }) // Asumimos que ya se procesó
     }
 
     // ¿Ya está referido?
