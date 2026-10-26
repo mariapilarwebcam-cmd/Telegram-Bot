@@ -24,7 +24,6 @@ router = Router()
 # --- Helper para guardar el estado en Turso ---
 def save_conversation_state(user_id: int, admin_msg_id: int, user_msg_id: int):
     try:
-        # Guardamos la relación entre el mensaje del admin y el usuario
         turso_execute(
             "INSERT OR REPLACE INTO support_conversations (admin_message_id, user_id, user_message_id) VALUES (?, ?, ?)",
             [str(admin_msg_id), str(user_id), str(user_msg_id)]
@@ -49,7 +48,6 @@ async def handle_user_message(message: Message):
     if not user:
         return
 
-    # Preparamos el encabezado para el admin
     header = (
         f"📩 *Nuevo mensaje de soporte*\n\n"
         f"👤 *Usuario:* {user.full_name}\n"
@@ -58,7 +56,6 @@ async def handle_user_message(message: Message):
         f"--- MENSAJE ---\n"
     )
 
-    # ✅ FIX: Indentación corregida. Ahora todo está dentro de la función.
     admin_notice = await message.bot.send_message(
         chat_id=ADMIN_CHAT_ID,
         text=header
@@ -66,7 +63,6 @@ async def handle_user_message(message: Message):
 
     forwarded_msg = await message.forward(chat_id=ADMIN_CHAT_ID)
 
-    # Guardamos la relación en la base de datos para poder responder
     save_conversation_state(user.id, admin_notice.message_id, forwarded_msg.message_id)
 
     await message.answer("✅ Tu mensaje ha sido enviado al equipo de soporte.")
@@ -77,11 +73,12 @@ async def handle_admin_reply(message: Message):
     if not message.reply_to_message:
         return
 
-    # Buscamos a qué usuario corresponde este hilo
     admin_msg_id = message.reply_to_message.message_id
+    
+    # ✅ FIX: Busca por admin_message_id (aviso) o user_message_id (mensaje reenviado)
     conversation = turso_query_one(
-        "SELECT user_id FROM support_conversations WHERE admin_message_id = ?",
-        [str(admin_msg_id)]
+        "SELECT user_id FROM support_conversations WHERE admin_message_id = ? OR user_message_id = ?",
+        [str(admin_msg_id), str(admin_msg_id)]
     )
 
     if conversation and conversation.get('user_id'):
