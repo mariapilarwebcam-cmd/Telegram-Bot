@@ -17,9 +17,9 @@ export async function POST(request: Request) {
     const tx = await db.transaction('write')
 
     try {
-      // 1. Verificar que el personaje existe Y pertenece al usuario
+      // 1. Obtener el personaje y su armario actual
       const charRes = await tx.execute({
-        sql: `SELECT equipped_outfit FROM user_characters WHERE id = ? AND telegram_id = ?`,
+        sql: `SELECT equipped_outfit, owned_outfits FROM user_characters WHERE id = ? AND telegram_id = ?`,
         args: [character_id, tid]
       })
 
@@ -29,17 +29,25 @@ export async function POST(request: Request) {
       }
 
       const currentOutfit = charRes.rows[0].equipped_outfit
-
-      // ✅ REGLA ESTRICTA: Si el personaje ya tiene un outfit, bloqueamos el cambio.
-      if (currentOutfit) {
-        await tx.rollback()
-        return NextResponse.json({ 
-          error: 'character_has_outfit', 
-          message: 'Este personaje ya tiene un regalo permanente. No puedes cambiarlo.' 
-        }, { status: 400 })
+      let ownedOutfits: string[] = []
+      
+      try {
+        ownedOutfits = JSON.parse(String(charRes.rows[0].owned_outfits || '[]'))
+      } catch (e) {
+        ownedOutfits = []
       }
 
-      // 2. Verificar que el usuario realmente tenga el nuevo outfit en su inventario
+      // ✅ CASO A: El usuario ya tiene este outfit en el armario del personaje (solo quiere alternar)
+      if (ownedOutfits.includes(outfit_key)) {
+        await tx.execute({
+          sql: `UPDATE user_characters SET equipped_outfit = ? WHERE id = ? AND telegram_id = ?`,
+          args: [outfit_key, character_id, tid]
+        })
+        await tx.commit()
+        return NextResponse.json({ success: true, message: 'Outfit alternado' })
+      }
+
+      // ✅ CASO B: Es un outfit nuevo del inventario global
       const invItem = await tx.execute({
         sql: `SELECT id FROM user_inventory WHERE user_id = ? AND item_type = 'outfit' AND item_key = ? LIMIT 1`,
         args: [tid, outfit_key]
@@ -52,16 +60,18 @@ export async function POST(request: Request) {
 
       const inventoryId = invItem.rows[0].id
 
-      // 3. Borrar el outfit del inventario global (se consume para siempre)
+      // Borrar del inventario global (se consume)
       await tx.execute({
         sql: `DELETE FROM user_inventory WHERE id = ?`,
         args: [inventoryId]
       })
 
-      // 4. Asignar el outfit al personaje
+      // Añadir al armario del personaje
+      ownedOutfits.push(outfit_key)
+      
       await tx.execute({
-        sql: `UPDATE user_characters SET equipped_outfit = ? WHERE id = ? AND telegram_id = ?`,
-        args: [outfit_key, character_id, tid]
+        sql: `UPDATE user_characters SET equipped_outfit = ?, owned_outfits = ? WHERE id = ? AND telegram_id = ?`,
+        args: [outfit_key, JSON.stringify(ownedOutfits), character_id, tid]
       })
 
       await tx.commit()
@@ -69,7 +79,7 @@ export async function POST(request: Request) {
       return NextResponse.json({
         success: true,
         message: 'Outfit regalado permanentemente',
-        equipped_outfit: outfit_key
+        is_new: true // Flag para saber si el frontend debe generar la foto de regalo
       })
     } catch (txError) {
       await tx.rollback().catch(() => {})
