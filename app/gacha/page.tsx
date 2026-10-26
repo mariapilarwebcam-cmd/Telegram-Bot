@@ -18,20 +18,14 @@ const TIER_COLORS = {
 
 const COST = 50
 
-// ✅ FIX: Función corregida para usar la carpeta 'item/' y manejar .png / .jpg
 const getItemImageUrl = (itemId: string) => {
   const base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL
   if (!base) return ''
-  
-  // Si es el cofre, es .png. Si es un outfit, es .jpg
   const ext = itemId === 'roulette_chest' ? 'png' : 'jpg'
-  
   return `${base.replace(/\/$/, '')}/item/${itemId}.${ext}`
 }
 
-// ✅ Lista completa de Outfits (11 femeninos + 5 masculinos)
 const SHOWCASE_OUTFITS = [
-  // 👩 Femeninos
   { id: 'outfit_red_lace', name: 'Encaje Rojo', rarity: 'epic' },
   { id: 'outfit_black_leather', name: 'Cuero Negro', rarity: 'epic' },
   { id: 'outfit_cyber_armor', name: 'Cyberpunk', rarity: 'legendary' },
@@ -43,8 +37,6 @@ const SHOWCASE_OUTFITS = [
   { id: 'outfit_school', name: 'Escolar', rarity: 'rare' },
   { id: 'outfit_nurse', name: 'Enfermera', rarity: 'rare' },
   { id: 'outfit_police', name: 'Policía Sexy', rarity: 'rare' },
-
-  // 👨 Masculinos (Incluye al Bailarín ✅)
   { id: 'outfit_male_pirate', name: 'Pirata', rarity: 'epic' },
   { id: 'outfit_male_firefighter', name: 'Bombero', rarity: 'epic' },
   { id: 'outfit_male_gladiator', name: 'Gladiador', rarity: 'legendary' },
@@ -62,7 +54,6 @@ export default function GachaPage() {
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'characters' | 'outfits'>('characters')
   
-  // ✅ Estado para saber qué personajes Gacha tiene el usuario
   const [ownedCharacters, setOwnedCharacters] = useState<string[]>([])
   const [loadingChars, setLoadingChars] = useState(true)
 
@@ -107,7 +98,6 @@ export default function GachaPage() {
       setResult(data)
       await refresh()
       
-      // Si ganó un personaje, lo agregamos a la lista local
       if (data.reward_type === 'gacha_character') {
          setOwnedCharacters(prev => [...prev, data.item_key])
       }
@@ -129,7 +119,6 @@ export default function GachaPage() {
   return (
     <div className="page" style={{ paddingBottom: 32, minHeight: '100vh', overflow: 'hidden' }}>
       
-      {/* HEADER */}
       <header className="page-header" style={{ background: 'transparent', borderBottom: 'none', position: 'relative' }}>
         <button
           onClick={() => router.push('/')}
@@ -145,7 +134,6 @@ export default function GachaPage() {
         <div style={{ width: 32 }} />
       </header>
 
-      {/* BALANCE Y GEMAS BONUS */}
       <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginTop: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(168, 85, 247, 0.15)', padding: '8px 16px', borderRadius: 20, border: '1px solid rgba(168, 85, 247, 0.3)' }}>
           <span style={{ fontSize: 14 }}>💎</span>
@@ -163,15 +151,7 @@ export default function GachaPage() {
         )}
       </div>
 
-      {/* LA MÁQUINA / CAJA FUERTE (CON IMAGEN DE R2) */}
-      <div style={{ 
-        marginTop: 40, 
-        display: 'flex', 
-        flexDirection: 'column', 
-        alignItems: 'center', 
-        justifyContent: 'center',
-        position: 'relative'
-      }}>
+      <div style={{ marginTop: 40, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
         <div style={{ position: 'absolute', width: 300, height: 300, background: 'radial-gradient(circle, rgba(236,72,153,0.2) 0%, transparent 60%)', filter: 'blur(40px)', zIndex: 0, animation: 'pulseGlow 4s infinite' }} />
 
         <div style={{
@@ -190,15 +170,17 @@ export default function GachaPage() {
           transition: 'transform 0.2s',
           animation: spinning ? 'shake 0.5s infinite' : 'float 3s infinite ease-in-out'
         }}>
-          {/* ✅ IMAGEN DEL COFRE DESDE R2 */}
+          {/* ✅ IMAGEN DEL COFRE CON BORDES REDONDEADOS Y SOMBRA PREMIUM */}
           <img 
             src={getItemImageUrl('roulette_chest')} 
             alt="Roulette Chest"
             style={{ 
-              width: 140, 
-              height: 140, 
-              objectFit: 'contain',
-              filter: 'drop-shadow(0 0 20px rgba(236,72,153,0.8))', 
+              width: 150, 
+              height: 150, 
+              objectFit: 'cover',
+              borderRadius: 20, // ✅ Bordes redondeados
+              boxShadow: '0 10px 30px rgba(0,0,0,0.8), 0 0 20px rgba(236,72,153,0.6)', // ✅ Sombra 3D
+              border: '1px solid rgba(255,255,255,0.1)',
               animation: spinning ? 'spinFast 1s infinite linear' : 'none' 
             }}
             onError={(e) => {
@@ -211,7 +193,6 @@ export default function GachaPage() {
         </div>
       </div>
 
-      {/* BOTÓN DE TIRADA */}
       <div style={{ padding: '32px 24px 0', position: 'relative', zIndex: 10 }}>
         {error && (
           <p style={{ color: '#fca5a5', fontSize: 13, textAlign: 'center', marginBottom: 12, background: 'rgba(220,38,38,0.1)', padding: 8, borderRadius: 8 }}>
@@ -258,7 +239,6 @@ export default function GachaPage() {
         )}
       </div>
 
-      {/* VITRINA DE PREMIOS (TABS) */}
       <div style={{ padding: '40px 24px 0', position: 'relative', zIndex: 1 }}>
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
           <button
@@ -287,7 +267,6 @@ export default function GachaPage() {
           </button>
         </div>
 
-        {/* ✅ VITRINA: PERSONAJES (Grises si no los tienes, a color si sí) */}
         {activeTab === 'characters' && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
             {GACHA_ARCHETYPES.map((arch) => {
@@ -304,7 +283,6 @@ export default function GachaPage() {
                   display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                   position: 'relative', overflow: 'hidden'
                 }}>
-                  {/* Imagen del personaje */}
                   {imgUrl && (
                     <img 
                       src={imgUrl} 
@@ -317,17 +295,14 @@ export default function GachaPage() {
                     />
                   )}
                   
-                  {/* Capa oscura para legibilidad del texto */}
                   <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(10,5,16,0.9) 0%, transparent 50%)' }} />
                   
-                  {/* Nombre del personaje */}
                   <div style={{ position: 'absolute', bottom: 4, width: '100%', textAlign: 'center' }}>
                     <span style={{ fontSize: 10, fontWeight: 900, color: hasChar ? '#22c55e' : '#f5f0ff', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                       {name}
                     </span>
                   </div>
 
-                  {/* Si ya lo tiene, ponemos un check */}
                   {hasChar && (
                     <div style={{ position: 'absolute', top: 4, right: 4, fontSize: 12 }}>✅</div>
                   )}
@@ -337,7 +312,6 @@ export default function GachaPage() {
           </div>
         )}
 
-        {/* VITRINA: OUTFITS CON IMÁGENES */}
         {activeTab === 'outfits' && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
             {SHOWCASE_OUTFITS.map((outfit) => (
@@ -369,7 +343,7 @@ export default function GachaPage() {
         )}
       </div>
 
-      {/* ✅ NUEVA SECCIÓN: INFORMACIÓN DE LA RULETA */}
+      {/* ✅ SECCIÓN DE INFORMACIÓN ACTUALIZADA */}
       <div style={{ padding: '40px 24px 0', position: 'relative', zIndex: 1 }}>
         <div style={{ padding: 16, borderRadius: 16, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
           <h3 style={{ fontSize: 14, fontWeight: 800, color: '#f0abfc', margin: '0 0 12px 0', textAlign: 'center' }}>
@@ -379,13 +353,13 @@ export default function GachaPage() {
             <li>Cada tirada cuesta <strong>50 Gemas de Pago</strong>.</li>
             <li>Puedes ganar <strong>Gemas de Chat</strong> (para hablar), <strong>Outfits</strong> (para regalar), o <strong>Pases de Fantasía</strong> (fotos nivel 5).</li>
             <li>Los <strong>Personajes Exclusivos</strong> solo se pueden desbloquear aquí. Si ya los tienes, se marcan con un ✅.</li>
-            <li>Si tienes mala suerte, no te preocupes: <strong>cada 10 tiradas</strong> (500 gemas) el sistema te garantiza un premio Épico o superior.</li>
-            <li>Los Outfits que ganes se guardan en tu inventario. Puedes regalárselos a tus personajes desde la pantalla de chat.</li>
+            <li><strong>Los premios más codiciados (Épicos, Legendarios y Míticos) tienen una probabilidad muy baja.</strong></li>
+            <li><strong>Garantía:</strong> Si tienes mala suerte, cada 10 tiradas el sistema te asegura un premio Épico o superior.</li>
+            <li><strong>Outfits:</strong> Cuando regalas un Outfit, el personaje lo guarda en su armario. ¡Y lo usará en las <strong>futuras fotos</strong> que te envíe!</li>
           </ul>
         </div>
       </div>
 
-      {/* MODAL DE RESULTADO */}
       {result && (
         <div className="modal-backdrop" style={{ zIndex: 9999, background: 'rgba(5, 2, 10, 0.95)', backdropFilter: 'blur(10px)' }}>
           <div 
@@ -400,14 +374,7 @@ export default function GachaPage() {
               {result.tier === 'common' ? '💬' : result.tier === 'rare' ? '📸' : result.tier === 'epic' ? '🎟️' : result.tier === 'legendary' ? '👑' : '🔥'}
             </div>
             
-            <p style={{ 
-              fontSize: 12, 
-              fontWeight: 900, 
-              letterSpacing: '0.2em', 
-              color: TIER_COLORS[result.tier as keyof typeof TIER_COLORS].color,
-              margin: 0,
-              textShadow: `0 0 10px ${TIER_COLORS[result.tier as keyof typeof TIER_COLORS].color}`
-            }}>
+            <p style={{ fontSize: 12, fontWeight: 900, letterSpacing: '0.2em', color: TIER_COLORS[result.tier as keyof typeof TIER_COLORS].color, margin: 0, textShadow: `0 0 10px ${TIER_COLORS[result.tier as keyof typeof TIER_COLORS].color}` }}>
               ¡HAS OBTENIDO UN PREMIO {TIER_COLORS[result.tier as keyof typeof TIER_COLORS].label}!
             </p>
 
@@ -432,7 +399,6 @@ export default function GachaPage() {
         </div>
       )}
 
-      {/* ESTILOS DE ANIMACIÓN */}
       <style jsx>{`
         @keyframes shake {
           0% { transform: translate(1px, 1px) rotate(0deg); }
