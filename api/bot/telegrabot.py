@@ -2,7 +2,7 @@ import os
 import random
 import string
 import logging
-from datetime import datetime, timezone, timedelta  # ✅ FIX: Añadido timedelta
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, Router, F
@@ -25,10 +25,10 @@ if not TELEGRAM_BOT_TOKEN:
     raise RuntimeError("❌ Falta TELEGRAM_BOT_TOKEN")
 
 # ==================== ECONOMÍA ====================
-BASE_DAILY_GEMS = 3
-GEMS_PER_REFERRAL = 10
 STARTING_GEMS = 10
-REFERRAL_MIN_MESSAGES = 10 # ✅ Requisito para pagar comisión
+DAILY_MESSAGES = 3       # ✅ Ahora se dan Mensajes diarios
+REFERRAL_MESSAGES = 15   # ✅ Ahora se dan Mensajes por referido
+REFERRAL_MIN_MESSAGES = 10
 
 REFERRAL_PURCHASE_COMMISSION_PCT = 5
 REFERRAL_TOP_TIER_THRESHOLD = 5
@@ -36,12 +36,19 @@ REFERRAL_TOP_TIER_PCT = 7
 REFERRAL_ELITE_TIER_THRESHOLD = 20
 REFERRAL_ELITE_TIER_PCT = 10
 
+# ✅ NUEVOS PAQUETES (Basados en lib/constants.ts)
 STAR_PACKAGES = [
-    {"stars": 100,  "gems": 300,  "bonus": 5, "first_time": True,  "flat_bonus": 50},
-    {"stars": 150,  "gems": 600,  "bonus": 5, "first_time": False, "flat_bonus": 0},
-    {"stars": 300,  "gems": 1200, "bonus": 5, "first_time": False, "flat_bonus": 0},
-    {"stars": 500,  "gems": 2400, "bonus": 5, "first_time": False, "flat_bonus": 0},
-    {"stars": 1000, "gems": 5000, "bonus": 5, "first_time": False, "flat_bonus": 0},
+    {"stars": 100,  "gems": 200,  "bonus": 100, "first_time": True,  "flat_bonus": 0},
+    {"stars": 150,  "gems": 300,  "bonus": 20,  "first_time": False, "flat_bonus": 0},
+    {"stars": 300,  "gems": 600,  "bonus": 25,  "first_time": False, "flat_bonus": 0},
+    {"stars": 500,  "gems": 1000, "bonus": 40,  "first_time": False, "flat_bonus": 0},
+    {"stars": 1000, "gems": 2000, "bonus": 50,  "first_time": False, "flat_bonus": 0},
+]
+
+MESSAGE_PACKAGES = [
+    {"stars": 100,  "messages": 300,  "first_time": False},
+    {"stars": 250,  "messages": 800,  "first_time": False},
+    {"stars": 500,  "messages": 2000, "first_time": False},
 ]
 
 
@@ -134,7 +141,6 @@ async def create_user_immediately(
         logger.warning(f"telegram_ids_seen check failed for {telegram_id}: {e}")
 
     try:
-        # ✅ FIX: Añadidas las columnas photo_tokens y photo_tokens_at para el sistema Runware
         turso_execute(
             """INSERT INTO users
               (telegram_id, username, first_name, language, gems, purchased_gems,
@@ -307,48 +313,60 @@ async def pay_referral_commission(
 
 # ==================== PURCHASE HELPERS ====================
 
-# ✅ FIX: Ahora devuelve True (éxito) o False (duplicado/error) para cortar el flujo
-async def record_star_purchase(telegram_id: int, stars: int, gems: int, is_first_purchase: bool, charge_id: str) -> bool:
+async def record_star_purchase(telegram_id: int, stars: int, amount: int, is_first_purchase: bool, charge_id: str, is_messages: bool = False) -> bool:
     try:
         turso_execute(
             """INSERT INTO star_purchases
               (telegram_id, stars_amount, gems_amount, is_first_purchase,
                telegram_charge_id, payment_method)
-             VALUES (?, ?, ?, ?, ?, 'stars')""",
-            [str(telegram_id), stars, gems, 1 if is_first_purchase else 0, charge_id]
+             VALUES (?, ?, ?, ?, ?, ?)""",
+            [str(telegram_id), stars, amount, 1 if is_first_purchase else 0, charge_id, 'messages' if is_messages else 'stars']
         )
     except Exception as e:
         err_str = str(e)
         if 'UNIQUE' in err_str or 'unique' in err_str.lower() or 'constraint' in err_str.lower():
             logger.warning(f"⚠️ Charge {charge_id} ya procesado, ignorando")
-            return False  # ❌ Detener flujo (duplicado)
+            return False
         logger.error(f"Error insertando star_purchase: {err_str}")
-        return False      # ❌ Detener flujo (error)
+        return False
 
     try:
         now_iso = datetime.now(timezone.utc).isoformat()
-        turso_query_one(
-            """UPDATE users
-             SET gems = COALESCE(gems, 0) + ?,
-                 purchased_gems = COALESCE(purchased_gems, 0) + ?,
-                 hook_messages_remaining = 0,
-                 updated_at = ?
-             WHERE telegram_id = ?
-             RETURNING gems, purchased_gems""",
-            [gems, gems, now_iso, str(telegram_id)]
-        )
+        if is_messages:
+            turso_query_one(
+                """UPDATE users
+                 SET bonus_gems = COALESCE(bonus_gems, 0) + ?,
+                     hook_messages_remaining = 0,
+                     updated_at = ?
+                 WHERE telegram_id = ?
+                 RETURNING bonus_gems""",
+                [amount, now_iso, str(telegram_id)]
+            )
+        else:
+            turso_query_one(
+                """UPDATE users
+                 SET gems = COALESCE(gems, 0) + ?,
+                     purchased_gems = COALESCE(purchased_gems, 0) + ?,
+                     hook_messages_remaining = 0,
+                     updated_at = ?
+                 WHERE telegram_id = ?
+                 RETURNING gems, purchased_gems""",
+                [amount, amount, now_iso, str(telegram_id)]
+            )
     except Exception as e:
-        logger.error(f"Error incrementando gemas post-compra: {e}")
+        logger.error(f"Error incrementando balance post-compra: {e}")
 
     turso_execute(
         """INSERT INTO gem_transactions
           (telegram_id, amount, transaction_type, description)
          VALUES (?, ?, ?, ?)""",
-        [str(telegram_id), gems, 'purchase', f'Compra con {stars} stars']
+        [str(telegram_id), amount, 'purchase', f'Compra con {stars} stars']
     )
 
-    await pay_referral_commission(telegram_id, gems, 'stars', charge_id)
-    return True  # ✅ Éxito
+    # ✅ Si es compra de mensajes, calculamos la comisión basándonos en el valor aproximado en gemas
+    commission_base = amount if not is_messages else int(amount / 2) 
+    await pay_referral_commission(telegram_id, commission_base, 'stars', charge_id)
+    return True
 
 
 # ==================== AGE VERIFICATION ====================
@@ -542,13 +560,13 @@ async def apply_pending_referral(telegram_id: int, ref_code: str) -> bool:
             if lang == 'es':
                 text = (
                     f"🎉 *¡Alguien usó tu código!*\n\n"
-                    f"💎 Recibirás *{GEMS_PER_REFERRAL} gemas* cuando mande {REFERRAL_MIN_MESSAGES} mensajes.\n"
+                    f"💌 Recibirás *{REFERRAL_MESSAGES} mensajes* cuando mande {REFERRAL_MIN_MESSAGES} mensajes.\n"
                     f"💰 Y *{REFERRAL_PURCHASE_COMMISSION_PCT}%* de todo lo que compre."
                 )
             else:
                 text = (
                     f"🎉 *Someone used your code!*\n\n"
-                    f"💎 You'll receive *{GEMS_PER_REFERRAL} gems* once they send {REFERRAL_MIN_MESSAGES} messages.\n"
+                    f"💌 You'll receive *{REFERRAL_MESSAGES} messages* once they send {REFERRAL_MIN_MESSAGES} messages.\n"
                     f"💰 Plus *{REFERRAL_PURCHASE_COMMISSION_PCT}%* of everything they buy."
                 )
             await bot.send_message(int(referrer['telegram_id']), text, parse_mode="Markdown")
@@ -582,7 +600,7 @@ async def send_mini_app_message(message: Message, lang: str, is_new_user: bool =
                 "🎭 *¡Bienvenido a Taboo Realm!*\n\n"
                 "Aquí podrás chatear con personajes únicos de IA.\n\n"
                 f"💎 Te regalamos *{STARTING_GEMS} gemas* para empezar.\n"
-                f"🎁 Invita amigos y gana *{GEMS_PER_REFERRAL} gemas* + *5% de sus compras*.\n\n"
+                f"🎁 Invita amigos y gana *{REFERRAL_MESSAGES} mensajes* + *5% de sus compras*.\n\n"
                 "👇 Toca el botón para comenzar:"
             )
         else:
@@ -599,7 +617,7 @@ async def send_mini_app_message(message: Message, lang: str, is_new_user: bool =
                 "🎭 *Welcome to Taboo Realm!*\n\n"
                 "Here you can chat with unique AI characters.\n\n"
                 f"💎 We gift you *{STARTING_GEMS} gems* to start.\n"
-                f"🎁 Invite friends and earn *{GEMS_PER_REFERRAL} gems* + *5% of their purchases*.\n\n"
+                f"🎁 Invite friends and earn *{REFERRAL_MESSAGES} messages* + *5% of their purchases*.\n\n"
                 "👇 Tap the button to begin:"
             )
         else:
@@ -834,9 +852,9 @@ async def cmd_balance(message: Message):
         return await message.answer("⚠️ Usa /start primero")
     lang = user.get('language', 'es')
     if lang == 'es':
-        text = f"💎 *Tu Balance*\n\nGemas: *{user['gems']}*\n\n💡 Abre la Mini App para más detalles."
+        text = f"💎 *Tu Balance*\n\nGemas de Pago: *{user['gems']}*\n💌 Mensajes de Chat: *{user.get('bonus_gems', 0)}*\n\n💡 Abre la Mini App para más detalles."
     else:
-        text = f"💎 *Your Balance*\n\nGems: *{user['gems']}*\n\n💡 Open the Mini App for more details."
+        text = f"💎 *Your Balance*\n\nPaid Gems: *{user['gems']}*\n💌 Chat Messages: *{user.get('bonus_gems', 0)}*\n\n💡 Open the Mini App for more details."
     await message.answer(text, parse_mode="Markdown")
 
 
@@ -860,7 +878,7 @@ async def cmd_shop(message: Message):
             if pkg['first_time']:
                 line += " (¡Primera vez!)"
             text += f"{i+1}. {line}\n"
-            builder.button(text=f"Opción {i+1}", callback_data=f"buy_{i}")
+            builder.button(text=f"Opción {i+1}", callback_data=f"buy_gem_{i}")
     else:
         text = "💎 *Gem Store*\n\nSelect a package:\n\n"
         for i, pkg in enumerate(STAR_PACKAGES):
@@ -869,17 +887,17 @@ async def cmd_shop(message: Message):
             if pkg['first_time']:
                 line += " (First time!)"
             text += f"{i+1}. {line}\n"
-            builder.button(text=f"Option {i+1}", callback_data=f"buy_{i}")
+            builder.button(text=f"Option {i+1}", callback_data=f"buy_gem_{i}")
 
     builder.adjust(1)
     await message.answer(text, reply_markup=builder.as_markup(), parse_mode="Markdown")
 
 
-@router.callback_query(F.data.startswith('buy_'))
+@router.callback_query(F.data.startswith('buy_gem_'))
 async def process_purchase(callback: CallbackQuery):
     telegram_id = callback.from_user.id
     try:
-        package_index = int(callback.data.split('_')[1])
+        package_index = int(callback.data.split('_')[-1])
     except (ValueError, IndexError):
         return await callback.answer("❌ Paquete no válido", show_alert=True)
 
@@ -941,7 +959,6 @@ async def process_successful_payment(message: Message):
                 )
                 
                 if current_sub and current_sub.get('expires_at'):
-                    # ✅ FIX: Cálculo matemático seguro en Python en lugar de SQL
                     current_exp = datetime.fromisoformat(str(current_sub['expires_at']).replace('Z', '+00:00'))
                     new_exp = current_exp + timedelta(days=days)
                     new_exp_str = new_exp.strftime('%Y-%m-%d %H:%M:%S')
@@ -953,7 +970,6 @@ async def process_successful_payment(message: Message):
                         [new_exp_str, charge_id, str(telegram_id)]
                     )
                 else:
-                    # ✅ FIX: También calculamos la fecha inicial en Python
                     new_exp = datetime.now(timezone.utc) + timedelta(days=days)
                     new_exp_str = new_exp.strftime('%Y-%m-%d %H:%M:%S')
                     
@@ -974,22 +990,27 @@ async def process_successful_payment(message: Message):
                 await message.answer("⚠️ Pago recibido pero hubo un error activando VIP. Contacta a soporte.")
                 return
 
+    # ✅ NUEVO: Diferenciar entre compra de gemas y compra de mensajes
+    is_messages = payload.startswith("message_purchase_")
+    prefix = "message_purchase_" if is_messages else "gem_purchase_"
+    
     try:
-        pkg_idx = int(payload.split('_')[-1])
+        pkg_idx = int(payload.replace(prefix, ""))
     except ValueError:
         return await message.answer("⚠️ Error al procesar la compra.")
 
-    if pkg_idx >= len(STAR_PACKAGES):
+    active_packages = MESSAGE_PACKAGES if is_messages else STAR_PACKAGES
+    if pkg_idx >= len(active_packages):
         return await message.answer("⚠️ Error al procesar la compra.")
 
-    pkg = STAR_PACKAGES[pkg_idx]
-    gems = calc_final_gems(pkg)
+    pkg = active_packages[pkg_idx]
+    amount = pkg['messages'] if is_messages else calc_final_gems(pkg)
 
-    # ✅ FIX: Capturamos si la compra se procesó o era un duplicado
     success = await record_star_purchase(
-        telegram_id, pkg['stars'], gems,
+        telegram_id, pkg['stars'], amount,
         pkg.get('first_time', False),
-        charge_id
+        charge_id,
+        is_messages
     )
 
     if not success:
@@ -998,10 +1019,17 @@ async def process_successful_payment(message: Message):
     user = await get_user(telegram_id)
     lang = user.get('language', 'es') if user else 'es'
 
-    if lang == 'es':
-        text = f"✅ ¡Compra exitosa! Recibiste *{gems} gemas*.\n\n🎉 ¡Ahora tienes acceso a audio e imágenes!"
+    if is_messages:
+        if lang == 'es':
+            text = f"✅ ¡Compra exitosa! Recibiste *{amount} mensajes de chat*.\n\n🎉 ¡Ahora puedes seguir hablando con tus personajes!"
+        else:
+            text = f"✅ Purchase successful! You received *{amount} chat messages*.\n\n🎉 You can now keep talking with your characters!"
     else:
-        text = f"✅ Purchase successful! You received *{gems} gems*.\n\n🎉 You now have access to audio and images!"
+        if lang == 'es':
+            text = f"✅ ¡Compra exitosa! Recibiste *{amount} gemas*.\n\n🎉 ¡Ahora tienes acceso a audio e imágenes!"
+        else:
+            text = f"✅ Purchase successful! You received *{amount} gems*.\n\n🎉 You now have access to audio and images!"
+            
     await message.answer(text, parse_mode="Markdown", reply_markup=get_main_keyboard(lang))
 
 
@@ -1032,7 +1060,7 @@ async def cmd_invite(message: Message):
         text = (
             f"🎁 *Sistema de Referidos*\n\n"
             f"🔗 Tu enlace:\n`{link}`\n\n"
-            f"💎 *{GEMS_PER_REFERRAL} gemas* cuando tu amigo mande {REFERRAL_MIN_MESSAGES} mensajes.\n"
+            f"💌 *{REFERRAL_MESSAGES} mensajes* cuando tu amigo mande {REFERRAL_MIN_MESSAGES} mensajes.\n"
             f"💰 *{current_pct}%* de todas sus compras (permanente).\n\n"
             f"📊 Amigos que han comprado: *{paying_count}*\n"
             f"• 5+ → 7% de comisión\n"
@@ -1042,7 +1070,7 @@ async def cmd_invite(message: Message):
         text = (
             f"🎁 *Referral System*\n\n"
             f"🔗 Your link:\n`{link}`\n\n"
-            f"💎 *{GEMS_PER_REFERRAL} gems* when your friend sends {REFERRAL_MIN_MESSAGES} messages.\n"
+            f"💌 *{REFERRAL_MESSAGES} messages* when your friend sends {REFERRAL_MIN_MESSAGES} messages.\n"
             f"💰 *{current_pct}%* of all their purchases (permanent).\n\n"
             f"📊 Friends who bought: *{paying_count}*\n"
             f"• 5+ → 7% commission\n"
@@ -1065,7 +1093,7 @@ async def cmd_help(message: Message):
         text = (
             "📚 *Comandos*\n\n"
             "/start - Iniciar\n"
-            "/balance - Ver gemas\n"
+            "/balance - Ver balance\n"
             "/shop - Tienda\n"
             "/invite - Invitar amigos\n"
             "/help - Ayuda\n\n"
@@ -1075,7 +1103,7 @@ async def cmd_help(message: Message):
         text = (
             "📚 *Commands*\n\n"
             "/start - Start\n"
-            "/balance - View gems\n"
+            "/balance - View balance\n"
             "/shop - Store\n"
             "/invite - Invite friends\n"
             "/help - Help\n\n"
