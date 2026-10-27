@@ -12,6 +12,7 @@ export interface UserData {
   username: string | null
   gems: number
   purchased_gems?: number
+  bonus_gems?: number          // ✅ NUEVO: Mensajes de chat (💌)
   language: string
   hook_messages_remaining: number
   hook_used?: boolean
@@ -25,6 +26,7 @@ export interface UserData {
   gender?: string | null
   interested_in?: string | null
   onboarding_complete?: boolean
+  is_vip?: boolean             // ✅ NUEVO: reflejar VIP en el contexto
 }
 
 interface UserContextType {
