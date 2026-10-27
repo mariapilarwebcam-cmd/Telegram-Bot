@@ -120,6 +120,8 @@ export default function ShopPage() {
           const checkSub = setInterval(async () => {
              attempts++;
              await loadVipStatus();
+             // ✅ NUEVO: refrescar también el contexto (VIP se refleja sin salir)
+             await refresh();
              if (attempts >= 4) {
                clearInterval(checkSub);
                setVipPurchasing(null);
@@ -350,7 +352,9 @@ export default function ShopPage() {
               const checkBalance = setInterval(async () => {
                 attempts++;
                 await refresh();
-                if (attempts >= 3) {
+                // ✅ Antes: 3 intentos (4.5s). Ahora: 5 intentos (7.5s) para dar
+                // más margen al webhook de Telegram → bot Python → Turso.
+                if (attempts >= 5) {
                   clearInterval(checkBalance);
                   setPurchasing(null);
                 }
