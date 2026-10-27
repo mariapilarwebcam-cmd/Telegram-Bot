@@ -55,7 +55,7 @@ export const translations = {
     blockedTitle: 'No te vayas todavía',
     blockedDesc: 'tiene algo especial para ti',
     rechargeUnlock: 'Recargar mensajes',
-    inviteFriend: 'Invitar amigo (+10 mensajes)',
+    inviteFriend: 'Invitar amigo (+15 mensajes)', // ✅ CORREGIDO
     close: 'Cerrar',
     generateSelfie: 'Generar selfie',
     generateSelfieDesc: 'Describe la foto (10 gemas)',
@@ -203,7 +203,7 @@ export const translations = {
     blockedTitle: 'Don\'t leave yet',
     blockedDesc: 'has something special for you',
     rechargeUnlock: 'Recharge messages',
-    inviteFriend: 'Invite friend (+10 messages)',
+    inviteFriend: 'Invite friend (+15 messages)', // ✅ CORREGIDO
     close: 'Close',
     generateSelfie: 'Generate selfie',
     generateSelfieDesc: 'Describe the photo (10 gems)',
