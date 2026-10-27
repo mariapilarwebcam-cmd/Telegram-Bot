@@ -112,7 +112,7 @@ export default function GachaPage() {
   const [glowClass, setGlowClass] = useState('')
   const [isShaking, setIsShaking] = useState(false)
   
-  // ✅ NUEVO ESTADO: Para el toggle de animación rápida
+  // ✅ ESTADO: Para el toggle de animación rápida
   const [instantSpin, setInstantSpin] = useState(false)
 
   const reelRef = useRef<HTMLDivElement>(null)
@@ -324,7 +324,6 @@ export default function GachaPage() {
         setOwnedCharacters(prev => [...prev, data.item_key])
       }
 
-      // ✅ LÓGICA DEL NUEVO TOGGLE: MODO RÁPIDO vs ANIMACIÓN NORMAL
       if (instantSpin) {
         setTimeout(() => {
           const cw = reelWindowRef.current?.offsetWidth || 340
@@ -333,7 +332,7 @@ export default function GachaPage() {
             reelRef.current.style.transform = `translateX(${targetPos.current}px)`
           }
           finishSpin()
-        }, 100) // Pequeño delay para que React pinte el nuevo rodillo
+        }, 100)
       } else {
         setTimeout(() => {
           const cw = reelWindowRef.current?.offsetWidth || 340
@@ -467,7 +466,6 @@ export default function GachaPage() {
         </div>
       </div>
 
-      {/* ✅ NUEVO BOTÓN TOGGLE PARA SALTAR ANIMACIÓN */}
       <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16, position: 'relative', zIndex: 10 }}>
         <button
           onClick={() => setInstantSpin(!instantSpin)}
@@ -587,8 +585,11 @@ export default function GachaPage() {
             <li>Cada tirada cuesta <strong>50 Gemas de Pago</strong>.</li>
             <li>Puedes ganar <strong>Gemas de Chat</strong> (para hablar), <strong>Outfits</strong> (para regalar), o <strong>Pases de Fantasía</strong> (fotos nivel 5).</li>
             <li>Los <strong>Personajes Exclusivos</strong> solo se pueden desbloquear aquí. Si ya los tienes, se marcan con un ✅.</li>
-            <li><strong>Los premios más codiciados (Épicos, Legendarios y Míticos) tienen una probabilidad muy baja.</strong></li>
-            <li><strong>Garantía:</strong> Si tienes mala suerte, cada 10 tiradas el sistema te asegura un premio Épico o superior.</li>
+            
+            {/* ✅ TEXTOS MODIFICADOS AQUÍ */}
+            <li><strong>Los premios más codiciados (Épicos, Legendarios y Míticos) tienen menor posibilidad de salir por su rareza y exclusividad.</strong></li>
+            <li><strong>Garantía:</strong> Cada 10 tiradas tienes asegurado un premio Épico o superior si no lo has obtenido antes.</li>
+            
             <li><strong>Outfits:</strong> Cuando regalas un Outfit, el personaje lo guarda en su armario. ¡Y lo usará en las <strong>futuras fotos</strong> que te envíe!</li>
           </ul>
         </div>
