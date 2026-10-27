@@ -1123,7 +1123,7 @@ export const VIP_PLANS: VipPlan[] = [
     price: { es: '$9.99', en: '$9.99' },
     crypto_price: 8.49,
     savings: { es: 'Ahorras 42%', en: 'Save 42%' },
-    crypto_savings: { es: 'Ahorras 51%', en: 'Save 51%' },
+    crypto_savings: { es: 'Ahorras 42%', en: 'Save 42%' },
   },
   {
     id: 'quarterly',
@@ -1134,7 +1134,7 @@ export const VIP_PLANS: VipPlan[] = [
     price: { es: '$19.99', en: '$19.99' },
     crypto_price: 16.99,
     savings: { es: 'Ahorras 61%', en: 'Save 61%' },
-    crypto_savings: { es: 'Ahorras 67%', en: 'Save 67%' },
+    crypto_savings: { es: 'Ahorras 61%', en: 'Save 61%' },
   },
   {
     id: 'annual',
@@ -1145,8 +1145,8 @@ export const VIP_PLANS: VipPlan[] = [
     label: { es: 'Anual', en: 'Annual' },
     price: { es: '$79.99', en: '$79.99' },
     crypto_price: 67.99,
-    savings: { es: 'Ahorras 78%', en: 'Save 78%' },
-    crypto_savings: { es: 'Ahorras 81%', en: 'Save 81%' },
+    savings: { es: 'Ahorras 62%', en: 'Save 62%' },
+    crypto_savings: { es: 'Ahorras 62%', en: 'Save 62%' },
   },
 ]
 
