@@ -319,6 +319,7 @@ export default function HomePage() {
           borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
         }}
       >
+        {/* ✅ HEADER CORREGIDO SIN ETIQUETA VIP PARA EVITAR CORTES */}
         <div
           style={{
             display: 'flex',
@@ -331,28 +332,6 @@ export default function HomePage() {
           <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0, letterSpacing: '-0.02em', flex: 1 }}>
             Taboo<span style={{ color: '#a78bfa' }}>Realm</span>
           </h1>
-
-          {isVip && (
-            <span
-              style={{
-                fontSize: 10,
-                fontWeight: 900,
-                letterSpacing: '0.08em',
-                color: '#fbbf24',
-                background:
-                  'linear-gradient(135deg, rgba(251,191,36,0.25) 0%, rgba(217,119,6,0.15) 100%)',
-                border: '1px solid rgba(251, 191, 36, 0.5)',
-                padding: '4px 8px',
-                borderRadius: 8,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 3,
-                flexShrink: 0,
-              }}
-            >
-              👑 VIP
-            </span>
-          )}
 
           <button
             onClick={() => router.push('/settings')}
@@ -404,7 +383,6 @@ export default function HomePage() {
                 flexShrink: 0,
               }}
             >
-              {/* ✅ Icono de diamante unificado */}
               <span style={{ fontSize: 13 }}>💎</span>
               <span style={{ fontSize: 13, fontWeight: 600 }}>{gems}</span>
             </div>
@@ -767,7 +745,6 @@ export default function HomePage() {
                 flexShrink: 0,
               }}
             >
-              {/* ✅ Icono de diamante unificado */}
               <span style={{ fontSize: 12 }}>💎</span>
               <span style={{ fontSize: 12, fontWeight: 700, color: '#22c55e' }}>+10</span>
             </div>
