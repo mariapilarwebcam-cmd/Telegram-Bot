@@ -75,7 +75,6 @@ const PUBLIC_ENDPOINTS = [
   '/api/cron',      // ← Vercel Cron (protegido con CRON_SECRET internamente)
   '/api/support',   // ← webhook bot soporte (protegido con secret_token de Telegram)
   '/api/tonconnect-manifest', // ✅ Necesario para que las wallets lean el manifest sin token de Telegram
-  '/api/test-purchase', // ✅ NUEVO: Ruta de pruebas (protegida internamente con x-test-secret)
 ]
 
 const DEV_BYPASS =
