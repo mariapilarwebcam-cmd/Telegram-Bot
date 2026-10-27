@@ -1292,35 +1292,40 @@ export default function ChatPage() {
             )}
           </div>
 
-          {isVip ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
-              <div style={{ flex: 1, height: 3, background: 'rgba(251, 191, 36, 0.15)', borderRadius: 2, overflow: 'hidden', maxWidth: 90 }}>
-                <div
-                  style={{
-                    height: '100%',
-                    width: `${vipUsagePercent}%`,
-                    background:
-                      vipUsagePercent >= 90
-                        ? 'linear-gradient(90deg, #f59e0b, #dc2626)'
-                        : 'linear-gradient(90deg, #fbbf24, #f59e0b)',
-                    transition: 'width 0.4s ease',
-                  }}
-                />
+          {/* ✅ BARRAS DE PROGRESO: VIP Y RELACIÓN APILADAS */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
+            {isVip && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <div style={{ flex: 1, height: 3, background: 'rgba(251, 191, 36, 0.15)', borderRadius: 2, overflow: 'hidden', maxWidth: 90 }}>
+                  <div
+                    style={{
+                      height: '100%',
+                      width: `${vipUsagePercent}%`,
+                      background:
+                        vipUsagePercent >= 90
+                          ? 'linear-gradient(90deg, #f59e0b, #dc2626)'
+                          : 'linear-gradient(90deg, #fbbf24, #f59e0b)',
+                      transition: 'width 0.4s ease',
+                    }}
+                  />
+                </div>
+                <span style={{ fontSize: 9, color: '#fbbf24', fontWeight: 700, letterSpacing: '0.02em' }}>
+                  {vipMessagesToday}/{VIP_DAILY_MESSAGE_LIMIT} VIP
+                </span>
               </div>
-              <span style={{ fontSize: 9, color: '#fbbf24', fontWeight: 700, letterSpacing: '0.02em' }}>
-                {vipMessagesToday}/{VIP_DAILY_MESSAGE_LIMIT}
-              </span>
-            </div>
-          ) : showLevelProgress ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
-              <div style={{ flex: 1, height: 3, background: 'rgba(168, 85, 247, 0.15)', borderRadius: 2, overflow: 'hidden', maxWidth: 70 }}>
-                <div style={{ height: '100%', width: `${levelProgressPercent}%`, background: 'linear-gradient(90deg, #a855f7, #ec4899)', transition: 'width 0.4s ease' }} />
+            )}
+
+            {showLevelProgress && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <div style={{ flex: 1, height: 3, background: 'rgba(168, 85, 247, 0.15)', borderRadius: 2, overflow: 'hidden', maxWidth: 70 }}>
+                  <div style={{ height: '100%', width: `${levelProgressPercent}%`, background: 'linear-gradient(90deg, #a855f7, #ec4899)', transition: 'width 0.4s ease' }} />
+                </div>
+                <span style={{ fontSize: 9, color: '#8b8b9e', fontWeight: 600, letterSpacing: '0.02em' }}>
+                  {levelProgress.current}/{levelProgress.next} Nivel
+                </span>
               </div>
-              <span style={{ fontSize: 9, color: '#8b8b9e', fontWeight: 600, letterSpacing: '0.02em' }}>
-                {levelProgress.current}/{levelProgress.next}
-              </span>
-            </div>
-          ) : null}
+            )}
+          </div>
         </div>
 
         <div className="menu-wrap" ref={menuRef}>
