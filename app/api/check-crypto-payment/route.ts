@@ -16,6 +16,7 @@ import {
 import {
   CRYPTO_PACKAGES,
   MESSAGE_PACKAGES,
+  HYBRID_PACKAGES, // ✅ NUEVO
   getFinalCryptoGems,
   REFERRAL_PURCHASE_COMMISSION_PCT,
   REFERRAL_TOP_TIER_THRESHOLD,
@@ -140,7 +141,10 @@ export async function POST(request: Request) {
 
     // ✅ Determinar qué paquete buscar
     const isMessages = packageType === 'messages'
-    const activePackages = isMessages ? MESSAGE_PACKAGES : CRYPTO_PACKAGES
+    const isHybrid = packageType === 'hybrid'
+    const activePackages = isHybrid 
+      ? HYBRID_PACKAGES 
+      : (isMessages ? MESSAGE_PACKAGES : CRYPTO_PACKAGES)
 
     if (
       isNaN(packageIndex) ||
@@ -225,20 +229,32 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
     }
 
-    // ✅ Calcular cuánto entregar
-    const amountToAdd = isMessages ? (pkg as any).messages : getFinalCryptoGems(pkg as any)
-    
-    // ✅ Equivalente en gemas para la comisión (ej. si 300 msgs valen $1.79, aprox 200 gemas)
-    const commissionBase = isMessages ? Math.floor((pkg as any).usdt * 120) : amountToAdd
+    // ✅ Calcular cuánto entregar (Gemas y Mensajes por separado)
+    let gemsToAdd = 0
+    let messagesToAdd = 0
+
+    if (isHybrid) {
+      gemsToAdd = (pkg as any).crypto_final_gems
+      messagesToAdd = (pkg as any).crypto_final_messages
+    } else if (isMessages) {
+      messagesToAdd = (pkg as any).messages
+    } else {
+      gemsToAdd = getFinalCryptoGems(pkg as any)
+    }
+
+    // ✅ Equivalente en gemas para la comisión (basado en el valor USD total)
+    const commissionBase = isHybrid 
+      ? Math.floor((pkg as any).usdt * 120) 
+      : (isMessages ? Math.floor((pkg as any).usdt * 120) : gemsToAdd)
 
     // ─── Insertar purchase (con UNIQUE constraint anti-doble) ───
     const inserted = await insertStarPurchase({
       telegram_id: telegramId,
       stars_amount: 0,
-      gems_amount: isMessages ? 0 : amountToAdd,
+      gems_amount: isHybrid ? gemsToAdd : (isMessages ? 0 : gemsToAdd),
       is_first_purchase: pkg.first_time_only || false,
       telegram_charge_id: reference,
-      payment_method: isMessages ? 'crypto_messages' : 'crypto',
+      payment_method: isHybrid ? 'crypto_hybrid' : (isMessages ? 'crypto_messages' : 'crypto'),
     })
 
     if (!inserted) {
@@ -259,7 +275,28 @@ export async function POST(request: Request) {
     let newPurchasedGems = user.purchased_gems || 0
     let newBonusGems = user.bonus_gems || 0
 
-    if (isMessages) {
+    if (isHybrid) {
+      // 1. Entregar Gemas de Pago
+      if (gemsToAdd > 0) {
+        const rpcGems = await incrementGemsAndPurchased(telegramId, gemsToAdd)
+        newGems = rpcGems.new_gems
+        newPurchasedGems = rpcGems.new_purchased
+      }
+      
+      // 2. Entregar Mensajes de Chat
+      if (messagesToAdd > 0) {
+        const rpcMessages = await queryOne<{ bonus_gems: number }>(
+          `UPDATE users 
+           SET bonus_gems = COALESCE(bonus_gems, 0) + ?, 
+               hook_messages_remaining = 0,
+               updated_at = datetime('now')
+           WHERE telegram_id = ? 
+           RETURNING bonus_gems`,
+          [messagesToAdd, telegramId]
+        )
+        newBonusGems = rpcMessages?.bonus_gems ?? newBonusGems
+      }
+    } else if (isMessages) {
       // Entregar Mensajes (bonus_gems)
       const rpc = await queryOne<{ bonus_gems: number }>(
         `UPDATE users 
@@ -268,22 +305,28 @@ export async function POST(request: Request) {
              updated_at = datetime('now')
          WHERE telegram_id = ? 
          RETURNING bonus_gems`,
-        [amountToAdd, telegramId]
+        [messagesToAdd, telegramId]
       )
       newBonusGems = rpc?.bonus_gems ?? newBonusGems
     } else {
       // Entregar Gemas (gems + purchased_gems)
-      const rpc = await incrementGemsAndPurchased(telegramId, amountToAdd)
+      const rpc = await incrementGemsAndPurchased(telegramId, gemsToAdd)
       newGems = rpc.new_gems
       newPurchasedGems = rpc.new_purchased
     }
 
     // ─── Registrar transacción ───
+    let txAmount = isMessages ? messagesToAdd : gemsToAdd
+    let txType = isHybrid ? 'crypto_purchase_hybrid' : (isMessages ? 'crypto_purchase_messages' : 'crypto_purchase')
+    let txDesc = isHybrid 
+      ? `Compra crypto Híbrida ${pkg.usdt} USDT (${reference})`
+      : `Compra crypto ${pkg.usdt} USDT (${reference})`
+
     await insertGemTransaction({
       telegram_id: telegramId,
-      amount: amountToAdd,
-      transaction_type: isMessages ? 'crypto_purchase_messages' : 'crypto_purchase',
-      description: `Compra crypto ${pkg.usdt} USDT (${reference})`,
+      amount: txAmount,
+      transaction_type: txType,
+      description: txDesc,
     })
 
     // ─── Pagar comisión al referidor ───
@@ -291,8 +334,11 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       status: 'paid',
-      amount_added: amountToAdd,
+      amount_added: isMessages ? messagesToAdd : gemsToAdd,
+      gems_added: gemsToAdd,
+      messages_added: messagesToAdd,
       is_messages: isMessages,
+      is_hybrid: isHybrid,
       remaining_gems: newGems,
       remaining_purchased_gems: newPurchasedGems,
       remaining_bonus_gems: newBonusGems,
