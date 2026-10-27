@@ -10,7 +10,7 @@ import {
   FANTASY_ARCHETYPES,
   isVipArchetype,
   VIP_PLANS,
-  GACHA_ARCHETYPES, // ✅ NUEVO
+  GACHA_ARCHETYPES,
   sortByPopularity,
 } from '@/lib/constants'
 import { getTranslations } from '@/lib/i18n'
@@ -47,7 +47,6 @@ function getGradient(key: string): string {
   return GRADIENTS[Math.abs(hash) % GRADIENTS.length]
 }
 
-// ✅ DISMISSABLE: claves de localStorage
 const LS_KEY_VIP_DISMISSED = 'taboo_banner_vip_dismissed'
 const LS_KEY_INVITE_DISMISSED = 'taboo_banner_invite_dismissed'
 
@@ -66,7 +65,6 @@ export default function HomePage() {
   const [showVipModal, setShowVipModal] = useState(false)
   const [vipBlockedChar, setVipBlockedChar] = useState<Char | null>(null)
 
-  // ✅ NUEVO: Modal de Gacha
   const [showGachaModal, setShowGachaModal] = useState(false)
   const [gachaBlockedChar, setGachaBlockedChar] = useState<Char | null>(null)
 
@@ -173,7 +171,6 @@ export default function HomePage() {
       if (tab === 'vip') return isVipChar && !isGachaChar
       if (tab === 'gacha') return isGachaChar
       
-      // En "all", "male" y "female" ocultamos los de la ruleta
       if (isGachaChar) return false
 
       if (tab === 'all') return true
@@ -197,14 +194,12 @@ export default function HomePage() {
     const isVipChar = isVipArchetype(c.archetype)
     const isGachaChar = GACHA_ARCHETYPES.includes(c.archetype)
 
-    // ✅ 1. Validar si es de la Ruleta
     if (isGachaChar) {
       setGachaBlockedChar(c)
       setShowGachaModal(true)
       return
     }
 
-    // ✅ 2. Validar si es VIP
     if (isVipChar && !isVip) {
       setVipBlockedChar(c)
       setShowVipModal(true)
@@ -304,7 +299,6 @@ export default function HomePage() {
   }
 
   const gems = user?.gems || 0
-  // ✅ NUEVO: saldo de mensajes de chat
   const messages = (user as any)?.bonus_gems || 0
   const hookRemaining = user?.hook_messages_remaining || 0
 
@@ -390,7 +384,6 @@ export default function HomePage() {
             </svg>
           </button>
 
-          {/* ✅ NUEVO: contenedor con los DOS balances (Gemas + Mensajes) */}
           <div
             style={{
               display: 'flex',
@@ -399,7 +392,6 @@ export default function HomePage() {
               flexShrink: 0,
             }}
           >
-            {/* Pill de Gemas (igual que antes) */}
             <div
               style={{
                 display: 'flex',
@@ -412,13 +404,11 @@ export default function HomePage() {
                 flexShrink: 0,
               }}
             >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
-                <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" fill="#a78bfa" />
-              </svg>
+              {/* ✅ Icono de diamante unificado */}
+              <span style={{ fontSize: 13 }}>💎</span>
               <span style={{ fontSize: 13, fontWeight: 600 }}>{gems}</span>
             </div>
 
-            {/* ✅ NUEVO: Pill de Mensajes (💌) */}
             <div
               style={{
                 display: 'flex',
@@ -777,9 +767,8 @@ export default function HomePage() {
                 flexShrink: 0,
               }}
             >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" fill="#22c55e" />
-              </svg>
+              {/* ✅ Icono de diamante unificado */}
+              <span style={{ fontSize: 12 }}>💎</span>
               <span style={{ fontSize: 12, fontWeight: 700, color: '#22c55e' }}>+10</span>
             </div>
           </button>
@@ -817,7 +806,6 @@ export default function HomePage() {
         </section>
       )}
 
-      {/* ✅ PESTAÑAS ACTUALIZADAS CON VIP Y GACHA */}
       <div className="tabs">
         {[
           { id: 'all', label: t.all },
@@ -867,7 +855,6 @@ export default function HomePage() {
                   />
                 )}
 
-                {/* ✅ CANDADO VIP */}
                 {isLockedVip && (
                   <div
                     style={{
@@ -903,7 +890,6 @@ export default function HomePage() {
                   </div>
                 )}
 
-                {/* ✅ CANDADO GACHA */}
                 {isLockedGacha && (
                   <div
                     style={{
@@ -985,7 +971,6 @@ export default function HomePage() {
         })}
       </div>
 
-      {/* ✅ MODAL DE VIP */}
       {showVipModal && vipBlockedChar && (
         <div
           className="modal-backdrop"
@@ -1109,7 +1094,6 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* ✅ MODAL DE GACHA */}
       {showGachaModal && gachaBlockedChar && (
         <div
           className="modal-backdrop"
