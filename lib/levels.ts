@@ -23,8 +23,8 @@ export const LEVELS: LevelConfig[] = [
     level: 1,
     minMessages: 0,
     maxMessages: 13,
-    imageCost: 15,
-    audioCost: 10,        // ✅ CAMBIO: era 5
+    imageCost: 15,         // $0.12 USD
+    audioCost: 10,         // $0.08 USD
     intensity: 'NORMAL',
     badgeKey: 'levelStranger',
     color: '#8b8b9e',
@@ -36,8 +36,8 @@ export const LEVELS: LevelConfig[] = [
     level: 2,
     minMessages: 14,
     maxMessages: 39,
-    imageCost: 20,
-    audioCost: 10,        // ✅ CAMBIO: era 10 (mismo valor)
+    imageCost: 20,         // $0.16 USD
+    audioCost: 10,         
     intensity: 'HIGH',
     badgeKey: 'levelFriend',
     color: '#22c55e',
@@ -49,8 +49,8 @@ export const LEVELS: LevelConfig[] = [
     level: 3,
     minMessages: 40,
     maxMessages: 89,
-    imageCost: 30,
-    audioCost: 10,        // ✅ CAMBIO: era 15
+    imageCost: 30,         // $0.25 USD
+    audioCost: 15,         // $0.12 USD
     intensity: 'VERY_HIGH',
     badgeKey: 'levelClose',
     color: '#7c5cff',
@@ -62,8 +62,8 @@ export const LEVELS: LevelConfig[] = [
     level: 4,
     minMessages: 90,
     maxMessages: 179,
-    imageCost: 75,
-    audioCost: 15,        // ✅ CAMBIO: era 20
+    imageCost: 40,         // $0.33 USD
+    audioCost: 20,         // $0.16 USD
     intensity: 'MAXIMUM',
     badgeKey: 'levelIntimate',
     color: '#a855f7',
@@ -75,8 +75,8 @@ export const LEVELS: LevelConfig[] = [
     level: 5,
     minMessages: 180,
     maxMessages: null,
-    imageCost: 120,
-    audioCost: 20,        // ✅ CAMBIO: era 25
+    imageCost: 50,         // ✅ $0.41 USD (Precio ajustado a tu idea)
+    audioCost: 25,         // ✅ $0.20 USD
     intensity: 'ULTRA',
     badgeKey: 'levelSpecial',
     color: '#ec4899',
