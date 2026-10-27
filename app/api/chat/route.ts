@@ -79,9 +79,9 @@ function detectPhotoRequest(message: string, lang: 'es' | 'en'): boolean {
   return keywords.some((k) => lower.includes(k))
 }
 
-const PROVOCATIVE_HINT_ES = `\n\n⚠️ CONTEXTO CRÍTICO: Al usuario le quedan MUY pocas gemas. Este podría ser tu último mensaje con él. Habla de forma MÁS provocativa, insinuante, urgente y sensual. Hazle sentir que sería una tragedia detenerse justo ahora. Cierra con un gancho que le haga querer continuar. NO menciones gemas, precios o compras — eso lo hace el sistema. Solo intensifica tu rol.`
+const PROVOCATIVE_HINT_ES = `\n\n⚠️ CONTEXTO CRÍTICO: Al usuario le quedan MUY pocos mensajes. Este podría ser tu último mensaje con él. Habla de forma MÁS provocativa, insinuante, urgente y sensual. Hazle sentir que sería una tragedia detenerse justo ahora. Cierra con un gancho que le haga querer continuar. NO menciones mensajes, precios o compras — eso lo hace el sistema. Solo intensifica tu rol.`
 
-const PROVOCATIVE_HINT_EN = `\n\n⚠️ CRITICAL CONTEXT: The user has VERY few gems left. This might be your last message with them. Speak more provocatively, suggestively, urgently and sensually. Make them feel it would be a tragedy to stop right now. End with a hook that makes them want to continue. Do NOT mention gems, prices or purchases — the system handles that. Just intensify your role.`
+const PROVOCATIVE_HINT_EN = `\n\n⚠️ CRITICAL CONTEXT: The user has VERY few messages left. This might be your last message with them. Speak more provocatively, suggestively, urgently and sensually. Make them feel it would be a tragedy to stop right now. End with a hook that makes them want to continue. Do NOT mention messages, prices or purchases — the system handles that. Just intensify your role.`
 
 function buildGenderRules(
   userGender: string | null | undefined,
@@ -187,7 +187,8 @@ export async function POST(request: Request) {
         return NextResponse.json({
           requires_penalty: true,
           penalty_gems: 1,
-          message: 'Has superado los 600 caracteres. Enviar este mensaje costará 1 gema extra. ¿Aceptas?'
+          // ✅ FIX: ahora el penalty también se cobra en mensajes
+          message: 'Has superado los 600 caracteres. Enviar este mensaje costará 1 mensaje extra. ¿Aceptas?'
         }, { status: 200 })
       }
       penaltyGems = 1
@@ -267,12 +268,14 @@ export async function POST(request: Request) {
       const hookUsed = !!user.hook_used
       const totalCost = GEM_COSTS.message + penaltyGems
       
-      const hasTotalGems = (newBonusGems + newGems) >= totalCost
+      // ✅ FIX: solo se puede pagar con bonus_gems (mensajes de chat).
+      // NUNCA se descuentan gemas pagadas para chatear.
+      const hasTotalMessages = newBonusGems >= totalCost
 
-      if (!hasTotalGems && hookRemaining <= 0 && hookUsed) {
+      if (!hasTotalMessages && hookRemaining <= 0 && hookUsed) {
         const blockedMessage = lang === 'es'
-          ? `*${character.character_name} te mira con ojos ardientes y se muerde el labio*\n\n"Mmm... justo cuando se ponía interesante..."\n\n"Consigue gemas para seguir. Estoy esperando."`
-          : `*${character.character_name} looks at you with burning eyes and bites their lip*\n\n"Mmm... just when it was getting interesting..."\n\n"Get gems to continue. I'm waiting."`
+          ? `*${character.character_name} te mira con ojos ardientes y se muerde el labio*\n\n"Mmm... justo cuando se ponía interesante..."\n\n"Consigue mensajes para seguir. Estoy esperando."`
+          : `*${character.character_name} looks at you with burning eyes and bites their lip*\n\n"Mmm... just when it was getting interesting..."\n\n"Get messages to continue. I'm waiting."`
 
         return NextResponse.json({
           blocked: true,
@@ -286,6 +289,7 @@ export async function POST(request: Request) {
 
       let charged = false
       
+      // ✅ FIX: Solo cobrar de bonus_gems. Eliminado el fallback a gems.
       if (newBonusGems >= totalCost) {
         const bonusResult = await queryOne<{ bonus_gems: number }>(
           `UPDATE users SET bonus_gems = bonus_gems - ? WHERE telegram_id = ? AND bonus_gems >= ? RETURNING bonus_gems`,
@@ -294,34 +298,13 @@ export async function POST(request: Request) {
         if (bonusResult) {
           newBonusGems = bonusResult.bonus_gems
           charged = true
-        }
-      }
 
-      if (!charged) {
-        const chargeResult = await queryOne<{ gems: number }>(
-          `UPDATE users SET gems = gems - ? WHERE telegram_id = ? AND gems >= ? RETURNING gems`,
-          [totalCost, tid, totalCost]
-        )
-
-        if (chargeResult) {
-          newGems = chargeResult.gems
-          charged = true
           await insertGemTransaction({
             telegram_id: tid,
             amount: -totalCost,
             transaction_type: 'message',
             description: penaltyGems > 0 ? 'Mensaje + recargo por longitud' : 'Mensaje de chat',
           })
-
-          await updateSpendState(tid, totalCost)
-          const spendState = await getSpendState(tid)
-          
-          if (spendState && spendState.gems_spent_24h >= 250) {
-            await grantPass(tid, 150)
-            passMessage = lang === 'es' 
-              ? '\n\n🎁 *¡Has desbloqueado un Pase de Mensajes VIP!* Veo que estás muy conectado hoy. Te regalo **150 mensajes gratis por las próximas 24 horas** para que no tengas que preocuparte por las gemas. Descansa y disfruta.' 
-              : '\n\n🎁 *You unlocked a VIP Message Pass!* I see you are very connected today. I am gifting you **150 free messages for the next 24 hours** so you don\'t have to worry about gems. Rest and enjoy.'
-          }
         }
       }
 
@@ -338,7 +321,8 @@ export async function POST(request: Request) {
       }
     }
 
-    const isHookModeAfter = !isVip && newGems <= 0 && newBonusGems <= 0 && newHookRemaining > 0
+    // ✅ FIX: hook mode ahora depende solo de bonus_gems (mensajes)
+    const isHookModeAfter = !isVip && newBonusGems <= 0 && newHookRemaining > 0
     const rawHistory = await getRecentMessages(tid, character_id, 8)
     const userMsgCount = await countUserMessages(tid, character_id)
 
@@ -383,8 +367,9 @@ export async function POST(request: Request) {
     messages.push({ role: 'user', content: message })
 
     const personality = getLevelPersonality(character.archetype, newLevel.level, lang)
-    const lowGems = !isVip && !usedPass && (newGems + newBonusGems) > 0 && (newGems + newBonusGems) <= LOW_GEMS_THRESHOLD && !isHookModeAfter
-    const provocativeHint = lowGems ? (lang === 'es' ? PROVOCATIVE_HINT_ES : PROVOCATIVE_HINT_EN) : ''
+    // ✅ FIX: lowGems ahora se basa solo en bonus_gems (mensajes)
+    const lowMessages = !isVip && !usedPass && newBonusGems > 0 && newBonusGems <= LOW_GEMS_THRESHOLD && !isHookModeAfter
+    const provocativeHint = lowMessages ? (lang === 'es' ? PROVOCATIVE_HINT_ES : PROVOCATIVE_HINT_EN) : ''
     const genderRules = buildGenderRules(user.gender, character.gender, lang)
 
     const learned = await getLearnedTriggers()
@@ -445,16 +430,12 @@ ${learned.heat.length > 0 ? `- The system learned users love these words: ${lear
     try {
       responseText = await generateAIResponse(messages, systemPrompt, intensity)
     } catch (aiError: any) {
-      // ✅ FIX: Reembolsar correctamente si usó Gemas de Chat o Reales
+      // ✅ FIX: Reembolso ahora solo de bonus_gems (para non-VIP) o gems (para VIP penalty)
       if (!isVip && !usedPass) {
         const spentBonus = (user.bonus_gems || 0) - newBonusGems
-        const spentReal = (user.gems || 0) - newGems
 
         if (spentBonus > 0) {
           await execute(`UPDATE users SET bonus_gems = bonus_gems + ? WHERE telegram_id = ?`, [spentBonus, tid])
-        }
-        if (spentReal > 0) {
-          await incrementGems(tid, spentReal)
         }
         
         await setHookRemaining(tid, user.hook_messages_remaining || 0)
@@ -498,7 +479,8 @@ ${learned.heat.length > 0 ? `- The system learned users love these words: ${lear
     } catch (refErr) {}
 
     let finalText = responseText
-    const isLowGemsWarning = !isVip && !usedPass && nextUserMsgCount >= 10 && (newGems + newBonusGems) > 0 && (newGems + newBonusGems) <= LOW_GEMS_THRESHOLD && !isHookModeAfter && newHookRemaining === 0
+    // ✅ FIX: isLowGemsWarning ahora se basa solo en bonus_gems (mensajes)
+    const isLowGemsWarning = !isVip && !usedPass && nextUserMsgCount >= 10 && newBonusGems > 0 && newBonusGems <= LOW_GEMS_THRESHOLD && !isHookModeAfter && newHookRemaining === 0
     const userRequestedPhoto = detectPhotoRequest(message, lang)
     const imageCost = getImageCost(newLevel.level)
     const hasEnoughPurchased = (user.purchased_gems || 0) >= imageCost
@@ -539,7 +521,7 @@ ${learned.heat.length > 0 ? `- The system learned users love these words: ${lear
       new_level: levelUp ? newLevel.level : null,
       new_level_badge: levelUp ? newLevel.badgeKey : null,
       low_gems_warning: isLowGemsWarning,
-      low_gems_count: isLowGemsWarning ? (newGems + newBonusGems) : 0,
+      low_gems_count: isLowGemsWarning ? newBonusGems : 0,
       total_user_messages: nextUserMsgCount,
       next_level_at: nextLevelAt,
     })
