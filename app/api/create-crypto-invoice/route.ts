@@ -2,7 +2,7 @@
 
 import { NextResponse } from 'next/server'
 import { getLastPurchase, getUser } from '@/lib/db-queries'
-import { CRYPTO_PACKAGES, MESSAGE_PACKAGES, getFinalCryptoGems } from '@/lib/constants'
+import { CRYPTO_PACKAGES, MESSAGE_PACKAGES, HYBRID_PACKAGES, getFinalCryptoGems } from '@/lib/constants'
 
 const RECIPIENT_WALLET =
   process.env.NEXT_PUBLIC_TON_RECIPIENT_WALLET ||
@@ -18,9 +18,10 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => ({}))
     const { package_id, package_type } = body
 
-    // ✅ NUEVO: Determinamos qué paquete usar
+    // ✅ NUEVO: Determinamos qué paquete usar (Híbrido, Mensajes o Gemas)
     const isMessages = package_type === 'messages'
-    const activePackages = isMessages ? MESSAGE_PACKAGES : CRYPTO_PACKAGES
+    const isHybrid = package_type === 'hybrid'
+    const activePackages = isHybrid ? HYBRID_PACKAGES : (isMessages ? MESSAGE_PACKAGES : CRYPTO_PACKAGES)
 
     if (
       typeof package_id !== 'number' ||
@@ -61,10 +62,30 @@ export async function POST(request: Request) {
     }
 
     // Reference único — se envía como comentario en la transacción USDT
-    // ✅ NUEVO: Añadimos el tipo al reference para saber qué entregar
+    // ✅ Incluye el tipo (gems, messages, hybrid) para que el verificador sepa qué entregar
     const reference = `TABOO_${tid}_${package_type || 'gems'}_${package_id}_${Date.now()}`
 
-    const finalAmount = isMessages ? (pkg as any).messages : getFinalCryptoGems(pkg as any)
+    // ✅ NUEVO: Calcular cantidades finales según el tipo de paquete
+    let finalGems = 0
+    let finalMessages = 0
+    let baseGems = 0
+    let baseMessages = 0
+    let firstTimeBonus = 0
+
+    if (isHybrid) {
+      // Usar los valores precalculados de crypto del paquete híbrido
+      finalGems = (pkg as any).crypto_final_gems
+      finalMessages = (pkg as any).crypto_final_messages
+      baseGems = (pkg as any).gems
+      baseMessages = (pkg as any).messages
+    } else if (isMessages) {
+      finalMessages = (pkg as any).messages
+      baseMessages = (pkg as any).messages
+    } else {
+      finalGems = getFinalCryptoGems(pkg as any)
+      baseGems = (pkg as any).gems
+      firstTimeBonus = (pkg as any).first_time_bonus || 0
+    }
 
     return NextResponse.json({
       payment_data: {
@@ -74,12 +95,13 @@ export async function POST(request: Request) {
       },
       package: {
         usdt: pkg.usdt,
-        gems: isMessages ? 0 : (pkg as any).gems,
-        messages: isMessages ? (pkg as any).messages : 0,
-        bonus: isMessages ? 0 : (pkg as any).bonus,
-        first_time_bonus: isMessages ? 0 : ((pkg as any).first_time_bonus || 0),
-        total_gems: isMessages ? 0 : finalAmount,
-        total_messages: isMessages ? finalAmount : 0,
+        gems: baseGems,
+        messages: baseMessages,
+        bonus: (pkg as any).bonus || 0,
+        first_time_bonus: firstTimeBonus,
+        total_gems: finalGems,
+        total_messages: finalMessages,
+        is_hybrid: isHybrid,
       },
     })
   } catch (e: any) {
