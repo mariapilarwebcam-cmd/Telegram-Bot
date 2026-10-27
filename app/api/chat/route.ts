@@ -24,11 +24,11 @@ import {
   getSpendState,
   grantPass
 } from '@/lib/db-queries'
-import { queryOne, query, execute } from '@/lib/turso' // ✅ Añadido execute
+import { queryOne, query, execute } from '@/lib/turso'
 import {
   GEM_COSTS,
   HOOK_MODE_MESSAGES,
-  GEMS_PER_REFERRAL,
+  REFERRAL_MESSAGES, // ✅ FIX: Reemplazado GEMS_PER_REFERRAL
   REFERRAL_MIN_MESSAGES,
   LOW_GEMS_THRESHOLD,
   getLevelPersonality,
@@ -488,9 +488,10 @@ ${learned.heat.length > 0 ? `- The system learned users love these words: ${lear
         const totalMsg = await countAllUserMessages(tid)
         await updateReferralCount(referral.id, totalMsg)
         if (totalMsg >= REFERRAL_MIN_MESSAGES) {
-          await incrementGems(String(referral.referrer_id), GEMS_PER_REFERRAL)
+          // ✅ FIX: Entregar mensajes de chat (bonus_gems) en lugar de gemas de pago
+          await execute(`UPDATE users SET bonus_gems = COALESCE(bonus_gems, 0) + ? WHERE telegram_id = ?`, [REFERRAL_MESSAGES, String(referral.referrer_id)])
           await incrementTotalReferrals(String(referral.referrer_id))
-          await insertGemTransaction({ telegram_id: String(referral.referrer_id), amount: GEMS_PER_REFERRAL, transaction_type: 'referral', description: `Referido verificado (${REFERRAL_MIN_MESSAGES}+ mensajes)` })
+          await insertGemTransaction({ telegram_id: String(referral.referrer_id), amount: REFERRAL_MESSAGES, transaction_type: 'referral', description: `Referido verificado (${REFERRAL_MIN_MESSAGES}+ mensajes)` })
           await markReferralPaid(referral.id)
         }
       }
