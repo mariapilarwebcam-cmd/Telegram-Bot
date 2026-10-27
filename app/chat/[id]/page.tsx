@@ -40,7 +40,6 @@ function getGradient(key: string) {
   return GRADIENTS[Math.abs(h) % GRADIENTS.length]
 }
 
-// ✅ NUEVA FUNCIÓN: Obtener la imagen del outfit desde R2
 const getItemImageUrl = (itemId: string) => {
   const base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL
   if (!base) return ''
@@ -170,11 +169,9 @@ export default function ChatPage() {
 
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
   
-  // ✅ ESTADOS DEL PASE DE FANTASÍA
   const [hasFantasyPass, setHasFantasyPass] = useState(false)
   const [usingFantasyPass, setUsingFantasyPass] = useState(false)
 
-  // ✅ ESTADOS DEL ARMARIO (OUTFITS)
   const [showWardrobe, setShowWardrobe] = useState(false)
   const [wardrobeData, setWardrobeData] = useState<{ inventory: any[], owned: string[], equipped: string | null }>({ inventory: [], owned: [], equipped: null })
   const [equippingOutfit, setEquippingOutfit] = useState(false)
@@ -324,7 +321,6 @@ export default function ChatPage() {
 
     const startChat = async () => {
       setAutoStartAttempted(true)
-      // ✅ NUEVO: los chats consumen mensajes (bonus_gems), no gemas pagadas
       const bonusGems = (user as any)?.bonus_gems || 0
       const gems = user.gems || 0
       const hookRemaining = user.hook_messages_remaining || 0
@@ -375,7 +371,6 @@ export default function ChatPage() {
     if (!input.trim() || !user || loading || sendingRef.current) return
     sendingRef.current = true
 
-    // ✅ NUEVO: el chat consume mensajes (bonus_gems), no gemas pagadas
     const bonusGems = (user as any)?.bonus_gems || 0
     const gems = user.gems || 0
     const hookRemaining = user.hook_messages_remaining || 0
@@ -458,7 +453,6 @@ export default function ChatPage() {
           setHookRemaining(data.hook_messages_remaining ?? 0)
           setTotalUserMessages((prev) => prev + 1)
           
-          // ✅ NUEVO: si el backend consumió mensajes (💌), refrescamos el balance del contexto
           if (typeof data.remaining_bonus_gems === 'number') {
             await refresh()
           }
@@ -559,7 +553,6 @@ export default function ChatPage() {
     }
   }
 
-  // ✅ FUNCIÓN PARA EQUIPAR/REGALAR OUTFIT
   const handleEquipOutfit = async (outfitKey: string) => {
     if (!character || equippingOutfit) return
     setEquippingOutfit(true)
@@ -578,7 +571,6 @@ export default function ChatPage() {
         return
       }
 
-      // Actualizamos el estado local del armario
       setWardrobeData(prev => ({
         ...prev,
         equipped: outfitKey,
@@ -588,7 +580,6 @@ export default function ChatPage() {
 
       setShowWardrobe(false)
 
-      // ✅ Si es un outfit NUEVO, disparamos la foto de agradecimiento
       if (data.is_new) {
         const imgRes = await tgFetch('/api/generate-image', {
           method: 'POST',
@@ -1252,9 +1243,7 @@ export default function ChatPage() {
             )}
             {headerBadgeVariant === 'low-gems' && (
               <span className="status-badge status-badge-low">
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
-                  <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" fill="currentColor" />
-                </svg>
+                <span style={{ fontSize: 10 }}>💎</span>
                 {headerBadgeText}
               </span>
             )}
@@ -1315,7 +1304,6 @@ export default function ChatPage() {
                 {t.renameTitle}
               </button>
 
-              {/* ✅ NUEVO BOTÓN DE ARMARIO */}
               <button
                 className="menu-item"
                 onClick={async () => {
@@ -1393,7 +1381,6 @@ export default function ChatPage() {
           )}
         </div>
 
-        {/* ✅ Balances (Mensajes 💌 + Gemas 💎) — ambos siempre visibles */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(34, 197, 94, 0.15)', padding: '5px 8px', borderRadius: 20, border: '1px solid rgba(34, 197, 94, 0.4)' }}>
             <span style={{ fontSize: 10 }}>💌</span>
@@ -1402,9 +1389,7 @@ export default function ChatPage() {
             </span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.05)', padding: '5px 10px', borderRadius: 20, border: '1px solid rgba(168,85,247,0.3)' }}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-              <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" fill="#a78bfa" />
-            </svg>
+            <span style={{ fontSize: 12 }}>💎</span>
             <span style={{ fontSize: 12, fontWeight: 600 }}>
               <AnimatedNumber value={gems} />
             </span>
@@ -1783,7 +1768,6 @@ export default function ChatPage() {
         </div>
       </div>
 
-      {/* MODAL DEL ARMARIO */}
       {showWardrobe && (
         <div className="modal-backdrop" onClick={() => setShowWardrobe(false)}>
           <div className="modal-box" onClick={(e) => e.stopPropagation()} style={{ maxHeight: '80vh', overflowY: 'auto' }}>
@@ -1802,7 +1786,6 @@ export default function ChatPage() {
               </p>
             ) : (
               <>
-                {/* Outfits para regalar (Consumen inventario) */}
                 {wardrobeData.inventory.length > 0 && (
                   <div style={{ marginBottom: 20 }}>
                     <p style={{ fontSize: 12, color: '#a395c9', fontWeight: 700, marginBottom: 8, textTransform: 'uppercase' }}>
@@ -1841,7 +1824,6 @@ export default function ChatPage() {
                   </div>
                 )}
 
-                {/* Outfits que ya posee el personaje (Solo alternan) */}
                 {wardrobeData.owned.length > 0 && (
                   <div>
                     <p style={{ fontSize: 12, color: '#a395c9', fontWeight: 700, marginBottom: 8, textTransform: 'uppercase' }}>
@@ -1898,7 +1880,6 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* LEVEL UP MODAL */}
       {levelUpModal && (
         <div className="modal-backdrop">
           <div className="modal-box level-up-modal">
@@ -1926,7 +1907,6 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* VIP LIMIT MODAL */}
       {showVipLimitModal && (
         <div className="modal-backdrop">
           <div className="modal-box level-up-modal">
@@ -2007,7 +1987,6 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* PREMIUM MODAL */}
       {showPremiumModal && (
         <div className="modal-backdrop">
           <div className="modal-box">
@@ -2028,7 +2007,6 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* RENAME MODAL */}
       {showRename && (
         <div className="modal-backdrop">
           <div className="modal-box">
@@ -2045,7 +2023,6 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* REPORT MODAL */}
       {showReportModal && (
         <div className="modal-backdrop" onClick={() => !reportSending && setShowReportModal(false)}>
           <div className="modal-box" onClick={(e) => e.stopPropagation()} style={{ maxHeight: '90vh', overflowY: 'auto' }}>
@@ -2178,7 +2155,6 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* BLOCKED MODAL */}
       {blocked && (
         <div className="modal-backdrop">
           <div className="modal-box danger">
@@ -2194,7 +2170,6 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* SELECTED IMAGE */}
       {selectedImage && (
         <div 
           className="modal-backdrop" 
@@ -2235,7 +2210,6 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* LOADING IMAGE OVERLAY */}
       {generatingImage && !usingFantasyPass && (
         <div 
           className="modal-backdrop" 
