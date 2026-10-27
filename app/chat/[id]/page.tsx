@@ -176,6 +176,11 @@ export default function ChatPage() {
   const [wardrobeData, setWardrobeData] = useState<{ inventory: any[], owned: string[], equipped: string | null }>({ inventory: [], owned: [], equipped: null })
   const [equippingOutfit, setEquippingOutfit] = useState(false)
 
+  // ✅ ESTADOS PARA EL INTERCAMBIO
+  const [showExchangeModal, setShowExchangeModal] = useState(false)
+  const [exchangeAmount, setExchangeAmount] = useState(2)
+  const [exchanging, setExchanging] = useState(false)
+
   const endRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const sendingRef = useRef(false)
@@ -1108,6 +1113,44 @@ export default function ChatPage() {
     text = text.replace(/@@IMG(\d+)@@/g, (_, idx) => images[parseInt(idx)] || '')
 
     return text
+  }
+
+  const handleExchange = async () => {
+    if (!user || exchanging) return
+    if (exchangeAmount < 2 || exchangeAmount % 2 !== 0) {
+      alert(lang === 'es' ? 'Debes cambiar un número par de gemas (mínimo 2).' : 'You must exchange an even number of gems (min 2).')
+      return
+    }
+    if (user.gems < exchangeAmount) {
+      alert(lang === 'es' ? 'No tienes suficientes gemas.' : 'Not enough gems.')
+      return
+    }
+
+    setExchanging(true)
+    try {
+      const res = await tgFetch('/api/exchange-gems', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gems: exchangeAmount }),
+      })
+      const data = await res.json()
+
+      if (res.ok) {
+        await refresh()
+        setShowExchangeModal(false)
+        setExchangeAmount(2)
+        setBlocked(false) // Cierra el modal de bloqueo para que pueda seguir chateando
+        alert(lang === 'es' 
+          ? `✅ ¡Cambio exitoso! Has recibido ${data.exchanged.messages} mensajes.` 
+          : `✅ Success! You received ${data.exchanged.messages} messages.`)
+      } else {
+        alert(data.error || 'Error al cambiar')
+      }
+    } catch {
+      alert('Error de conexión')
+    } finally {
+      setExchanging(false)
+    }
   }
 
   const t = getTranslations(lang)
@@ -2163,9 +2206,103 @@ export default function ChatPage() {
               <div style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(168,85,247,0.2)', borderRadius: 12, padding: 16, marginBottom: 16, fontSize: 14, lineHeight: 1.5 }} dangerouslySetInnerHTML={{ __html: formatMessage(blockedMessage) }} />
             )}
             <p className="modal-desc">{displayName} {t.blockedDesc}</p>
-            <button onClick={() => router.push('/shop')} className="modal-btn primary" style={{ width: '100%', marginBottom: 8 }}>{t.rechargeUnlock}</button>
-            <button onClick={() => router.push('/')} className="modal-btn secondary" style={{ width: '100%', background: 'rgba(255,255,255,0.05)', color: '#fff', marginBottom: 8 }}>{t.inviteFriend}</button>
+            
+            {/* ✅ OPCIÓN 1: COMPRAR MENSAJES */}
+            <button onClick={() => router.push('/shop')} className="modal-btn primary" style={{ width: '100%', marginBottom: 8, background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)', boxShadow: '0 4px 16px rgba(34, 197, 94, 0.4)' }}>
+              💌 {lang === 'es' ? 'Comprar Mensajes' : 'Buy Messages'}
+            </button>
+
+            {/* ✅ OPCIÓN 2: CAMBIAR GEMAS POR MENSAJES */}
+            <button onClick={() => { setShowExchangeModal(true); setBlocked(false); }} className="modal-btn primary" style={{ width: '100%', marginBottom: 8, background: 'linear-gradient(135deg, #a855f7 0%, #ec4899 100%)', boxShadow: '0 4px 16px rgba(236, 72, 153, 0.4)' }}>
+              🔄 {lang === 'es' ? 'Cambiar Gemas por Mensajes' : 'Exchange Gems for Messages'}
+            </button>
+
+            <button onClick={() => router.push('/')} className="modal-btn secondary" style={{ width: '100%', background: 'rgba(255,255,255,0.05)', color: '#fff', marginBottom: 8 }}>
+              🎁 {t.inviteFriend}
+            </button>
+            
             <button onClick={() => setBlocked(false)} style={{ width: '100%', background: 'transparent', border: 'none', color: '#8b8b9e', padding: 8, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>{t.close}</button>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ MODAL DE INTERCAMBIO EN EL CHAT */}
+      {showExchangeModal && (
+        <div className="modal-backdrop" onClick={() => !exchanging && setShowExchangeModal(false)}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+            <div style={{ fontSize: 40, textAlign: 'center', marginBottom: 8 }}>🔄</div>
+            <h3 className="modal-title" style={{ textAlign: 'center', marginBottom: 4 }}>
+              {lang === 'es' ? 'Cambia tus gemas' : 'Exchange your gems'}
+            </h3>
+            <p className="modal-desc" style={{ textAlign: 'center', marginBottom: 16 }}>
+              {lang === 'es' ? 'Convierte tus Gemas de Pago en Mensajes de Chat.' : 'Convert your Paid Gems into Chat Messages.'}
+            </p>
+
+            <div style={{ background: 'rgba(0,0,0,0.2)', padding: 16, borderRadius: 14, marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ fontSize: 13, color: '#a395c9' }}>{lang === 'es' ? 'Tus gemas:' : 'Your gems:'}</span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: '#f5f0ff' }}>💎 {gems}</span>
+              </div>
+              
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
+                <div style={{ textAlign: 'center', flex: 1 }}>
+                  <p style={{ fontSize: 11, color: '#8b8b9e', margin: '0 0 4px 0' }}>{lang === 'es' ? 'Entregas' : 'You give'}</p>
+                  <p style={{ fontSize: 20, fontWeight: 900, color: '#a855f7', margin: 0 }}>💎 {exchangeAmount}</p>
+                </div>
+                <div style={{ fontSize: 20, color: '#6b6b7e' }}>➡️</div>
+                <div style={{ textAlign: 'center', flex: 1 }}>
+                  <p style={{ fontSize: 11, color: '#8b8b9e', margin: '0 0 4px 0' }}>{lang === 'es' ? 'Recibes' : 'You get'}</p>
+                  <p style={{ fontSize: 20, fontWeight: 900, color: '#22c55e', margin: 0 }}>💌 {Math.floor((exchangeAmount / 2) * 3)}</p>
+                </div>
+              </div>
+            </div>
+
+            <p style={{ fontSize: 11, color: '#a395c9', textAlign: 'center', marginBottom: 8, fontWeight: 600 }}>
+              {lang === 'es' ? 'Selecciona cuántas gemas cambiar:' : 'Select how many gems to exchange:'}
+            </p>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 16 }}>
+              {[2, 10, 50, 100].map((amt) => {
+                const isDisabled = gems < amt
+                return (
+                  <button
+                    key={amt}
+                    onClick={() => setExchangeAmount(amt)}
+                    disabled={isDisabled}
+                    style={{
+                      padding: '10px 0',
+                      borderRadius: 10,
+                      background: exchangeAmount === amt ? 'linear-gradient(135deg, #a855f7 0%, #ec4899 100%)' : 'rgba(255,255,255,0.05)',
+                      border: exchangeAmount === amt ? 'none' : '1px solid rgba(255,255,255,0.1)',
+                      color: isDisabled ? '#6b6b7e' : '#fff',
+                      fontSize: 14,
+                      fontWeight: 700,
+                      cursor: isDisabled ? 'not-allowed' : 'pointer',
+                      fontFamily: 'inherit',
+                      opacity: isDisabled ? 0.5 : 1,
+                    }}
+                  >
+                    {amt} 💎
+                  </button>
+                )
+              })}
+            </div>
+
+            <div className="modal-btn-row">
+              <button onClick={() => setShowExchangeModal(false)} disabled={exchanging} className="modal-btn secondary">
+                {lang === 'es' ? 'Cancelar' : 'Cancel'}
+              </button>
+              <button 
+                onClick={handleExchange} 
+                disabled={exchanging || exchangeAmount < 2 || exchangeAmount % 2 !== 0 || gems < exchangeAmount} 
+                className="modal-btn primary"
+                style={{ background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)', boxShadow: '0 4px 16px rgba(34, 197, 94, 0.4)' }}
+              >
+                {exchanging 
+                  ? (lang === 'es' ? 'Cambiando...' : 'Exchanging...') 
+                  : (lang === 'es' ? 'Confirmar Cambio' : 'Confirm Exchange')}
+              </button>
+            </div>
           </div>
         </div>
       )}
