@@ -855,28 +855,67 @@ export function getCharacterDescription(
 // PAQUETES Y COSTOS
 // ============================================================
 
-// ✅ PAQUETES DE GEMAS DE PAGO (Tasa base $1 = 120 Gemas)
+// ✅ PAQUETES DE GEMAS DE PAGO (Stars: +5% bonus | Crypto: -10% precio +20% bonus)
 export const STAR_PACKAGES = [
   { stars: 100,  gems: 200,  bonus: 100, first_time_only: true,  first_time_bonus: 0 },
-  { stars: 150,  gems: 300,  bonus: 20,  first_time_only: false },
-  { stars: 300,  gems: 600,  bonus: 25,  first_time_only: false },
-  { stars: 500,  gems: 1000, bonus: 40,  first_time_only: false },
-  { stars: 1000, gems: 2000, bonus: 50,  first_time_only: false },
+  { stars: 150,  gems: 300,  bonus: 5,   first_time_only: false },
+  { stars: 300,  gems: 600,  bonus: 5,   first_time_only: false },
+  { stars: 500,  gems: 1000, bonus: 5,   first_time_only: false },
+  { stars: 1000, gems: 2000, bonus: 5,   first_time_only: false },
 ]
 
 export const CRYPTO_PACKAGES = [
   { usdt: 1.79,  gems: 200,  bonus: 100, first_time_only: true,  first_time_bonus: 0 },
-  { usdt: 2.69,  gems: 300,  bonus: 20,  first_time_only: false },
-  { usdt: 4.49,  gems: 600,  bonus: 25,  first_time_only: false },
-  { usdt: 8.99,  gems: 1000, bonus: 40,  first_time_only: false },
-  { usdt: 17.99, gems: 2000, bonus: 50,  first_time_only: false },
+  { usdt: 1.79,  gems: 300,  bonus: 20,  first_time_only: false },
+  { usdt: 3.59,  gems: 600,  bonus: 20,  first_time_only: false },
+  { usdt: 5.99,  gems: 1000, bonus: 20,  first_time_only: false },
+  { usdt: 11.99, gems: 2000, bonus: 20,  first_time_only: false },
 ]
 
-// ✅ NUEVOS PAQUETES DE MENSAJES (Se pagan directo con Stars o Crypto)
+// ✅ PAQUETES DE MENSAJES (Stars: +5% bonus | Crypto: +20% bonus)
 export const MESSAGE_PACKAGES = [
-  { stars: 100,  usdt: 1.79, messages: 300,  first_time_only: false },
-  { stars: 250,  usdt: 4.49, messages: 800,  first_time_only: false },
-  { stars: 500,  usdt: 8.99, messages: 2000, first_time_only: false },
+  { stars: 100, usdt: 1.19, messages: 300,  star_bonus: 5, crypto_bonus: 20, first_time_only: false },
+  { stars: 250, usdt: 2.99, messages: 800,  star_bonus: 5, crypto_bonus: 20, first_time_only: false },
+  { stars: 500, usdt: 5.99, messages: 2000, star_bonus: 5, crypto_bonus: 20, first_time_only: false },
+]
+
+// ✅ PAQUETES HÍBRIDOS (Gemas + Mensajes combinados)
+// 20% más baratos que comprar por separado. Stars: +5% bonus | Crypto: +20% bonus.
+// Valores finales precalculados (incluye el ajuste 155 del Híbrido 1 en Stars).
+export const HYBRID_PACKAGES = [
+  {
+    stars: 200,
+    usdt: 2.39,
+    gems: 150,
+    messages: 300,
+    stars_final_gems: 155,
+    stars_final_messages: 315,
+    crypto_final_gems: 180,
+    crypto_final_messages: 360,
+    first_time_only: false,
+  },
+  {
+    stars: 350,
+    usdt: 4.19,
+    gems: 300,
+    messages: 600,
+    stars_final_gems: 315,
+    stars_final_messages: 630,
+    crypto_final_gems: 360,
+    crypto_final_messages: 720,
+    first_time_only: false,
+  },
+  {
+    stars: 650,
+    usdt: 7.79,
+    gems: 600,
+    messages: 1200,
+    stars_final_gems: 630,
+    stars_final_messages: 1260,
+    crypto_final_gems: 720,
+    crypto_final_messages: 1440,
+    first_time_only: false,
+  },
 ]
 
 export const GEM_COSTS = {
@@ -953,6 +992,33 @@ export function getFinalCryptoGems(pkg: {
   const percentBonus = pkg.bonus > 0 ? Math.floor((pkg.gems * pkg.bonus) / 100) : 0
   const flatBonus = pkg.first_time_bonus || 0
   return pkg.gems + percentBonus + flatBonus
+}
+
+// ✅ NUEVOS HELPERS DE MENSAJES Y HÍBRIDOS
+export function getFinalStarMessages(pkg: {
+  messages: number
+  star_bonus?: number
+}) {
+  const bonus = pkg.star_bonus || 0
+  const percentBonus = bonus > 0 ? Math.floor((pkg.messages * bonus) / 100) : 0
+  return pkg.messages + percentBonus
+}
+
+export function getFinalCryptoMessages(pkg: {
+  messages: number
+  crypto_bonus?: number
+}) {
+  const bonus = pkg.crypto_bonus || 0
+  const percentBonus = bonus > 0 ? Math.floor((pkg.messages * bonus) / 100) : 0
+  return pkg.messages + percentBonus
+}
+
+export function getHybridStarsReward(pkg: typeof HYBRID_PACKAGES[0]) {
+  return { gems: pkg.stars_final_gems, messages: pkg.stars_final_messages }
+}
+
+export function getHybridCryptoReward(pkg: typeof HYBRID_PACKAGES[0]) {
+  return { gems: pkg.crypto_final_gems, messages: pkg.crypto_final_messages }
 }
 
 export const RELATIONSHIP_LEVELS = [
