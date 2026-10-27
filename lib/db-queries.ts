@@ -19,7 +19,7 @@ const generateReferralCode = (): string => {
 // ═══════════════════════════════════════════════════════════════
 
 const USER_COLS = `
-  telegram_id, first_name, username, gems, purchased_gems, language,
+  telegram_id, first_name, username, gems, purchased_gems, bonus_gems, language,
   hook_messages_remaining, hook_used, referral_code, total_referrals,
   paying_referrals_count, age_verified, streak_count, longest_streak,
   last_daily_claim, referred_by, pending_referral_code,
