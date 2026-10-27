@@ -2,7 +2,7 @@
 
 import { NextResponse } from 'next/server'
 import { getLastPurchase, getUser } from '@/lib/db-queries'
-import { CRYPTO_PACKAGES, getFinalCryptoGems } from '@/lib/constants'
+import { CRYPTO_PACKAGES, MESSAGE_PACKAGES, getFinalCryptoGems } from '@/lib/constants'
 
 const RECIPIENT_WALLET =
   process.env.NEXT_PUBLIC_TON_RECIPIENT_WALLET ||
@@ -16,11 +16,15 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json().catch(() => ({}))
-    const { package_id } = body
+    const { package_id, package_type } = body
+
+    // ✅ NUEVO: Determinamos qué paquete usar
+    const isMessages = package_type === 'messages'
+    const activePackages = isMessages ? MESSAGE_PACKAGES : CRYPTO_PACKAGES
 
     if (
       typeof package_id !== 'number' ||
-      package_id >= CRYPTO_PACKAGES.length ||
+      package_id >= activePackages.length ||
       package_id < 0
     ) {
       return NextResponse.json({ error: 'Paquete no válido' }, { status: 400 })
@@ -34,7 +38,7 @@ export async function POST(request: Request) {
       )
     }
 
-    const pkg = CRYPTO_PACKAGES[package_id]
+    const pkg = activePackages[package_id]
 
     // Verificar first_time_only
     if (pkg.first_time_only) {
@@ -57,10 +61,10 @@ export async function POST(request: Request) {
     }
 
     // Reference único — se envía como comentario en la transacción USDT
-    // Formato: TABOO_<telegram_id>_<package_index>_<timestamp>
-    const reference = `TABOO_${tid}_${package_id}_${Date.now()}`
+    // ✅ NUEVO: Añadimos el tipo al reference para saber qué entregar
+    const reference = `TABOO_${tid}_${package_type || 'gems'}_${package_id}_${Date.now()}`
 
-    const finalGems = getFinalCryptoGems(pkg)
+    const finalAmount = isMessages ? (pkg as any).messages : getFinalCryptoGems(pkg as any)
 
     return NextResponse.json({
       payment_data: {
@@ -70,10 +74,12 @@ export async function POST(request: Request) {
       },
       package: {
         usdt: pkg.usdt,
-        gems: pkg.gems,
-        bonus: pkg.bonus,
-        first_time_bonus: pkg.first_time_bonus || 0,
-        total_gems: finalGems,
+        gems: isMessages ? 0 : (pkg as any).gems,
+        messages: isMessages ? (pkg as any).messages : 0,
+        bonus: isMessages ? 0 : (pkg as any).bonus,
+        first_time_bonus: isMessages ? 0 : ((pkg as any).first_time_bonus || 0),
+        total_gems: isMessages ? 0 : finalAmount,
+        total_messages: isMessages ? finalAmount : 0,
       },
     })
   } catch (e: any) {
