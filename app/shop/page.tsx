@@ -191,7 +191,7 @@ export default function ShopPage() {
       console.log('[shop] vip crypto sent')
       startVipPolling(planId, payment_data.reference)
     } catch (cryptoErr: any) {
-      handleCryptoError(cryptoErr) // ✅ Usamos el manejador
+      handleCryptoError(cryptoErr)
     } finally {
       setVipPurchasing(null)
     }
@@ -491,7 +491,7 @@ export default function ShopPage() {
       console.log('[shop] crypto payment sent')
       startPolling(payment_data.reference, idx)
     } catch (e: any) {
-      handleCryptoError(e) // ✅ Usamos el manejador
+      handleCryptoError(e)
     } finally {
       setPurchasing(null)
     }
@@ -763,21 +763,22 @@ export default function ShopPage() {
                 gap: 4,
               }}
             >
+              {/* ✅ TEXTOS CORREGIDOS AQUÍ */}
               {lang === 'es' ? (
                 <>
                   <div>📨 <strong style={{ color: '#f5f0ff' }}>6.000 mensajes/mes</strong></div>
                   <div>📸 <strong style={{ color: '#f5f0ff' }}>30 imágenes IA premium/mes</strong> <span style={{ color: '#8b8b9e' }}>(acumula hasta 5)</span></div>
-                  <div>🎨 <strong style={{ color: '#f5f0ff' }}>Hasta 300 imágenes SFW/mes</strong></div>
-                  <div>🎧 <strong style={{ color: '#f5f0ff' }}>1 audio gratis/día</strong> <span style={{ color: '#8b8b9e' }}>(acumula hasta 5)</span></div>
-                  <div>👑 <strong style={{ color: '#f5f0ff' }}>18 personajes exclusivos</strong></div>
+                  <div>🎧 <strong style={{ color: '#f5f0ff' }}>Hasta 30 audios al mes</strong> <span style={{ color: '#8b8b9e' }}>(acumula hasta 5)</span></div>
+                  <div>🎰 <strong style={{ color: '#f5f0ff' }}>1 tirada gratis en la Ruleta a la semana</strong></div>
+                  <div>👑 <strong style={{ color: '#f5f0ff' }}>12 personajes exclusivos</strong></div>
                 </>
               ) : (
                 <>
                   <div>📨 <strong style={{ color: '#f5f0ff' }}>6,000 messages/month</strong></div>
                   <div>📸 <strong style={{ color: '#f5f0ff' }}>30 premium AI images/month</strong> <span style={{ color: '#8b8b9e' }}>(accumulate up to 5)</span></div>
-                  <div>🎨 <strong style={{ color: '#f5f0ff' }}>Up to 300 SFW images/month</strong></div>
-                  <div>🎧 <strong style={{ color: '#f5f0ff' }}>1 free audio/day</strong> <span style={{ color: '#8b8b9e' }}>(accumulate up to 5)</span></div>
-                  <div>👑 <strong style={{ color: '#f5f0ff' }}>18 exclusive characters</strong></div>
+                  <div>🎧 <strong style={{ color: '#f5f0ff' }}>Up to 30 audios/month</strong> <span style={{ color: '#8b8b9e' }}>(accumulate up to 5)</span></div>
+                  <div>🎰 <strong style={{ color: '#f5f0ff' }}>1 free Roulette spin per week</strong></div>
+                  <div>👑 <strong style={{ color: '#f5f0ff' }}>12 exclusive characters</strong></div>
                 </>
               )}
             </div>
@@ -1339,21 +1340,22 @@ export default function ShopPage() {
                 gap: 4,
               }}
             >
+              {/* ✅ TEXTOS CORREGIDOS EN EL MODAL */}
               {lang === 'es' ? (
                 <>
                   <div>📨 6.000 mensajes/mes</div>
                   <div>📸 30 imágenes IA premium/mes</div>
-                  <div>🎨 Hasta 300 imágenes SFW/mes</div>
-                  <div>🎧 1 audio gratis/día (acumula 5)</div>
-                  <div>👑 18 personajes exclusivos</div>
+                  <div>🎧 Hasta 30 audios al mes (acumula 5)</div>
+                  <div>🎰 1 tirada gratis en la Ruleta a la semana</div>
+                  <div>👑 12 personajes exclusivos</div>
                 </>
               ) : (
                 <>
                   <div>📨 6,000 messages/month</div>
                   <div>📸 30 premium AI images/month</div>
-                  <div>🎨 Up to 300 SFW images/month</div>
-                  <div>🎧 1 free audio/day (accumulate 5)</div>
-                  <div>👑 18 exclusive characters</div>
+                  <div>🎧 Up to 30 audios/month (accumulate 5)</div>
+                  <div>🎰 1 free Roulette spin per week</div>
+                  <div>👑 12 exclusive characters</div>
                 </>
               )}
             </div>
