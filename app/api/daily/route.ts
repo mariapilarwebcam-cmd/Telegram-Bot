@@ -5,8 +5,8 @@ import {
   ensureUser,
   insertGemTransaction,
 } from '@/lib/db-queries'
-import { queryOne } from '@/lib/turso' // ✅ Importamos queryOne para el UPDATE atómico
-import { BASE_DAILY_GEMS, HOURS_BETWEEN_CLAIMS } from '@/lib/constants'
+import { queryOne } from '@/lib/turso'
+import { DAILY_MESSAGES, HOURS_BETWEEN_CLAIMS } from '@/lib/constants' // ✅ FIX: Importamos DAILY_MESSAGES
 
 export async function POST(request: Request) {
   try {
@@ -20,18 +20,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Error cargando tu cuenta' }, { status: 500 })
     }
 
-    const dailyTotal = BASE_DAILY_GEMS
+    const dailyTotal = DAILY_MESSAGES // ✅ Ahora son Mensajes
 
-    // 🛡️ FIX CRÍTICO: COBRO ATÓMICO Y VERIFICACIÓN DE 24H EN UN SOLO PASO
-    // Solo suma gemas SI el cooldown de 24h ha expirado.
-    const claimed = await queryOne<{ gems: number }>(
+    // 🛡️ COBRO ATÓMICO Y VERIFICACIÓN DE 24H EN UN SOLO PASO
+    // Ahora suma a bonus_gems (mensajes) en lugar de gems (de pago)
+    const claimed = await queryOne<{ bonus_gems: number, gems: number }>(
       `UPDATE users
-       SET gems = gems + ?,
+       SET bonus_gems = COALESCE(bonus_gems, 0) + ?,
            last_daily_claim = datetime('now'),
            hook_messages_remaining = 0
        WHERE telegram_id = ?
          AND (last_daily_claim IS NULL OR last_daily_claim < datetime('now', '-24 hours'))
-       RETURNING gems`,
+       RETURNING bonus_gems, gems`,
       [dailyTotal, tid]
     )
 
@@ -55,13 +55,14 @@ export async function POST(request: Request) {
       telegram_id: tid,
       amount: dailyTotal,
       transaction_type: 'daily',
-      description: `Recompensa diaria (${dailyTotal} gemas)`,
+      description: `Recompensa diaria (${dailyTotal} mensajes)`, // ✅ Texto actualizado
     })
 
     return NextResponse.json({
-      gems: claimed.gems,
+      gems: claimed.gems, // Mantenemos esto para no romper la UI actual
+      bonus_gems: claimed.bonus_gems, // ✅ Añadimos esto para que la UI pueda leer los nuevos mensajes
       claimed: dailyTotal,
-      base: BASE_DAILY_GEMS,
+      base: DAILY_MESSAGES,
       referral_bonus: 0,
       streak_bonus: 0,
       streak_count: 0,
