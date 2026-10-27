@@ -7,10 +7,10 @@ import {
   hasAnyMessage,
   insertMessage,
   insertGemTransaction,
-  getActiveSubscription, // ✅ IMPORTAMOS ESTO
+  getActiveSubscription,
 } from '@/lib/db-queries'
 import { queryOne } from '@/lib/turso' 
-import { OPENING_LINES, GEM_COSTS, isVipArchetype } from '@/lib/constants' // ✅ IMPORTAMOS isVipArchetype
+import { OPENING_LINES, GEM_COSTS, isVipArchetype } from '@/lib/constants'
 
 export async function POST(request: Request) {
   try {
@@ -44,39 +44,70 @@ export async function POST(request: Request) {
       }, { status: 403 })
     }
 
-    // 🛡️ FIX CRÍTICO: COBRO ATÓMICO Y VERIFICACIÓN EN UN SOLO PASO
-    const charged = await queryOne<{ gems: number }>(
-      `UPDATE users
-       SET gems = gems - ?
-       WHERE telegram_id = ?
-         AND gems >= ?
-         AND NOT EXISTS (
-           SELECT 1 FROM conversation_history WHERE telegram_id = ? AND character_id = ?
-         )
-       RETURNING gems`,
-      [GEM_COSTS.message, tid, GEM_COSTS.message, tid, character_id]
-    )
+    // 🛡️ Verificar si el chat ya fue iniciado para no cobrar doble
+    const alreadyStarted = await hasAnyMessage(tid, character_id)
+    if (alreadyStarted) {
+      return NextResponse.json({ already_started: true })
+    }
 
-    if (!charged) {
-      const alreadyStarted = await hasAnyMessage(tid, character_id)
-      if (alreadyStarted) {
-        return NextResponse.json({ already_started: true })
+    let charged = false
+    let newBonusGems = user.bonus_gems || 0
+    let newGems = user.gems || 0
+    let newHookRemaining = user.hook_messages_remaining || 0
+    const lang = (user.language === 'en' ? 'en' : 'es') as 'es' | 'en'
+
+    if (isVip) {
+      // ✅ VIP no paga por iniciar el chat (tienen su límite diario)
+      charged = true
+    } else {
+      // ✅ 1. Intentar cobrar 1 Mensaje (bonus_gems)
+      const bonusResult = await queryOne<{ bonus_gems: number }>(
+        `UPDATE users 
+         SET bonus_gems = COALESCE(bonus_gems, 0) - ? 
+         WHERE telegram_id = ? AND COALESCE(bonus_gems, 0) >= ? 
+         RETURNING bonus_gems`,
+        [GEM_COSTS.message, tid, GEM_COSTS.message]
+      )
+
+      if (bonusResult) {
+        newBonusGems = bonusResult.bonus_gems
+        charged = true
+        await insertGemTransaction({
+          telegram_id: tid,
+          amount: -GEM_COSTS.message,
+          transaction_type: 'message',
+          description: 'Mensaje de apertura',
+        })
+      } else {
+        // ✅ 2. Intentar usar el Hook Mode (mensajes gratis de bienvenida)
+        const hookRemaining = user.hook_messages_remaining || 0
+        if (hookRemaining > 0) {
+          const hookResult = await queryOne<{ hook_messages_remaining: number }>(
+            `UPDATE users 
+             SET hook_messages_remaining = hook_messages_remaining - 1 
+             WHERE telegram_id = ? AND hook_messages_remaining >= 1 
+             RETURNING hook_messages_remaining`,
+            [tid]
+          )
+          if (hookResult) {
+            newHookRemaining = hookResult.hook_messages_remaining
+            charged = true
+          }
+        }
       }
+    }
+
+    // 🚫 Si no hay mensajes ni hook, bloquear
+    if (!charged) {
       return NextResponse.json({
         blocked: true,
-        response: '',
-        remaining_gems: user.gems || 0,
+        response: lang === 'es' ? 'Necesitas al menos 1 mensaje para empezar a chatear.' : 'You need at least 1 message to start chatting.',
+        remaining_gems: newGems,
+        remaining_bonus_gems: newBonusGems,
+        hook_messages_remaining: newHookRemaining
       })
     }
 
-    await insertGemTransaction({
-      telegram_id: tid,
-      amount: -GEM_COSTS.message,
-      transaction_type: 'message',
-      description: 'Mensaje de apertura',
-    })
-
-    const lang = (user.language === 'en' ? 'en' : 'es') as 'es' | 'en'
     const openingTemplate = OPENING_LINES[character.archetype]
     const fallback =
       lang === 'es'
@@ -92,10 +123,13 @@ export async function POST(request: Request) {
       content: openingMessage,
     })
 
+    // Devolvemos los saldos actualizados para que el frontend los pinte
     return NextResponse.json({
       response: openingMessage,
       assistant_message_id: insertedMsg?.id,
-      remaining_gems: charged.gems,
+      remaining_gems: newGems,
+      remaining_bonus_gems: newBonusGems,
+      hook_messages_remaining: newHookRemaining
     })
   } catch (e: any) {
     console.error('Error en start-chat:', e)
