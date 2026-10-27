@@ -6,10 +6,12 @@ import {
   STAR_PACKAGES,
   CRYPTO_PACKAGES,
   MESSAGE_PACKAGES,
-  HYBRID_PACKAGES, // ✅ NUEVO
+  HYBRID_PACKAGES,
   VIP_PLANS,
   getFinalGems,
   getFinalCryptoGems,
+  getFinalStarMessages,    // ✅ NUEVO
+  getFinalCryptoMessages,  // ✅ NUEVO
   type VipPlanId,
 } from '@/lib/constants'
 import { getTranslations } from '@/lib/i18n'
@@ -27,13 +29,9 @@ export default function ShopPage() {
   const [checking, setChecking] = useState(true)
   const [paymentMethod, setPaymentMethod] = useState<'stars' | 'crypto'>('stars')
   
-  // ✅ NUEVO: Categoría principal (VIP vs Premium)
   const [shopCategory, setShopCategory] = useState<'vip' | 'premium'>('vip')
-  
-  // ✅ NUEVO: Sub-categoría dentro de Premium
   const [premiumCategory, setPremiumCategory] = useState<'hybrid' | 'gems' | 'messages'>('hybrid')
   
-  // ✅ NUEVO: Estados para el intercambio de gemas
   const [showExchangeModal, setShowExchangeModal] = useState(false)
   const [exchangeAmount, setExchangeAmount] = useState(2)
   const [exchanging, setExchanging] = useState(false)
@@ -346,7 +344,6 @@ export default function ShopPage() {
       const res = await tgFetch('/api/create-invoice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        // ✅ AHORA ENVIAMOS SI ES HIBRIDO, GEMAS O MENSAJES
         body: JSON.stringify({ package_id: idx, package_type: premiumCategory }),
       })
       const data = await res.json()
@@ -467,7 +464,6 @@ export default function ShopPage() {
       const res = await tgFetch('/api/create-crypto-invoice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        // ✅ AHORA ENVIAMOS SI ES HIBRIDO, GEMAS O MENSAJES
         body: JSON.stringify({ package_id: idx, package_type: premiumCategory }),
       })
       const data = await res.json()
@@ -627,7 +623,6 @@ export default function ShopPage() {
         </div>
       </header>
 
-      {/* ✅ NUEVO SELECTOR PRINCIPAL: VIP VS PREMIUM */}
       <section style={{ padding: '20px 16px 0' }}>
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
           <button
@@ -677,7 +672,6 @@ export default function ShopPage() {
         </div>
       </section>
 
-      {/* SECCIÓN VIP */}
       {shopCategory === 'vip' && (
         <section style={{ padding: '10px 16px 0' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
@@ -856,11 +850,9 @@ export default function ShopPage() {
         </section>
       )}
 
-      {/* SECCIÓN PREMIUM */}
       {shopCategory === 'premium' && (
         <section style={{ padding: '10px 16px 0' }}>
           
-          {/* Sub-pestañas de Premium */}
           <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
             <button
               onClick={() => setPremiumCategory('hybrid')}
@@ -915,7 +907,6 @@ export default function ShopPage() {
             </button>
           </div>
 
-          {/* Botón de intercambio solo en Mensajes */}
           {premiumCategory === 'messages' && (
             <div style={{ marginBottom: 16 }}>
               <button
@@ -943,7 +934,6 @@ export default function ShopPage() {
             </div>
           )}
 
-          {/* Título de la sección */}
           <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>
             {premiumCategory === 'hybrid' 
               ? (lang === 'es' ? 'Paquetes Híbridos' : 'Hybrid Packages') 
@@ -952,7 +942,6 @@ export default function ShopPage() {
                 : (lang === 'es' ? 'Paquetes de Mensajes' : 'Message Packages')}
           </h2>
 
-          {/* Selector de Método de Pago */}
           <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
             <button
               onClick={() => setPaymentMethod('stars')}
@@ -999,7 +988,7 @@ export default function ShopPage() {
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
                 <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" fill="currentColor" />
               </svg>
-              Crypto +15%
+              Crypto +20%
             </button>
           </div>
 
@@ -1023,7 +1012,7 @@ export default function ShopPage() {
             </div>
           )}
 
-          {/* Grilla de Paquetes */}
+          {/* ✅ GRILLA DE PAQUETES CORREGIDA CON BONOS */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {paymentMethod === 'stars'
               ? visibleStarsPackages.map((pkg) => {
@@ -1033,6 +1022,28 @@ export default function ShopPage() {
                   const isHybrid = premiumCategory === 'hybrid'
                   const isGems = premiumCategory === 'gems'
                   
+                  // Calcular base y finales para mostrar el bono
+                  let baseGems = 0, finalGems = 0, bonusGems = 0
+                  let baseMessages = 0, finalMessages = 0, bonusMessages = 0
+
+                  if (isGems) {
+                    baseGems = (pkg as any).gems
+                    finalGems = getFinalGems(pkg as any)
+                    bonusGems = finalGems - baseGems
+                  } else if (premiumCategory === 'messages') {
+                    baseMessages = (pkg as any).messages
+                    finalMessages = getFinalStarMessages(pkg as any)
+                    bonusMessages = finalMessages - baseMessages
+                  } else if (isHybrid) {
+                    baseGems = (pkg as any).gems
+                    finalGems = (pkg as any).stars_final_gems
+                    bonusGems = finalGems - baseGems
+
+                    baseMessages = (pkg as any).messages
+                    finalMessages = (pkg as any).stars_final_messages
+                    bonusMessages = finalMessages - baseMessages
+                  }
+
                   return (
                     <button
                       key={`stars_${idx}`}
@@ -1059,13 +1070,13 @@ export default function ShopPage() {
                       </div>
 
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                           <p style={{ fontWeight: 700, fontSize: 16, margin: 0 }}>
                             {isHybrid 
-                              ? `${(pkg as any).stars_final_gems} 💎 + ${(pkg as any).stars_final_messages} 💌`
-                              : isGems
-                                ? `${(pkg as any).gems} ${lang === 'es' ? 'Gemas' : 'Gems'}`
-                                : `${(pkg as any).messages} ${lang === 'es' ? 'Mensajes' : 'Messages'}`}
+                              ? `${finalGems} 💎 + ${finalMessages} 💌`
+                              : isGems 
+                                ? `${finalGems} Gemas`
+                                : `${finalMessages} Mensajes`}
                           </p>
                           {isFirstTime && (
                             <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', background: '#22c55e', color: '#fff', padding: '2px 6px', borderRadius: 4 }}>
@@ -1073,6 +1084,15 @@ export default function ShopPage() {
                             </span>
                           )}
                         </div>
+                        {(bonusGems > 0 || bonusMessages > 0) && (
+                          <p style={{ fontSize: 12, color: '#22c55e', fontWeight: 600, margin: '2px 0 0 0' }}>
+                            {isHybrid 
+                              ? `(+${bonusGems} bono 💎, +${bonusMessages} bono 💌)`
+                              : isGems 
+                                ? `(+${bonusGems} bono)`
+                                : `(+${bonusMessages} bono)`}
+                          </p>
+                        )}
                       </div>
 
                       <div style={{ flexShrink: 0, textAlign: 'right' }}>
@@ -1090,6 +1110,27 @@ export default function ShopPage() {
                   
                   const isHybrid = premiumCategory === 'hybrid'
                   const isGems = premiumCategory === 'gems'
+                  
+                  let baseGems = 0, finalGems = 0, bonusGems = 0
+                  let baseMessages = 0, finalMessages = 0, bonusMessages = 0
+
+                  if (isGems) {
+                    baseGems = (pkg as any).gems
+                    finalGems = getFinalCryptoGems(pkg as any)
+                    bonusGems = finalGems - baseGems
+                  } else if (premiumCategory === 'messages') {
+                    baseMessages = (pkg as any).messages
+                    finalMessages = getFinalCryptoMessages(pkg as any)
+                    bonusMessages = finalMessages - baseMessages
+                  } else if (isHybrid) {
+                    baseGems = (pkg as any).gems
+                    finalGems = (pkg as any).crypto_final_gems
+                    bonusGems = finalGems - baseGems
+
+                    baseMessages = (pkg as any).messages
+                    finalMessages = (pkg as any).crypto_final_messages
+                    bonusMessages = finalMessages - baseMessages
+                  }
 
                   return (
                     <button
@@ -1117,13 +1158,13 @@ export default function ShopPage() {
                       </div>
 
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                           <p style={{ fontWeight: 700, fontSize: 16, margin: 0 }}>
                             {isHybrid 
-                              ? `${(pkg as any).crypto_final_gems} 💎 + ${(pkg as any).crypto_final_messages} 💌`
-                              : isGems
-                                ? `${(pkg as any).gems} ${lang === 'es' ? 'Gemas' : 'Gems'}`
-                                : `${(pkg as any).messages} ${lang === 'es' ? 'Mensajes' : 'Messages'}`}
+                              ? `${finalGems} 💎 + ${finalMessages} 💌`
+                              : isGems 
+                                ? `${finalGems} Gemas`
+                                : `${finalMessages} Mensajes`}
                           </p>
                           {isFirstTime && (
                             <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', background: '#22c55e', color: '#fff', padding: '2px 6px', borderRadius: 4 }}>
@@ -1131,6 +1172,15 @@ export default function ShopPage() {
                             </span>
                           )}
                         </div>
+                        {(bonusGems > 0 || bonusMessages > 0) && (
+                          <p style={{ fontSize: 12, color: '#22c55e', fontWeight: 600, margin: '2px 0 0 0' }}>
+                            {isHybrid 
+                              ? `(+${bonusGems} bono 💎, +${bonusMessages} bono 💌)`
+                              : isGems 
+                                ? `(+${bonusGems} bono)`
+                                : `(+${bonusMessages} bono)`}
+                          </p>
+                        )}
                       </div>
 
                       <div style={{ flexShrink: 0, textAlign: 'right' }}>
@@ -1146,7 +1196,6 @@ export default function ShopPage() {
         </section>
       )}
 
-      {/* MODAL DE INTERCAMBIO */}
       {showExchangeModal && (
         <div className="modal-backdrop" onClick={() => !exchanging && setShowExchangeModal(false)}>
           <div className="modal-box" onClick={(e) => e.stopPropagation()}>
