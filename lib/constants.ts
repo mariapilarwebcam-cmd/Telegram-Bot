@@ -854,25 +854,34 @@ export function getCharacterDescription(
 // ============================================================
 // PAQUETES Y COSTOS
 // ============================================================
+
+// ✅ PAQUETES DE GEMAS DE PAGO (Tasa base $1 = 120 Gemas)
 export const STAR_PACKAGES = [
-  { stars: 100,  gems: 300,  bonus: 5, first_time_only: true,  first_time_bonus: 50 },
-  { stars: 150,  gems: 600,  bonus: 5, first_time_only: false },
-  { stars: 300,  gems: 1200, bonus: 5, first_time_only: false },
-  { stars: 500,  gems: 2400, bonus: 5, first_time_only: false },
-  { stars: 1000, gems: 5000, bonus: 5, first_time_only: false },
+  { stars: 100,  gems: 200,  bonus: 100, first_time_only: true,  first_time_bonus: 0 },
+  { stars: 150,  gems: 300,  bonus: 20,  first_time_only: false },
+  { stars: 300,  gems: 600,  bonus: 25,  first_time_only: false },
+  { stars: 500,  gems: 1000, bonus: 40,  first_time_only: false },
+  { stars: 1000, gems: 2000, bonus: 50,  first_time_only: false },
 ]
 
 export const CRYPTO_PACKAGES = [
-  { usdt: 1.99,  gems: 300,  bonus: 20, first_time_only: true,  first_time_bonus: 100 },
-  { usdt: 2.99,  gems: 600,  bonus: 20, first_time_only: false },
-  { usdt: 5.99,  gems: 1200, bonus: 20, first_time_only: false },
-  { usdt: 9.99,  gems: 2400, bonus: 25, first_time_only: false },
-  { usdt: 19.99, gems: 5000, bonus: 25, first_time_only: false },
+  { usdt: 1.79,  gems: 200,  bonus: 100, first_time_only: true,  first_time_bonus: 0 },
+  { usdt: 2.69,  gems: 300,  bonus: 20,  first_time_only: false },
+  { usdt: 4.49,  gems: 600,  bonus: 25,  first_time_only: false },
+  { usdt: 8.99,  gems: 1000, bonus: 40,  first_time_only: false },
+  { usdt: 17.99, gems: 2000, bonus: 50,  first_time_only: false },
+]
+
+// ✅ NUEVOS PAQUETES DE MENSAJES (Se pagan directo con Stars o Crypto)
+export const MESSAGE_PACKAGES = [
+  { stars: 100,  usdt: 1.79, messages: 300,  first_time_only: false },
+  { stars: 250,  usdt: 4.49, messages: 800,  first_time_only: false },
+  { stars: 500,  usdt: 8.99, messages: 2000, first_time_only: false },
 ]
 
 export const GEM_COSTS = {
-  message: 1,
-  rename_character: 3,
+  message: 1,          // ✅ Costo en Mensajes por chatear
+  rename_character: 3, // ✅ Costo en Gemas de Pago por renombrar
 }
 
 // ============================================================
@@ -881,16 +890,18 @@ export const GEM_COSTS = {
 
 export const HOOK_MODE_MESSAGES = 5
 
-export const GEMS_PER_REFERRAL = 10
-export const REFERRAL_MIN_MESSAGES = 10
+// ✅ NUEVAS RECOMPENSAS DE MENSAJES
+export const DAILY_MESSAGES = 3         // 3 Mensajes al día
+export const REFERRAL_MESSAGES = 15     // 15 Mensajes por invitar
+export const REFERRAL_MIN_MESSAGES = 10 // Mensajes que debe mandar el referido para que cuente
 
+// Comisiones de compra (se pagan en Gemas de Pago)
 export const REFERRAL_PURCHASE_COMMISSION_PCT = 5
 export const REFERRAL_TOP_TIER_THRESHOLD = 5
 export const REFERRAL_TOP_TIER_PCT = 7
 export const REFERRAL_ELITE_TIER_THRESHOLD = 20
 export const REFERRAL_ELITE_TIER_PCT = 10
 
-export const BASE_DAILY_GEMS = 3
 export const HOURS_BETWEEN_CLAIMS = 24
 
 export const LOW_GEMS_THRESHOLD = 5
