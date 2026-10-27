@@ -10,8 +10,8 @@ import {
   VIP_PLANS,
   getFinalGems,
   getFinalCryptoGems,
-  getFinalStarMessages,    // ✅ NUEVO
-  getFinalCryptoMessages,  // ✅ NUEVO
+  getFinalStarMessages,
+  getFinalCryptoMessages,
   type VipPlanId,
 } from '@/lib/constants'
 import { getTranslations } from '@/lib/i18n'
@@ -1012,7 +1012,7 @@ export default function ShopPage() {
             </div>
           )}
 
-          {/* ✅ GRILLA DE PAQUETES CORREGIDA CON BONOS */}
+          {/* ✅ GRILLA DE PAQUETES CON DISEÑO BASE + BONO + TOTAL */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {paymentMethod === 'stars'
               ? visibleStarsPackages.map((pkg) => {
@@ -1022,7 +1022,6 @@ export default function ShopPage() {
                   const isHybrid = premiumCategory === 'hybrid'
                   const isGems = premiumCategory === 'gems'
                   
-                  // Calcular base y finales para mostrar el bono
                   let baseGems = 0, finalGems = 0, bonusGems = 0
                   let baseMessages = 0, finalMessages = 0, bonusMessages = 0
 
@@ -1073,10 +1072,10 @@ export default function ShopPage() {
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                           <p style={{ fontWeight: 700, fontSize: 16, margin: 0 }}>
                             {isHybrid 
-                              ? `${finalGems} 💎 + ${finalMessages} 💌`
+                              ? `${baseGems} 💎 + ${baseMessages} 💌`
                               : isGems 
-                                ? `${finalGems} Gemas`
-                                : `${finalMessages} Mensajes`}
+                                ? `${baseGems} Gemas`
+                                : `${baseMessages} Mensajes`}
                           </p>
                           {isFirstTime && (
                             <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', background: '#22c55e', color: '#fff', padding: '2px 6px', borderRadius: 4 }}>
@@ -1087,10 +1086,17 @@ export default function ShopPage() {
                         {(bonusGems > 0 || bonusMessages > 0) && (
                           <p style={{ fontSize: 12, color: '#22c55e', fontWeight: 600, margin: '2px 0 0 0' }}>
                             {isHybrid 
-                              ? `(+${bonusGems} bono 💎, +${bonusMessages} bono 💌)`
+                              ? `+${bonusGems} bono 💎 y +${bonusMessages} bono 💌`
                               : isGems 
-                                ? `(+${bonusGems} bono)`
-                                : `(+${bonusMessages} bono)`}
+                                ? `+${bonusGems} bono`
+                                : `+${bonusMessages} bono`}
+                            <span style={{ color: '#8b8b9e', fontWeight: 500 }}>
+                              {isHybrid 
+                                ? ` (Total: ${finalGems} 💎 + ${finalMessages} 💌)`
+                                : isGems
+                                  ? ` (Total: ${finalGems} 💎)`
+                                  : ` (Total: ${finalMessages} 💌)`}
+                            </span>
                           </p>
                         )}
                       </div>
@@ -1161,10 +1167,10 @@ export default function ShopPage() {
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                           <p style={{ fontWeight: 700, fontSize: 16, margin: 0 }}>
                             {isHybrid 
-                              ? `${finalGems} 💎 + ${finalMessages} 💌`
+                              ? `${baseGems} 💎 + ${baseMessages} 💌`
                               : isGems 
-                                ? `${finalGems} Gemas`
-                                : `${finalMessages} Mensajes`}
+                                ? `${baseGems} Gemas`
+                                : `${baseMessages} Mensajes`}
                           </p>
                           {isFirstTime && (
                             <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', background: '#22c55e', color: '#fff', padding: '2px 6px', borderRadius: 4 }}>
@@ -1175,10 +1181,17 @@ export default function ShopPage() {
                         {(bonusGems > 0 || bonusMessages > 0) && (
                           <p style={{ fontSize: 12, color: '#22c55e', fontWeight: 600, margin: '2px 0 0 0' }}>
                             {isHybrid 
-                              ? `(+${bonusGems} bono 💎, +${bonusMessages} bono 💌)`
+                              ? `+${bonusGems} bono 💎 y +${bonusMessages} bono 💌`
                               : isGems 
-                                ? `(+${bonusGems} bono)`
-                                : `(+${bonusMessages} bono)`}
+                                ? `+${bonusGems} bono`
+                                : `+${bonusMessages} bono`}
+                            <span style={{ color: '#8b8b9e', fontWeight: 500 }}>
+                              {isHybrid 
+                                ? ` (Total: ${finalGems} 💎 + ${finalMessages} 💌)`
+                                : isGems
+                                  ? ` (Total: ${finalGems} 💎)`
+                                  : ` (Total: ${finalMessages} 💌)`}
+                            </span>
                           </p>
                         )}
                       </div>
