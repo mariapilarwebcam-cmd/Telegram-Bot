@@ -304,6 +304,8 @@ export default function HomePage() {
   }
 
   const gems = user?.gems || 0
+  // ✅ NUEVO: saldo de mensajes de chat
+  const messages = (user as any)?.bonus_gems || 0
   const hookRemaining = user?.hook_messages_remaining || 0
 
   const shouldShowVipBanner = vipChecked && !isVip && vipBannerVisible
@@ -388,22 +390,50 @@ export default function HomePage() {
             </svg>
           </button>
 
+          {/* ✅ NUEVO: contenedor con los DOS balances (Gemas + Mensajes) */}
           <div
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 6,
-              background: 'rgba(255, 255, 255, 0.05)',
-              padding: '6px 12px',
-              borderRadius: 20,
-              border: '1px solid rgba(255, 255, 255, 0.06)',
+              gap: 4,
               flexShrink: 0,
             }}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-              <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" fill="#a78bfa" />
-            </svg>
-            <span style={{ fontSize: 14, fontWeight: 600 }}>{gems}</span>
+            {/* Pill de Gemas (igual que antes) */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                background: 'rgba(255, 255, 255, 0.05)',
+                padding: '6px 10px',
+                borderRadius: 20,
+                border: '1px solid rgba(255, 255, 255, 0.06)',
+                flexShrink: 0,
+              }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+                <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" fill="#a78bfa" />
+              </svg>
+              <span style={{ fontSize: 13, fontWeight: 600 }}>{gems}</span>
+            </div>
+
+            {/* ✅ NUEVO: Pill de Mensajes (💌) */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                background: 'rgba(34, 197, 94, 0.1)',
+                padding: '6px 10px',
+                borderRadius: 20,
+                border: '1px solid rgba(34, 197, 94, 0.25)',
+                flexShrink: 0,
+              }}
+            >
+              <span style={{ fontSize: 12 }}>💌</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: '#22c55e' }}>{messages}</span>
+            </div>
           </div>
         </div>
 
