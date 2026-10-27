@@ -5,8 +5,8 @@ import { useUser } from '@/lib/UserContext'
 import { getTranslations } from '@/lib/i18n'
 import { tgFetch } from '@/lib/telegram-fetch'
 import {
-  BASE_DAILY_GEMS,
-  GEMS_PER_REFERRAL,
+  DAILY_MESSAGES,          // ✅ FIX: Reemplazado BASE_DAILY_GEMS
+  REFERRAL_MESSAGES,       // ✅ FIX: Reemplazado GEMS_PER_REFERRAL
   REFERRAL_PURCHASE_COMMISSION_PCT,
   REFERRAL_TOP_TIER_THRESHOLD,
   REFERRAL_TOP_TIER_PCT,
@@ -70,7 +70,7 @@ export default function RewardsPage() {
     }
   }, [user, now])
 
-  const previewGems = BASE_DAILY_GEMS
+  const previewMessages = DAILY_MESSAGES
 
   const handleRetry = async () => {
     setRetrying(true)
@@ -252,7 +252,7 @@ export default function RewardsPage() {
 
   const refCode = user.username || user.referral_code
   const referralLink = `https://t.me/TabooRealmBot?start=${refCode}`
-  const earnedGems = (user.total_referrals || 0) * GEMS_PER_REFERRAL
+  const earnedMessages = (user.total_referrals || 0) * REFERRAL_MESSAGES
   const payingCount = user.paying_referrals_count || 0
 
   let currentPct = REFERRAL_PURCHASE_COMMISSION_PCT
@@ -328,7 +328,7 @@ export default function RewardsPage() {
                   lineHeight: 1.2,
                 }}
               >
-                {t.dailyClaimTitle}
+                {lang === 'es' ? 'Reclama tus mensajes diarios' : 'Claim your daily messages'}
               </h2>
               <p
                 style={{
@@ -341,8 +341,8 @@ export default function RewardsPage() {
                 }}
               >
                 {lang === 'es'
-                  ? 'Entra cada día y recibe gemas gratis'
-                  : 'Come back every day for free gems'}
+                  ? 'Entra cada día y recibe mensajes gratis'
+                  : 'Come back every day for free messages'}
               </p>
             </div>
           </div>
@@ -363,10 +363,8 @@ export default function RewardsPage() {
                   gap: 6,
                 }}
               >
-                <span>✨ {t.dailyClaimReady} ~{previewGems}</span>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                  <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" fill="#fff" />
-                </svg>
+                <span>✨ {t.dailyClaimReady} ~{previewMessages}</span>
+                <span style={{ fontSize: 14 }}>💌</span>
               </p>
               <button
                 onClick={handleClaim}
@@ -476,8 +474,8 @@ export default function RewardsPage() {
             }}
           >
             {lang === 'es'
-              ? `Gana ${GEMS_PER_REFERRAL} gemas por cada amigo + ${currentPct}% de sus compras`
-              : `Earn ${GEMS_PER_REFERRAL} gems per friend + ${currentPct}% of their purchases`}
+              ? `Gana ${REFERRAL_MESSAGES} mensajes por cada amigo + ${currentPct}% de sus compras`
+              : `Earn ${REFERRAL_MESSAGES} messages per friend + ${currentPct}% of their purchases`}
           </p>
         </div>
       </section>
@@ -756,10 +754,8 @@ export default function RewardsPage() {
               flexShrink: 0,
             }}
           >
-            <span>+{earnedGems}</span>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-              <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" fill="#22c55e" />
-            </svg>
+            <span>+{earnedMessages}</span>
+            <span>💌</span>
           </div>
         </div>
       </section>
@@ -809,8 +805,8 @@ export default function RewardsPage() {
               {
                 n: '3',
                 text: lang === 'es'
-                  ? `Ganas ${GEMS_PER_REFERRAL} gemas al instante`
-                  : `You earn ${GEMS_PER_REFERRAL} gems instantly`,
+                  ? `Ganas ${REFERRAL_MESSAGES} mensajes al instante`
+                  : `You earn ${REFERRAL_MESSAGES} messages instantly`,
               },
               {
                 n: '4',
@@ -887,7 +883,7 @@ export default function RewardsPage() {
               className="modal-title"
               style={{ textAlign: 'center', fontSize: 20, marginBottom: 4 }}
             >
-              {t.dailyClaimYouGot} {claimResult.claimed} {t.dailyClaimGems}
+              {lang === 'es' ? '¡Has recibido' : 'You received'} {claimResult.claimed} {lang === 'es' ? 'mensajes!' : 'messages!'}
             </h3>
 
             <div
@@ -902,7 +898,7 @@ export default function RewardsPage() {
               }}
             >
               <p style={{ fontSize: 13, color: '#a395c9', margin: '0 0 4px 0' }}>
-                {lang === 'es' ? 'Nuevo balance' : 'New balance'}
+                {lang === 'es' ? 'Nuevo balance de mensajes' : 'New message balance'}
               </p>
               <p
                 style={{
@@ -912,7 +908,7 @@ export default function RewardsPage() {
                   margin: 0,
                 }}
               >
-                {claimResult.gems}
+                {claimResult.bonus_gems} 💌
               </p>
             </div>
 
