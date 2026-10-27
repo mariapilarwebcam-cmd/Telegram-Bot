@@ -324,10 +324,12 @@ export default function ChatPage() {
 
     const startChat = async () => {
       setAutoStartAttempted(true)
+      // ✅ NUEVO: los chats consumen mensajes (bonus_gems), no gemas pagadas
+      const bonusGems = (user as any)?.bonus_gems || 0
       const gems = user.gems || 0
       const hookRemaining = user.hook_messages_remaining || 0
 
-      if (!isVip && gems < GEM_COSTS.message && hookRemaining <= 0 && !activePass) {
+      if (!isVip && (bonusGems + gems) < GEM_COSTS.message && hookRemaining <= 0 && !activePass) {
         setBlocked(true)
         return
       }
@@ -373,10 +375,12 @@ export default function ChatPage() {
     if (!input.trim() || !user || loading || sendingRef.current) return
     sendingRef.current = true
 
+    // ✅ NUEVO: el chat consume mensajes (bonus_gems), no gemas pagadas
+    const bonusGems = (user as any)?.bonus_gems || 0
     const gems = user.gems || 0
     const hookRemaining = user.hook_messages_remaining || 0
 
-    if (!acceptPenalty && !isVip && gems < GEM_COSTS.message && hookRemaining <= 0 && !activePass) {
+    if (!acceptPenalty && !isVip && (bonusGems + gems) < GEM_COSTS.message && hookRemaining <= 0 && !activePass) {
       sendingRef.current = false
       setBlocked(true)
       return
@@ -453,6 +457,12 @@ export default function ChatPage() {
           setGems(data.remaining_gems)
           setHookRemaining(data.hook_messages_remaining ?? 0)
           setTotalUserMessages((prev) => prev + 1)
+          
+          // ✅ NUEVO: si el backend consumió mensajes (💌), refrescamos el balance del contexto
+          if (typeof data.remaining_bonus_gems === 'number') {
+            await refresh()
+          }
+          
           setPhotoOfferActive(!!data.photo_offer_available)
           setLowGemsWarning(!!data.low_gems_warning)
           setLowGemsCount(data.low_gems_count || 0)
@@ -1383,15 +1393,14 @@ export default function ChatPage() {
           )}
         </div>
 
+        {/* ✅ Balances (Mensajes 💌 + Gemas 💎) — ambos siempre visibles */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-          {bonusGems > 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(34, 197, 94, 0.15)', padding: '5px 8px', borderRadius: 20, border: '1px solid rgba(34, 197, 94, 0.4)' }}>
-              <span style={{ fontSize: 10 }}>💬</span>
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#22c55e' }}>
-                <AnimatedNumber value={bonusGems} />
-              </span>
-            </div>
-          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(34, 197, 94, 0.15)', padding: '5px 8px', borderRadius: 20, border: '1px solid rgba(34, 197, 94, 0.4)' }}>
+            <span style={{ fontSize: 10 }}>💌</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#22c55e' }}>
+              <AnimatedNumber value={bonusGems} />
+            </span>
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.05)', padding: '5px 10px', borderRadius: 20, border: '1px solid rgba(168,85,247,0.3)' }}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
               <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" fill="#a78bfa" />
