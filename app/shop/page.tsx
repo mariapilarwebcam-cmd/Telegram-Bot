@@ -5,7 +5,7 @@ import { tgFetch } from '@/lib/telegram-fetch'
 import {
   STAR_PACKAGES,
   CRYPTO_PACKAGES,
-  MESSAGE_PACKAGES, // ✅ NUEVO
+  MESSAGE_PACKAGES,
   VIP_PLANS,
   getFinalGems,
   getFinalCryptoGems,
@@ -26,9 +26,14 @@ export default function ShopPage() {
   const [checking, setChecking] = useState(true)
   const [paymentMethod, setPaymentMethod] = useState<'stars' | 'crypto'>('stars')
   
-  // ✅ NUEVO: Categoría de la tienda (Gemas o Mensajes)
+  // ✅ Categoría de la tienda
   const [shopCategory, setShopCategory] = useState<'gems' | 'messages'>('gems')
   
+  // ✅ NUEVO: Estados para el intercambio de gemas
+  const [showExchangeModal, setShowExchangeModal] = useState(false)
+  const [exchangeAmount, setExchangeAmount] = useState(2)
+  const [exchanging, setExchanging] = useState(false)
+
   const [pendingReference, setPendingReference] = useState<string | null>(null)
   const [pendingStatus, setPendingStatus] = useState<string>('')
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -120,7 +125,6 @@ export default function ShopPage() {
           const checkSub = setInterval(async () => {
              attempts++;
              await loadVipStatus();
-             // ✅ NUEVO: refrescar también el contexto (VIP se refleja sin salir)
              await refresh();
              if (attempts >= 4) {
                clearInterval(checkSub);
@@ -339,7 +343,6 @@ export default function ShopPage() {
       const res = await tgFetch('/api/create-invoice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        // ✅ Enviamos el tipo de paquete para que el backend sepa qué dar
         body: JSON.stringify({ package_id: idx, package_type: shopCategory }),
       })
       const data = await res.json()
@@ -352,8 +355,6 @@ export default function ShopPage() {
               const checkBalance = setInterval(async () => {
                 attempts++;
                 await refresh();
-                // ✅ Antes: 3 intentos (4.5s). Ahora: 5 intentos (7.5s) para dar
-                // más margen al webhook de Telegram → bot Python → Turso.
                 if (attempts >= 5) {
                   clearInterval(checkBalance);
                   setPurchasing(null);
@@ -452,7 +453,6 @@ export default function ShopPage() {
       const res = await tgFetch('/api/create-crypto-invoice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        // ✅ Enviamos el tipo de paquete para que el backend sepa qué dar
         body: JSON.stringify({ package_id: idx, package_type: shopCategory }),
       })
       const data = await res.json()
@@ -505,6 +505,44 @@ export default function ShopPage() {
     }
   }
 
+  // ✅ NUEVA FUNCIÓN: Intercambiar gemas por mensajes
+  const handleExchange = async () => {
+    if (!user || exchanging) return
+    if (exchangeAmount < 2 || exchangeAmount % 2 !== 0) {
+      alert(lang === 'es' ? 'Debes cambiar un número par de gemas (mínimo 2).' : 'You must exchange an even number of gems (min 2).')
+      return
+    }
+    if (user.gems < exchangeAmount) {
+      alert(lang === 'es' ? 'No tienes suficientes gemas.' : 'Not enough gems.')
+      return
+    }
+
+    setExchanging(true)
+    try {
+      const res = await tgFetch('/api/exchange-gems', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gems: exchangeAmount }),
+      })
+      const data = await res.json()
+
+      if (res.ok) {
+        await refresh()
+        setShowExchangeModal(false)
+        setExchangeAmount(2)
+        alert(lang === 'es' 
+          ? `✅ ¡Cambio exitoso! Has recibido ${data.exchanged.messages} mensajes.` 
+          : `✅ Success! You received ${data.exchanged.messages} messages.`)
+      } else {
+        alert(data.error || 'Error al cambiar')
+      }
+    } catch {
+      alert('Error de conexión')
+    } finally {
+      setExchanging(false)
+    }
+  }
+
   if (userLoading && !user) {
     return (
       <div className="spinner-full">
@@ -539,6 +577,7 @@ export default function ShopPage() {
       <header className="page-header">
         <h1 className="page-title">{t.shop}</h1>
         <div style={{ display: 'flex', gap: 8 }}>
+          {/* ✅ Iconos unificados */}
           <div
             style={{
               display: 'flex',
@@ -575,7 +614,6 @@ export default function ShopPage() {
         </div>
       </header>
 
-      {/* ✅ NUEVO SELECTOR DE CATEGORÍA: GEMAS O MENSAJES */}
       <section style={{ padding: '20px 16px 0' }}>
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
           <button
@@ -625,7 +663,6 @@ export default function ShopPage() {
         </div>
       </section>
 
-      {/* SECCIÓN VIP (SOLO SE MUESTRA EN LA PESTAÑA DE GEMAS PARA NO SATURAR) */}
       {shopCategory === 'gems' && (
         <section style={{ padding: '10px 16px 0' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
@@ -670,50 +707,17 @@ export default function ShopPage() {
                 overflow: 'hidden',
               }}
             >
-              <div
-                style={{
-                  position: 'absolute',
-                  top: -20,
-                  right: -20,
-                  fontSize: 140,
-                  opacity: 0.15,
-                  pointerEvents: 'none',
-                }}
-              >
+              <div style={{ position: 'absolute', top: -20, right: -20, fontSize: 140, opacity: 0.15, pointerEvents: 'none' }}>
                 👑
               </div>
-
               <div style={{ position: 'relative', zIndex: 1 }}>
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    marginBottom: 12,
-                  }}
-                >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                   <span style={{ fontSize: 24 }}>✨</span>
                   <div>
-                    <p
-                      style={{
-                        fontSize: 11,
-                        fontWeight: 800,
-                        letterSpacing: '0.1em',
-                        color: 'rgba(255,255,255,0.85)',
-                        margin: 0,
-                      }}
-                    >
+                    <p style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.85)', margin: 0 }}>
                       VIP ACTIVO
                     </p>
-                    <h3
-                      style={{
-                        fontSize: 22,
-                        fontWeight: 900,
-                        color: '#fff',
-                        margin: '2px 0 0 0',
-                        textShadow: '0 2px 8px rgba(0,0,0,0.2)',
-                      }}
-                    >
+                    <h3 style={{ fontSize: 22, fontWeight: 900, color: '#fff', margin: '2px 0 0 0', textShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
                       {VIP_PLANS.find((p) => p.id === vipSub.subscription.plan)
                         ? VIP_PLANS.find((p) => p.id === vipSub.subscription.plan)!
                             .label[lang === 'es' ? 'es' : 'en']
@@ -722,67 +726,21 @@ export default function ShopPage() {
                   </div>
                 </div>
 
-                <div
-                  style={{
-                    display: 'flex',
-                    gap: 16,
-                    padding: 14,
-                    borderRadius: 14,
-                    background: 'rgba(0,0,0,0.15)',
-                    backdropFilter: 'blur(8px)',
-                  }}
-                >
+                <div style={{ display: 'flex', gap: 16, padding: 14, borderRadius: 14, background: 'rgba(0,0,0,0.15)', backdropFilter: 'blur(8px)' }}>
                   <div style={{ flex: 1 }}>
-                    <p
-                      style={{
-                        fontSize: 10,
-                        fontWeight: 700,
-                        color: 'rgba(255,255,255,0.75)',
-                        margin: 0,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.06em',
-                      }}
-                    >
+                    <p style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.75)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                       {lang === 'es' ? 'Días restantes' : 'Days left'}
                     </p>
-                    <p
-                      style={{
-                        fontSize: 24,
-                        fontWeight: 900,
-                        color: '#fff',
-                        margin: '2px 0 0 0',
-                      }}
-                    >
+                    <p style={{ fontSize: 24, fontWeight: 900, color: '#fff', margin: '2px 0 0 0' }}>
                       {vipSub.subscription.days_remaining}
                     </p>
                   </div>
                   <div style={{ flex: 1 }}>
-                    <p
-                      style={{
-                        fontSize: 10,
-                        fontWeight: 700,
-                        color: 'rgba(255,255,255,0.75)',
-                        margin: 0,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.06em',
-                      }}
-                    >
+                    <p style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.75)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                       {lang === 'es' ? 'Expira' : 'Expires'}
                     </p>
-                    <p
-                      style={{
-                        fontSize: 13,
-                        fontWeight: 700,
-                        color: '#fff',
-                        margin: '6px 0 0 0',
-                      }}
-                    >
-                      {new Date(
-                        vipSub.subscription.expires_at.replace(' ', 'T') + 'Z'
-                      ).toLocaleDateString(lang === 'es' ? 'es-ES' : 'en-US', {
-                        day: 'numeric',
-                        month: 'short',
-                      })}
+                    <p style={{ fontSize: 13, fontWeight: 700, color: '#fff', margin: '6px 0 0 0' }}>
+                      {new Date(vipSub.subscription.expires_at.replace(' ', 'T') + 'Z').toLocaleDateString(lang === 'es' ? 'es-ES' : 'en-US', { day: 'numeric', month: 'short' })}
                     </p>
                   </div>
                 </div>
@@ -791,37 +749,14 @@ export default function ShopPage() {
                   <button
                     onClick={() => buyVipWithStars(vipSub.subscription.plan)}
                     disabled={!!vipPurchasing || !!vipPendingRef}
-                    style={{
-                      flex: 1,
-                      padding: '12px 16px',
-                      borderRadius: 12,
-                      background: '#fff',
-                      border: 'none',
-                      color: '#d97706',
-                      fontSize: 13,
-                      fontWeight: 800,
-                      cursor: vipPurchasing ? 'wait' : 'pointer',
-                      fontFamily: 'inherit',
-                      opacity: vipPurchasing ? 0.6 : 1,
-                    }}
+                    style={{ flex: 1, padding: '12px 16px', borderRadius: 12, background: '#fff', border: 'none', color: '#d97706', fontSize: 13, fontWeight: 800, cursor: vipPurchasing ? 'wait' : 'pointer', fontFamily: 'inherit', opacity: vipPurchasing ? 0.6 : 1 }}
                   >
                     ⭐ {lang === 'es' ? 'Extender' : 'Extend'}
                   </button>
                   <button
                     onClick={cancelVip}
                     disabled={!!vipPurchasing || !!vipPendingRef}
-                    style={{
-                      flex: 1,
-                      padding: '12px 16px',
-                      borderRadius: 12,
-                      background: 'rgba(0,0,0,0.2)',
-                      border: '1px solid rgba(255,255,255,0.3)',
-                      color: '#fff',
-                      fontSize: 13,
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      fontFamily: 'inherit',
-                    }}
+                    style={{ flex: 1, padding: '12px 16px', borderRadius: 12, background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
                   >
                     {lang === 'es' ? 'Cancelar' : 'Cancel'}
                   </button>
@@ -830,17 +765,7 @@ export default function ShopPage() {
             </div>
           ) : (
             <>
-              <div
-                style={{
-                  fontSize: 13,
-                  color: '#c4b5fd',
-                  margin: '0 0 16px 0',
-                  lineHeight: 1.7,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 4,
-                }}
-              >
+              <div style={{ fontSize: 13, color: '#c4b5fd', margin: '0 0 16px 0', lineHeight: 1.7, display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {lang === 'es' ? (
                   <>
                     <div>📨 <strong style={{ color: '#f5f0ff' }}>6.000 mensajes/mes</strong></div>
@@ -866,9 +791,7 @@ export default function ShopPage() {
                   const planLabel = plan.label[lang === 'es' ? 'es' : 'en']
                   const planPrice = plan.price[lang === 'es' ? 'es' : 'en']
                   const cryptoPrice = `$${plan.crypto_price.toFixed(2)}`
-                  const planSavings = plan.savings
-                    ? plan.savings[lang === 'es' ? 'es' : 'en']
-                    : null
+                  const planSavings = plan.savings ? plan.savings[lang === 'es' ? 'es' : 'en'] : null
                   const cryptoSavings = plan.crypto_savings[lang === 'es' ? 'es' : 'en']
 
                   return (
@@ -878,110 +801,33 @@ export default function ShopPage() {
                         position: 'relative',
                         borderRadius: 18,
                         overflow: 'hidden',
-                        background: plan.popular
-                          ? 'linear-gradient(135deg, #a855f7 0%, #ec4899 100%)'
-                          : plan.bestValue
-                          ? 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #d97706 100%)'
-                          : 'rgba(168, 85, 247, 0.12)',
-                        border: plan.popular
-                          ? '2px solid rgba(240, 171, 252, 0.8)'
-                          : plan.bestValue
-                          ? '2px solid rgba(251, 191, 36, 0.8)'
-                          : '2px solid rgba(168, 85, 247, 0.3)',
-                        boxShadow: plan.popular
-                          ? '0 8px 28px rgba(236, 72, 153, 0.5)'
-                          : plan.bestValue
-                          ? '0 8px 28px rgba(251, 191, 36, 0.5)'
-                          : 'none',
+                        background: plan.popular ? 'linear-gradient(135deg, #a855f7 0%, #ec4899 100%)' : plan.bestValue ? 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #d97706 100%)' : 'rgba(168, 85, 247, 0.12)',
+                        border: plan.popular ? '2px solid rgba(240, 171, 252, 0.8)' : plan.bestValue ? '2px solid rgba(251, 191, 36, 0.8)' : '2px solid rgba(168, 85, 247, 0.3)',
+                        boxShadow: plan.popular ? '0 8px 28px rgba(236, 72, 153, 0.5)' : plan.bestValue ? '0 8px 28px rgba(251, 191, 36, 0.5)' : 'none',
                         opacity: vipPurchasing && !isPurchasing ? 0.6 : 1,
                         transition: 'opacity 0.2s ease',
                       }}
                     >
                       {(plan.popular || plan.bestValue) && (
-                        <div
-                          style={{
-                            position: 'absolute',
-                            top: 10,
-                            right: 12,
-                            background: '#1a1228',
-                            color: plan.bestValue ? '#fbbf24' : '#f0abfc',
-                            fontSize: 9,
-                            fontWeight: 900,
-                            letterSpacing: '0.1em',
-                            padding: '4px 10px',
-                            borderRadius: 8,
-                            border: plan.bestValue
-                              ? '1px solid #fbbf24'
-                              : '1px solid #f0abfc',
-                            zIndex: 2,
-                          }}
-                        >
-                          {plan.bestValue
-                            ? (lang === 'es' ? 'MEJOR VALOR' : 'BEST VALUE')
-                            : (lang === 'es' ? 'POPULAR' : 'POPULAR')}
+                        <div style={{ position: 'absolute', top: 10, right: 12, background: '#1a1228', color: plan.bestValue ? '#fbbf24' : '#f0abfc', fontSize: 9, fontWeight: 900, letterSpacing: '0.1em', padding: '4px 10px', borderRadius: 8, border: plan.bestValue ? '1px solid #fbbf24' : '1px solid #f0abfc', zIndex: 2 }}>
+                          {plan.bestValue ? (lang === 'es' ? 'MEJOR VALOR' : 'BEST VALUE') : (lang === 'es' ? 'POPULAR' : 'POPULAR')}
                         </div>
                       )}
 
                       <div style={{ padding: 16, display: 'flex', alignItems: 'center', gap: 14 }}>
-                        <div
-                          style={{
-                            width: 48,
-                            height: 48,
-                            borderRadius: 14,
-                            background:
-                              plan.popular || plan.bestValue
-                                ? 'rgba(0,0,0,0.2)'
-                                : 'rgba(168, 85, 247, 0.2)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: 24,
-                            flexShrink: 0,
-                          }}
-                        >
+                        <div style={{ width: 48, height: 48, borderRadius: 14, background: plan.popular || plan.bestValue ? 'rgba(0,0,0,0.2)' : 'rgba(168, 85, 247, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, flexShrink: 0 }}>
                           {plan.emoji}
                         </div>
-
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <p
-                            style={{
-                              fontSize: 16,
-                              fontWeight: 800,
-                              margin: 0,
-                              color: '#fff',
-                              textShadow:
-                                plan.popular || plan.bestValue
-                                  ? '0 1px 4px rgba(0,0,0,0.2)'
-                                  : 'none',
-                            }}
-                          >
+                          <p style={{ fontSize: 16, fontWeight: 800, margin: 0, color: '#fff', textShadow: plan.popular || plan.bestValue ? '0 1px 4px rgba(0,0,0,0.2)' : 'none' }}>
                             {planLabel}
                           </p>
-                          <p
-                            style={{
-                              fontSize: 11,
-                              margin: '2px 0 0 0',
-                              color:
-                                plan.popular || plan.bestValue
-                                  ? 'rgba(255,255,255,0.85)'
-                                  : '#a395c9',
-                              fontWeight: 600,
-                            }}
-                          >
+                          <p style={{ fontSize: 11, margin: '2px 0 0 0', color: plan.popular || plan.bestValue ? 'rgba(255,255,255,0.85)' : '#a395c9', fontWeight: 600 }}>
                             {plan.days} {lang === 'es' ? 'días' : 'days'}
                             {planSavings && (
                               <>
                                 {' · '}
-                                <span
-                                  style={{
-                                    color: plan.bestValue
-                                      ? '#1a1228'
-                                      : plan.popular
-                                      ? '#fef3c7'
-                                      : '#22c55e',
-                                    fontWeight: 800,
-                                  }}
-                                >
+                                <span style={{ color: plan.bestValue ? '#1a1228' : plan.popular ? '#fef3c7' : '#22c55e', fontWeight: 800 }}>
                                   {planSavings}
                                 </span>
                               </>
@@ -990,68 +836,23 @@ export default function ShopPage() {
                         </div>
                       </div>
 
-                      <div
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: '1fr 1fr',
-                          gap: 8,
-                          padding: '0 16px 16px 16px',
-                        }}
-                      >
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, padding: '0 16px 16px 16px' }}>
                         <button
                           onClick={() => buyVipWithStars(plan.id)}
                           disabled={!!vipPurchasing || !!vipPendingRef}
-                          style={{
-                            padding: '12px 10px',
-                            borderRadius: 12,
-                            background: plan.popular || plan.bestValue
-                              ? '#fff'
-                              : 'rgba(255, 255, 255, 0.1)',
-                            border: 'none',
-                            color: plan.popular || plan.bestValue
-                              ? (plan.bestValue ? '#d97706' : '#a855f7')
-                              : '#fff',
-                            fontSize: 13,
-                            fontWeight: 800,
-                            cursor: 'pointer',
-                            fontFamily: 'inherit',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            gap: 2,
-                            opacity: vipPurchasing && !isPurchasing ? 0.5 : 1,
-                          }}
+                          style={{ padding: '12px 10px', borderRadius: 12, background: plan.popular || plan.bestValue ? '#fff' : 'rgba(255, 255, 255, 0.1)', border: 'none', color: plan.popular || plan.bestValue ? (plan.bestValue ? '#d97706' : '#a855f7') : '#fff', fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, opacity: vipPurchasing && !isPurchasing ? 0.5 : 1 }}
                         >
                           <span>⭐ {planPrice}</span>
-                          <span style={{ fontSize: 9, opacity: 0.75, fontWeight: 600 }}>
-                            {plan.stars} Stars
-                          </span>
+                          <span style={{ fontSize: 9, opacity: 0.75, fontWeight: 600 }}>{plan.stars} Stars</span>
                         </button>
 
                         <button
                           onClick={() => buyVipWithCrypto(plan.id)}
                           disabled={!!vipPurchasing || !!vipPendingRef}
-                          style={{
-                            padding: '12px 10px',
-                            borderRadius: 12,
-                            background: 'rgba(34, 197, 94, 0.15)',
-                            border: '1px solid rgba(34, 197, 94, 0.6)',
-                            color: '#4ade80',
-                            fontSize: 13,
-                            fontWeight: 800,
-                            cursor: 'pointer',
-                            fontFamily: 'inherit',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            gap: 2,
-                            opacity: vipPurchasing && !isPurchasing ? 0.5 : 1,
-                          }}
+                          style={{ padding: '12px 10px', borderRadius: 12, background: 'rgba(34, 197, 94, 0.15)', border: '1px solid rgba(34, 197, 94, 0.6)', color: '#4ade80', fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, opacity: vipPurchasing && !isPurchasing ? 0.5 : 1 }}
                         >
                           <span>💎 {cryptoPrice}</span>
-                          <span style={{ fontSize: 9, opacity: 0.9, fontWeight: 700 }}>
-                            {cryptoSavings}
-                          </span>
+                          <span style={{ fontSize: 9, opacity: 0.9, fontWeight: 700 }}>{cryptoSavings}</span>
                         </button>
                       </div>
                     </div>
@@ -1059,18 +860,8 @@ export default function ShopPage() {
                 })}
               </div>
 
-              <p
-                style={{
-                  fontSize: 10,
-                  color: '#6b6b7e',
-                  margin: '12px 0 0 0',
-                  textAlign: 'center',
-                  lineHeight: 1.5,
-                }}
-              >
-                {lang === 'es'
-                  ? '💡 Se renueva automáticamente. Puedes cancelar cuando quieras.'
-                  : '💡 Auto-renews. Cancel anytime.'}
+              <p style={{ fontSize: 10, color: '#6b6b7e', margin: '12px 0 0 0', textAlign: 'center', lineHeight: 1.5 }}>
+                {lang === 'es' ? '💡 Se renueva automáticamente. Puedes cancelar cuando quieras.' : '💡 Auto-renews. Cancel anytime.'}
               </p>
             </>
           )}
@@ -1086,6 +877,35 @@ export default function ShopPage() {
         </h2>
       </section>
 
+      {/* ✅ NUEVO: BOTÓN DE INTERCAMBIO (SOLO EN LA SECCIÓN DE MENSAJES) */}
+      {shopCategory === 'messages' && (
+        <section style={{ padding: '0 16px 10px' }}>
+          <button
+            onClick={() => setShowExchangeModal(true)}
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              padding: '14px',
+              borderRadius: 16,
+              background: 'linear-gradient(90deg, rgba(168, 85, 247, 0.15), rgba(34, 197, 94, 0.15))',
+              border: '1px dashed rgba(255, 255, 255, 0.2)',
+              color: '#fff',
+              fontSize: 14,
+              fontWeight: 700,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              transition: 'all 0.2s ease',
+            }}
+          >
+            <span style={{ fontSize: 18 }}>🔄</span>
+            {lang === 'es' ? 'Cambia tus gemas por mensajes' : 'Exchange gems for messages'}
+          </button>
+        </section>
+      )}
+
       {/* SELECTOR DE MÉTODO DE PAGO */}
       <section style={{ padding: '10px 16px 0' }}>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -1095,18 +915,14 @@ export default function ShopPage() {
               flex: 1,
               padding: '12px 16px',
               borderRadius: 14,
-              background:
-                paymentMethod === 'stars'
-                  ? 'linear-gradient(135deg, #a855f7 0%, #ec4899 100%)'
-                  : 'rgba(168, 85, 247, 0.08)',
+              background: paymentMethod === 'stars' ? 'linear-gradient(135deg, #a855f7 0%, #ec4899 100%)' : 'rgba(168, 85, 247, 0.08)',
               color: paymentMethod === 'stars' ? '#fff' : '#a395c9',
               border: paymentMethod === 'stars' ? 'none' : '1px solid rgba(168, 85, 247, 0.2)',
               fontSize: 14,
               fontWeight: 700,
               cursor: 'pointer',
               fontFamily: 'inherit',
-              boxShadow:
-                paymentMethod === 'stars' ? '0 4px 16px rgba(236, 72, 153, 0.5)' : 'none',
+              boxShadow: paymentMethod === 'stars' ? '0 4px 16px rgba(236, 72, 153, 0.5)' : 'none',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -1121,18 +937,14 @@ export default function ShopPage() {
               flex: 1,
               padding: '12px 16px',
               borderRadius: 14,
-              background:
-                paymentMethod === 'crypto'
-                  ? 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)'
-                  : 'rgba(34, 197, 94, 0.08)',
+              background: paymentMethod === 'crypto' ? 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)' : 'rgba(34, 197, 94, 0.08)',
               color: paymentMethod === 'crypto' ? '#fff' : '#a395c9',
               border: paymentMethod === 'crypto' ? 'none' : '1px solid rgba(34, 197, 94, 0.3)',
               fontSize: 14,
               fontWeight: 700,
               cursor: 'pointer',
               fontFamily: 'inherit',
-              boxShadow:
-                paymentMethod === 'crypto' ? '0 4px 16px rgba(34, 197, 94, 0.5)' : 'none',
+              boxShadow: paymentMethod === 'crypto' ? '0 4px 16px rgba(34, 197, 94, 0.5)' : 'none',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -1196,32 +1008,12 @@ export default function ShopPage() {
                       cursor: 'pointer',
                       fontFamily: 'inherit',
                       color: 'inherit',
-                      background: isFirstTime
-                        ? 'linear-gradient(90deg, rgba(34,197,94,0.15), rgba(34,197,94,0.05))'
-                        : 'rgba(255,255,255,0.03)',
-                      border: isFirstTime
-                        ? '1px solid rgba(34,197,94,0.4)'
-                        : '1px solid rgba(255,255,255,0.06)',
+                      background: isFirstTime ? 'linear-gradient(90deg, rgba(34,197,94,0.15), rgba(34,197,94,0.05))' : 'rgba(255,255,255,0.03)',
+                      border: isFirstTime ? '1px solid rgba(34,197,94,0.4)' : '1px solid rgba(255,255,255,0.06)',
                       opacity: purchasing !== null || pendingReference ? 0.5 : 1,
                     }}
                   >
-                    <div
-                      style={{
-                        width: 44,
-                        height: 44,
-                        borderRadius: 12,
-                        background: isFirstTime
-                          ? 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)'
-                          : isGems 
-                            ? 'linear-gradient(135deg, #7c5cff 0%, #a855f7 100%)'
-                            : 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0,
-                        fontSize: 20
-                      }}
-                    >
+                    <div style={{ width: 44, height: 44, borderRadius: 12, background: isFirstTime ? 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)' : isGems ? 'linear-gradient(135deg, #7c5cff 0%, #a855f7 100%)' : 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 20 }}>
                       {isGems ? '💎' : '💌'}
                     </div>
 
@@ -1236,17 +1028,7 @@ export default function ShopPage() {
                           </span>
                         )}
                         {isFirstTime && (
-                          <span
-                            style={{
-                              fontSize: 10,
-                              fontWeight: 700,
-                              textTransform: 'uppercase',
-                              background: '#22c55e',
-                              color: '#fff',
-                              padding: '2px 6px',
-                              borderRadius: 4,
-                            }}
-                          >
+                          <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', background: '#22c55e', color: '#fff', padding: '2px 6px', borderRadius: 4 }}>
                             {t.firstTime}
                           </span>
                         )}
@@ -1255,14 +1037,7 @@ export default function ShopPage() {
 
                     <div style={{ flexShrink: 0, textAlign: 'right' }}>
                       <p style={{ fontWeight: 700, fontSize: 14, margin: 0 }}>{pkg.stars}</p>
-                      <p
-                        style={{
-                          fontSize: 10,
-                          color: '#8b8b9e',
-                          textTransform: 'uppercase',
-                          margin: 0,
-                        }}
-                      >
+                      <p style={{ fontSize: 10, color: '#8b8b9e', textTransform: 'uppercase', margin: 0 }}>
                         Stars
                       </p>
                     </div>
@@ -1293,32 +1068,12 @@ export default function ShopPage() {
                       cursor: 'pointer',
                       fontFamily: 'inherit',
                       color: 'inherit',
-                      background: isFirstTime
-                        ? 'linear-gradient(90deg, rgba(34,197,94,0.15), rgba(34,197,94,0.05))'
-                        : 'rgba(255,255,255,0.03)',
-                      border: isFirstTime
-                        ? '1px solid rgba(34,197,94,0.4)'
-                        : '1px solid rgba(255,255,255,0.06)',
+                      background: isFirstTime ? 'linear-gradient(90deg, rgba(34,197,94,0.15), rgba(34,197,94,0.05))' : 'rgba(255,255,255,0.03)',
+                      border: isFirstTime ? '1px solid rgba(34,197,94,0.4)' : '1px solid rgba(255,255,255,0.06)',
                       opacity: purchasing !== null || pendingReference ? 0.5 : 1,
                     }}
                   >
-                    <div
-                      style={{
-                        width: 44,
-                        height: 44,
-                        borderRadius: 12,
-                        background: isFirstTime
-                          ? 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)'
-                          : isGems 
-                            ? 'linear-gradient(135deg, #7c5cff 0%, #a855f7 100%)'
-                            : 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0,
-                        fontSize: 20
-                      }}
-                    >
+                    <div style={{ width: 44, height: 44, borderRadius: 12, background: isFirstTime ? 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)' : isGems ? 'linear-gradient(135deg, #7c5cff 0%, #a855f7 100%)' : 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 20 }}>
                       {isGems ? '💎' : '💌'}
                     </div>
 
@@ -1333,17 +1088,7 @@ export default function ShopPage() {
                           </span>
                         )}
                         {isFirstTime && (
-                          <span
-                            style={{
-                              fontSize: 10,
-                              fontWeight: 700,
-                              textTransform: 'uppercase',
-                              background: '#22c55e',
-                              color: '#fff',
-                              padding: '2px 6px',
-                              borderRadius: 4,
-                            }}
-                          >
+                          <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', background: '#22c55e', color: '#fff', padding: '2px 6px', borderRadius: 4 }}>
                             {t.firstTime}
                           </span>
                         )}
@@ -1352,14 +1097,7 @@ export default function ShopPage() {
 
                     <div style={{ flexShrink: 0, textAlign: 'right' }}>
                       <p style={{ fontWeight: 700, fontSize: 14, margin: 0 }}>{(pkg as any).usdt}</p>
-                      <p
-                        style={{
-                          fontSize: 10,
-                          color: '#8b8b9e',
-                          textTransform: 'uppercase',
-                          margin: 0,
-                        }}
-                      >
+                      <p style={{ fontSize: 10, color: '#8b8b9e', textTransform: 'uppercase', margin: 0 }}>
                         USDT
                       </p>
                     </div>
@@ -1369,37 +1107,98 @@ export default function ShopPage() {
         </div>
       </section>
 
+      {/* ✅ NUEVO: MODAL DE INTERCAMBIO */}
+      {showExchangeModal && (
+        <div className="modal-backdrop" onClick={() => !exchanging && setShowExchangeModal(false)}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+            <div style={{ fontSize: 40, textAlign: 'center', marginBottom: 8 }}>🔄</div>
+            <h3 className="modal-title" style={{ textAlign: 'center', marginBottom: 4 }}>
+              {lang === 'es' ? 'Cambia tus gemas' : 'Exchange your gems'}
+            </h3>
+            <p className="modal-desc" style={{ textAlign: 'center', marginBottom: 16 }}>
+              {lang === 'es' 
+                ? 'Convierte tus Gemas de Pago en Mensajes de Chat.' 
+                : 'Convert your Paid Gems into Chat Messages.'}
+            </p>
+
+            <div style={{ background: 'rgba(0,0,0,0.2)', padding: 16, borderRadius: 14, marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ fontSize: 13, color: '#a395c9' }}>{lang === 'es' ? 'Tus gemas:' : 'Your gems:'}</span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: '#f5f0ff' }}>💎 {gems}</span>
+              </div>
+              
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
+                <div style={{ textAlign: 'center', flex: 1 }}>
+                  <p style={{ fontSize: 11, color: '#8b8b9e', margin: '0 0 4px 0' }}>{lang === 'es' ? 'Entregas' : 'You give'}</p>
+                  <p style={{ fontSize: 20, fontWeight: 900, color: '#a855f7', margin: 0 }}>💎 {exchangeAmount}</p>
+                </div>
+                <div style={{ fontSize: 20, color: '#6b6b7e' }}>➡️</div>
+                <div style={{ textAlign: 'center', flex: 1 }}>
+                  <p style={{ fontSize: 11, color: '#8b8b9e', margin: '0 0 4px 0' }}>{lang === 'es' ? 'Recibes' : 'You get'}</p>
+                  <p style={{ fontSize: 20, fontWeight: 900, color: '#22c55e', margin: 0 }}>💌 {Math.floor((exchangeAmount / 2) * 3)}</p>
+                </div>
+              </div>
+            </div>
+
+            <p style={{ fontSize: 11, color: '#a395c9', textAlign: 'center', marginBottom: 8, fontWeight: 600 }}>
+              {lang === 'es' ? 'Selecciona cuántas gemas cambiar:' : 'Select how many gems to exchange:'}
+            </p>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 16 }}>
+              {[2, 10, 50, 100].map((amt) => {
+                const isDisabled = gems < amt
+                return (
+                  <button
+                    key={amt}
+                    onClick={() => setExchangeAmount(amt)}
+                    disabled={isDisabled}
+                    style={{
+                      padding: '10px 0',
+                      borderRadius: 10,
+                      background: exchangeAmount === amt ? 'linear-gradient(135deg, #a855f7 0%, #ec4899 100%)' : 'rgba(255,255,255,0.05)',
+                      border: exchangeAmount === amt ? 'none' : '1px solid rgba(255,255,255,0.1)',
+                      color: isDisabled ? '#6b6b7e' : '#fff',
+                      fontSize: 14,
+                      fontWeight: 700,
+                      cursor: isDisabled ? 'not-allowed' : 'pointer',
+                      fontFamily: 'inherit',
+                      opacity: isDisabled ? 0.5 : 1,
+                    }}
+                  >
+                    {amt} 💎
+                  </button>
+                )
+              })}
+            </div>
+
+            <div className="modal-btn-row">
+              <button onClick={() => setShowExchangeModal(false)} disabled={exchanging} className="modal-btn secondary">
+                {lang === 'es' ? 'Cancelar' : 'Cancel'}
+              </button>
+              <button 
+                onClick={handleExchange} 
+                disabled={exchanging || exchangeAmount < 2 || exchangeAmount % 2 !== 0 || gems < exchangeAmount} 
+                className="modal-btn primary"
+                style={{ background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)', boxShadow: '0 4px 16px rgba(34, 197, 94, 0.4)' }}
+              >
+                {exchanging 
+                  ? (lang === 'es' ? 'Cambiando...' : 'Exchanging...') 
+                  : (lang === 'es' ? 'Confirmar Cambio' : 'Confirm Exchange')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showVipSuccess && (
         <div className="modal-backdrop">
           <div className="modal-box level-up-modal">
             <div style={{ fontSize: 60, textAlign: 'center', marginBottom: 8 }}>👑</div>
-            <h2
-              className="modal-title"
-              style={{
-                textAlign: 'center',
-                fontSize: 24,
-                marginTop: 6,
-                background: 'linear-gradient(135deg, #fbbf24, #f59e0b)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                backgroundClip: 'text',
-              }}
-            >
+            <h2 className="modal-title" style={{ textAlign: 'center', fontSize: 24, marginTop: 6, background: 'linear-gradient(135deg, #fbbf24, #f59e0b)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
               {lang === 'es' ? '¡Bienvenido a VIP!' : 'Welcome to VIP!'}
             </h2>
 
-            <div
-              style={{
-                fontSize: 13,
-                color: '#c4b5fd',
-                textAlign: 'center',
-                margin: '12px 0 20px 0',
-                lineHeight: 1.7,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 4,
-              }}
-            >
+            <div style={{ fontSize: 13, color: '#c4b5fd', textAlign: 'center', margin: '12px 0 20px 0', lineHeight: 1.7, display: 'flex', flexDirection: 'column', gap: 4 }}>
               {lang === 'es' ? (
                 <>
                   <div>📨 6.000 mensajes/mes</div>
@@ -1422,11 +1221,7 @@ export default function ShopPage() {
             <button
               onClick={() => setShowVipSuccess(false)}
               className="modal-btn primary"
-              style={{
-                width: '100%',
-                background: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)',
-                boxShadow: '0 4px 24px rgba(251, 191, 36, 0.6)',
-              }}
+              style={{ width: '100%', background: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)', boxShadow: '0 4px 24px rgba(251, 191, 36, 0.6)' }}
             >
               {lang === 'es' ? '¡Empezar!' : 'Get started!'}
             </button>
