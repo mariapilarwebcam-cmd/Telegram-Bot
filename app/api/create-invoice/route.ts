@@ -2,7 +2,7 @@
 
 import { NextResponse } from 'next/server'
 import { getLastPurchase } from '@/lib/db-queries'
-import { STAR_PACKAGES, MESSAGE_PACKAGES, getFinalGems } from '@/lib/constants'
+import { STAR_PACKAGES, MESSAGE_PACKAGES, HYBRID_PACKAGES, getFinalGems } from '@/lib/constants'
 
 export async function POST(request: Request) {
   try {
@@ -14,9 +14,10 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => ({}))
     const { package_id, package_type } = body
 
-    // ✅ NUEVO: Determinamos qué paquete usar según la pestaña de la tienda
+    // ✅ NUEVO: Determinamos qué paquete usar (Híbrido, Mensajes o Gemas)
     const isMessages = package_type === 'messages'
-    const activePackages = isMessages ? MESSAGE_PACKAGES : STAR_PACKAGES
+    const isHybrid = package_type === 'hybrid'
+    const activePackages = isHybrid ? HYBRID_PACKAGES : (isMessages ? MESSAGE_PACKAGES : STAR_PACKAGES)
 
     if (
       typeof package_id !== 'number' ||
@@ -40,21 +41,28 @@ export async function POST(request: Request) {
     }
 
     // ✅ NUEVO: Formatear título, descripción y payload según el tipo
-    let finalAmount = 0
     let title = ''
     let description = ''
     let payload = ''
+    let label = 'Gems'
 
-    if (isMessages) {
-      finalAmount = (pkg as any).messages
+    if (isHybrid) {
+      title = `${(pkg as any).stars_final_gems} Gems + ${(pkg as any).stars_final_messages} Messages`
+      description = `${(pkg as any).stars_final_gems} gems and ${(pkg as any).stars_final_messages} messages for chatting`
+      payload = `hybrid_purchase_${package_id}`
+      label = 'Hybrid Pack'
+    } else if (isMessages) {
+      const finalAmount = (pkg as any).messages
       title = `${finalAmount} Messages`
       description = `${finalAmount} messages for chatting`
       payload = `message_purchase_${package_id}`
+      label = 'Messages'
     } else {
-      finalAmount = getFinalGems(pkg as any)
+      const finalAmount = getFinalGems(pkg as any)
       title = `${finalAmount} Gems`
       description = `${finalAmount} gems${(pkg as any).bonus > 0 ? ` (+${(pkg as any).bonus}% bonus)` : ''}`
       payload = `gem_purchase_${package_id}`
+      label = 'Gems'
     }
 
     const response = await fetch(
@@ -67,7 +75,7 @@ export async function POST(request: Request) {
           description,
           payload,
           currency: 'XTR',
-          prices: [{ label: isMessages ? 'Messages' : 'Gems', amount: pkg.stars }],
+          prices: [{ label, amount: pkg.stars }],
         }),
       }
     )
