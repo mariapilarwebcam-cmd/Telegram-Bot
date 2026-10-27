@@ -468,9 +468,9 @@ export function buildSystemPrompt(
 // MODEL CHAIN CON FALLBACK
 // ═══════════════════════════════════════════════════════════════
 const MODEL_CHAIN = [
-  'deepseek/deepseek-v4-flash',
-  'deepseek/deepseek-v4-flash-0731',
-  'deepseek/deepseek-chat-v3-0324',
+  'deepseek/deepseek-v4-flash-0731', // ✅ AHORA ES EL PRIMERO (Más barato en Output)
+  'deepseek/deepseek-chat',          // Respaldo genérico
+  'deepseek/deepseek-v4-flash',      // Respaldo final (Mapea a 0423)
 ]
 
 const MAX_TOKENS = 650
