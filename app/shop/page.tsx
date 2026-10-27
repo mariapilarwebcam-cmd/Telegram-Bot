@@ -6,6 +6,7 @@ import {
   STAR_PACKAGES,
   CRYPTO_PACKAGES,
   MESSAGE_PACKAGES,
+  HYBRID_PACKAGES, // ✅ NUEVO
   VIP_PLANS,
   getFinalGems,
   getFinalCryptoGems,
@@ -26,8 +27,11 @@ export default function ShopPage() {
   const [checking, setChecking] = useState(true)
   const [paymentMethod, setPaymentMethod] = useState<'stars' | 'crypto'>('stars')
   
-  // ✅ Categoría de la tienda
-  const [shopCategory, setShopCategory] = useState<'gems' | 'messages'>('gems')
+  // ✅ NUEVO: Categoría principal (VIP vs Premium)
+  const [shopCategory, setShopCategory] = useState<'vip' | 'premium'>('vip')
+  
+  // ✅ NUEVO: Sub-categoría dentro de Premium
+  const [premiumCategory, setPremiumCategory] = useState<'hybrid' | 'gems' | 'messages'>('hybrid')
   
   // ✅ NUEVO: Estados para el intercambio de gemas
   const [showExchangeModal, setShowExchangeModal] = useState(false)
@@ -50,7 +54,6 @@ export default function ShopPage() {
   const [tonConnectUI] = useTonConnectUI()
   const t = getTranslations(lang)
 
-  // ✅ FUNCIÓN MAESTRA PARA MANEJAR ERRORES DE CRIPTO
   const handleCryptoError = (error: any) => {
     const msg = error?.message || error?.toString() || String(error)
     const lowerMsg = msg.toLowerCase()
@@ -343,7 +346,8 @@ export default function ShopPage() {
       const res = await tgFetch('/api/create-invoice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ package_id: idx, package_type: shopCategory }),
+        // ✅ AHORA ENVIAMOS SI ES HIBRIDO, GEMAS O MENSAJES
+        body: JSON.stringify({ package_id: idx, package_type: premiumCategory }),
       })
       const data = await res.json()
       if (res.ok && data.invoice_link) {
@@ -364,8 +368,13 @@ export default function ShopPage() {
               if (user.telegram_id) purchaseCache[user.telegram_id] = true
               setHasPurchased(true)
 
-              const pkg = shopCategory === 'gems' ? STAR_PACKAGES[idx] : MESSAGE_PACKAGES[idx]
-              if (pkg && shopCategory === 'gems') {
+              const pkg = premiumCategory === 'hybrid' 
+                ? HYBRID_PACKAGES[idx] 
+                : premiumCategory === 'gems' 
+                  ? STAR_PACKAGES[idx] 
+                  : MESSAGE_PACKAGES[idx]
+                  
+              if (pkg && premiumCategory === 'gems') {
                 Analytics.gemsPurchased({
                   package_index: idx,
                   gems: getFinalGems(pkg as any),
@@ -426,8 +435,13 @@ export default function ShopPage() {
           if (user?.telegram_id) purchaseCache[user.telegram_id] = true
           setHasPurchased(true)
 
-          const pkg = shopCategory === 'gems' ? CRYPTO_PACKAGES[pkgIndex] : MESSAGE_PACKAGES[pkgIndex]
-          if (pkg && shopCategory === 'gems') {
+          const pkg = premiumCategory === 'hybrid' 
+            ? HYBRID_PACKAGES[pkgIndex] 
+            : premiumCategory === 'gems' 
+              ? CRYPTO_PACKAGES[pkgIndex] 
+              : MESSAGE_PACKAGES[pkgIndex]
+
+          if (pkg && premiumCategory === 'gems') {
             Analytics.gemsPurchased({
               package_index: pkgIndex,
               gems: getFinalCryptoGems(pkg as any),
@@ -453,7 +467,8 @@ export default function ShopPage() {
       const res = await tgFetch('/api/create-crypto-invoice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ package_id: idx, package_type: shopCategory }),
+        // ✅ AHORA ENVIAMOS SI ES HIBRIDO, GEMAS O MENSAJES
+        body: JSON.stringify({ package_id: idx, package_type: premiumCategory }),
       })
       const data = await res.json()
       if (!res.ok || !data.payment_data) {
@@ -505,7 +520,6 @@ export default function ShopPage() {
     }
   }
 
-  // ✅ NUEVA FUNCIÓN: Intercambiar gemas por mensajes
   const handleExchange = async () => {
     if (!user || exchanging) return
     if (exchangeAmount < 2 || exchangeAmount % 2 !== 0) {
@@ -554,7 +568,7 @@ export default function ShopPage() {
   const gems = user?.gems || 0
   const messages = (user as any)?.bonus_gems || 0
 
-  const visibleStarsPackages = (shopCategory === 'gems' ? STAR_PACKAGES : MESSAGE_PACKAGES)
+  const visibleStarsPackages = (premiumCategory === 'hybrid' ? HYBRID_PACKAGES : premiumCategory === 'gems' ? STAR_PACKAGES : MESSAGE_PACKAGES)
     .map((pkg, idx) => ({ ...pkg, originalIndex: idx }))
     .filter((p) => {
       if (!p.first_time_only) return true
@@ -562,7 +576,7 @@ export default function ShopPage() {
       return !hasPurchased
     })
 
-  const visibleCryptoPackages = (shopCategory === 'gems' ? CRYPTO_PACKAGES : MESSAGE_PACKAGES)
+  const visibleCryptoPackages = (premiumCategory === 'hybrid' ? HYBRID_PACKAGES : premiumCategory === 'gems' ? CRYPTO_PACKAGES : MESSAGE_PACKAGES)
     .map((pkg, idx) => ({ ...pkg, originalIndex: idx }))
     .filter((p) => {
       if (!p.first_time_only) return true
@@ -577,7 +591,6 @@ export default function ShopPage() {
       <header className="page-header">
         <h1 className="page-title">{t.shop}</h1>
         <div style={{ display: 'flex', gap: 8 }}>
-          {/* ✅ Iconos unificados */}
           <div
             style={{
               display: 'flex',
@@ -614,16 +627,17 @@ export default function ShopPage() {
         </div>
       </header>
 
+      {/* ✅ NUEVO SELECTOR PRINCIPAL: VIP VS PREMIUM */}
       <section style={{ padding: '20px 16px 0' }}>
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
           <button
-            onClick={() => setShopCategory('gems')}
+            onClick={() => setShopCategory('vip')}
             style={{
               flex: 1,
               padding: '14px',
               borderRadius: 16,
-              background: shopCategory === 'gems' ? 'linear-gradient(135deg, #a855f7 0%, #ec4899 100%)' : 'rgba(255,255,255,0.05)',
-              border: shopCategory === 'gems' ? 'none' : '1px solid rgba(255,255,255,0.08)',
+              background: shopCategory === 'vip' ? 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)' : 'rgba(255,255,255,0.05)',
+              border: shopCategory === 'vip' ? 'none' : '1px solid rgba(255,255,255,0.08)',
               color: '#fff',
               fontSize: 14,
               fontWeight: 800,
@@ -633,19 +647,19 @@ export default function ShopPage() {
               alignItems: 'center',
               justifyContent: 'center',
               gap: 6,
-              boxShadow: shopCategory === 'gems' ? '0 4px 16px rgba(236, 72, 153, 0.4)' : 'none',
+              boxShadow: shopCategory === 'vip' ? '0 4px 16px rgba(251, 191, 36, 0.4)' : 'none',
             }}
           >
-            💎 Gemas de Pago
+            👑 Paquetes VIP
           </button>
           <button
-            onClick={() => setShopCategory('messages')}
+            onClick={() => setShopCategory('premium')}
             style={{
               flex: 1,
               padding: '14px',
               borderRadius: 16,
-              background: shopCategory === 'messages' ? 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)' : 'rgba(255,255,255,0.05)',
-              border: shopCategory === 'messages' ? 'none' : '1px solid rgba(255,255,255,0.08)',
+              background: shopCategory === 'premium' ? 'linear-gradient(135deg, #a855f7 0%, #ec4899 100%)' : 'rgba(255,255,255,0.05)',
+              border: shopCategory === 'premium' ? 'none' : '1px solid rgba(255,255,255,0.08)',
               color: '#fff',
               fontSize: 14,
               fontWeight: 800,
@@ -655,15 +669,16 @@ export default function ShopPage() {
               alignItems: 'center',
               justifyContent: 'center',
               gap: 6,
-              boxShadow: shopCategory === 'messages' ? '0 4px 16px rgba(34, 197, 94, 0.4)' : 'none',
+              boxShadow: shopCategory === 'premium' ? '0 4px 16px rgba(236, 72, 153, 0.4)' : 'none',
             }}
           >
-            💌 Mensajes de Chat
+            ✨ Paquetes Premium
           </button>
         </div>
       </section>
 
-      {shopCategory === 'gems' && (
+      {/* SECCIÓN VIP */}
+      {shopCategory === 'vip' && (
         <section style={{ padding: '10px 16px 0' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
             <span style={{ fontSize: 22 }}>👑</span>
@@ -707,9 +722,7 @@ export default function ShopPage() {
                 overflow: 'hidden',
               }}
             >
-              <div style={{ position: 'absolute', top: -20, right: -20, fontSize: 140, opacity: 0.15, pointerEvents: 'none' }}>
-                👑
-              </div>
+              <div style={{ position: 'absolute', top: -20, right: -20, fontSize: 140, opacity: 0.15, pointerEvents: 'none' }}>👑</div>
               <div style={{ position: 'relative', zIndex: 1 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                   <span style={{ fontSize: 24 }}>✨</span>
@@ -718,10 +731,7 @@ export default function ShopPage() {
                       VIP ACTIVO
                     </p>
                     <h3 style={{ fontSize: 22, fontWeight: 900, color: '#fff', margin: '2px 0 0 0', textShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
-                      {VIP_PLANS.find((p) => p.id === vipSub.subscription.plan)
-                        ? VIP_PLANS.find((p) => p.id === vipSub.subscription.plan)!
-                            .label[lang === 'es' ? 'es' : 'en']
-                        : 'VIP'}
+                      {VIP_PLANS.find((p) => p.id === vipSub.subscription.plan) ? VIP_PLANS.find((p) => p.id === vipSub.subscription.plan)!.label[lang === 'es' ? 'es' : 'en'] : 'VIP'}
                     </h3>
                   </div>
                 </div>
@@ -746,18 +756,10 @@ export default function ShopPage() {
                 </div>
 
                 <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-                  <button
-                    onClick={() => buyVipWithStars(vipSub.subscription.plan)}
-                    disabled={!!vipPurchasing || !!vipPendingRef}
-                    style={{ flex: 1, padding: '12px 16px', borderRadius: 12, background: '#fff', border: 'none', color: '#d97706', fontSize: 13, fontWeight: 800, cursor: vipPurchasing ? 'wait' : 'pointer', fontFamily: 'inherit', opacity: vipPurchasing ? 0.6 : 1 }}
-                  >
+                  <button onClick={() => buyVipWithStars(vipSub.subscription.plan)} disabled={!!vipPurchasing || !!vipPendingRef} style={{ flex: 1, padding: '12px 16px', borderRadius: 12, background: '#fff', border: 'none', color: '#d97706', fontSize: 13, fontWeight: 800, cursor: vipPurchasing ? 'wait' : 'pointer', fontFamily: 'inherit', opacity: vipPurchasing ? 0.6 : 1 }}>
                     ⭐ {lang === 'es' ? 'Extender' : 'Extend'}
                   </button>
-                  <button
-                    onClick={cancelVip}
-                    disabled={!!vipPurchasing || !!vipPendingRef}
-                    style={{ flex: 1, padding: '12px 16px', borderRadius: 12, background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
-                  >
+                  <button onClick={cancelVip} disabled={!!vipPurchasing || !!vipPendingRef} style={{ flex: 1, padding: '12px 16px', borderRadius: 12, background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
                     {lang === 'es' ? 'Cancelar' : 'Cancel'}
                   </button>
                 </div>
@@ -813,7 +815,6 @@ export default function ShopPage() {
                           {plan.bestValue ? (lang === 'es' ? 'MEJOR VALOR' : 'BEST VALUE') : (lang === 'es' ? 'POPULAR' : 'POPULAR')}
                         </div>
                       )}
-
                       <div style={{ padding: 16, display: 'flex', alignItems: 'center', gap: 14 }}>
                         <div style={{ width: 48, height: 48, borderRadius: 14, background: plan.popular || plan.bestValue ? 'rgba(0,0,0,0.2)' : 'rgba(168, 85, 247, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, flexShrink: 0 }}>
                           {plan.emoji}
@@ -827,30 +828,18 @@ export default function ShopPage() {
                             {planSavings && (
                               <>
                                 {' · '}
-                                <span style={{ color: plan.bestValue ? '#1a1228' : plan.popular ? '#fef3c7' : '#22c55e', fontWeight: 800 }}>
-                                  {planSavings}
-                                </span>
+                                <span style={{ color: plan.bestValue ? '#1a1228' : plan.popular ? '#fef3c7' : '#22c55e', fontWeight: 800 }}>{planSavings}</span>
                               </>
                             )}
                           </p>
                         </div>
                       </div>
-
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, padding: '0 16px 16px 16px' }}>
-                        <button
-                          onClick={() => buyVipWithStars(plan.id)}
-                          disabled={!!vipPurchasing || !!vipPendingRef}
-                          style={{ padding: '12px 10px', borderRadius: 12, background: plan.popular || plan.bestValue ? '#fff' : 'rgba(255, 255, 255, 0.1)', border: 'none', color: plan.popular || plan.bestValue ? (plan.bestValue ? '#d97706' : '#a855f7') : '#fff', fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, opacity: vipPurchasing && !isPurchasing ? 0.5 : 1 }}
-                        >
+                        <button onClick={() => buyVipWithStars(plan.id)} disabled={!!vipPurchasing || !!vipPendingRef} style={{ padding: '12px 10px', borderRadius: 12, background: plan.popular || plan.bestValue ? '#fff' : 'rgba(255, 255, 255, 0.1)', border: 'none', color: plan.popular || plan.bestValue ? (plan.bestValue ? '#d97706' : '#a855f7') : '#fff', fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, opacity: vipPurchasing && !isPurchasing ? 0.5 : 1 }}>
                           <span>⭐ {planPrice}</span>
                           <span style={{ fontSize: 9, opacity: 0.75, fontWeight: 600 }}>{plan.stars} Stars</span>
                         </button>
-
-                        <button
-                          onClick={() => buyVipWithCrypto(plan.id)}
-                          disabled={!!vipPurchasing || !!vipPendingRef}
-                          style={{ padding: '12px 10px', borderRadius: 12, background: 'rgba(34, 197, 94, 0.15)', border: '1px solid rgba(34, 197, 94, 0.6)', color: '#4ade80', fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, opacity: vipPurchasing && !isPurchasing ? 0.5 : 1 }}
-                        >
+                        <button onClick={() => buyVipWithCrypto(plan.id)} disabled={!!vipPurchasing || !!vipPendingRef} style={{ padding: '12px 10px', borderRadius: 12, background: 'rgba(34, 197, 94, 0.15)', border: '1px solid rgba(34, 197, 94, 0.6)', color: '#4ade80', fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, opacity: vipPurchasing && !isPurchasing ? 0.5 : 1 }}>
                           <span>💎 {cryptoPrice}</span>
                           <span style={{ fontSize: 9, opacity: 0.9, fontWeight: 700 }}>{cryptoSavings}</span>
                         </button>
@@ -859,7 +848,6 @@ export default function ShopPage() {
                   )
                 })}
               </div>
-
               <p style={{ fontSize: 10, color: '#6b6b7e', margin: '12px 0 0 0', textAlign: 'center', lineHeight: 1.5 }}>
                 {lang === 'es' ? '💡 Se renueva automáticamente. Puedes cancelar cuando quieras.' : '💡 Auto-renews. Cancel anytime.'}
               </p>
@@ -868,246 +856,297 @@ export default function ShopPage() {
         </section>
       )}
 
-      {/* TÍTULO DE LA SECCIÓN DE PAQUETES */}
-      <section style={{ padding: '28px 16px 0' }}>
-        <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>
-          {shopCategory === 'gems' 
-            ? (lang === 'es' ? 'Paquetes de Gemas' : 'Gem Packages') 
-            : (lang === 'es' ? 'Paquetes de Mensajes' : 'Message Packages')}
-        </h2>
-      </section>
+      {/* SECCIÓN PREMIUM */}
+      {shopCategory === 'premium' && (
+        <section style={{ padding: '10px 16px 0' }}>
+          
+          {/* Sub-pestañas de Premium */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+            <button
+              onClick={() => setPremiumCategory('hybrid')}
+              style={{
+                flex: 1,
+                padding: '10px',
+                borderRadius: 12,
+                background: premiumCategory === 'hybrid' ? 'linear-gradient(135deg, #a855f7 0%, #ec4899 100%)' : 'rgba(255,255,255,0.05)',
+                border: premiumCategory === 'hybrid' ? 'none' : '1px solid rgba(255,255,255,0.1)',
+                color: '#fff',
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              🎁 Híbrido
+            </button>
+            <button
+              onClick={() => setPremiumCategory('gems')}
+              style={{
+                flex: 1,
+                padding: '10px',
+                borderRadius: 12,
+                background: premiumCategory === 'gems' ? 'linear-gradient(135deg, #7c5cff 0%, #a855f7 100%)' : 'rgba(255,255,255,0.05)',
+                border: premiumCategory === 'gems' ? 'none' : '1px solid rgba(255,255,255,0.1)',
+                color: '#fff',
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              💎 Gemas
+            </button>
+            <button
+              onClick={() => setPremiumCategory('messages')}
+              style={{
+                flex: 1,
+                padding: '10px',
+                borderRadius: 12,
+                background: premiumCategory === 'messages' ? 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)' : 'rgba(255,255,255,0.05)',
+                border: premiumCategory === 'messages' ? 'none' : '1px solid rgba(255,255,255,0.1)',
+                color: '#fff',
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              💌 Mensajes
+            </button>
+          </div>
 
-      {/* ✅ NUEVO: BOTÓN DE INTERCAMBIO (SOLO EN LA SECCIÓN DE MENSAJES) */}
-      {shopCategory === 'messages' && (
-        <section style={{ padding: '0 16px 10px' }}>
-          <button
-            onClick={() => setShowExchangeModal(true)}
-            style={{
-              width: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 8,
-              padding: '14px',
-              borderRadius: 16,
-              background: 'linear-gradient(90deg, rgba(168, 85, 247, 0.15), rgba(34, 197, 94, 0.15))',
-              border: '1px dashed rgba(255, 255, 255, 0.2)',
-              color: '#fff',
-              fontSize: 14,
-              fontWeight: 700,
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-              transition: 'all 0.2s ease',
-            }}
-          >
-            <span style={{ fontSize: 18 }}>🔄</span>
-            {lang === 'es' ? 'Cambia tus gemas por mensajes' : 'Exchange gems for messages'}
-          </button>
-        </section>
-      )}
+          {/* Botón de intercambio solo en Mensajes */}
+          {premiumCategory === 'messages' && (
+            <div style={{ marginBottom: 16 }}>
+              <button
+                onClick={() => setShowExchangeModal(true)}
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  padding: '14px',
+                  borderRadius: 16,
+                  background: 'linear-gradient(90deg, rgba(168, 85, 247, 0.15), rgba(34, 197, 94, 0.15))',
+                  border: '1px dashed rgba(255, 255, 255, 0.2)',
+                  color: '#fff',
+                  fontSize: 14,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >
+                <span style={{ fontSize: 18 }}>🔄</span>
+                {lang === 'es' ? 'Cambia tus gemas por mensajes' : 'Exchange gems for messages'}
+              </button>
+            </div>
+          )}
 
-      {/* SELECTOR DE MÉTODO DE PAGO */}
-      <section style={{ padding: '10px 16px 0' }}>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            onClick={() => setPaymentMethod('stars')}
-            style={{
-              flex: 1,
-              padding: '12px 16px',
-              borderRadius: 14,
-              background: paymentMethod === 'stars' ? 'linear-gradient(135deg, #a855f7 0%, #ec4899 100%)' : 'rgba(168, 85, 247, 0.08)',
-              color: paymentMethod === 'stars' ? '#fff' : '#a395c9',
-              border: paymentMethod === 'stars' ? 'none' : '1px solid rgba(168, 85, 247, 0.2)',
-              fontSize: 14,
-              fontWeight: 700,
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-              boxShadow: paymentMethod === 'stars' ? '0 4px 16px rgba(236, 72, 153, 0.5)' : 'none',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 6,
-            }}
-          >
-            ⭐ Stars +5%
-          </button>
-          <button
-            onClick={() => setPaymentMethod('crypto')}
-            style={{
-              flex: 1,
-              padding: '12px 16px',
-              borderRadius: 14,
-              background: paymentMethod === 'crypto' ? 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)' : 'rgba(34, 197, 94, 0.08)',
-              color: paymentMethod === 'crypto' ? '#fff' : '#a395c9',
-              border: paymentMethod === 'crypto' ? 'none' : '1px solid rgba(34, 197, 94, 0.3)',
-              fontSize: 14,
-              fontWeight: 700,
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-              boxShadow: paymentMethod === 'crypto' ? '0 4px 16px rgba(34, 197, 94, 0.5)' : 'none',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 6,
-            }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-              <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" fill="currentColor" />
-            </svg>
-            Crypto +15%
-          </button>
-        </div>
-      </section>
+          {/* Título de la sección */}
+          <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>
+            {premiumCategory === 'hybrid' 
+              ? (lang === 'es' ? 'Paquetes Híbridos' : 'Hybrid Packages') 
+              : premiumCategory === 'gems' 
+                ? (lang === 'es' ? 'Paquetes de Gemas' : 'Gem Packages')
+                : (lang === 'es' ? 'Paquetes de Mensajes' : 'Message Packages')}
+          </h2>
 
-      {pendingReference && (
-        <section style={{ padding: '16px 16px 0' }}>
-          <div
-            style={{
-              padding: 14,
-              borderRadius: 14,
-              background: 'linear-gradient(135deg, rgba(34,197,94,0.15), rgba(34,197,94,0.05))',
-              border: '1px solid rgba(34, 197, 94, 0.4)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-            }}
-          >
-            <div className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }} />
-            <p style={{ fontSize: 13, color: '#86efac', margin: 0, flex: 1 }}>
-              {pendingStatus}
-            </p>
+          {/* Selector de Método de Pago */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+            <button
+              onClick={() => setPaymentMethod('stars')}
+              style={{
+                flex: 1,
+                padding: '12px 16px',
+                borderRadius: 14,
+                background: paymentMethod === 'stars' ? 'linear-gradient(135deg, #a855f7 0%, #ec4899 100%)' : 'rgba(168, 85, 247, 0.08)',
+                color: paymentMethod === 'stars' ? '#fff' : '#a395c9',
+                border: paymentMethod === 'stars' ? 'none' : '1px solid rgba(168, 85, 247, 0.2)',
+                fontSize: 14,
+                fontWeight: 700,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                boxShadow: paymentMethod === 'stars' ? '0 4px 16px rgba(236, 72, 153, 0.5)' : 'none',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+              }}
+            >
+              ⭐ Stars +5%
+            </button>
+            <button
+              onClick={() => setPaymentMethod('crypto')}
+              style={{
+                flex: 1,
+                padding: '12px 16px',
+                borderRadius: 14,
+                background: paymentMethod === 'crypto' ? 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)' : 'rgba(34, 197, 94, 0.08)',
+                color: paymentMethod === 'crypto' ? '#fff' : '#a395c9',
+                border: paymentMethod === 'crypto' ? 'none' : '1px solid rgba(34, 197, 94, 0.3)',
+                fontSize: 14,
+                fontWeight: 700,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                boxShadow: paymentMethod === 'crypto' ? '0 4px 16px rgba(34, 197, 94, 0.5)' : 'none',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <path d="M12 3l3 5h5l-8 13L4 8h5l3-5z" fill="currentColor" />
+              </svg>
+              Crypto +15%
+            </button>
+          </div>
+
+          {pendingReference && (
+            <div
+              style={{
+                padding: 14,
+                borderRadius: 14,
+                background: 'linear-gradient(135deg, rgba(34,197,94,0.15), rgba(34,197,94,0.05))',
+                border: '1px solid rgba(34, 197, 94, 0.4)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                marginBottom: 16
+              }}
+            >
+              <div className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }} />
+              <p style={{ fontSize: 13, color: '#86efac', margin: 0, flex: 1 }}>
+                {pendingStatus}
+              </p>
+            </div>
+          )}
+
+          {/* Grilla de Paquetes */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {paymentMethod === 'stars'
+              ? visibleStarsPackages.map((pkg) => {
+                  const idx = pkg.originalIndex
+                  const isFirstTime = pkg.first_time_only
+                  
+                  const isHybrid = premiumCategory === 'hybrid'
+                  const isGems = premiumCategory === 'gems'
+                  
+                  return (
+                    <button
+                      key={`stars_${idx}`}
+                      onClick={() => buyWithStars(idx)}
+                      disabled={purchasing !== null || !!pendingReference}
+                      style={{
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 12,
+                        padding: 16,
+                        borderRadius: 16,
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        fontFamily: 'inherit',
+                        color: 'inherit',
+                        background: isFirstTime ? 'linear-gradient(90deg, rgba(34,197,94,0.15), rgba(34,197,94,0.05))' : 'rgba(255,255,255,0.03)',
+                        border: isFirstTime ? '1px solid rgba(34,197,94,0.4)' : '1px solid rgba(255,255,255,0.06)',
+                        opacity: purchasing !== null || pendingReference ? 0.5 : 1,
+                      }}
+                    >
+                      <div style={{ width: 44, height: 44, borderRadius: 12, background: isFirstTime ? 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)' : isHybrid ? 'linear-gradient(135deg, #a855f7 0%, #ec4899 100%)' : isGems ? 'linear-gradient(135deg, #7c5cff 0%, #a855f7 100%)' : 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 20 }}>
+                        {isHybrid ? '🎁' : isGems ? '💎' : '💌'}
+                      </div>
+
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <p style={{ fontWeight: 700, fontSize: 16, margin: 0 }}>
+                            {isHybrid 
+                              ? `${(pkg as any).stars_final_gems} 💎 + ${(pkg as any).stars_final_messages} 💌`
+                              : isGems
+                                ? `${(pkg as any).gems} ${lang === 'es' ? 'Gemas' : 'Gems'}`
+                                : `${(pkg as any).messages} ${lang === 'es' ? 'Mensajes' : 'Messages'}`}
+                          </p>
+                          {isFirstTime && (
+                            <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', background: '#22c55e', color: '#fff', padding: '2px 6px', borderRadius: 4 }}>
+                              {t.firstTime}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div style={{ flexShrink: 0, textAlign: 'right' }}>
+                        <p style={{ fontWeight: 700, fontSize: 14, margin: 0 }}>{pkg.stars}</p>
+                        <p style={{ fontSize: 10, color: '#8b8b9e', textTransform: 'uppercase', margin: 0 }}>
+                          Stars
+                        </p>
+                      </div>
+                    </button>
+                  )
+                })
+              : visibleCryptoPackages.map((pkg) => {
+                  const idx = pkg.originalIndex
+                  const isFirstTime = pkg.first_time_only
+                  
+                  const isHybrid = premiumCategory === 'hybrid'
+                  const isGems = premiumCategory === 'gems'
+
+                  return (
+                    <button
+                      key={`crypto_${idx}`}
+                      onClick={() => buyWithCrypto(idx)}
+                      disabled={purchasing !== null || !!pendingReference}
+                      style={{
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 12,
+                        padding: 16,
+                        borderRadius: 16,
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        fontFamily: 'inherit',
+                        color: 'inherit',
+                        background: isFirstTime ? 'linear-gradient(90deg, rgba(34,197,94,0.15), rgba(34,197,94,0.05))' : 'rgba(255,255,255,0.03)',
+                        border: isFirstTime ? '1px solid rgba(34,197,94,0.4)' : '1px solid rgba(255,255,255,0.06)',
+                        opacity: purchasing !== null || pendingReference ? 0.5 : 1,
+                      }}
+                    >
+                      <div style={{ width: 44, height: 44, borderRadius: 12, background: isFirstTime ? 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)' : isHybrid ? 'linear-gradient(135deg, #a855f7 0%, #ec4899 100%)' : isGems ? 'linear-gradient(135deg, #7c5cff 0%, #a855f7 100%)' : 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 20 }}>
+                        {isHybrid ? '🎁' : isGems ? '💎' : '💌'}
+                      </div>
+
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <p style={{ fontWeight: 700, fontSize: 16, margin: 0 }}>
+                            {isHybrid 
+                              ? `${(pkg as any).crypto_final_gems} 💎 + ${(pkg as any).crypto_final_messages} 💌`
+                              : isGems
+                                ? `${(pkg as any).gems} ${lang === 'es' ? 'Gemas' : 'Gems'}`
+                                : `${(pkg as any).messages} ${lang === 'es' ? 'Mensajes' : 'Messages'}`}
+                          </p>
+                          {isFirstTime && (
+                            <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', background: '#22c55e', color: '#fff', padding: '2px 6px', borderRadius: 4 }}>
+                              {t.firstTime}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div style={{ flexShrink: 0, textAlign: 'right' }}>
+                        <p style={{ fontWeight: 700, fontSize: 14, margin: 0 }}>{(pkg as any).usdt}</p>
+                        <p style={{ fontSize: 10, color: '#8b8b9e', textTransform: 'uppercase', margin: 0 }}>
+                          USDT
+                        </p>
+                      </div>
+                    </button>
+                  )
+                })}
           </div>
         </section>
       )}
 
-      {/* GRILLA DE PAQUETES */}
-      <section style={{ padding: '16px 16px 0' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {paymentMethod === 'stars'
-            ? visibleStarsPackages.map((pkg) => {
-                const idx = pkg.originalIndex
-                const isFirstTime = pkg.first_time_only
-                
-                const isGems = shopCategory === 'gems'
-                const amount = isGems ? (pkg as any).gems : (pkg as any).messages
-                const finalGems = isGems ? getFinalGems(pkg as any) : amount
-
-                return (
-                  <button
-                    key={`stars_${idx}`}
-                    onClick={() => buyWithStars(idx)}
-                    disabled={purchasing !== null || !!pendingReference}
-                    style={{
-                      width: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 12,
-                      padding: 16,
-                      borderRadius: 16,
-                      textAlign: 'left',
-                      cursor: 'pointer',
-                      fontFamily: 'inherit',
-                      color: 'inherit',
-                      background: isFirstTime ? 'linear-gradient(90deg, rgba(34,197,94,0.15), rgba(34,197,94,0.05))' : 'rgba(255,255,255,0.03)',
-                      border: isFirstTime ? '1px solid rgba(34,197,94,0.4)' : '1px solid rgba(255,255,255,0.06)',
-                      opacity: purchasing !== null || pendingReference ? 0.5 : 1,
-                    }}
-                  >
-                    <div style={{ width: 44, height: 44, borderRadius: 12, background: isFirstTime ? 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)' : isGems ? 'linear-gradient(135deg, #7c5cff 0%, #a855f7 100%)' : 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 20 }}>
-                      {isGems ? '💎' : '💌'}
-                    </div>
-
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                        <p style={{ fontWeight: 700, fontSize: 16, margin: 0 }}>
-                          {amount} {isGems ? (lang === 'es' ? 'Gemas' : 'Gems') : (lang === 'es' ? 'Mensajes' : 'Messages')}
-                        </p>
-                        {isGems && finalGems > amount && (
-                          <span style={{ fontSize: 13, color: '#22c55e', fontWeight: 700 }}>
-                            + {finalGems - amount} {lang === 'es' ? 'bono' : 'bonus'}
-                          </span>
-                        )}
-                        {isFirstTime && (
-                          <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', background: '#22c55e', color: '#fff', padding: '2px 6px', borderRadius: 4 }}>
-                            {t.firstTime}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div style={{ flexShrink: 0, textAlign: 'right' }}>
-                      <p style={{ fontWeight: 700, fontSize: 14, margin: 0 }}>{pkg.stars}</p>
-                      <p style={{ fontSize: 10, color: '#8b8b9e', textTransform: 'uppercase', margin: 0 }}>
-                        Stars
-                      </p>
-                    </div>
-                  </button>
-                )
-              })
-            : visibleCryptoPackages.map((pkg) => {
-                const idx = pkg.originalIndex
-                const isFirstTime = pkg.first_time_only
-                
-                const isGems = shopCategory === 'gems'
-                const amount = isGems ? (pkg as any).gems : (pkg as any).messages
-                const finalGems = isGems ? getFinalCryptoGems(pkg as any) : amount
-
-                return (
-                  <button
-                    key={`crypto_${idx}`}
-                    onClick={() => buyWithCrypto(idx)}
-                    disabled={purchasing !== null || !!pendingReference}
-                    style={{
-                      width: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 12,
-                      padding: 16,
-                      borderRadius: 16,
-                      textAlign: 'left',
-                      cursor: 'pointer',
-                      fontFamily: 'inherit',
-                      color: 'inherit',
-                      background: isFirstTime ? 'linear-gradient(90deg, rgba(34,197,94,0.15), rgba(34,197,94,0.05))' : 'rgba(255,255,255,0.03)',
-                      border: isFirstTime ? '1px solid rgba(34,197,94,0.4)' : '1px solid rgba(255,255,255,0.06)',
-                      opacity: purchasing !== null || pendingReference ? 0.5 : 1,
-                    }}
-                  >
-                    <div style={{ width: 44, height: 44, borderRadius: 12, background: isFirstTime ? 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)' : isGems ? 'linear-gradient(135deg, #7c5cff 0%, #a855f7 100%)' : 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 20 }}>
-                      {isGems ? '💎' : '💌'}
-                    </div>
-
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                        <p style={{ fontWeight: 700, fontSize: 16, margin: 0 }}>
-                          {amount} {isGems ? (lang === 'es' ? 'Gemas' : 'Gems') : (lang === 'es' ? 'Mensajes' : 'Messages')}
-                        </p>
-                        {isGems && finalGems > amount && (
-                          <span style={{ fontSize: 13, color: '#22c55e', fontWeight: 700 }}>
-                            + {finalGems - amount} {lang === 'es' ? 'bono' : 'bonus'}
-                          </span>
-                        )}
-                        {isFirstTime && (
-                          <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', background: '#22c55e', color: '#fff', padding: '2px 6px', borderRadius: 4 }}>
-                            {t.firstTime}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div style={{ flexShrink: 0, textAlign: 'right' }}>
-                      <p style={{ fontWeight: 700, fontSize: 14, margin: 0 }}>{(pkg as any).usdt}</p>
-                      <p style={{ fontSize: 10, color: '#8b8b9e', textTransform: 'uppercase', margin: 0 }}>
-                        USDT
-                      </p>
-                    </div>
-                  </button>
-                )
-              })}
-        </div>
-      </section>
-
-      {/* ✅ NUEVO: MODAL DE INTERCAMBIO */}
+      {/* MODAL DE INTERCAMBIO */}
       {showExchangeModal && (
         <div className="modal-backdrop" onClick={() => !exchanging && setShowExchangeModal(false)}>
           <div className="modal-box" onClick={(e) => e.stopPropagation()}>
@@ -1116,9 +1155,7 @@ export default function ShopPage() {
               {lang === 'es' ? 'Cambia tus gemas' : 'Exchange your gems'}
             </h3>
             <p className="modal-desc" style={{ textAlign: 'center', marginBottom: 16 }}>
-              {lang === 'es' 
-                ? 'Convierte tus Gemas de Pago en Mensajes de Chat.' 
-                : 'Convert your Paid Gems into Chat Messages.'}
+              {lang === 'es' ? 'Convierte tus Gemas de Pago en Mensajes de Chat.' : 'Convert your Paid Gems into Chat Messages.'}
             </p>
 
             <div style={{ background: 'rgba(0,0,0,0.2)', padding: 16, borderRadius: 14, marginBottom: 16 }}>
