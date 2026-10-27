@@ -36,19 +36,26 @@ REFERRAL_TOP_TIER_PCT = 7
 REFERRAL_ELITE_TIER_THRESHOLD = 20
 REFERRAL_ELITE_TIER_PCT = 10
 
-# ✅ NUEVOS PAQUETES (Basados en lib/constants.ts)
+# ✅ PAQUETES SINCRONIZADOS CON lib/constants.ts (Bono Stars: 5%)
 STAR_PACKAGES = [
     {"stars": 100,  "gems": 200,  "bonus": 100, "first_time": True,  "flat_bonus": 0},
-    {"stars": 150,  "gems": 300,  "bonus": 20,  "first_time": False, "flat_bonus": 0},
-    {"stars": 300,  "gems": 600,  "bonus": 25,  "first_time": False, "flat_bonus": 0},
-    {"stars": 500,  "gems": 1000, "bonus": 40,  "first_time": False, "flat_bonus": 0},
-    {"stars": 1000, "gems": 2000, "bonus": 50,  "first_time": False, "flat_bonus": 0},
+    {"stars": 150,  "gems": 300,  "bonus": 5,   "first_time": False, "flat_bonus": 0},
+    {"stars": 300,  "gems": 600,  "bonus": 5,   "first_time": False, "flat_bonus": 0},
+    {"stars": 500,  "gems": 1000, "bonus": 5,   "first_time": False, "flat_bonus": 0},
+    {"stars": 1000, "gems": 2000, "bonus": 5,   "first_time": False, "flat_bonus": 0},
 ]
 
 MESSAGE_PACKAGES = [
     {"stars": 100,  "messages": 300,  "first_time": False},
     {"stars": 250,  "messages": 800,  "first_time": False},
     {"stars": 500,  "messages": 2000, "first_time": False},
+]
+
+# ✅ NUEVOS PAQUETES HÍBRIDOS (Valores finales ya calculados con el 5% de bono en Stars)
+HYBRID_PACKAGES = [
+    {"stars": 200,  "gems": 155,  "messages": 315,  "first_time": False},
+    {"stars": 350,  "gems": 315,  "messages": 630,  "first_time": False},
+    {"stars": 650,  "gems": 630,  "messages": 1260, "first_time": False},
 ]
 
 
@@ -313,14 +320,22 @@ async def pay_referral_commission(
 
 # ==================== PURCHASE HELPERS ====================
 
-async def record_star_purchase(telegram_id: int, stars: int, amount: int, is_first_purchase: bool, charge_id: str, is_messages: bool = False) -> bool:
+async def record_star_purchase(
+    telegram_id: int,
+    stars: int,
+    gems_amount: int,
+    messages_amount: int,
+    is_first_purchase: bool,
+    charge_id: str,
+    purchase_type: str = 'gems'
+) -> bool:
     try:
         turso_execute(
             """INSERT INTO star_purchases
               (telegram_id, stars_amount, gems_amount, is_first_purchase,
                telegram_charge_id, payment_method)
              VALUES (?, ?, ?, ?, ?, ?)""",
-            [str(telegram_id), stars, amount, 1 if is_first_purchase else 0, charge_id, 'messages' if is_messages else 'stars']
+            [str(telegram_id), stars, gems_amount, 1 if is_first_purchase else 0, charge_id, purchase_type]
         )
     except Exception as e:
         err_str = str(e)
@@ -332,17 +347,9 @@ async def record_star_purchase(telegram_id: int, stars: int, amount: int, is_fir
 
     try:
         now_iso = datetime.now(timezone.utc).isoformat()
-        if is_messages:
-            turso_query_one(
-                """UPDATE users
-                 SET bonus_gems = COALESCE(bonus_gems, 0) + ?,
-                     hook_messages_remaining = 0,
-                     updated_at = ?
-                 WHERE telegram_id = ?
-                 RETURNING bonus_gems""",
-                [amount, now_iso, str(telegram_id)]
-            )
-        else:
+        
+        # ✅ Actualizar GEMAS si aplica
+        if gems_amount > 0:
             turso_query_one(
                 """UPDATE users
                  SET gems = COALESCE(gems, 0) + ?,
@@ -351,20 +358,34 @@ async def record_star_purchase(telegram_id: int, stars: int, amount: int, is_fir
                      updated_at = ?
                  WHERE telegram_id = ?
                  RETURNING gems, purchased_gems""",
-                [amount, amount, now_iso, str(telegram_id)]
+                [gems_amount, gems_amount, now_iso, str(telegram_id)]
+            )
+            
+        # ✅ Actualizar MENSAJES si aplica
+        if messages_amount > 0:
+            turso_query_one(
+                """UPDATE users
+                 SET bonus_gems = COALESCE(bonus_gems, 0) + ?,
+                     hook_messages_remaining = 0,
+                     updated_at = ?
+                 WHERE telegram_id = ?
+                 RETURNING bonus_gems""",
+                [messages_amount, now_iso, str(telegram_id)]
             )
     except Exception as e:
         logger.error(f"Error incrementando balance post-compra: {e}")
 
-    turso_execute(
-        """INSERT INTO gem_transactions
-          (telegram_id, amount, transaction_type, description)
-         VALUES (?, ?, ?, ?)""",
-        [str(telegram_id), amount, 'purchase', f'Compra con {stars} stars']
-    )
+    # Registrar transacción principal (usamos gems_amount para el historial de gemas)
+    if gems_amount > 0:
+        turso_execute(
+            """INSERT INTO gem_transactions
+              (telegram_id, amount, transaction_type, description)
+             VALUES (?, ?, ?, ?)""",
+            [str(telegram_id), gems_amount, 'purchase', f'Compra con {stars} stars']
+        )
 
-    # ✅ Si es compra de mensajes, calculamos la comisión basándonos en el valor aproximado en gemas
-    commission_base = amount if not is_messages else int(amount / 2) 
+    # ✅ Calcular comisión base (si es híbrido, sumamos el valor equivalente de los mensajes)
+    commission_base = gems_amount + int(messages_amount / 3) if purchase_type == 'hybrid' else gems_amount
     await pay_referral_commission(telegram_id, commission_base, 'stars', charge_id)
     return True
 
@@ -990,27 +1011,49 @@ async def process_successful_payment(message: Message):
                 await message.answer("⚠️ Pago recibido pero hubo un error activando VIP. Contacta a soporte.")
                 return
 
-    # ✅ NUEVO: Diferenciar entre compra de gemas y compra de mensajes
+    # ✅ NUEVO: Diferenciar entre Híbrido, Mensajes o Gemas
+    is_hybrid = payload.startswith("hybrid_purchase_")
     is_messages = payload.startswith("message_purchase_")
-    prefix = "message_purchase_" if is_messages else "gem_purchase_"
     
+    if is_hybrid:
+        prefix = "hybrid_purchase_"
+        active_packages = HYBRID_PACKAGES
+    elif is_messages:
+        prefix = "message_purchase_"
+        active_packages = MESSAGE_PACKAGES
+    else:
+        prefix = "gem_purchase_"
+        active_packages = STAR_PACKAGES
+
     try:
         pkg_idx = int(payload.replace(prefix, ""))
     except ValueError:
         return await message.answer("⚠️ Error al procesar la compra.")
 
-    active_packages = MESSAGE_PACKAGES if is_messages else STAR_PACKAGES
     if pkg_idx >= len(active_packages):
         return await message.answer("⚠️ Error al procesar la compra.")
 
     pkg = active_packages[pkg_idx]
-    amount = pkg['messages'] if is_messages else calc_final_gems(pkg)
+    
+    # Asignar montos según el tipo
+    gems_amount = 0
+    messages_amount = 0
+    purchase_type = 'gems'
+
+    if is_hybrid:
+        gems_amount = pkg['gems']
+        messages_amount = pkg['messages']
+        purchase_type = 'hybrid'
+    elif is_messages:
+        messages_amount = pkg['messages']
+        purchase_type = 'messages'
+    else:
+        gems_amount = calc_final_gems(pkg)
+        purchase_type = 'gems'
 
     success = await record_star_purchase(
-        telegram_id, pkg['stars'], amount,
-        pkg.get('first_time', False),
-        charge_id,
-        is_messages
+        telegram_id, pkg['stars'], gems_amount, messages_amount,
+        pkg.get('first_time', False), charge_id, purchase_type
     )
 
     if not success:
@@ -1019,16 +1062,21 @@ async def process_successful_payment(message: Message):
     user = await get_user(telegram_id)
     lang = user.get('language', 'es') if user else 'es'
 
-    if is_messages:
+    if is_hybrid:
         if lang == 'es':
-            text = f"✅ ¡Compra exitosa! Recibiste *{amount} mensajes de chat*.\n\n🎉 ¡Ahora puedes seguir hablando con tus personajes!"
+            text = f"✅ ¡Compra exitosa! Recibiste *{gems_amount} gemas* y *{messages_amount} mensajes de chat*."
         else:
-            text = f"✅ Purchase successful! You received *{amount} chat messages*.\n\n🎉 You can now keep talking with your characters!"
+            text = f"✅ Purchase successful! You received *{gems_amount} gems* and *{messages_amount} chat messages*."
+    elif is_messages:
+        if lang == 'es':
+            text = f"✅ ¡Compra exitosa! Recibiste *{messages_amount} mensajes de chat*.\n\n🎉 ¡Ahora puedes seguir hablando con tus personajes!"
+        else:
+            text = f"✅ Purchase successful! You received *{messages_amount} chat messages*.\n\n🎉 You can now keep talking with your characters!"
     else:
         if lang == 'es':
-            text = f"✅ ¡Compra exitosa! Recibiste *{amount} gemas*.\n\n🎉 ¡Ahora tienes acceso a audio e imágenes!"
+            text = f"✅ ¡Compra exitosa! Recibiste *{gems_amount} gemas*.\n\n🎉 ¡Ahora tienes acceso a audio e imágenes!"
         else:
-            text = f"✅ Purchase successful! You received *{amount} gems*.\n\n🎉 You now have access to audio and images!"
+            text = f"✅ Purchase successful! You received *{gems_amount} gems*.\n\n🎉 You now have access to audio and images!"
             
     await message.answer(text, parse_mode="Markdown", reply_markup=get_main_keyboard(lang))
 
