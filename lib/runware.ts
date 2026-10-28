@@ -19,7 +19,6 @@ export async function generateRunwareImage(
   const payload = {
     taskType: "imageInference",
     taskUUID: crypto.randomUUID(),
-    // ✅ CORREGIDO: Formato AIR válido para Runware
     model: "runware:z-image@turbo", 
     positivePrompt: prompt,
     // 🛡️ BLINDAJE ANTI-BAN DE TELEGRAM
@@ -30,12 +29,15 @@ export async function generateRunwareImage(
     // ✅ Formato vertical (Retrato) 832x1216
     width: 832,
     height: 1216,
+    
+    // ✅ LORA ACTIVADO CON EL AIR CORRECTO
     lora: [
       {
-        model: "taboorealm:elusarca@1", // ✅ Tu LoRA blindado
-        weight: 0.80 // ✅ Peso equilibrado para texturas de piel y lencería detallada
+        model: "taboorealm:10011@1", 
+        weight: 0.80 // Mantenemos 0.80 para evitar que la imagen se sature
       }
     ],
+    
     seedImage: seedImageUrl, // ✅ La foto base del personaje (img2img)
     strength: strength
   }
