@@ -23,7 +23,7 @@ import { execute, queryOne, query } from '@/lib/turso'
 export const maxDuration = 60
 
 // ═══════════════════════════════════════════════════════════════
-// CHARACTER DNA (Restaurado completo)
+// CHARACTER DNA (Global para todos)
 // ═══════════════════════════════════════════════════════════════
 const CHARACTER_DNA: Record<string, string> = {
   female_stepmom: "mature woman, long dark hair, green eyes, elegant",
@@ -464,8 +464,10 @@ export async function POST(request: Request) {
     }
 
     // ✅ CAMBIO: Desactivamos las imágenes estáticas de R2 (las 300 del estilo viejo)
+    // para forzar el nuevo estilo ZImage Turbo + LoRA. El sistema generará nuevas
+    // imágenes y las guardará en el pool para reutilizarlas.
     let r2Index: number | null = null
-    const candidateIndices: number[] = [] 
+    const candidateIndices: number[] = [] // Antes: level.level <= 3 ? [1, 2] : [1, 3, 4]
     for (const idx of candidateIndices) {
       if (!seenIndices.has(idx)) {
         r2Index = idx
@@ -476,7 +478,7 @@ export async function POST(request: Request) {
     const genderKey = character.gender === 'male' ? 'male' : 'female'
     const characterKey = `${character.archetype}_${genderKey}`
     const r2Base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL
-    const useR2Static = r2Index !== null && !!r2Base && !isFantasyPass 
+    const useR2Static = r2Index !== null && !!r2Base && !isFantasyPass // ✅ El pase siempre genera imagen nueva
 
     let source: 'r2_static' | 'pool' | 'generated' = 'generated'
     let imageUrl: string = ''
@@ -573,7 +575,7 @@ export async function POST(request: Request) {
       try { await markImageSeen(tid, character_id, r2Index!, false) } catch (markErr) {}
     } else {
       let poolHit = false
-      const usePool = !userHint && !!mood && r2Available && !isFantasyPass && !isGiftPhoto 
+      const usePool = !userHint && !!mood && r2Available && !isFantasyPass && !isGiftPhoto // El pase o regalo no usan el pool
 
       if (usePool) {
         try {
@@ -626,7 +628,7 @@ export async function POST(request: Request) {
         // Eliminamos la inyección de la descripción física del texto y le ordenamos explícitamente que mantenga la cara.
         const IDENTITY_LOCK = `(exact same character as reference image, identical face to the reference photo, consistent facial features, same eye color, same facial structure, recognizable identity:2.0)`
         
-        const QUALITY_CONTROL_PROMPT = `(masterpiece, best quality, highres:1.2), solo, single character, ${genderTag}, only one person in frame, perfect anatomy, perfect hands, five fingers, correct proportions, no mutations, no extra limbs, no missing limbs, no multiple people, no deformed hands, no extra fingers, perfectly sized hands, correct hand size, hand in mid-ground, no giant hands touching the lens, natural pose`
+        const QUALITY_CONTROL_PROMPT = `(masterpiece, best quality, highres:1.2), solo, single character, ${genderTag}, only one person in frame, perfect anatomy, perfect hands, five fingers, perfect legs, perfect feet, smooth detailed skin, correct proportions, no mutations, no extra limbs, no missing limbs, no multiple people, no deformed hands, no extra fingers, perfectly sized hands, correct hand size, hand in mid-ground, no giant hands touching the lens, natural pose`
 
         // ✅ NUEVO: Inyectar Outfit si el personaje tiene uno equipado
         let outfitPrompt = ''
