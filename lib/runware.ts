@@ -10,7 +10,7 @@ export async function generateRunwareImage(
     throw new Error('Falta la API Key de Runware en las variables de entorno')
   }
 
-  // ✅ STRENGTH BAJO: Al usar ControlNet para la cara, bajamos esto para evitar alucinaciones (como el ojo gigante).
+  // ✅ STRENGTH EQUILIBRADO
   const strength = level <= 2 ? 0.45 : level === 3 ? 0.55 : 0.65
 
   const payload = {
@@ -18,14 +18,14 @@ export async function generateRunwareImage(
     taskUUID: crypto.randomUUID(),
     model: "runware:z-image@turbo", 
     positivePrompt: prompt,
-    // 🛡️ BLINDAJE ANTI-BAN + NEGATIVE PROMPT AGRESIVO
+    // 🛡️ BLINDAJE ANTI-BAN + BLOQUEO DE ALUCINACIONES
     negativePrompt: "ugly, deformed, bad anatomy, bad hands, mutated hands, missing fingers, extra digits, text, watermark, low quality, worst quality, jpeg artifacts, explicit, nude, naked, nudity, genitals, penis, vagina, sex, penetration, cum, bodily fluids, pubic hair, areola, nipples, child, minor, underage, cp, gore, blood, extreme violence, (red dress, red robe, wine glass, holding glass, mirror, reflection, second person, male, man, multiple people, giant eye, close up of eye:1.5), (bad legs, mutated legs, bad feet, missing toes, deformed feet:1.4)",
     steps: 10,
     CFGScale: 1.5,
     width: 832,
     height: 1216,
     
-    // ✅ LORA ACTIVADO
+    // ✅ LORA DE ESTILO ANIME
     lora: [
       {
         model: "taboorealm:10011@1", 
@@ -33,12 +33,12 @@ export async function generateRunwareImage(
       }
     ],
 
-    // ✅ LA MAGIA: CONTROLNET PARA MANTENER LA CARA EXACTA
-    // Esto le dice a la IA "usa esta foto para la cara, pero ignora la ropa".
-    controlNet: [
+    // ✅ LA MAGIA: IP-ADAPTER PARA MANTENER LA CARA EXACTA
+    // Usamos el AIR "runware:55@3" (IP Adapter SDXL Plus Face) que es el experto en rostros.
+    ipAdapters: [
       {
-        model: "runware:faceid@1", // Modelo de Runware para identificar rostros
-        guideImage: seedImageUrl,
+        model: "runware:55@3", 
+        guideImages: [seedImageUrl],
         weight: 0.85 // Alta fidelidad facial
       }
     ],
