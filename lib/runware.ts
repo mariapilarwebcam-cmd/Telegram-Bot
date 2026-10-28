@@ -10,14 +10,14 @@ export async function generateRunwareImage(
     throw new Error('Falta la API Key de Runware en las variables de entorno')
   }
 
-  // ✅ STRENGTH EQUILIBRADO
+  // ✅ STRENGTH EQUILIBRADO (0.45 - 0.65)
   const strength = level <= 2 ? 0.45 : level === 3 ? 0.55 : 0.65
 
   const payload = {
     taskType: "imageInference",
     taskUUID: crypto.randomUUID(),
-    // ✅ CAMBIO A SDXL (soporta IP-Adapter)
-    model: "runware:sdxl@turbo", 
+    // ✅ AIR CORRECTO PARA SDXL
+    model: "stability:sdxl@1", 
     positivePrompt: prompt,
     negativePrompt: "ugly, deformed, bad anatomy, bad hands, mutated hands, missing fingers, extra digits, text, watermark, low quality, worst quality, jpeg artifacts, explicit, nude, naked, nudity, genitals, penis, vagina, sex, penetration, cum, bodily fluids, pubic hair, areola, nipples, child, minor, underage, cp, gore, blood, extreme violence, (red dress, red robe, wine glass, holding glass, mirror, reflection, second person, male, man, multiple people, giant eye, close up of eye:1.5), (bad legs, mutated legs, bad feet, missing toes, deformed feet:1.4)",
     steps: 10,
@@ -25,6 +25,7 @@ export async function generateRunwareImage(
     width: 832,
     height: 1216,
     
+    // ✅ LORA DE ESTILO ANIME
     lora: [
       {
         model: "taboorealm:10011@1", 
@@ -32,7 +33,7 @@ export async function generateRunwareImage(
       }
     ],
 
-    // ✅ IP-ADAPTER PARA SDXL (funciona con runware:55@3)
+    // ✅ IP-ADAPTER PARA MANTENER LA CARA
     ipAdapters: [
       {
         model: "runware:55@3", 
