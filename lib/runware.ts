@@ -10,19 +10,16 @@ export async function generateRunwareImage(
     throw new Error('Falta la API Key de Runware en las variables de entorno')
   }
 
-  // ✅ EL PUNTO EXACTO: 0.55 mantiene la cara y los ojos, pero permite cambiar la ropa y el fondo.
-  const strength = level <= 2 ? 0.55 : level === 3 ? 0.60 : 0.70
-
-  // Bloqueamos cualquier prenda roja en niveles bajos para evitar que la IA recuerde el vestido original
-  const redClothesBan = level <= 3 ? ", red clothes, red hoodie, red jacket, red dress, red robe" : ""
+  // ✅ STRENGTH BAJO: Al usar ControlNet para la cara, bajamos esto para evitar alucinaciones (como el ojo gigante).
+  const strength = level <= 2 ? 0.45 : level === 3 ? 0.55 : 0.65
 
   const payload = {
     taskType: "imageInference",
     taskUUID: crypto.randomUUID(),
     model: "runware:z-image@turbo", 
     positivePrompt: prompt,
-    // 🛡️ BLINDAJE ANTI-BAN + BLOQUEO DE ROPA ROJA
-    negativePrompt: `ugly, deformed, bad anatomy, bad hands, mutated hands, missing fingers, extra digits, text, watermark, low quality, worst quality, jpeg artifacts, explicit, nude, naked, nudity, genitals, penis, vagina, sex, penetration, cum, bodily fluids, pubic hair, areola, nipples, child, minor, underage, cp, gore, blood, extreme violence, (mirror, reflection, second person, male, man, multiple people:1.5), (bad legs, mutated legs, bad feet, missing toes, deformed feet:1.4)${redClothesBan}`,
+    // 🛡️ BLINDAJE ANTI-BAN + NEGATIVE PROMPT AGRESIVO
+    negativePrompt: "ugly, deformed, bad anatomy, bad hands, mutated hands, missing fingers, extra digits, text, watermark, low quality, worst quality, jpeg artifacts, explicit, nude, naked, nudity, genitals, penis, vagina, sex, penetration, cum, bodily fluids, pubic hair, areola, nipples, child, minor, underage, cp, gore, blood, extreme violence, (red dress, red robe, wine glass, holding glass, mirror, reflection, second person, male, man, multiple people, giant eye, close up of eye:1.5), (bad legs, mutated legs, bad feet, missing toes, deformed feet:1.4)",
     steps: 10,
     CFGScale: 1.5,
     width: 832,
@@ -33,6 +30,16 @@ export async function generateRunwareImage(
       {
         model: "taboorealm:10011@1", 
         weight: 0.80 
+      }
+    ],
+
+    // ✅ LA MAGIA: CONTROLNET PARA MANTENER LA CARA EXACTA
+    // Esto le dice a la IA "usa esta foto para la cara, pero ignora la ropa".
+    controlNet: [
+      {
+        model: "runware:faceid@1", // Modelo de Runware para identificar rostros
+        guideImage: seedImageUrl,
+        weight: 0.85 // Alta fidelidad facial
       }
     ],
     
