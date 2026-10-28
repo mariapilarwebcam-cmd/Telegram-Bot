@@ -10,17 +10,18 @@ export async function generateRunwareImage(
     throw new Error('Falta la API Key de Runware en las variables de entorno')
   }
 
-  // ✅ EL PUNTO MEDIO EXACTO: 
-  // 0.55 permite cambiar la ropa, pero obliga a mantener la estructura facial.
-  const strength = level <= 2 ? 0.55 : level === 3 ? 0.60 : 0.70
+  // ✅ SUBIMOS LA FUERZA A 0.75
+  // Esto obliga a la IA a ignorar el vestido rojo y el fondo de la foto original,
+  // y le da libertad para crear la escena que pide el prompt.
+  const strength = level <= 2 ? 0.75 : level === 3 ? 0.80 : 0.85
 
   const payload = {
     taskType: "imageInference",
     taskUUID: crypto.randomUUID(),
     model: "runware:z-image@turbo", 
     positivePrompt: prompt,
-    // 🛡️ BLINDAJE ANTI-BAN + FIX ROPA
-    negativePrompt: "ugly, deformed, bad anatomy, bad hands, mutated hands, missing fingers, extra digits, text, watermark, low quality, multiple people, worst quality, jpeg artifacts, explicit, nude, naked, nudity, genitals, penis, vagina, sex, penetration, cum, bodily fluids, pubic hair, areola, nipples, child, minor, underage, cp, gore, blood, extreme violence, red dress, wine glass",
+    // 🛡️ BLINDAJE ANTI-BAN (Quitamos red dress del negativo, confiamos en el prompt positivo)
+    negativePrompt: "ugly, deformed, bad anatomy, bad hands, mutated hands, missing fingers, extra digits, text, watermark, low quality, multiple people, worst quality, jpeg artifacts, explicit, nude, naked, nudity, genitals, penis, vagina, sex, penetration, cum, bodily fluids, pubic hair, areola, nipples, child, minor, underage, cp, gore, blood, extreme violence",
     steps: 10,
     CFGScale: 1.5,
     width: 832,
