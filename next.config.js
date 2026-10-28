@@ -6,36 +6,32 @@ const { withSentryConfig } = require('@sentry/nextjs')
 const nextConfig = {
   images: {
     remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: 'images.goddessgridhq.com',
-      },
-      {
-        protocol: 'https',
-        hostname: '**.r2.dev',
-      },
-      {
-        protocol: 'https',
-        hostname: '**.cloudflarestorage.com',
-      },
-      {
-        protocol: 'https',
-        hostname: '**.wiro.ai',
-      },
-      {
-        protocol: 'https',
-        hostname: '**.deepinfra.com',
-      },
+      { protocol: 'https', hostname: 'images.goddessgridhq.com' },
+      { protocol: 'https', hostname: '**.r2.dev' },
+      { protocol: 'https', hostname: '**.cloudflarestorage.com' },
+      { protocol: 'https', hostname: '**.wiro.ai' },
+      { protocol: 'https', hostname: '**.deepinfra.com' },
     ],
   },
   
-  // ✅ NUEVO: Le dice a Next.js que no empaquete "sharp" en el servidor, 
-  // para que use el binario de Linux que instalamos con el postinstall.
+  // ✅ Mantiene 'sharp' fuera del empaquetado de Webpack (Next 14)
   experimental: {
     serverComponentsExternalPackages: ['sharp'],
   },
 
-  // ✅ Cabeceras CORS para que las wallets puedan leer el manifest
+  // ✅ Ayuda a Vercel a manejar los binarios nativos en las funciones Serverless
+  outputFileTracingExcludes: {
+    '*': [
+      'node_modules/@swc/core-linux-x64-gnu',
+      'node_modules/@swc/core-linux-x64-musl',
+      'node_modules/esbuild/linux',
+      'node_modules/webpack',
+      'node_modules/rollup',
+      'node_modules/terser',
+      'node_modules/sharp/**/*',
+    ],
+  },
+
   async headers() {
     return [
       {
