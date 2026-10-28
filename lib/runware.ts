@@ -10,19 +10,20 @@ export async function generateRunwareImage(
     throw new Error('Falta la API Key de Runware en las variables de entorno')
   }
 
-  // Ajustamos la fuerza (strength) de img2img según el nivel.
-  // Nivel 1-2: 0.45 (mantiene el rostro y la ropa base casi intactos)
-  // Nivel 3: 0.55 (mantiene el rostro, pero permite cambiar la ropa)
-  // Nivel 4-5: 0.75 (permite cambios de pose y lencería, manteniendo los rasgos faciales)
-  const strength = level <= 2 ? 0.45 : level === 3 ? 0.55 : 0.75
+  // ✅ CAMBIO CLAVE: Aumentamos el strength para darle más libertad a la IA
+  // Nivel 1-2: 0.65 -> Permite cambiar ropa y fondo.
+  // Nivel 3: 0.70 -> Permite cambios más bruscos.
+  // Nivel 4-5: 0.80 -> Máxima libertad para poses y lencería.
+  const strength = level <= 2 ? 0.65 : level === 3 ? 0.70 : 0.80
 
   const payload = {
     taskType: "imageInference",
     taskUUID: crypto.randomUUID(),
     model: "runware:z-image@turbo", 
     positivePrompt: prompt,
-    // 🛡️ BLINDAJE ANTI-BAN DE TELEGRAM
-    negativePrompt: "ugly, deformed, bad anatomy, bad hands, mutated hands, missing fingers, extra digits, text, watermark, low quality, multiple people, worst quality, jpeg artifacts, explicit, nude, naked, nudity, genitals, penis, vagina, sex, penetration, cum, bodily fluids, pubic hair, areola, nipples, child, minor, underage, cp, gore, blood, extreme violence",
+    // 🛡️ BLINDAJE ANTI-BAN DE TELEGRAM + FIX ROPA
+    // Añadimos "red dress, wine glass" al final para forzar a la IA a quitarlos en niveles bajos
+    negativePrompt: "ugly, deformed, bad anatomy, bad hands, mutated hands, missing fingers, extra digits, text, watermark, low quality, multiple people, worst quality, jpeg artifacts, explicit, nude, naked, nudity, genitals, penis, vagina, sex, penetration, cum, bodily fluids, pubic hair, areola, nipples, child, minor, underage, cp, gore, blood, extreme violence, red dress, wine glass",
     // ✅ Parámetros de inferencia para ZImage Turbo
     steps: 10,
     CFGScale: 1.5,
