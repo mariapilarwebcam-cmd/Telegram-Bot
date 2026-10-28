@@ -1,7 +1,6 @@
 // lib/levels.ts
 
 export type Intensity = 'NORMAL' | 'HIGH' | 'VERY_HIGH' | 'MAXIMUM' | 'ULTRA'
-
 export type FaceVisibility = 'hidden' | 'partial' | 'full'
 
 export interface LevelConfig {
@@ -22,9 +21,9 @@ export const LEVELS: LevelConfig[] = [
   {
     level: 1,
     minMessages: 0,
-    maxMessages: 13,
-    imageCost: 15,         // $0.12 USD
-    audioCost: 10,         // $0.08 USD
+    maxMessages: 4,         // ✅ Súper rápido
+    imageCost: 15,         
+    audioCost: 10,         
     intensity: 'NORMAL',
     badgeKey: 'levelStranger',
     color: '#8b8b9e',
@@ -34,9 +33,9 @@ export const LEVELS: LevelConfig[] = [
   },
   {
     level: 2,
-    minMessages: 14,
-    maxMessages: 39,
-    imageCost: 20,         // $0.16 USD
+    minMessages: 5,
+    maxMessages: 14,        // ✅ En 15 mensajes ya sube al 3
+    imageCost: 20,         
     audioCost: 10,         
     intensity: 'HIGH',
     badgeKey: 'levelFriend',
@@ -47,57 +46,53 @@ export const LEVELS: LevelConfig[] = [
   },
   {
     level: 3,
-    minMessages: 40,
-    maxMessages: 89,
-    imageCost: 30,         // $0.25 USD
-    audioCost: 15,         // $0.12 USD
+    minMessages: 15,        // ✅ El usuario llega aquí rapidísimo
+    maxMessages: 39,
+    imageCost: 30,         
+    audioCost: 15,         
     intensity: 'VERY_HIGH',
     badgeKey: 'levelClose',
     color: '#7c5cff',
-    // ✅ Actualizado: Primer toque de lencería suave, dejando ver más
     clothingLevel: 'provocative outfit, delicate lace lingerie, silk robe slipping off shoulder, minimal but covered, alluring, anime aesthetic',
     sceneStyle: 'seductive pose, dim moody lighting, bedroom or bathroom setting, hint of intimacy, soft shadows on skin, anime aesthetic',
     faceVisibility: 'partial',
   },
   {
     level: 4,
-    minMessages: 90,
-    maxMessages: 179,
-    imageCost: 40,         // $0.33 USD
-    audioCost: 20,         // $0.16 USD
+    minMessages: 40,
+    maxMessages: 89,
+    imageCost: 40,         
+    audioCost: 20,         
     intensity: 'MAXIMUM',
     badgeKey: 'levelIntimate',
     color: '#a855f7',
-    // ✅ Actualizado: Lencería explícita, texturas mojadas y brillantes (Semi-NSFW)
     clothingLevel: 'delicate lace lingerie set, sheer fabric, garter belt, thigh-high stockings, micro bikini, thin straps, highly detailed intimate apparel, glossy skin, shiny thighs, barely covered but strategically covered, anime aesthetic',
     sceneStyle: 'from behind looking back over shoulder, arched back, kneeling on bed, hands on hips, mirror selfie, low angle shot, chiaroscuro lighting, rim lighting, dramatic cinematic lighting, highly detailed skin texture, soft shadows, seductive invitation, anime aesthetic',
     faceVisibility: 'full',
   },
   {
     level: 5,
-    minMessages: 180,
+    minMessages: 90,        // ✅ A los 90 mensajes llega al clímax
     maxMessages: null,
-    imageCost: 50,         // ✅ $0.41 USD
-    audioCost: 25,         // ✅ $0.20 USD
+    imageCost: 50,         
+    audioCost: 25,         
     intensity: 'ULTRA',
     badgeKey: 'levelSpecial',
     color: '#ec4899',
-    // ✅ Actualizado: Desnudez implícita, uso estratégico de sábanas, piel aceitada/brillante
-    clothingLevel: 'strategic placement of silk sheets, micro lingerie, sheer lace bodysuit, wet look, oiled glossy skin, tasteful implied nudity, no exposed genitalia, no nipples visible, extreme teasing, anime aesthetic',
+    clothingLevel: 'strategic placement of silk sheets, micro lingerie, sheer lace bodysuit, wet look, oiled glossy skin, tasteful implied nudity, no exposed genitalia, no visible nipples, extreme teasing, anime aesthetic',
     sceneStyle: 'artistic boudoir composition, tangled sheets, dramatic low-key lighting, neon glow accents, extreme close-up on curves, highly detailed skin, sweat drops, maximum tension, post-intimacy atmosphere, everything suggested nothing shown, anime aesthetic',
     faceVisibility: 'full',
   },
 ]
 
-// ✅ Primer hito en 14 (coincide con level up + fin de hook mode)
-export const PHOTO_MILESTONES_EARLY: number[] = [14, 30, 50, 80, 120, 180, 250]
-
-export const PHOTO_MILESTONE_LATE_START = 250
+// ✅ Hitos de fotos actualizados para que coincidan con la nueva velocidad
+export const PHOTO_MILESTONES_EARLY: number[] = [5, 15, 30, 50, 90, 150]
+export const PHOTO_MILESTONE_LATE_START = 150
 
 export const PHOTO_MILESTONE_LATE_INTERVAL_TIERS = [
-  { fromMessage: 250, toMessage: 400, interval: 50 },
-  { fromMessage: 400, toMessage: 700, interval: 60 },
-  { fromMessage: 700, toMessage: Infinity, interval: 70 },
+  { fromMessage: 150, toMessage: 300, interval: 30 },
+  { fromMessage: 300, toMessage: 600, interval: 40 },
+  { fromMessage: 600, toMessage: Infinity, interval: 50 },
 ]
 
 function getLateInterval(userMsgCount: number): number {
@@ -106,7 +101,7 @@ function getLateInterval(userMsgCount: number): number {
       return tier.interval
     }
   }
-  return 70
+  return 50
 }
 
 export function isPhotoMilestoneBase(userMsgCount: number): boolean {
@@ -177,13 +172,13 @@ export function getFaceVisibility(level: number): FaceVisibility {
   return LEVELS.find((l) => l.level === level)?.faceVisibility ?? 'hidden'
 }
 
-// ✅ Helper: siguiente nivel
+// ✅ Helper: siguiente nivel con los nuevos límites
 export function getNextLevelThreshold(currentLevel: number): number | null {
   switch (currentLevel) {
-    case 1: return 14
-    case 2: return 40
-    case 3: return 90
-    case 4: return 180
+    case 1: return 5
+    case 2: return 15
+    case 3: return 40
+    case 4: return 90
     default: return null
   }
 }
