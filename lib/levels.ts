@@ -54,8 +54,9 @@ export const LEVELS: LevelConfig[] = [
     intensity: 'VERY_HIGH',
     badgeKey: 'levelClose',
     color: '#7c5cff',
-    clothingLevel: 'provocative outfit, lingerie, minimal coverage, anime aesthetic',
-    sceneStyle: 'seductive pose, dim moody lighting, bedroom or bathroom, anime aesthetic',
+    // ✅ Actualizado: Primer toque de lencería suave, dejando ver más
+    clothingLevel: 'provocative outfit, delicate lace lingerie, silk robe slipping off shoulder, minimal but covered, alluring, anime aesthetic',
+    sceneStyle: 'seductive pose, dim moody lighting, bedroom or bathroom setting, hint of intimacy, soft shadows on skin, anime aesthetic',
     faceVisibility: 'partial',
   },
   {
@@ -67,21 +68,23 @@ export const LEVELS: LevelConfig[] = [
     intensity: 'MAXIMUM',
     badgeKey: 'levelIntimate',
     color: '#a855f7',
-    clothingLevel: 'minimal clothing, lingerie or swimwear, very revealing, anime aesthetic',
-    sceneStyle: 'explicit suggestive pose, low intimate lighting, bedroom setting, anime aesthetic',
+    // ✅ Actualizado: Lencería explícita, texturas mojadas y brillantes (Semi-NSFW)
+    clothingLevel: 'delicate lace lingerie set, sheer fabric, garter belt, thigh-high stockings, micro bikini, thin straps, highly detailed intimate apparel, glossy skin, shiny thighs, barely covered but strategically covered, anime aesthetic',
+    sceneStyle: 'from behind looking back over shoulder, arched back, kneeling on bed, hands on hips, mirror selfie, low angle shot, chiaroscuro lighting, rim lighting, dramatic cinematic lighting, highly detailed skin texture, soft shadows, seductive invitation, anime aesthetic',
     faceVisibility: 'full',
   },
   {
     level: 5,
     minMessages: 180,
     maxMessages: null,
-    imageCost: 50,         // ✅ $0.41 USD (Precio ajustado a tu idea)
+    imageCost: 50,         // ✅ $0.41 USD
     audioCost: 25,         // ✅ $0.20 USD
     intensity: 'ULTRA',
     badgeKey: 'levelSpecial',
     color: '#ec4899',
-    clothingLevel: 'extremely revealing or tasteful implied nudity, artistic, anime aesthetic',
-    sceneStyle: 'highly explicit artistic composition, dramatic cinematic lighting, intimate, anime aesthetic',
+    // ✅ Actualizado: Desnudez implícita, uso estratégico de sábanas, piel aceitada/brillante
+    clothingLevel: 'strategic placement of silk sheets, micro lingerie, sheer lace bodysuit, wet look, oiled glossy skin, tasteful implied nudity, no exposed genitalia, no nipples visible, extreme teasing, anime aesthetic',
+    sceneStyle: 'artistic boudoir composition, tangled sheets, dramatic low-key lighting, neon glow accents, extreme close-up on curves, highly detailed skin, sweat drops, maximum tension, post-intimacy atmosphere, everything suggested nothing shown, anime aesthetic',
     faceVisibility: 'full',
   },
 ]
