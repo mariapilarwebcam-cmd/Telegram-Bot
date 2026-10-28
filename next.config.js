@@ -28,7 +28,14 @@ const nextConfig = {
       },
     ],
   },
-  // ✅ NUEVO: Cabeceras CORS para que las wallets puedan leer el manifest
+  
+  // ✅ NUEVO: Le dice a Next.js que no empaquete "sharp" en el servidor, 
+  // para que use el binario de Linux que instalamos con el postinstall.
+  experimental: {
+    serverComponentsExternalPackages: ['sharp'],
+  },
+
+  // ✅ Cabeceras CORS para que las wallets puedan leer el manifest
   async headers() {
     return [
       {
