@@ -712,10 +712,28 @@ export async function POST(request: Request) {
         imageUrl = origKey
         blurUrl = blurKey
 
-        // Guardar en generated_images
+        // ✅ CORRECCIÓN CRÍTICA: Guardar todos los datos para que el Pool funcione
+        const r2BaseUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL?.replace(/\/$/, '') || ''
+        const fullOrigUrl = `${r2BaseUrl}/${origKey}`
+
         const ins = await execute(
-          `INSERT INTO generated_images (r2_key, blur_r2_key, character_key, max_level, status) VALUES (?, ?, ?, ?, 'candidate')`,
-          [origKey, blurKey, characterKey, level.level]
+          `INSERT INTO generated_images 
+           (tag_key, archetype, gender, mood, level_bucket, r2_key, blur_r2_key, character_key, max_level, status, r2_url, prompt_used, first_user_id) 
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'candidate', ?, ?, ?)`,
+          [
+            normalizedTagKey, 
+            character.archetype, 
+            genderKey, 
+            mood || 'default', 
+            levelBucket, 
+            origKey, 
+            blurKey, 
+            characterKey, 
+            level.level, 
+            fullOrigUrl, 
+            imagePrompt, 
+            tid
+          ]
         )
         imageId = Number(ins.lastInsertRowid)
       }
