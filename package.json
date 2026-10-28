@@ -22,6 +22,7 @@
     "@twa-dev/sdk": "^7.0.0",
     "@upstash/ratelimit": "^2.0.5",
     "@upstash/redis": "^1.34.3",
+    "@wiro-ai/wiro-mcp": "^1.0.0", 
     "next": "14.0.4",
     "posthog-js": "^1.438.7",
     "react": "^18.2.0",
