@@ -13,30 +13,30 @@ export async function generateWiroImage(
   }
 
   const client = new WiroClient(WIRO_API_KEY)
-
-  // Ajustamos la fuerza de la imagen de referencia según el nivel.
-  // Para niveles bajos, mantenemos más la foto original; para altos, damos más libertad.
-  // Seedream no tiene un parámetro "strength" directo, pero podemos usar "imageWeight" si está disponible.
-  // Por ahora, confiamos en el prompt para guiar el cambio.
-
   const modelId = 'bytedance/seedream-v4-5-uncensored'
 
   const run = await client.runModel(modelId, {
     prompt: prompt,
-    inputImage: seedImageUrl, // La foto base del personaje
-    aspectRatio: '3:4',       // Formato vertical para la Mini App
-    resolution: '2k',         // 2K es suficiente y más económico
-    maxImages: 1,             // Solo una imagen por generación
+    inputImage: seedImageUrl,
+    aspectRatio: '3:4',
+    resolution: '2k',
+    maxImages: 1,
     watermark: 'false',
   })
 
   if (!run.result) {
+    // ✅ FIX TYPESCRIPT: Extraemos el mensaje de error correctamente
+    const errorObj = run.errors?.[0]
+    const errorMessage = typeof errorObj === 'string' 
+      ? errorObj 
+      : (errorObj as any)?.message || 'Error desconocido en Wiro'
+      
     console.error('[Wiro] Error al iniciar tarea:', run.errors)
-    throw new Error(run.errors?.[0] || 'Error al iniciar la generación en Wiro')
+    throw new Error(errorMessage)
   }
 
-  // Esperar a que la tarea termine
-  const result = await client.waitForTask(run.socketaccesstoken, 120000) // 2 minutos de timeout
+  // Esperar a que la tarea termine (Timeout de 2 minutos)
+  const result = await client.waitForTask(run.socketaccesstoken, 120000)
   const task = result.tasklist[0]
 
   if (!task || task.pexit !== '0') {
@@ -44,7 +44,6 @@ export async function generateWiroImage(
     throw new Error('La generación en Wiro falló o expiró')
   }
 
-  // La URL de la imagen generada está en task.outputs[0].url
   const imageUrl = task.outputs?.[0]?.url
   if (!imageUrl) {
     console.error('[Wiro] Respuesta sin URL de imagen:', task)
