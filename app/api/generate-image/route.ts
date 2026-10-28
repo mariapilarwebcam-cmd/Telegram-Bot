@@ -23,7 +23,7 @@ import { execute, queryOne, query } from '@/lib/turso'
 export const maxDuration = 60
 
 // ═══════════════════════════════════════════════════════════════
-// CHARACTER DNA
+// CHARACTER DNA (Restaurado completo)
 // ═══════════════════════════════════════════════════════════════
 const CHARACTER_DNA: Record<string, string> = {
   female_stepmom: "mature woman, long dark hair, green eyes, elegant",
@@ -62,7 +62,6 @@ const CHARACTER_DNA: Record<string, string> = {
   female_best_friends_sister: "adult young woman, long straight black hair, expressive brown eyes, fitted sweater",
   female_foot_fetish_girl: "beautiful woman, long elegant hair, stunning bare feet, red toenails, elegant legs",
   female_psycho: "unsettling beautiful woman, long straight black hair, wide empty dead eyes, innocent creepy smile, elegant white dress",
-
   male_stepdad: "mature man, salt and pepper hair, broad shoulders, dress shirt",
   male_ceo: "man, sharp haircut, steel-blue eyes, tailored suit, expensive watch",
   male_stepbrother: "young man, buzz cut, strong jawline, muscular",
@@ -138,7 +137,6 @@ const ARCHETYPE_IMAGE_HINTS: Record<string, string> = {
   female_best_friends_sister: 'confident and slightly playful smile, adult elegant look, sitting gracefully on a couch',
   female_foot_fetish_girl: 'focus on foreground bare feet, perfect foot anatomy, five distinct toes, clean smooth soles, high arches, perfectly placed painted toenails on toes, delicate gold anklets, dangling heels, elegant legs crossed, foot fetish aesthetic',
   female_psycho: 'obsessive empty stare, innocent creepy smile, holding a smartphone, dimly lit bedroom, eerie tension, dark psychological atmosphere',
-
   male_stepdad: 'mature authority, whiskey glass, dark study, dominant presence',
   male_stepbrother: 'athletic casual, home setting, playful dominance',
   male_boss: 'executive power, dark office after hours, commanding presence',
@@ -466,10 +464,8 @@ export async function POST(request: Request) {
     }
 
     // ✅ CAMBIO: Desactivamos las imágenes estáticas de R2 (las 300 del estilo viejo)
-    // para forzar el nuevo estilo ZImage Turbo + LoRA. El sistema generará nuevas
-    // imágenes y las guardará en el pool para reutilizarlas.
     let r2Index: number | null = null
-    const candidateIndices: number[] = [] // Antes: level.level <= 3 ? [1, 2] : [1, 3, 4]
+    const candidateIndices: number[] = [] 
     for (const idx of candidateIndices) {
       if (!seenIndices.has(idx)) {
         r2Index = idx
@@ -480,7 +476,7 @@ export async function POST(request: Request) {
     const genderKey = character.gender === 'male' ? 'male' : 'female'
     const characterKey = `${character.archetype}_${genderKey}`
     const r2Base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL
-    const useR2Static = r2Index !== null && !!r2Base && !isFantasyPass // ✅ El pase siempre genera imagen nueva
+    const useR2Static = r2Index !== null && !!r2Base && !isFantasyPass 
 
     let source: 'r2_static' | 'pool' | 'generated' = 'generated'
     let imageUrl: string = ''
@@ -577,7 +573,7 @@ export async function POST(request: Request) {
       try { await markImageSeen(tid, character_id, r2Index!, false) } catch (markErr) {}
     } else {
       let poolHit = false
-      const usePool = !userHint && !!mood && r2Available && !isFantasyPass && !isGiftPhoto // El pase o regalo no usan el pool
+      const usePool = !userHint && !!mood && r2Available && !isFantasyPass && !isGiftPhoto 
 
       if (usePool) {
         try {
@@ -625,10 +621,11 @@ export async function POST(request: Request) {
 
         let imagePrompt: string
         const genderTag = character.gender === 'male' ? '1boy, male' : '1girl, female'
-        const dna = CHARACTER_DNA[`${character.gender}_${character.archetype}`] || 'anime character'
         
-        // ✅ NUEVO: Refuerzo de identidad facial para TODOS los niveles
-        const FACE_CONSISTENCY = `(consistent facial features, identical face to the reference image, same eye color, same facial structure, recognizable character identity:1.8)`
+        // ✅ AQUÍ ESTÁ TU IDEA APLICADA: 
+        // Eliminamos la inyección de la descripción física del texto y le ordenamos explícitamente que mantenga la cara.
+        const IDENTITY_LOCK = `(exact same character as reference image, identical face to the reference photo, consistent facial features, same eye color, same facial structure, recognizable identity:2.0)`
+        
         const QUALITY_CONTROL_PROMPT = `(masterpiece, best quality, highres:1.2), solo, single character, ${genderTag}, only one person in frame, perfect anatomy, perfect hands, five fingers, correct proportions, no mutations, no extra limbs, no missing limbs, no multiple people, no deformed hands, no extra fingers, perfectly sized hands, correct hand size, hand in mid-ground, no giant hands touching the lens, natural pose`
 
         // ✅ NUEVO: Inyectar Outfit si el personaje tiene uno equipado
@@ -639,7 +636,6 @@ export async function POST(request: Request) {
             [character.equipped_outfit]
           )
           if (outfitData) {
-            // ✅ FIX: Evitamos duplicar la palabra "wearing"
             outfitPrompt = `${outfitData.prompt_tag}, `
           }
         }
@@ -649,7 +645,9 @@ export async function POST(request: Request) {
           let faceRule = ''
           if (faceVisibility === 'hidden') faceRule = FACE_HIDDEN_FRAGMENT
           else if (faceVisibility === 'partial') faceRule = FACE_PARTIAL_FRAGMENT
-          imagePrompt = [QUALITY_CONTROL_PROMPT, FACE_CONSISTENCY, outfitPrompt, `[CHARACTER: ${dna}]`, 'highly detailed anime illustration, cel shading, soft cinematic lighting', scene, sceneHint, faceRule, userTopTagsPrompt, 'muted color palette, elegant composition, best quality, masterpiece', 'safe for work, no nudity, no explicit content'].filter((s) => s && s.length > 0).join(', ')
+          
+          // ✅ Prompt final para SFW: Usa IDENTITY_LOCK en vez del DNA
+          imagePrompt = [QUALITY_CONTROL_PROMPT, IDENTITY_LOCK, outfitPrompt, 'highly detailed anime illustration, cel shading, soft cinematic lighting', scene, sceneHint, faceRule, userTopTagsPrompt, 'muted color palette, elegant composition, best quality, masterpiece', 'safe for work, no nudity, no explicit content'].filter((s) => s && s.length > 0).join(', ')
         } else {
           const facePrompt = getCharacterFace(character.archetype, character.gender)
           const clothing = getClothingLevel(level.level)
@@ -664,8 +662,8 @@ export async function POST(request: Request) {
               ? 'thankful expression, showing off new clothes, exclusive gift, ' 
               : ''
 
-          // ✅ FIX: Añadimos el DNA del personaje también a los niveles NSFW
-          imagePrompt = [QUALITY_CONTROL_PROMPT, FACE_CONSISTENCY, fantasyPrefix, outfitPrompt, facePrompt, `[CHARACTER: ${dna}]`, 'anime style, cel shading, moody atmospheric lighting, deep shadows, muted color palette, cinematic dark tones, detailed anime eyes', clothing, scene, archetypeHint, moodFragment, sceneHint, userTopTagsPrompt, NO_GENITALIA, 'beautiful cinematic lighting, 2D illustration, best quality, dynamic camera angle, shallow depth of field, cinematic composition'].filter((s) => s && s.length > 0).join(', ')
+          // ✅ Prompt final para NSFW: Usa IDENTITY_LOCK en vez del DNA
+          imagePrompt = [QUALITY_CONTROL_PROMPT, IDENTITY_LOCK, fantasyPrefix, outfitPrompt, facePrompt, 'anime style, cel shading, moody atmospheric lighting, deep shadows, muted color palette, cinematic dark tones, detailed anime eyes', clothing, scene, archetypeHint, moodFragment, sceneHint, userTopTagsPrompt, NO_GENITALIA, 'beautiful cinematic lighting, 2D illustration, best quality, dynamic camera angle, shallow depth of field, cinematic composition'].filter((s) => s && s.length > 0).join(', ')
         }
 
         promptUsed = imagePrompt
@@ -817,8 +815,8 @@ export async function POST(request: Request) {
       cost: gemsCharged ? imageCost : 0, 
       free: isFree,
       vip_quota: useVipQuota,
-      fantasy_pass_used: isFantasyPass, // ✅ Indicamos que se usó
-      gift_photo_used: isGiftPhoto, // ✅ Indicamos que fue regalo
+      fantasy_pass_used: isFantasyPass, 
+      gift_photo_used: isGiftPhoto, 
       source,
       image_index: r2Index,
       face_visibility: faceVisibility,
