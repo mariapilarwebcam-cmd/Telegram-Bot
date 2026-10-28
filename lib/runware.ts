@@ -10,9 +10,9 @@ export async function generateRunwareImage(
     throw new Error('Falta la API Key de Runware en las variables de entorno')
   }
 
-  // ✅ STRENGTH BAJADO A 0.50
-  // Esto obliga a la IA a copiar los rasgos faciales de la imagen semilla.
-  const strength = level <= 2 ? 0.50 : level === 3 ? 0.55 : 0.65
+  // ✅ STRENGTH A 0.65: El punto de equilibrio. 
+  // Permite redibujar las piernas y la ropa, pero mantiene la identidad.
+  const strength = level <= 2 ? 0.65 : level === 3 ? 0.70 : 0.75
 
   const payload = {
     taskType: "imageInference",
@@ -20,7 +20,7 @@ export async function generateRunwareImage(
     model: "runware:z-image@turbo", 
     positivePrompt: prompt,
     // 🛡️ BLINDAJE ANTI-BAN + ORDEN DE BORRAR EL ENTORNO VIEJO
-    negativePrompt: "ugly, deformed, bad anatomy, bad hands, mutated hands, missing fingers, extra digits, text, watermark, low quality, worst quality, jpeg artifacts, explicit, nude, naked, nudity, genitals, penis, vagina, sex, penetration, cum, bodily fluids, pubic hair, areola, nipples, child, minor, underage, cp, gore, blood, extreme violence, (red dress, red robe, wine glass, holding glass, mirror, reflection, second person, male, man, multiple people:1.5)",
+    negativePrompt: "ugly, deformed, bad anatomy, bad hands, mutated hands, missing fingers, extra digits, text, watermark, low quality, worst quality, jpeg artifacts, explicit, nude, naked, nudity, genitals, penis, vagina, sex, penetration, cum, bodily fluids, pubic hair, areola, nipples, child, minor, underage, cp, gore, blood, extreme violence, (red dress, red robe, wine glass, holding glass, mirror, reflection, second person, male, man, multiple people:1.5), (bad legs, mutated legs, bad feet, missing toes, deformed feet:1.4)",
     steps: 10,
     CFGScale: 1.5,
     width: 832,
