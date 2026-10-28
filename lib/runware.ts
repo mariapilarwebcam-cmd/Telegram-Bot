@@ -10,18 +10,17 @@ export async function generateRunwareImage(
     throw new Error('Falta la API Key de Runware en las variables de entorno')
   }
 
-  // ✅ SUBIMOS LA FUERZA A 0.75
-  // Esto obliga a la IA a ignorar el vestido rojo y el fondo de la foto original,
-  // y le da libertad para crear la escena que pide el prompt.
-  const strength = level <= 2 ? 0.75 : level === 3 ? 0.80 : 0.85
+  // ✅ STRENGTH BAJADO A 0.50
+  // Esto obliga a la IA a copiar los rasgos faciales de la imagen semilla.
+  const strength = level <= 2 ? 0.50 : level === 3 ? 0.55 : 0.65
 
   const payload = {
     taskType: "imageInference",
     taskUUID: crypto.randomUUID(),
     model: "runware:z-image@turbo", 
     positivePrompt: prompt,
-    // 🛡️ BLINDAJE ANTI-BAN (Quitamos red dress del negativo, confiamos en el prompt positivo)
-    negativePrompt: "ugly, deformed, bad anatomy, bad hands, mutated hands, missing fingers, extra digits, text, watermark, low quality, multiple people, worst quality, jpeg artifacts, explicit, nude, naked, nudity, genitals, penis, vagina, sex, penetration, cum, bodily fluids, pubic hair, areola, nipples, child, minor, underage, cp, gore, blood, extreme violence",
+    // 🛡️ BLINDAJE ANTI-BAN + ORDEN DE BORRAR EL ENTORNO VIEJO
+    negativePrompt: "ugly, deformed, bad anatomy, bad hands, mutated hands, missing fingers, extra digits, text, watermark, low quality, worst quality, jpeg artifacts, explicit, nude, naked, nudity, genitals, penis, vagina, sex, penetration, cum, bodily fluids, pubic hair, areola, nipples, child, minor, underage, cp, gore, blood, extreme violence, (red dress, red robe, wine glass, holding glass, mirror, reflection, second person, male, man, multiple people:1.5)",
     steps: 10,
     CFGScale: 1.5,
     width: 832,
