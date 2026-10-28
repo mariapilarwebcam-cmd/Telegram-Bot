@@ -631,7 +631,9 @@ export async function POST(request: Request) {
 
         let imagePrompt: string
         const genderTag = character.gender === 'male' ? '1boy, male' : '1girl, female'
-        const QUALITY_CONTROL_PROMPT = `(masterpiece, best quality, highres:1.2), solo, single character, ${genderTag}, only one person in frame, perfect anatomy, perfect hands, five fingers, correct proportions, no mutations, no extra limbs, no missing limbs, no multiple people, no deformed hands, no extra fingers, perfectly sized hands, correct hand size, hand in mid-ground, no giant hands touching the lens, natural pose`
+        
+        // ✅ NUEVO: Añadimos las instrucciones de consistencia facial al Quality Control
+        const QUALITY_CONTROL_PROMPT = `(masterpiece, best quality, highres:1.2), solo, single character, ${genderTag}, only one person in frame, perfect anatomy, perfect hands, five fingers, correct proportions, no mutations, no extra limbs, no missing limbs, no multiple people, no deformed hands, no extra fingers, perfectly sized hands, correct hand size, hand in mid-ground, no giant hands touching the lens, natural pose, (consistent facial features, identical face to the reference image, same eye color, same facial structure, recognizable character identity:1.5)`
 
         // ✅ NUEVO: Inyectar Outfit si el personaje tiene uno equipado
         let outfitPrompt = ''
