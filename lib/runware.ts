@@ -13,8 +13,8 @@ export async function generateRunwareImage(
   // Ajustamos la fuerza (strength) de img2img según el nivel.
   // Nivel 1-2: 0.45 (mantiene el rostro y la ropa base casi intactos)
   // Nivel 3: 0.55 (mantiene el rostro, pero permite cambiar la ropa)
-  // Nivel 4-5: 0.65 (mantiene los rasgos faciales, pero permite cambios de pose y lencería)
-  const strength = level <= 2 ? 0.45 : level === 3 ? 0.55 : 0.65
+  // Nivel 4-5: 0.75 (permite cambios de pose y lencería, manteniendo los rasgos faciales)
+  const strength = level <= 2 ? 0.45 : level === 3 ? 0.55 : 0.75
 
   const payload = {
     taskType: "imageInference",
@@ -22,14 +22,17 @@ export async function generateRunwareImage(
     model: "z-image-turbo",
     positivePrompt: prompt,
     // 🛡️ BLINDAJE ANTI-BAN DE TELEGRAM
-    negativePrompt: "ugly, deformed, bad anatomy, bad hands, missing fingers, extra digits, text, watermark, low quality, multiple people, worst quality, jpeg artifacts, explicit, nude, naked, nudity, genitals, penis, vagina, sex, penetration, cum, bodily fluids, pubic hair, areola, nipples, child, minor, underage, cp, gore, blood, extreme violence",
+    negativePrompt: "ugly, deformed, bad anatomy, bad hands, mutated hands, missing fingers, extra digits, text, watermark, low quality, multiple people, worst quality, jpeg artifacts, explicit, nude, naked, nudity, genitals, penis, vagina, sex, penetration, cum, bodily fluids, pubic hair, areola, nipples, child, minor, underage, cp, gore, blood, extreme violence",
+    // ✅ Parámetros de inferencia para ZImage Turbo
+    steps: 10,
+    CFGScale: 1.5,
     // ✅ Formato vertical (Retrato) 832x1216
     width: 832,
     height: 1216,
     lora: [
       {
         model: "taboorealm:elusarca@1", // ✅ Tu LoRA blindado
-        weight: 0.85 // ✅ Fuerza recomendada por el creador
+        weight: 0.80 // ✅ Peso equilibrado para texturas de piel y lencería detallada
       }
     ],
     seedImage: seedImageUrl, // ✅ La foto base del personaje (img2img)
