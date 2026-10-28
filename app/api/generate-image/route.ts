@@ -57,9 +57,7 @@ const CHARACTER_DNA: Record<string, string> = {
   female_elf: "elegant high elf archer, long golden blonde hair, emerald green eyes, elf ears",
   female_witch: "mysterious witch, long midnight-black hair with purple streaks, violet eyes",
   female_nun_fantasy: "devoted fantasy nun, dark brown hair under white coif, blue eyes",
-  
   female_cyborg_assassin: "beautiful female cyborg assassin, short messy white hair, one glowing red robotic eye, black high-tech tactical suit with exposed cleavage, mechanical robotic left arm with glowing cyan lines, holding a futuristic rifle, cyberpunk city background",
-  
   female_best_friends_gf: "young woman, long wavy brunette hair, brown eyes, tight summer dress",
   female_best_friends_sister: "adult young woman, long straight black hair, expressive brown eyes, fitted sweater",
   female_foot_fetish_girl: "beautiful woman, long elegant hair, stunning bare feet, red toenails, elegant legs",
@@ -97,9 +95,7 @@ const CHARACTER_DNA: Record<string, string> = {
   male_oni_male: "powerful oni warrior, muscular imposing build, dark red hair, black horns",
   male_knight: "noble knight, wavy shoulder-length chestnut hair, blue-grey eyes, silver armor",
   male_angel_m: "celestial angel, long golden-blonde hair, pale blue eyes, white feathered wings",
-  
   male_incubus_lord: "dangerously handsome male demon lord, long dark hair, glowing red eyes, large black demon horns, large bat wings, sharp fangs, black and red unbuttoned aristocratic shirt showing muscular chest, dark hellish background",
-  
   male_best_friends_bf: "athletic man, short dark hair, blue eyes, confident smirk",
   male_best_friends_brother: "tall muscular man, messy hair, dark eyes, protective",
   male_psycho: "dangerously handsome man, elegant dark suit, cold piercing dark eyes, terrifying smirk, black leather gloves",
@@ -629,9 +625,11 @@ export async function POST(request: Request) {
 
         let imagePrompt: string
         const genderTag = character.gender === 'male' ? '1boy, male' : '1girl, female'
+        const dna = CHARACTER_DNA[`${character.gender}_${character.archetype}`] || 'anime character'
         
-        // ✅ NUEVO: Añadimos las instrucciones de consistencia facial al Quality Control y subimos el peso a 2.0
-        const QUALITY_CONTROL_PROMPT = `(masterpiece, best quality, highres:1.2), solo, single character, ${genderTag}, only one person in frame, perfect anatomy, perfect hands, five fingers, correct proportions, no mutations, no extra limbs, no missing limbs, no multiple people, no deformed hands, no extra fingers, perfectly sized hands, correct hand size, hand in mid-ground, no giant hands touching the lens, natural pose, (consistent facial features, identical face to the reference image, same eye color, same facial structure, recognizable character identity:2.0)`
+        // ✅ NUEVO: Refuerzo de identidad facial para TODOS los niveles
+        const FACE_CONSISTENCY = `(consistent facial features, identical face to the reference image, same eye color, same facial structure, recognizable character identity:1.8)`
+        const QUALITY_CONTROL_PROMPT = `(masterpiece, best quality, highres:1.2), solo, single character, ${genderTag}, only one person in frame, perfect anatomy, perfect hands, five fingers, correct proportions, no mutations, no extra limbs, no missing limbs, no multiple people, no deformed hands, no extra fingers, perfectly sized hands, correct hand size, hand in mid-ground, no giant hands touching the lens, natural pose`
 
         // ✅ NUEVO: Inyectar Outfit si el personaje tiene uno equipado
         let outfitPrompt = ''
@@ -647,12 +645,11 @@ export async function POST(request: Request) {
         }
 
         if (level.level <= 3) {
-          const dna = CHARACTER_DNA[`${character.gender}_${character.archetype}`] || 'anime character'
           const scene = SFW_SCENE_PROMPTS[level.level] || SFW_SCENE_PROMPTS[1]
           let faceRule = ''
           if (faceVisibility === 'hidden') faceRule = FACE_HIDDEN_FRAGMENT
           else if (faceVisibility === 'partial') faceRule = FACE_PARTIAL_FRAGMENT
-          imagePrompt = [QUALITY_CONTROL_PROMPT, outfitPrompt, `[CHARACTER: ${dna}]`, 'highly detailed anime illustration, cel shading, soft cinematic lighting', scene, sceneHint, faceRule, userTopTagsPrompt, 'muted color palette, elegant composition, best quality, masterpiece', 'safe for work, no nudity, no explicit content'].filter((s) => s && s.length > 0).join(', ')
+          imagePrompt = [QUALITY_CONTROL_PROMPT, FACE_CONSISTENCY, outfitPrompt, `[CHARACTER: ${dna}]`, 'highly detailed anime illustration, cel shading, soft cinematic lighting', scene, sceneHint, faceRule, userTopTagsPrompt, 'muted color palette, elegant composition, best quality, masterpiece', 'safe for work, no nudity, no explicit content'].filter((s) => s && s.length > 0).join(', ')
         } else {
           const facePrompt = getCharacterFace(character.archetype, character.gender)
           const clothing = getClothingLevel(level.level)
@@ -667,7 +664,8 @@ export async function POST(request: Request) {
               ? 'thankful expression, showing off new clothes, exclusive gift, ' 
               : ''
 
-          imagePrompt = [QUALITY_CONTROL_PROMPT, fantasyPrefix, outfitPrompt, facePrompt, 'anime style, cel shading, moody atmospheric lighting, deep shadows, muted color palette, cinematic dark tones, detailed anime eyes', clothing, scene, archetypeHint, moodFragment, sceneHint, userTopTagsPrompt, NO_GENITALIA, 'beautiful cinematic lighting, 2D illustration, best quality, dynamic camera angle, shallow depth of field, cinematic composition'].filter((s) => s && s.length > 0).join(', ')
+          // ✅ FIX: Añadimos el DNA del personaje también a los niveles NSFW
+          imagePrompt = [QUALITY_CONTROL_PROMPT, FACE_CONSISTENCY, fantasyPrefix, outfitPrompt, facePrompt, `[CHARACTER: ${dna}]`, 'anime style, cel shading, moody atmospheric lighting, deep shadows, muted color palette, cinematic dark tones, detailed anime eyes', clothing, scene, archetypeHint, moodFragment, sceneHint, userTopTagsPrompt, NO_GENITALIA, 'beautiful cinematic lighting, 2D illustration, best quality, dynamic camera angle, shallow depth of field, cinematic composition'].filter((s) => s && s.length > 0).join(', ')
         }
 
         promptUsed = imagePrompt
