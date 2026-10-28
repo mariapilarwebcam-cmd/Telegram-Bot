@@ -471,8 +471,11 @@ export async function POST(request: Request) {
       }, { status: 429 })
     }
 
+    // ✅ CAMBIO: Desactivamos las imágenes estáticas de R2 (las 300 del estilo viejo)
+    // para forzar el nuevo estilo ZImage Turbo + LoRA. El sistema generará nuevas
+    // imágenes y las guardará en el pool para reutilizarlas.
     let r2Index: number | null = null
-    const candidateIndices = level.level <= 3 ? [1, 2] : [1, 3, 4]
+    const candidateIndices: number[] = [] // Antes: level.level <= 3 ? [1, 2] : [1, 3, 4]
     for (const idx of candidateIndices) {
       if (!seenIndices.has(idx)) {
         r2Index = idx
@@ -781,7 +784,7 @@ export async function POST(request: Request) {
         levelBucket,
         character.archetype
       ].filter(Boolean) as string[]
-      
+
       if (autoTags.length > 0) {
         await saveContentTags(imageId, autoTags)
       }
