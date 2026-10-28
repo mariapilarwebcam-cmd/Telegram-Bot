@@ -19,7 +19,8 @@ export async function generateRunwareImage(
   const payload = {
     taskType: "imageInference",
     taskUUID: crypto.randomUUID(),
-    model: "z-image-turbo",
+    // ✅ CORREGIDO: Formato AIR válido para Runware
+    model: "runware:z-image@turbo", 
     positivePrompt: prompt,
     // 🛡️ BLINDAJE ANTI-BAN DE TELEGRAM
     negativePrompt: "ugly, deformed, bad anatomy, bad hands, mutated hands, missing fingers, extra digits, text, watermark, low quality, multiple people, worst quality, jpeg artifacts, explicit, nude, naked, nudity, genitals, penis, vagina, sex, penetration, cum, bodily fluids, pubic hair, areola, nipples, child, minor, underage, cp, gore, blood, extreme violence",
