@@ -245,26 +245,24 @@ const SFW_SCENE_PROMPTS: Record<number, string> = {
 
 // ✅ PROMPTS SEMI-NSFW (Máximo sugerente, cero explícito)
 const NSFW_SCENE_PROMPTS: Record<number, string> = {
-  4: `intimate photo, minimal tasteful clothing or elegant lingerie, 
-      very revealing but strategically covered at all times, 
-      artistic suggestive pose, low intimate lighting, bedroom setting, 
-      high-end boudoir aesthetic, magnetic desire in the eyes, 
-      parted lips, soft blush, tempting invitation, undeniable chemistry, 
+  4: `intimate high-end boudoir photography, minimal tasteful clothing or delicate black lace lingerie, 
+      very revealing but strategically covered at all times, alluring garter belt, sheer stockings, 
+      artistic suggestive pose, from behind looking back over shoulder, arched back, 
+      low intimate lighting, deep shadows on skin, bedroom setting with tangled silk sheets, 
+      glossy skin, soft blush, parted lips, tempting invitation, undeniable chemistry, 
       heat and tension palpable, flushed skin, breathless expression, 
       sensual atmosphere, fabric slipping off one shoulder, 
-      sheets loosely draped around body, everything suggested nothing shown, 
-      the art of seduction and anticipation, 
-      no exposed genitalia, no explicit sexual acts, no full nudity`,
+      everything suggested nothing shown, the art of seduction and anticipation, 
+      tasteful artistic composition, no exposed genitalia, no explicit sexual acts, no full nudity, safe for platform`,
 
-  5: `artistic boudoir photo, tasteful implied coverage with strategic 
-      placement of silk sheets and dramatic shadows, 
-      elegant artistic angles that conceal and reveal, 
-      no exposed genitalia, no explicit sexual acts, no full nudity, 
-      high-end artistic composition, dramatic cinematic lighting, 
+  5: `artistic erotica masterpiece, tasteful implied coverage with strategic placement of silk sheets and dramatic shadows, 
+      micro lingerie, sheer fabric, wet look, highly detailed glossy skin, sweat drops, 
+      elegant artistic angles that conceal and reveal, low angle shot, extreme close-up on curves, 
+      no exposed genitalia, no explicit sexual acts, no full nudity, no visible nipples, safe for platform, 
+      high-end artistic composition, dramatic cinematic lighting, chiaroscuro, rim lighting, 
       peak intimacy and anticipation, longing gaze, magnetic attraction, 
       undeniable chemistry between the subject and the viewer, 
-      tangled sheets, glowing skin, post-intimacy atmosphere, 
-      sensual silence, maximum suggestion without explicit content, 
+      post-intimacy atmosphere, sensual silence, maximum suggestion without explicit content, 
       the art of desire, everything suggested nothing shown`,
 }
 
@@ -272,16 +270,16 @@ const AUTO_SCENES_FEMALE: Record<number, string> = {
   1: 'relaxed at home in a cozy room, natural soft smile, casual daylight atmosphere, warm and wholesome vibe',
   2: 'lying on her bed, playful flirty look toward the camera, warm intimate lighting, teasing energy',
   3: 'seductive pose in a dimly lit room, elegant lingerie, moody atmosphere, confident inviting gaze',
-  4: 'intimate boudoir pose, soft shadows on skin, low warm lighting, private bedroom setting, sensual but tasteful, maximum suggestion without explicit content',
-  5: 'artistic intimate composition, cinematic dramatic lighting, elegant and tasteful, high-end boudoir editorial, the art of desire, everything suggested nothing shown',
+  4: 'intimate boudoir pose, kneeling on bed looking back over shoulder, soft shadows on skin, low warm lighting, private bedroom setting, sensual but tasteful, maximum suggestion without explicit content',
+  5: 'artistic intimate composition, tangled sheets, dramatic cinematic lighting, elegant and tasteful, high-end boudoir editorial, the art of desire, everything suggested nothing shown',
 }
 
 const AUTO_SCENES_MALE: Record<number, string> = {
   1: 'relaxed at home in a cozy room, natural soft smile, casual daylight atmosphere, warm and wholesome vibe',
   2: 'lying on his bed, playful confident look toward the camera, warm intimate lighting, teasing energy',
   3: 'seductive pose in a dimly lit room, half-open shirt, moody atmosphere, intense inviting gaze',
-  4: 'intimate boudoir pose, soft shadows on skin, low warm lighting, private bedroom setting, sensual but tasteful, maximum suggestion without explicit content',
-  5: 'artistic intimate composition, cinematic dramatic lighting, elegant and tasteful, high-end boudoir editorial, the art of desire, everything suggested nothing shown',
+  4: 'intimate boudoir pose, shirtless, soft shadows on muscles, low warm lighting, private bedroom setting, sensual but tasteful, maximum suggestion without explicit content',
+  5: 'artistic intimate composition, tangled sheets, cinematic dramatic lighting, elegant and tasteful, high-end boudoir editorial, the art of desire, everything suggested nothing shown',
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -626,7 +624,7 @@ export async function POST(request: Request) {
 
         const autoScenes = character.gender === 'male' ? AUTO_SCENES_MALE : AUTO_SCENES_FEMALE
         const sceneHint = userHint || autoScenes[level.level] || autoScenes[1]
-        const NO_GENITALIA = 'tasteful artistic composition, no explicit genitalia, no nudity visible below waist, strategic coverage, high-end boudoir photography aesthetic, safe for platform'
+        const NO_GENITALIA = 'tasteful artistic composition, strategic coverage, high-end boudoir photography aesthetic, safe for platform, elegant, implied nudity only, no visible nipples, no exposed genitals'
 
         let imagePrompt: string
         const genderTag = character.gender === 'male' ? '1boy, male' : '1girl, female'
@@ -666,7 +664,7 @@ export async function POST(request: Request) {
               ? 'thankful expression, showing off new clothes, exclusive gift, ' 
               : ''
 
-          imagePrompt = [QUALITY_CONTROL_PROMPT, fantasyPrefix, outfitPrompt, facePrompt, 'anime style, cel shading, moody atmospheric lighting, deep shadows, muted color palette, cinematic dark tones, detailed anime eyes', clothing, scene, archetypeHint, moodFragment, sceneHint, userTopTagsPrompt, NO_GENITALIA, 'beautiful cinematic lighting, 2D illustration, best quality'].filter((s) => s && s.length > 0).join(', ')
+          imagePrompt = [QUALITY_CONTROL_PROMPT, fantasyPrefix, outfitPrompt, facePrompt, 'anime style, cel shading, moody atmospheric lighting, deep shadows, muted color palette, cinematic dark tones, detailed anime eyes', clothing, scene, archetypeHint, moodFragment, sceneHint, userTopTagsPrompt, NO_GENITALIA, 'beautiful cinematic lighting, 2D illustration, best quality, dynamic camera angle, shallow depth of field, cinematic composition'].filter((s) => s && s.length > 0).join(', ')
         }
 
         promptUsed = imagePrompt
