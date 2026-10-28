@@ -23,7 +23,7 @@ import { execute, queryOne, query } from '@/lib/turso'
 export const maxDuration = 60
 
 // ═══════════════════════════════════════════════════════════════
-// CHARACTER DNA (Global para todos)
+// CHARACTER DNA (Restaurado)
 // ═══════════════════════════════════════════════════════════════
 const CHARACTER_DNA: Record<string, string> = {
   female_stepmom: "mature woman, long dark hair, green eyes, elegant",
@@ -623,10 +623,10 @@ export async function POST(request: Request) {
 
         let imagePrompt: string
         const genderTag = character.gender === 'male' ? '1boy, male' : '1girl, female'
+        const dna = CHARACTER_DNA[`${character.gender}_${character.archetype}`] || 'anime character'
         
-        // ✅ AQUÍ ESTÁ TU IDEA APLICADA: 
-        // Eliminamos la inyección de la descripción física del texto y le ordenamos explícitamente que mantenga la cara.
-        const IDENTITY_LOCK = `(exact same character as reference image, identical face to the reference photo, consistent facial features, same eye color, same facial structure, recognizable identity:2.0)`
+        // ✅ AQUÍ ESTÁ LA MAGIA: Unimos la orden de mantener la identidad con el ADN para forzar los ojos verdes y el pelo
+        const IDENTITY_LOCK = `(exact same character as reference image, identical face, consistent facial features, same eye color, same hair color:1.8, recognizable identity:2.0), ${dna}`
         
         const QUALITY_CONTROL_PROMPT = `(masterpiece, best quality, highres:1.2), solo, single character, ${genderTag}, only one person in frame, perfect anatomy, perfect hands, five fingers, perfect legs, perfect feet, smooth detailed skin, correct proportions, no mutations, no extra limbs, no missing limbs, no multiple people, no deformed hands, no extra fingers, perfectly sized hands, correct hand size, hand in mid-ground, no giant hands touching the lens, natural pose`
 
@@ -648,7 +648,7 @@ export async function POST(request: Request) {
           if (faceVisibility === 'hidden') faceRule = FACE_HIDDEN_FRAGMENT
           else if (faceVisibility === 'partial') faceRule = FACE_PARTIAL_FRAGMENT
           
-          // ✅ Prompt final para SFW: Usa IDENTITY_LOCK en vez del DNA
+          // ✅ Prompt final para SFW
           imagePrompt = [QUALITY_CONTROL_PROMPT, IDENTITY_LOCK, outfitPrompt, 'highly detailed anime illustration, cel shading, soft cinematic lighting', scene, sceneHint, faceRule, userTopTagsPrompt, 'muted color palette, elegant composition, best quality, masterpiece', 'safe for work, no nudity, no explicit content'].filter((s) => s && s.length > 0).join(', ')
         } else {
           const facePrompt = getCharacterFace(character.archetype, character.gender)
@@ -664,7 +664,7 @@ export async function POST(request: Request) {
               ? 'thankful expression, showing off new clothes, exclusive gift, ' 
               : ''
 
-          // ✅ Prompt final para NSFW: Usa IDENTITY_LOCK en vez del DNA
+          // ✅ Prompt final para NSFW
           imagePrompt = [QUALITY_CONTROL_PROMPT, IDENTITY_LOCK, fantasyPrefix, outfitPrompt, facePrompt, 'anime style, cel shading, moody atmospheric lighting, deep shadows, muted color palette, cinematic dark tones, detailed anime eyes', clothing, scene, archetypeHint, moodFragment, sceneHint, userTopTagsPrompt, NO_GENITALIA, 'beautiful cinematic lighting, 2D illustration, best quality, dynamic camera angle, shallow depth of field, cinematic composition'].filter((s) => s && s.length > 0).join(', ')
         }
 
