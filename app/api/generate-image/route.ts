@@ -23,7 +23,7 @@ import { execute, queryOne, query } from '@/lib/turso'
 export const maxDuration = 60
 
 // ═══════════════════════════════════════════════════════════════
-// CHARACTER DNA (Restaurado)
+// CHARACTER DNA
 // ═══════════════════════════════════════════════════════════════
 const CHARACTER_DNA: Record<string, string> = {
   female_stepmom: "mature woman, long dark hair, green eyes, elegant",
@@ -383,7 +383,6 @@ function getContextLimitMessage(lang: 'es' | 'en', characterName: string): strin
   return `*${characterName} sonríe de lado y niega con la cabeza*\n\n"Wow, veo que te encanta este momento, ¿eh? Creo que ya exploramos bastante esta escena... probemos algo diferente. Cambia el mood o el lugar, y te sorprendo otra vez."`
 }
 
-// ✅ NUEVA FUNCIÓN: Blur Seguro (24px)
 async function makeBlur(buf: Buffer): Promise<Buffer> {
   return sharp(buf)
     .resize(24, 35, { fit: 'cover' })
@@ -392,13 +391,11 @@ async function makeBlur(buf: Buffer): Promise<Buffer> {
     .toBuffer()
 }
 
-// ✅ NUEVA FUNCIÓN: CONSUMIR TOKEN VIP (Runware)
 async function consumeVipPhotoToken(user: any): Promise<boolean> {
   const now = Math.floor(Date.now() / 1000)
   let tokens = user.photo_tokens || 0
   let lastAt = user.photo_tokens_at || now
 
-  // Acumulación: 1 por día, máximo 5
   const daysPassed = Math.floor((now - lastAt) / 86400)
   if (daysPassed > 0) {
     tokens = Math.min(5, tokens + daysPassed)
@@ -428,8 +425,8 @@ export async function POST(request: Request) {
       : []
 
     const isDirectRequest = body?.is_direct_request === true
-    const isFantasyPass = body?.is_fantasy_pass === true // ✅ NUEVO: Detectar Pase de Fantasía
-    const isGiftPhoto = body?.is_gift_photo === true // ✅ NUEVO: Foto de agradecimiento por outfit
+    const isFantasyPass = body?.is_fantasy_pass === true 
+    const isGiftPhoto = body?.is_gift_photo === true 
 
     const user = await ensureUser(tid)
     if (!user) return NextResponse.json({ error: 'Error cargando tu cuenta' }, { status: 500 })
@@ -439,10 +436,10 @@ export async function POST(request: Request) {
 
     const lang: 'es' | 'en' = user.language === 'en' ? 'en' : 'es'
     const userMsgCount = await countUserMessages(tid, character_id)
-    let level = getLevelFromMessages(userMsgCount || 0) // Usamos 'let' para poder forzar el nivel 5
+    let level = getLevelFromMessages(userMsgCount || 0) 
     
     if (isFantasyPass) {
-      level = getLevelFromMessages(999) // ✅ Forzamos el nivel 5
+      level = getLevelFromMessages(999) 
     }
 
     const imageCost = getImageCost(level.level)
@@ -452,7 +449,6 @@ export async function POST(request: Request) {
     const isVip = !!vipSub
     const seenIndices = await getSeenR2Indices(tid, character_id)
 
-    // ✅ FRENO DE MANO
     const spendState = await getSpendState(tid)
     if (spendState?.level === 'rest' && !isDirectRequest && !isFantasyPass) {
       return NextResponse.json({ 
@@ -463,11 +459,8 @@ export async function POST(request: Request) {
       }, { status: 429 })
     }
 
-    // ✅ CAMBIO: Desactivamos las imágenes estáticas de R2 (las 300 del estilo viejo)
-    // para forzar el nuevo estilo ZImage Turbo + LoRA. El sistema generará nuevas
-    // imágenes y las guardará en el pool para reutilizarlas.
     let r2Index: number | null = null
-    const candidateIndices: number[] = [] // Antes: level.level <= 3 ? [1, 2] : [1, 3, 4]
+    const candidateIndices: number[] = [] 
     for (const idx of candidateIndices) {
       if (!seenIndices.has(idx)) {
         r2Index = idx
@@ -478,7 +471,7 @@ export async function POST(request: Request) {
     const genderKey = character.gender === 'male' ? 'male' : 'female'
     const characterKey = `${character.archetype}_${genderKey}`
     const r2Base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL
-    const useR2Static = r2Index !== null && !!r2Base && !isFantasyPass // ✅ El pase siempre genera imagen nueva
+    const useR2Static = r2Index !== null && !!r2Base && !isFantasyPass 
 
     let source: 'r2_static' | 'pool' | 'generated' = 'generated'
     let imageUrl: string = ''
@@ -488,7 +481,6 @@ export async function POST(request: Request) {
     let imageId: number | null = null
     let fantasyPassId: number | null = null
 
-    // ✅ LÓGICA DEL PASE DE FANTASÍA: Verificar y consumir
     if (isFantasyPass) {
       const pass = await queryOne<{ id: number }>(
         `SELECT id FROM user_inventory WHERE user_id = ? AND item_type = 'fantasy_pass' LIMIT 1`,
@@ -498,7 +490,6 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'No tienes Pases de Fantasía' }, { status: 403 })
       }
       
-      // Consumir el pase de forma atómica
       const deleted = await execute(`DELETE FROM user_inventory WHERE id = ?`, [pass.id])
       if (deleted.rowsAffected === 0) {
         return NextResponse.json({ error: 'Error al consumir el pase' }, { status: 500 })
@@ -527,11 +518,9 @@ export async function POST(request: Request) {
     let gemsCharged = false
 
     if (isFantasyPass || isGiftPhoto) {
-      // El pase o la foto de regalo anulan cualquier cobro
       isFree = true
       useVipQuota = false
     } else {
-      // ✅ LÓGICA VIP: Consumir token si es VIP y no es la primera imagen
       if (isVip && !isFree && !isDirectRequest) {
         const hasToken = await consumeVipPhotoToken(user)
         if (hasToken) {
@@ -539,7 +528,6 @@ export async function POST(request: Request) {
         }
       }
 
-      // ✅ LÓGICA DE COBRO (SOLO SI NO ES VIP CON TOKEN NI ES GRATIS)
       if (isDirectRequest && !isFree && !useVipQuota) {
         const charged = await queryOne<{ purchased_gems: number, gems: number }>(
           `UPDATE users SET purchased_gems = purchased_gems - ?, gems = gems - ? WHERE telegram_id = ? AND purchased_gems >= ? RETURNING purchased_gems, gems`,
@@ -575,7 +563,7 @@ export async function POST(request: Request) {
       try { await markImageSeen(tid, character_id, r2Index!, false) } catch (markErr) {}
     } else {
       let poolHit = false
-      const usePool = !userHint && !!mood && r2Available && !isFantasyPass && !isGiftPhoto // El pase o regalo no usan el pool
+      const usePool = !userHint && !!mood && r2Available && !isFantasyPass && !isGiftPhoto 
 
       if (usePool) {
         try {
@@ -625,12 +613,12 @@ export async function POST(request: Request) {
         const genderTag = character.gender === 'male' ? '1boy, male' : '1girl, female'
         const dna = CHARACTER_DNA[`${character.gender}_${character.archetype}`] || 'anime character'
         
-        // ✅ AQUÍ ESTÁ LA MAGIA: Unimos la orden de mantener la identidad con el ADN para forzar los ojos verdes y el pelo
-        const IDENTITY_LOCK = `(exact same character as reference image, identical face, consistent facial features, same eye color, same hair color:1.8, recognizable identity:2.0), ${dna}`
+        // ✅ IDENTITY LOCK REFORZADO CON EL DNA
+        const IDENTITY_LOCK = `(exact same character, identical face, consistent facial features, same eye color, same hair color:1.8, recognizable identity:2.0), ${dna}`
         
+        // ✅ QUALITY CONTROL CON PIERNAS Y PIES PERFECTOS
         const QUALITY_CONTROL_PROMPT = `(masterpiece, best quality, highres:1.2), solo, single character, ${genderTag}, only one person in frame, perfect anatomy, perfect hands, five fingers, perfect legs, perfect feet, smooth detailed skin, correct proportions, no mutations, no extra limbs, no missing limbs, no multiple people, no deformed hands, no extra fingers, perfectly sized hands, correct hand size, hand in mid-ground, no giant hands touching the lens, natural pose`
 
-        // ✅ NUEVO: Inyectar Outfit si el personaje tiene uno equipado
         let outfitPrompt = ''
         if (character.equipped_outfit) {
           const outfitData = await queryOne<{ prompt_tag: string }>(
@@ -648,7 +636,6 @@ export async function POST(request: Request) {
           if (faceVisibility === 'hidden') faceRule = FACE_HIDDEN_FRAGMENT
           else if (faceVisibility === 'partial') faceRule = FACE_PARTIAL_FRAGMENT
           
-          // ✅ Prompt final para SFW
           imagePrompt = [QUALITY_CONTROL_PROMPT, IDENTITY_LOCK, outfitPrompt, 'highly detailed anime illustration, cel shading, soft cinematic lighting', scene, sceneHint, faceRule, userTopTagsPrompt, 'muted color palette, elegant composition, best quality, masterpiece', 'safe for work, no nudity, no explicit content'].filter((s) => s && s.length > 0).join(', ')
         } else {
           const facePrompt = getCharacterFace(character.archetype, character.gender)
@@ -657,14 +644,12 @@ export async function POST(request: Request) {
           const archetypeHint = ARCHETYPE_IMAGE_HINTS[`${character.gender}_${character.archetype}`] || ''
           const moodFragment = mood ? MOOD_FRAGMENTS[mood] || '' : ''
           
-          // ✅ PROMPT ESPECIAL PARA EL PASE DE FANTASÍA O FOTO DE REGALO
           const fantasyPrefix = isFantasyPass 
             ? 'ultra rare secret intimate moment, highly exclusive fantasy scene, ultimate seduction, peak desire, cinematic masterpiece, ' 
             : isGiftPhoto 
               ? 'thankful expression, showing off new clothes, exclusive gift, ' 
               : ''
 
-          // ✅ Prompt final para NSFW
           imagePrompt = [QUALITY_CONTROL_PROMPT, IDENTITY_LOCK, fantasyPrefix, outfitPrompt, facePrompt, 'anime style, cel shading, moody atmospheric lighting, deep shadows, muted color palette, cinematic dark tones, detailed anime eyes', clothing, scene, archetypeHint, moodFragment, sceneHint, userTopTagsPrompt, NO_GENITALIA, 'beautiful cinematic lighting, 2D illustration, best quality, dynamic camera angle, shallow depth of field, cinematic composition'].filter((s) => s && s.length > 0).join(', ')
         }
 
@@ -680,12 +665,10 @@ export async function POST(request: Request) {
             await insertGemTransaction({ telegram_id: tid, amount: imageCost, transaction_type: 'refund', description: 'Reembolso por fallo en generación' })
           }
           
-          // ✅ FIX: Reembolsar el token VIP si se consumió
           if (useVipQuota) {
             await execute(`UPDATE users SET photo_tokens = photo_tokens + 1 WHERE telegram_id = ?`, [tid])
           }
 
-          // ✅ Si falla, devolvemos el Pase de Fantasía
           if (isFantasyPass && fantasyPassId) {
             await execute(`INSERT INTO user_inventory (user_id, item_type, item_key) VALUES (?, 'fantasy_pass', 'level_5')`, [tid])
           }
@@ -694,7 +677,6 @@ export async function POST(request: Request) {
 
         modelUsed = 'runware-z-image-turbo'
         
-        // ✅ CREACIÓN DEL BLUR Y GUARDADO EN R2
         const { buffer } = await downloadImage(rawUrl)
         const blurBuffer = await makeBlur(buffer)
         
@@ -710,7 +692,6 @@ export async function POST(request: Request) {
         imageUrl = origKey
         blurUrl = blurKey
 
-        // ✅ CORRECCIÓN CRÍTICA: Guardar todos los datos para que el Pool funcione
         const r2BaseUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL?.replace(/\/$/, '') || ''
         const fullOrigUrl = `${r2BaseUrl}/${origKey}`
 
@@ -740,7 +721,6 @@ export async function POST(request: Request) {
     let newGems = user.gems || 0
     let newPurchasedGems = user.purchased_gems || 0
     
-    // ✅ LÓGICA DE OFERTA (photo_offers)
     let offerId: number | null = null
     let publicBlurUrl = ''
 
@@ -749,13 +729,11 @@ export async function POST(request: Request) {
         newGems -= imageCost
         newPurchasedGems -= imageCost
       }
-      // Si es pase o regalo, no creamos oferta, se muestra nítida directamente
     } else {
       const offerPrice = isFree || useVipQuota ? 0 : imageCost
       const base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || ''
       publicBlurUrl = `${base.replace(/\/$/, '')}/${blurUrl}`
 
-      // Insertamos la oferta
       await execute(
         `INSERT OR IGNORE INTO photo_offers (user_id, image_id, character_id, price_gems, source) VALUES (?, ?, ?, ?, ?)`,
         [tid, imageId, character_id, offerPrice, source]
@@ -767,7 +745,6 @@ export async function POST(request: Request) {
       )
       offerId = offer!.id
 
-      // Si es gratis o VIP, se desbloquea automáticamente
       if (offerPrice === 0) {
         await execute(`UPDATE photo_offers SET state = 'unlocked', unlocked_at = unixepoch() WHERE id = ?`, [offerId])
         await execute(`UPDATE generated_images SET status = 'active' WHERE id = ?`, [imageId])
@@ -783,7 +760,6 @@ export async function POST(request: Request) {
       const base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || ''
       const fullOrigUrl = `${base.replace(/\/$/, '')}/${imageUrl}`
       
-      // ✅ FORMATO DE MENSAJE: locked:ID@URL_BLUR
       const imageMessageContent = (offerId && !isDirectRequest && !isFantasyPass && !isGiftPhoto)
         ? `*${character.character_name} te envía una foto*\n\n![Selfie](locked:${offerId}@${publicBlurUrl})`
         : `*${character.character_name} te envía una foto*\n\n![Selfie](${fullOrigUrl})`
@@ -792,7 +768,6 @@ export async function POST(request: Request) {
       insertedMsgId = inserted?.id
     } catch (persistErr) {}
 
-    // ✅ GUARDAR ETIQUETAS PARA RECOMENDACIONES
     if (imageId) {
       const autoTags = [
         ...extractTagsFromText(userHint),
