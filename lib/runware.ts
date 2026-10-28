@@ -16,16 +16,15 @@ export async function generateRunwareImage(
   const payload = {
     taskType: "imageInference",
     taskUUID: crypto.randomUUID(),
-    model: "runware:z-image@turbo", 
+    // ✅ CAMBIO A SDXL (soporta IP-Adapter)
+    model: "runware:sdxl@turbo", 
     positivePrompt: prompt,
-    // 🛡️ BLINDAJE ANTI-BAN + BLOQUEO DE ALUCINACIONES
     negativePrompt: "ugly, deformed, bad anatomy, bad hands, mutated hands, missing fingers, extra digits, text, watermark, low quality, worst quality, jpeg artifacts, explicit, nude, naked, nudity, genitals, penis, vagina, sex, penetration, cum, bodily fluids, pubic hair, areola, nipples, child, minor, underage, cp, gore, blood, extreme violence, (red dress, red robe, wine glass, holding glass, mirror, reflection, second person, male, man, multiple people, giant eye, close up of eye:1.5), (bad legs, mutated legs, bad feet, missing toes, deformed feet:1.4)",
     steps: 10,
     CFGScale: 1.5,
     width: 832,
     height: 1216,
     
-    // ✅ LORA DE ESTILO ANIME
     lora: [
       {
         model: "taboorealm:10011@1", 
@@ -33,13 +32,12 @@ export async function generateRunwareImage(
       }
     ],
 
-    // ✅ LA MAGIA: IP-ADAPTER PARA MANTENER LA CARA EXACTA
-    // Usamos el AIR "runware:55@3" (IP Adapter SDXL Plus Face) que es el experto en rostros.
+    // ✅ IP-ADAPTER PARA SDXL (funciona con runware:55@3)
     ipAdapters: [
       {
         model: "runware:55@3", 
         guideImages: [seedImageUrl],
-        weight: 0.85 // Alta fidelidad facial
+        weight: 0.85 
       }
     ],
     
