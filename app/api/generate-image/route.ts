@@ -15,7 +15,8 @@ import {
 import {
   getCharacterFace, getCharacterImageUrl, VIP_LIMITS, MAX_GENERATIONS_PER_CONTEXT_PER_USER,
 } from '@/lib/constants'
-import { generateRunwareImage } from '@/lib/runware'
+// ✅ CAMBIO 1: Importamos Wiro en lugar de Runware
+import { generateWiroImage } from '@/lib/wiro'
 import { getLevelFromMessages, getImageCost, getClothingLevel, getFaceVisibility } from '@/lib/levels'
 import { r2Available, uploadToR2, downloadImage, buildR2Key, buildTagKey } from '@/lib/r2-upload'
 import { execute, queryOne, query } from '@/lib/turso'
@@ -460,7 +461,8 @@ export async function POST(request: Request) {
     }
 
     let r2Index: number | null = null
-    const candidateIndices: number[] = [] 
+    // ✅ CAMBIO 2: Aquí reactivamos las imágenes estáticas para niveles 1, 2 y 3
+    const candidateIndices = level.level <= 3 ? [1, 2, 3] : []
     for (const idx of candidateIndices) {
       if (!seenIndices.has(idx)) {
         r2Index = idx
@@ -587,7 +589,7 @@ export async function POST(request: Request) {
         
         const reservation = await execute(
           `INSERT INTO image_generations (telegram_id, character_id, tag_key, model, level)
-           SELECT ?, ?, ?, 'runware', ?
+           SELECT ?, ?, ?, 'wiro', ?
            WHERE (
              SELECT COUNT(*) FROM image_generations
              WHERE telegram_id = ? AND tag_key = ? AND created_at >= datetime('now', '-30 days')
@@ -657,7 +659,8 @@ export async function POST(request: Request) {
         const seedUrl = getCharacterImageUrl(character.archetype, character.gender)
         let rawUrl: string
         try {
-          rawUrl = await generateRunwareImage(imagePrompt, seedUrl, level.level)
+          // ✅ CAMBIO 3: Llamada a Wiro AI
+          rawUrl = await generateWiroImage(imagePrompt, seedUrl, level.level)
         } catch (imgError) {
           await execute(`DELETE FROM image_generations WHERE id = ?`, [generationId])
           if (gemsCharged) {
@@ -675,7 +678,8 @@ export async function POST(request: Request) {
           return NextResponse.json({ error: 'Error al generar la imagen' }, { status: 500 })
         }
 
-        modelUsed = 'runware-z-image-turbo'
+        // ✅ CAMBIO 4: Actualizamos el nombre del modelo usado
+        modelUsed = 'wiro-seedream-v4-5'
         
         const { buffer } = await downloadImage(rawUrl)
         const blurBuffer = await makeBlur(buffer)
