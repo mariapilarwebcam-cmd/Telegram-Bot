@@ -709,7 +709,7 @@ export async function POST(request: Request) {
         const ins = await execute(
           `INSERT INTO generated_images 
            (tag_key, archetype, gender, mood, level_bucket, r2_key, blur_r2_key, character_key, max_level, status, r2_url, prompt_used, first_user_id) 
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'candidate', ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)`,
           [
             normalizedTagKey, 
             character.archetype, 
