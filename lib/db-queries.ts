@@ -14,6 +14,12 @@ const generateReferralCode = (): string => {
   return code
 }
 
+// ✅ FIX #3: Helper para checks UNIQUE case-insensitive
+const isUniqueError = (e: any): boolean => {
+  const msg = String(e?.message || '').toUpperCase()
+  return msg.includes('UNIQUE') || msg.includes('CONSTRAINT')
+}
+
 // ═══════════════════════════════════════════════════════════════
 // USERS
 // ═══════════════════════════════════════════════════════════════
@@ -115,7 +121,8 @@ export async function createUser(data: {
     )
     return getUser(data.telegram_id)
   } catch (e: any) {
-    if (String(e?.message || '').includes('UNIQUE')) {
+    // ✅ FIX #3: Check case-insensitive
+    if (isUniqueError(e)) {
       return getUser(data.telegram_id)
     }
     throw e
@@ -439,12 +446,13 @@ export async function hasAnyMessage(
   telegram_id: string,
   character_id: number
 ) {
-  const row = await queryOne<{ c: number }>(
-    `SELECT COUNT(*) AS c FROM conversation_history
+  // ✅ FIX #2: SELECT 1 con LIMIT 1 en lugar de COUNT(*) — short-circuit real
+  const row = await queryOne<{ one: number }>(
+    `SELECT 1 AS one FROM conversation_history
      WHERE telegram_id = ? AND character_id = ? LIMIT 1`,
     [telegram_id, character_id]
   )
-  return (row?.c ?? 0) > 0
+  return row !== null
 }
 
 export async function insertMessage(data: {
@@ -533,7 +541,8 @@ export async function insertReferral(data: {
     )
     return true
   } catch (e: any) {
-    if (String(e?.message || '').includes('UNIQUE')) return false
+    // ✅ FIX #3: Case-insensitive
+    if (isUniqueError(e)) return false
     throw e
   }
 }
@@ -598,10 +607,18 @@ export async function insertReferralCommission(data: {
 // STAR PURCHASES
 // ═══════════════════════════════════════════════════════════════
 
+// ✅ FIX #1 y #4 (CRÍTICO DE SEGURIDAD): getLastPurchase ahora considera
+// tanto compras previas (star_purchases) COMO suscripciones VIP (subscriptions).
+// Esto cierra el bypass de "first time" que permitía a un usuario VIP comprar
+// el paquete de bienvenida. Afecta automáticamente a create-invoice,
+// create-crypto-invoice y is-premium.
 export async function getLastPurchase(telegram_id: string) {
   return queryOne<{ id: number }>(
-    `SELECT id FROM star_purchases WHERE telegram_id = ? LIMIT 1`,
-    [telegram_id]
+    `SELECT id FROM star_purchases WHERE telegram_id = ?
+     UNION
+     SELECT id FROM subscriptions WHERE telegram_id = ?
+     LIMIT 1`,
+    [telegram_id, telegram_id]
   )
 }
 
@@ -630,7 +647,8 @@ export async function insertStarPurchase(data: {
     )
     return true
   } catch (e: any) {
-    if (String(e?.message || '').includes('UNIQUE')) return false
+    // ✅ FIX #3: Case-insensitive
+    if (isUniqueError(e)) return false
     throw e
   }
 }
@@ -810,7 +828,8 @@ export async function markImageSeen(
       [telegram_id, character_id, image_index, is_generated ? 1 : 0]
     )
   } catch (e: any) {
-    if (String(e?.message || '').includes('UNIQUE')) {
+    // ✅ FIX #3: Case-insensitive
+    if (isUniqueError(e)) {
       return { rowsAffected: 0, lastInsertRowid: 0 }
     }
     throw e
@@ -875,7 +894,8 @@ export async function createSubscription(data: {
     )
     return true
   } catch (e: any) {
-    if (String(e?.message || '').includes('UNIQUE')) return false
+    // ✅ FIX #3: Case-insensitive
+    if (isUniqueError(e)) return false
     throw e
   }
 }
@@ -967,9 +987,8 @@ export async function markPoolImageViewed(
       [pool_image_id, telegram_id, character_id]
     )
   } catch (e: any) {
-    if (String(e?.message || '').includes('UNIQUE')) {
-      return
-    }
+    // ✅ FIX #3: Case-insensitive
+    if (isUniqueError(e)) return
     console.warn('[pool] markPoolImageViewed failed:', e)
   }
 }
@@ -1070,7 +1089,7 @@ export async function insertImageGeneration(data: {
   telegram_id: string
   character_id: number
   tag_key: string
-  model: 'runware' | 'r2' | 'pool' | 'wiro' // ✅ Añadido 'wiro'
+  model: 'runware' | 'r2' | 'pool' | 'wiro'
   level: number
 }): Promise<void> {
   try {
