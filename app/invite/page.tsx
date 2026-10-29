@@ -5,8 +5,8 @@ import { useUser } from '@/lib/UserContext'
 import { getTranslations } from '@/lib/i18n'
 import { tgFetch } from '@/lib/telegram-fetch'
 import {
-  DAILY_MESSAGES,          // ✅ FIX: Reemplazado BASE_DAILY_GEMS
-  REFERRAL_MESSAGES,       // ✅ FIX: Reemplazado GEMS_PER_REFERRAL
+  DAILY_MESSAGES,
+  REFERRAL_MESSAGES,
   REFERRAL_PURCHASE_COMMISSION_PCT,
   REFERRAL_TOP_TIER_THRESHOLD,
   REFERRAL_TOP_TIER_PCT,
@@ -16,8 +16,16 @@ import {
 } from '@/lib/constants'
 import { Analytics } from '@/lib/posthog'
 
+// ✅ NUEVO: Estructura del cooldown devuelto por el backend
+interface ServerCooldown {
+  hoursRemaining: number
+  minutesRemaining: number
+  lastDailyClaim: string | null
+  receivedAt: number
+}
+
 export default function RewardsPage() {
-  const { user, loading: userLoading, lang, refresh, isTelegram } = useUser()
+  const { user, loading: userLoading, lang, refresh, isTelegram, setUser } = useUser()
   const [copied, setCopied] = useState(false)
   const [timedOut, setTimedOut] = useState(false)
   const [retrying, setRetrying] = useState(false)
@@ -27,11 +35,26 @@ export default function RewardsPage() {
   const [claimError, setClaimError] = useState<string | null>(null)
   const [showClaimModal, setShowClaimModal] = useState(false)
 
+  // ✅ NUEVO: Cooldown devuelto por el backend (fuente de verdad)
+  const [serverCooldown, setServerCooldown] = useState<ServerCooldown | null>(null)
+
+  // ✅ FIX #5: Intervalo más frecuente para contador más preciso
   const [now, setNow] = useState(Date.now())
   useEffect(() => {
-    const interval = setInterval(() => setNow(Date.now()), 60_000)
+    const interval = setInterval(() => setNow(Date.now()), 30_000)
     return () => clearInterval(interval)
   }, [])
+
+  // ✅ FIX #4: Resetear serverCooldown si el user cambia (por refresh)
+  useEffect(() => {
+    if (!serverCooldown) return
+    if (!user?.last_daily_claim) return
+
+    // Si el user tiene un last_daily_claim más nuevo que el del serverCooldown, usar el del user
+    if (user.last_daily_claim !== serverCooldown.lastDailyClaim) {
+      setServerCooldown(null)
+    }
+  }, [user?.last_daily_claim, serverCooldown])
 
   const t = getTranslations(lang)
 
@@ -41,18 +64,42 @@ export default function RewardsPage() {
     return () => clearTimeout(to)
   }, [user])
 
+  // ✅ FIX #1 y #2: Usa serverCooldown (si existe) como fuente de verdad con paso del tiempo
   const claimState = useMemo(() => {
+    // Prioridad 1: serverCooldown del backend
+    if (serverCooldown) {
+      const elapsedMs = now - serverCooldown.receivedAt
+      const elapsedMinutes = Math.floor(elapsedMs / 60_000)
+      const totalMinutes =
+        serverCooldown.hoursRemaining * 60 +
+        serverCooldown.minutesRemaining -
+        elapsedMinutes
+
+      if (totalMinutes <= 0) {
+        return { canClaim: true, hoursRemaining: 0, minutesRemaining: 0 }
+      }
+
+      return {
+        canClaim: false,
+        hoursRemaining: Math.floor(totalMinutes / 60),
+        minutesRemaining: totalMinutes % 60,
+      }
+    }
+
+    // Prioridad 2: cálculo local con user.last_daily_claim
     if (!user) {
       return { canClaim: false, hoursRemaining: 0, minutesRemaining: 0 }
     }
     if (!user.last_daily_claim) {
       return { canClaim: true, hoursRemaining: 0, minutesRemaining: 0 }
     }
-    
-    // ✅ FIX: Parseo seguro para Safari (SQLite usa "YYYY-MM-DD HH:MM:SS")
-    const safeIso = user.last_daily_claim.includes('T') ? user.last_daily_claim : user.last_daily_claim.replace(' ', 'T') + 'Z'
+
+    // ✅ Parseo seguro para Safari (SQLite usa "YYYY-MM-DD HH:MM:SS")
+    const safeIso = user.last_daily_claim.includes('T')
+      ? user.last_daily_claim
+      : user.last_daily_claim.replace(' ', 'T') + 'Z'
     const lastClaimTime = new Date(safeIso).getTime()
-    
+
     if (isNaN(lastClaimTime)) {
       return { canClaim: true, hoursRemaining: 0, minutesRemaining: 0 }
     }
@@ -61,14 +108,14 @@ export default function RewardsPage() {
     if (hoursSince >= 24) {
       return { canClaim: true, hoursRemaining: 0, minutesRemaining: 0 }
     }
-    
+
     const totalMinutes = Math.ceil((24 - hoursSince) * 60)
     return {
       canClaim: false,
       hoursRemaining: Math.floor(totalMinutes / 60),
       minutesRemaining: totalMinutes % 60,
     }
-  }, [user, now])
+  }, [user, now, serverCooldown])
 
   const previewMessages = DAILY_MESSAGES
 
@@ -89,6 +136,7 @@ export default function RewardsPage() {
     if (!user || claiming || !claimState.canClaim) return
     setClaiming(true)
     setClaimError(null)
+
     try {
       const res = await tgFetch('/api/daily', {
         method: 'POST',
@@ -98,12 +146,41 @@ export default function RewardsPage() {
       const data = await res.json()
 
       if (res.ok) {
+        // ✅ FIX #3: Actualizar estado local directamente con datos del backend
         setClaimResult(data)
         setShowClaimModal(true)
-        await refresh()
+        setServerCooldown(null) // El cooldown empieza ahora
+
+        if (data.last_daily_claim) {
+          setUser({
+            ...user,
+            bonus_gems: data.bonus_gems ?? user.bonus_gems,
+            gems: data.gems ?? user.gems,
+            last_daily_claim: data.last_daily_claim,
+          })
+        }
+
+        // Sincronización en background (no bloqueante)
+        refresh().catch((err) => console.warn('[rewards] refresh after claim failed:', err))
       } else if (res.status === 429) {
         setClaimError(data.error || 'Come back later')
-        await refresh()
+
+        // ✅ FIX #6: Aplicar inmediatamente el cooldown del backend al estado local
+        if (data.last_daily_claim) {
+          setServerCooldown({
+            hoursRemaining: data.hours_remaining ?? 0,
+            minutesRemaining: data.minutes_remaining ?? 0,
+            lastDailyClaim: data.last_daily_claim,
+            receivedAt: Date.now(),
+          })
+
+          setUser({
+            ...user,
+            last_daily_claim: data.last_daily_claim,
+          })
+        }
+
+        refresh().catch((err) => console.warn('[rewards] refresh after 429 failed:', err))
       } else {
         setClaimError(data.error || data.detail || t.dailyClaimError)
       }
@@ -817,8 +894,8 @@ export default function RewardsPage() {
               {
                 n: '5',
                 text: lang === 'es'
-                  ? `Con 5+ amigos comprando → ${REFERRAL_TOP_TIER_PCT}% · Con 20+ → ${REFERRAL_ELITE_TIER_PCT}%`
-                  : `With 5+ friends buying → ${REFERRAL_TOP_TIER_PCT}% · With 20+ → ${REFERRAL_ELITE_TIER_PCT}%`,
+                  ? `Con ${REFERRAL_TOP_TIER_THRESHOLD}+ amigos comprando → ${REFERRAL_TOP_TIER_PCT}% · Con ${REFERRAL_ELITE_TIER_THRESHOLD}+ → ${REFERRAL_ELITE_TIER_PCT}%`
+                  : `With ${REFERRAL_TOP_TIER_THRESHOLD}+ friends buying → ${REFERRAL_TOP_TIER_PCT}% · With ${REFERRAL_ELITE_TIER_THRESHOLD}+ → ${REFERRAL_ELITE_TIER_PCT}%`,
               },
             ].map((step) => (
               <li
