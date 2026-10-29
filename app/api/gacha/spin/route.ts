@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server'
 import { db, queryOne, execute } from '@/lib/turso'
 import { ensureUser, insertGemTransaction, getActiveSubscription } from '@/lib/db-queries'
+import { CHARACTER_NAMES_FEMALE, CHARACTER_NAMES_MALE, PERSONALITIES } from '@/lib/constants' // ✅ NUEVO
 
 const BASE_COST_GEMS = 50
 
@@ -96,14 +97,17 @@ export async function POST(request: Request) {
 
       // 4. Asignar Premio
       if (tier === 'mythic' || tier === 'legendary') {
-        // ✅ FIX #3: Si interested_in no está definido, asumimos que quiere ambos (o femenino por defecto como estaba)
+        // ✅ FIX CRÍTICO: Crear el personaje en user_characters
         const isFemale = user.interested_in !== 'male'
         const pool = isFemale ? GACHA_CHARACTERS_FEMALE : GACHA_CHARACTERS_MALE
         const char = pool[Math.floor(Math.random() * pool.length)]
+        const charGender = isFemale ? 'female' : 'male'
+        const charName = (isFemale ? CHARACTER_NAMES_FEMALE : CHARACTER_NAMES_MALE)[char] || char
 
+        // "Lo tiene" = existe en user_characters (lo que la app realmente usa)
         const alreadyOwned = await tx.execute({
-          sql: `SELECT id FROM user_inventory WHERE user_id = ? AND item_type = 'gacha_character' AND item_key = ? LIMIT 1`,
-          args: [tid, char]
+          sql: `SELECT id FROM user_characters WHERE telegram_id = ? AND archetype = ? AND gender = ? LIMIT 1`,
+          args: [tid, char, charGender]
         })
 
         if (alreadyOwned.rows.length > 0) {
@@ -113,15 +117,26 @@ export async function POST(request: Request) {
             args: [compensation, tid]
           })
           rewardType = 'bonus_gems'
-          rewardDetails = `¡Ya tenías a ${char}! Te compensamos con ${compensation} Mensajes de Chat.`
+          rewardDetails = `¡Ya tenías a ${charName}! Te compensamos con ${compensation} Mensajes de Chat.`
           itemKey = String(compensation)
         } else {
+          // Insertamos en user_characters (is_active = 0 para no cambiar el personaje actual)
           await tx.execute({
-            sql: `INSERT INTO user_inventory (user_id, item_type, item_key) VALUES (?, 'gacha_character', ?)`,
-            args: [tid, char]
+            sql: `INSERT INTO user_characters (telegram_id, character_name, gender, archetype, personality, is_active)
+                  VALUES (?, ?, ?, ?, ?, 0)`,
+            args: [tid, charName, charGender, char, PERSONALITIES[char] || '']
+          })
+          // También guardamos en el inventario como registro histórico
+          await tx.execute({
+            sql: `INSERT INTO user_inventory (user_id, item_type, item_key)
+                  SELECT ?, 'gacha_character', ?
+                  WHERE NOT EXISTS (
+                    SELECT 1 FROM user_inventory WHERE user_id = ? AND item_type = 'gacha_character' AND item_key = ?
+                  )`,
+            args: [tid, char, tid, char]
           })
           rewardType = 'gacha_character'
-          rewardDetails = `¡Has desbloqueado al personaje exclusivo ${char}!`
+          rewardDetails = `¡Has desbloqueado al personaje exclusivo ${charName}!`
           itemKey = char
         }
 
@@ -204,7 +219,7 @@ export async function POST(request: Request) {
           })
           rewardType = 'photo_token'
           rewardDetails = '¡Foto Sorpresa (Nivel 3 o 4)!'
-          itemKey = 'level_34' // ✅ FIX #1: Asignar itemKey para evitar que el frontend se rompa
+          itemKey = 'level_34'
         } else if (rareRoll < 66) {
           const audioAmount = Math.random() < 0.5 ? 1 : 2
           for (let i = 0; i < audioAmount; i++) {
@@ -215,7 +230,7 @@ export async function POST(request: Request) {
           }
           rewardType = 'audio_token'
           rewardDetails = `¡Has ganado ${audioAmount} Audio(s) Gratis!`
-          itemKey = 'free' // ✅ FIX #1: Asignar itemKey para evitar que el frontend se rompa
+          itemKey = 'free'
         } else {
           let randomMsg = 15
           const gemRoll = Math.random() * 100
@@ -265,8 +280,6 @@ export async function POST(request: Request) {
         args: [tid, cost, tier, `${rewardType}:${rewardDetails}`]
       })
 
-      // ✅ FIX #2: Movemos el registro de la transacción DENTRO de la transacción (tx.execute)
-      // para garantizar que si falla algo, se revierta el cobro de gemas.
       if (cost > 0) {
         await tx.execute({
           sql: `INSERT INTO gem_transactions (telegram_id, amount, transaction_type, description) VALUES (?, ?, ?, ?)`,
@@ -281,8 +294,9 @@ export async function POST(request: Request) {
         tier,
         reward_type: rewardType,
         reward_details: rewardDetails,
-        item_key: itemKey, // ✅ Ahora siempre tiene un valor válido
+        item_key: itemKey,
         remaining_gems: Number(debit.rows[0]?.gems || 0),
+        remaining_purchased_gems: Number(debit.rows[0]?.purchased_gems ?? user.purchased_gems ?? 0), // ✅ NUEVO
         is_free_spin: isFreeSpin 
       })
 
