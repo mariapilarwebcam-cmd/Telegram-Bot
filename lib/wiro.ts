@@ -35,12 +35,14 @@ export async function generateWiroImage(
     throw new Error(errorMessage)
   }
 
-  // Esperar a que la tarea termine (Timeout de 2 minutos)
-  const result = await client.waitForTask(run.socketaccesstoken, 120000)
+  // ✅ FIX CRÍTICO: Timeout ajustado a 55 segundos.
+  // Vercel mata la función a los 60s (maxDuration). Damos 55s a Wiro y
+  // nos quedan 5s para subir a R2 y actualizar la base de datos.
+  const result = await client.waitForTask(run.socketaccesstoken, 55000)
   const task = result.tasklist[0]
 
   if (!task || task.pexit !== '0') {
-    console.error('[Wiro] Tarea fallida:', task)
+    console.error('[Wiro] Tarea fallida o timeout:', task)
     throw new Error('La generación en Wiro falló o expiró')
   }
 
