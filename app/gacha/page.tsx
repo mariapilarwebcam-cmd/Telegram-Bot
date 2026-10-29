@@ -1,3 +1,4 @@
+// app/gacha/page.tsx
 "use client"
 
 import { useState, useEffect, useRef } from 'react'
@@ -34,7 +35,8 @@ interface Prize {
 const getPrizeImageUrl = (imageKey: string) => {
   const base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL
   if (!base) return ''
-  return `${base.replace(/\/$/, '')}/item/gacha/${imageKey}.png`
+  // ✅ FIX: Unificado a 'items/' en plural
+  return `${base.replace(/\/$/, '')}/items/gacha/${imageKey}.png`
 }
 
 const PRIZES_BG: Prize[] = [
@@ -71,8 +73,8 @@ function getResultPrize(result: any): Prize {
 const getItemImageUrl = (itemId: string) => {
   const base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL
   if (!base) return ''
-  const ext = itemId === 'roulette_chest' ? 'png' : 'jpg'
-  return `${base.replace(/\/$/, '')}/item/${itemId}.${ext}`
+  // ✅ FIX: Unificado a 'items/' en plural y .jpg para coincidir con chat/[id]/page.tsx
+  return `${base.replace(/\/$/, '')}/items/${itemId}.jpg`
 }
 
 const SHOWCASE_OUTFITS = [
@@ -104,6 +106,7 @@ export default function GachaPage() {
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'characters' | 'outfits'>('characters')
   const [ownedCharacters, setOwnedCharacters] = useState<string[]>([])
+  const [isVip, setIsVip] = useState(false) // ✅ FIX: Estado para VIP
   
   const [reelItems, setReelItems] = useState<Prize[]>([])
   const [showSkip, setShowSkip] = useState(false)
@@ -112,7 +115,6 @@ export default function GachaPage() {
   const [glowClass, setGlowClass] = useState('')
   const [isShaking, setIsShaking] = useState(false)
   
-  // ✅ ESTADO: Para el toggle de animación rápida
   const [instantSpin, setInstantSpin] = useState(false)
 
   const reelRef = useRef<HTMLDivElement>(null)
@@ -127,6 +129,15 @@ export default function GachaPage() {
   const startPos = useRef(0)
   const targetPos = useRef(0)
   const currentPrize = useRef<Prize | null>(null)
+
+  // ✅ FIX: Comprobar estado VIP al cargar
+  useEffect(() => {
+    if (!user?.telegram_id) return
+    tgFetch('/api/subscription')
+      .then(res => res.json())
+      .then(data => setIsVip(!!data.active))
+      .catch(console.error)
+  }, [user?.telegram_id])
 
   useEffect(() => {
     if (reelItems.length === 0) {
@@ -274,7 +285,9 @@ export default function GachaPage() {
 
   const handleSpin = async () => {
     if (!user || spinning) return
-    if ((user.purchased_gems || 0) < COST) {
+
+    // ✅ FIX: Si NO es VIP y no tiene gemas, bloqueamos. Si es VIP, dejamos que el backend decida si es gratis.
+    if (!isVip && (user.purchased_gems || 0) < COST) {
       setError(lang === 'es' ? 'Necesitas 50 gemas compradas para tirar.' : 'You need 50 purchased gems to spin.')
       return
     }
@@ -293,7 +306,12 @@ export default function GachaPage() {
 
       if (!res.ok) {
         setSpinning(false)
-        setError(data.message || 'Error al girar')
+        // ✅ FIX: Manejo amigable del error de gemas insuficientes desde el servidor
+        if (res.status === 402 || data.error === 'insufficient_gems') {
+          setError(lang === 'es' ? 'Necesitas 50 gemas compradas para tirar.' : 'You need 50 purchased gems to spin.')
+        } else {
+          setError(data.message || 'Error al girar')
+        }
         return
       }
 
@@ -586,7 +604,6 @@ export default function GachaPage() {
             <li>Puedes ganar <strong>Gemas de Chat</strong> (para hablar), <strong>Outfits</strong> (para regalar), o <strong>Pases de Fantasía</strong> (fotos nivel 5).</li>
             <li>Los <strong>Personajes Exclusivos</strong> solo se pueden desbloquear aquí. Si ya los tienes, se marcan con un ✅.</li>
             
-            {/* ✅ TEXTOS MODIFICADOS AQUÍ */}
             <li><strong>Los premios más codiciados (Épicos, Legendarios y Míticos) tienen menor posibilidad de salir por su rareza y exclusividad.</strong></li>
             <li><strong>Garantía:</strong> Cada 10 tiradas tienes asegurado un premio Épico o superior si no lo has obtenido antes.</li>
             
