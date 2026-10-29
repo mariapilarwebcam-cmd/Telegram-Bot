@@ -277,7 +277,6 @@ export default function ChatPage() {
         setActivePass(data.active_pass)
         setHasFantasyPass(!!data.has_fantasy_pass)
 
-        // ✅ Si el endpoint devuelve datos VIP, los usamos de inmediato
         if (data.is_vip !== undefined) setIsVip(!!data.is_vip)
         if (data.vip_messages_today !== undefined) setVipMessagesToday(data.vip_messages_today)
 
@@ -348,7 +347,6 @@ export default function ChatPage() {
       const gems = user.gems || 0
       const hookRemaining = user.hook_messages_remaining || 0
 
-      // ✅ Solo bloquea si NO es VIP, no tiene gemas, no tiene hook y no tiene pase
       if (!isVip && (bonusGems + gems) < GEM_COSTS.message && hookRemaining <= 0 && !activePass) {
         setBlocked(true)
         return
@@ -365,7 +363,7 @@ export default function ChatPage() {
         
         if (res.ok) {
           if (data.blocked) { 
-            if (data.response) setBlockedMessage(data.response) // ✅ FIX #3
+            if (data.response) setBlockedMessage(data.response)
             setBlocked(true); 
             return 
           }
@@ -379,12 +377,10 @@ export default function ChatPage() {
             setGems(data.remaining_gems)
             setHookRemaining(data.hook_messages_remaining ?? 0)
             
-            // ✅ FIX #1 y #4: Sincronizar estado VIP y gemas tras el auto-start
             if (data.is_vip !== undefined) setIsVip(!!data.is_vip)
             if (data.vip_messages_today !== undefined) setVipMessagesToday(data.vip_messages_today)
             
             if (data.remaining_bonus_gems !== undefined) {
-              // Refrescamos el contexto para actualizar bonus_gems visualmente
               await refresh()
             }
           }
@@ -424,7 +420,6 @@ export default function ChatPage() {
     const gems = user.gems || 0
     const hookRemaining = user.hook_messages_remaining || 0
 
-    // ✅ Solo bloquear en cliente si NO es VIP, no tiene hook, no tiene pase, y no tiene gemas
     if (!acceptPenalty && !isVip && (bonusGems + gems) < GEM_COSTS.message && hookRemaining <= 0 && !activePass) {
       sendingRef.current = false
       setBlocked(true)
@@ -511,6 +506,14 @@ export default function ChatPage() {
           
           if (typeof data.remaining_bonus_gems === 'number') {
             await refresh()
+          }
+
+          // ✅ FIX #2: Actualizar el badge del pase localmente
+          if (data.used_pass && activePass) {
+            setActivePass({
+              ...activePass,
+              messages_used: activePass.messages_used + 1
+            })
           }
           
           setPhotoOfferActive(!!data.photo_offer_available)
@@ -673,7 +676,6 @@ export default function ChatPage() {
   const playAudio = async () => {
     if (!user) return
     
-    // ✅ FIX #2: Los VIPs no deben ser bloqueados por el modal premium
     if (!isPremium && !isVip) {
       setPremiumModalReason('audio')
       setShowPremiumModal(true)
@@ -685,7 +687,6 @@ export default function ChatPage() {
 
     const currentAudioCost = getAudioCost(currentLevel.level)
 
-    // ✅ Si es VIP, NO bloquear en cliente aunque no tenga purchased_gems.
     if (!isVip && (user.purchased_gems || 0) < currentAudioCost) {
       return alert(
         lang === 'es'
@@ -756,7 +757,6 @@ export default function ChatPage() {
 
     const isFirstImage = seenImageCount === 0
 
-    // ✅ FIX #2: Los VIPs no deben ser bloqueados por el modal premium
     if (isDirect && !isFirstImage && !isPremium && !isVip) {
       setPremiumModalReason('image')
       setShowPremiumModal(true)
@@ -850,12 +850,9 @@ export default function ChatPage() {
   const handleUnlockPhoto = async (offerId: number, price: number) => {
     if (!user || unlockingPhoto) return
 
-    // ✅ Si es VIP, no bloquear en cliente (el backend usará photo_tokens).
-    if (!isVip && (user.purchased_gems || 0) < price) {
-      alert(`Necesitas ${price} gemas compradas. Ve a la tienda para recargar.`)
-      router.push('/shop')
-      return
-    }
+    // ✅ FIX #1: Eliminado el bloqueo en cliente basado en currentImageCost.
+    // El backend validará el precio real del offer en la base de datos.
+    // Si no tiene gemas suficientes, el backend devolverá el error y se mostrará el alert.
 
     setUnlockingPhoto(offerId)
     try {
@@ -883,7 +880,13 @@ export default function ChatPage() {
         clearRecentlyUnlocked(data.image_url)
         await refresh()
       } else {
-        alert(data.message || data.error || 'Error al desbloquear')
+        // Manejo de error específico para gemas insuficientes
+        if (data.error === 'insufficient_gems') {
+          alert(lang === 'es' ? 'No tienes suficientes gemas compradas.' : 'Not enough purchased gems.')
+          router.push('/shop')
+        } else {
+          alert(data.message || data.error || 'Error al desbloquear')
+        }
       }
     } catch {
       alert('Error de conexión')
@@ -951,7 +954,6 @@ export default function ChatPage() {
     const isFirstImage = seenImageCount === 0
     const purchasedGems = user?.purchased_gems || 0
 
-    // ✅ FIX #2: Los VIPs no deben ser bloqueados por el modal premium
     if (!isFirstImage && !isPremium && !isVip) {
       setPremiumModalReason('image')
       setShowPremiumModal(true)
