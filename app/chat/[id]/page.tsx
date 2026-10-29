@@ -1,4 +1,4 @@
-// app/api/character/[id]/route.ts
+"use client"
 
 import { useEffect, useState, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
