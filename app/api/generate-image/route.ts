@@ -15,7 +15,6 @@ import {
 import {
   getCharacterFace, getCharacterImageUrl, VIP_LIMITS, MAX_GENERATIONS_PER_CONTEXT_PER_USER,
 } from '@/lib/constants'
-// ✅ Importamos Wiro
 import { generateWiroImage } from '@/lib/wiro'
 import { getLevelFromMessages, getImageCost, getClothingLevel, getFaceVisibility } from '@/lib/levels'
 import { r2Available, uploadToR2, downloadImage, buildR2Key, buildTagKey } from '@/lib/r2-upload'
@@ -368,12 +367,7 @@ const MOOD_FRAGMENTS: Record<string, string> = {
   playful_laughing: 'playful laughing mood, genuine smile, relaxed happy energy',
 }
 
-function buildR2VariantUrl(gender: string, archetype: string, index: number): string {
-  const base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL
-  if (!base) return ''
-  const clean = base.replace(/\/$/, '')
-  return `${clean}/${gender}_${archetype}_${index}.jpg?v=8`
-}
+// ✅ FIX: buildR2VariantUrl eliminado, ahora se construye la ruta relativa directamente en el bloque useR2Static
 
 function getLevelBucket(level: number): 'sfw' | 'nsfw' {
   return level <= 3 ? 'sfw' : 'nsfw'
@@ -595,9 +589,38 @@ export async function POST(request: Request) {
 
     if (useR2Static) {
       source = 'r2_static'
-      imageUrl = buildR2VariantUrl(genderKey, character.archetype, r2Index!)
-      blurUrl = imageUrl 
+      
+      // ✅ FIX CRÍTICO: Construimos la ruta relativa para evitar el bug de la doble barra (https://.../https://...)
+      const r2FileName = `${genderKey}_${character.archetype}_${r2Index}.jpg?v=8`
+      imageUrl = r2FileName
+      blurUrl = r2FileName
       modelUsed = 'r2'
+      
+      // ✅ FIX CRÍTICO: Insertamos un registro en generated_images para que unlock-engine.ts 
+      // pueda encontrar el r2_key y NO haga crash cuando el usuario intenta desbloquear la foto.
+      const r2BaseUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL?.replace(/\/$/, '') || ''
+      const fullOrigUrl = `${r2BaseUrl}/${r2FileName}`
+      const tagKeyForR2 = `r2_${character.archetype}_${genderKey}_${r2Index}_${level.level}`
+      
+      const ins = await execute(
+        `INSERT INTO generated_images 
+         (tag_key, archetype, gender, mood, level_bucket, r2_key, blur_r2_key, character_key, max_level, status, r2_url, prompt_used, first_user_id) 
+         VALUES (?, ?, ?, 'static', ?, ?, ?, ?, ?, 'active', ?, 'static_r2', ?)`,
+        [
+          tagKeyForR2, 
+          character.archetype, 
+          genderKey, 
+          levelBucket, 
+          r2FileName, 
+          r2FileName, 
+          characterKey, 
+          level.level, 
+          fullOrigUrl, 
+          tid
+        ]
+      )
+      imageId = Number(ins.lastInsertRowid)
+      
       try { await markImageSeen(tid, character_id, r2Index!, false) } catch (markErr) {}
     } else {
       let poolHit = false
@@ -770,6 +793,9 @@ export async function POST(request: Request) {
     } else {
       const offerPrice = isFree || useVipQuota ? 0 : imageCost
       const base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || ''
+      
+      // ✅ FIX: Como blurUrl ahora es SIEMPRE una ruta relativa (para R2, Pool y Generated), 
+      // esta construcción ya no genera el error de doble barra (https://.../https://...)
       publicBlurUrl = `${base.replace(/\/$/, '')}/${blurUrl}`
 
       await execute(
