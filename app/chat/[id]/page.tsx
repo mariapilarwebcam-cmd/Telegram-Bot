@@ -270,8 +270,9 @@ export default function ChatPage() {
         setTotalUserMessages(count)
 
         const currentLvl = getLevelFromMessages(count)
+        // ✅ FIX: Umbrales actualizados para coincidir con lib/levels.ts
         const thresholds: Record<number, number | null> = {
-          1: 15, 2: 40, 3: 90, 4: 180, 5: null,
+          1: 5, 2: 15, 3: 40, 4: 90, 5: null,
         }
         setLevelProgress({
           current: count,
@@ -2385,7 +2386,7 @@ export default function ChatPage() {
               {lang === 'es' ? `${displayName} está preparando la cámara...` : `${displayName} is preparing the camera...`}
             </p>
             <p style={{ color: '#a395c9', fontSize: 13, marginTop: 4 }}>
-              {lang === 'es' ? 'Esto tomará solo unos segundos' : 'This will take just a few seconds'}
+              {lang === 'es' ? 'Esto puede tardar un poco más...' : 'This may take a little longer...'}
             </p>
           </div>
         </div>
