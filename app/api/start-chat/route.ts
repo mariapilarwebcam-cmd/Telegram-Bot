@@ -6,7 +6,6 @@ import {
   getCharacter,
   getActiveSubscription,
   getActivePass,
-  countVipMessagesToday,
 } from '@/lib/db-queries'
 import { db } from '@/lib/turso'
 import {
@@ -26,6 +25,7 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => ({}))
     const character_id = body?.character_id
 
+    // ✅ Validar character_id como número
     if (!character_id || typeof character_id !== 'number') {
       return NextResponse.json({ error: 'character_id inválido' }, { status: 400 })
     }
@@ -66,7 +66,7 @@ export async function POST(request: Request) {
     const template = openingTemplate ? openingTemplate[lang] : fallback
     const openingMessage = template.replace(/{name}/g, character.character_name)
 
-    // ✅ Transacción atómica: verificación + cobro + insert ocurren juntos o no ocurren.
+    // ✅ Transacción atómica para evitar doble cobro y garantizar consistencia.
     const tx = await db.transaction('write')
 
     try {
@@ -87,20 +87,25 @@ export async function POST(request: Request) {
       let newGems = user.gems || 0
       let newHookRemaining = user.hook_messages_remaining || 0
       let paymentMode: 'vip_daily' | 'vip_bonus' | 'pass' | 'bonus_gems' | 'hook' | 'none' = 'none'
+      let vipUsed = 0
 
       if (isVip) {
-        // ✅ FIX #1 (CRÍTICO): VIP consume cupo VIP diario. Si está agotado,
-        // cae a bonus_gems. Si tampoco tiene, se bloquea.
+        // ✅ FIX #1 y #2: Consultar el uso VIP DENTRO de la transacción.
         // La apertura consume 1 slot (no hay penalty porque no es mensaje del usuario).
-        const vipUsed = await countVipMessagesToday(tid)
-        const totalVipCost = 1 // La apertura es 1 slot, sin penalty
+        const vipCountRes = await tx.execute({
+          sql: `SELECT COALESCE(SUM(CASE WHEN LENGTH(content) > 600 THEN 2 ELSE 1 END), 0) AS c
+                FROM conversation_history
+                WHERE telegram_id = ? AND role = 'user' AND DATE(created_at) = DATE('now')`,
+          args: [tid]
+        })
+        vipUsed = Number(vipCountRes.rows[0]?.c ?? 0)
 
-        if (vipUsed + totalVipCost <= VIP_DAILY_MESSAGE_LIMIT) {
-          // Dentro del cupo VIP diario. No tocar bonus_gems.
+        if (vipUsed < VIP_DAILY_MESSAGE_LIMIT) {
+          // ✅ Dentro del cupo VIP diario. No tocar bonus_gems.
           charged = true
           paymentMode = 'vip_daily'
-        } else if (newBonusGems >= GEM_COSTS.message) {
-          // Cupo VIP agotado → cobrar de bonus_gems
+        } else {
+          // ✅ FIX #3: Cupo VIP agotado → intentar cobrar de bonus_gems directamente en la BD
           const bonusResult = await tx.execute({
             sql: `UPDATE users 
                   SET bonus_gems = COALESCE(bonus_gems, 0) - ? 
@@ -114,6 +119,7 @@ export async function POST(request: Request) {
             charged = true
             paymentMode = 'vip_bonus'
 
+            // Log de transacción para auditoría
             await tx.execute({
               sql: `INSERT INTO gem_transactions (telegram_id, amount, transaction_type, description) VALUES (?, ?, ?, ?)`,
               args: [tid, -GEM_COSTS.message, 'message_vip_overflow', 'Apertura VIP (cupo agotado)'],
@@ -146,21 +152,19 @@ export async function POST(request: Request) {
             args: [tid, -GEM_COSTS.message, 'message', 'Mensaje de apertura'],
           })
         } else {
-          // Intentar consumir del Hook Mode
-          const hookRemaining = user.hook_messages_remaining || 0
-          if (hookRemaining > 0) {
-            const hookResult = await tx.execute({
-              sql: `UPDATE users 
-                    SET hook_messages_remaining = hook_messages_remaining - 1 
-                    WHERE telegram_id = ? AND hook_messages_remaining >= 1 
-                    RETURNING hook_messages_remaining`,
-              args: [tid],
-            })
-            if (hookResult.rows.length > 0) {
-              newHookRemaining = Number(hookResult.rows[0].hook_messages_remaining)
-              charged = true
-              paymentMode = 'hook'
-            }
+          // Intentar consumir del Hook Mode directamente en la BD
+          const hookResult = await tx.execute({
+            sql: `UPDATE users 
+                  SET hook_messages_remaining = hook_messages_remaining - 1 
+                  WHERE telegram_id = ? AND hook_messages_remaining >= 1 
+                  RETURNING hook_messages_remaining`,
+            args: [tid],
+          })
+
+          if (hookResult.rows.length > 0) {
+            newHookRemaining = Number(hookResult.rows[0].hook_messages_remaining)
+            charged = true
+            paymentMode = 'hook'
           }
         }
       }
@@ -193,6 +197,7 @@ export async function POST(request: Request) {
 
       await tx.commit()
 
+      // ✅ FIX #4: Devolver datos VIP para que el frontend actualice la UI sin refresh extra
       return NextResponse.json({
         response: openingMessage,
         assistant_message_id: Number(insertResult.lastInsertRowid),
@@ -200,6 +205,8 @@ export async function POST(request: Request) {
         remaining_bonus_gems: newBonusGems,
         hook_messages_remaining: newHookRemaining,
         is_vip: isVip,
+        vip_messages_today: isVip ? vipUsed : undefined,
+        vip_daily_limit: isVip ? VIP_DAILY_MESSAGE_LIMIT : undefined,
         payment_mode: paymentMode,
       })
     } catch (txError) {
