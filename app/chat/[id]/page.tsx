@@ -1,3 +1,4 @@
+// app/chat/[id]/page.tsx
 "use client"
 
 import { useEffect, useState, useRef } from 'react'
@@ -373,8 +374,10 @@ export default function ChatPage() {
     }, 300)
   }
 
-  const send = async (acceptPenalty = false) => {
-    if (!input.trim() || !user || loading || sendingRef.current) return
+  // ✅ FIX #2: Se añade `textOverride` para evitar que se borre el mensaje original si se requiere pagar penalización
+  const send = async (acceptPenalty = false, textOverride?: string) => {
+    const text = textOverride || input.trim()
+    if (!text || !user || loading || sendingRef.current) return
     sendingRef.current = true
 
     const bonusGems = (user as any)?.bonus_gems || 0
@@ -387,7 +390,6 @@ export default function ChatPage() {
       return
     }
 
-    const text = input.trim()
     const wasFirstMessage = totalUserMessages === 0
     
     if (!acceptPenalty) {
@@ -417,7 +419,8 @@ export default function ChatPage() {
           
           const confirmPenalty = window.confirm(data.message)
           if (confirmPenalty) {
-            send(true)
+            // ✅ FIX #2: Pasamos el texto original como override
+            send(true, text)
           } else {
             setInput(text)
             setMessages((p) => p.slice(0, -1))
