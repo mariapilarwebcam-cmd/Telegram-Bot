@@ -1070,7 +1070,7 @@ export async function insertImageGeneration(data: {
   telegram_id: string
   character_id: number
   tag_key: string
-  model: 'runware' | 'r2' | 'pool'
+  model: 'runware' | 'r2' | 'pool' | 'wiro' // ✅ Añadido 'wiro'
   level: number
 }): Promise<void> {
   try {
