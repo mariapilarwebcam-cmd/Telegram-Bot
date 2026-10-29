@@ -1,20 +1,19 @@
 // app/api/create-crypto-invoice/route.ts
 
 import { NextResponse } from 'next/server'
-import { getLastPurchase, getUser, getActiveSubscription } from '@/lib/db-queries'
+import { getLastPurchase, getUser } from '@/lib/db-queries'
 import {
   CRYPTO_PACKAGES,
   MESSAGE_PACKAGES,
   HYBRID_PACKAGES,
   getFinalCryptoGems,
-  getFinalCryptoMessages, // ✅ FIX #5: Importado correctamente
+  getFinalCryptoMessages,
 } from '@/lib/constants'
 
 const RECIPIENT_WALLET =
   process.env.NEXT_PUBLIC_TON_RECIPIENT_WALLET ||
   'UQCt76T3JPW3WrpsfIz6Tc1eVrvkrQpwV0-3sk1so4P8Vd4-'
 
-// ✅ FIX #3: Validar package_type contra valores permitidos
 const VALID_PACKAGE_TYPES = ['gems', 'messages', 'hybrid'] as const
 type PackageType = (typeof VALID_PACKAGE_TYPES)[number]
 
@@ -32,7 +31,6 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => ({}))
     const { package_id, package_type } = body
 
-    // ✅ FIX #3: Validar package_type explícitamente. Si no viene, default a 'gems'.
     const normalizedType: PackageType =
       package_type === undefined || package_type === null
         ? 'gems'
@@ -69,7 +67,6 @@ export async function POST(request: Request) {
 
     const pkg = activePackages[package_id]
 
-    // ✅ FIX #4: Validar que pkg.usdt sea un número positivo
     const usdtAmount = (pkg as any).usdt
     if (typeof usdtAmount !== 'number' || isNaN(usdtAmount) || usdtAmount <= 0) {
       console.error('[create-crypto-invoice] Paquete sin usdt válido:', {
@@ -83,14 +80,12 @@ export async function POST(request: Request) {
       )
     }
 
-    // ✅ FIX #2: Verificar first_time_only considerando compras previas Y suscripción VIP
+    // ✅ FIX #2 (Optimizado): getLastPurchase AHORA YA INCLUYE suscripciones VIP.
+    // Por lo tanto, si el usuario ha comprado alguna vez O es VIP, devolverá un resultado.
     if ((pkg as any).first_time_only) {
-      const [priorPurchase, activeSub] = await Promise.all([
-        getLastPurchase(tid),
-        getActiveSubscription(tid),
-      ])
+      const priorPurchase = await getLastPurchase(tid)
 
-      if (priorPurchase || activeSub) {
+      if (priorPurchase) {
         return NextResponse.json(
           { error: 'Paquete no disponible' },
           { status: 400 }
@@ -98,7 +93,6 @@ export async function POST(request: Request) {
       }
     }
 
-    // Verificar usuario
     const user = await getUser(tid)
     if (!user) {
       return NextResponse.json(
@@ -107,10 +101,8 @@ export async function POST(request: Request) {
       )
     }
 
-    // Reference único — se envía como comentario en la transacción USDT
     const reference = `TABOO_${tid}_${normalizedType}_${package_id}_${Date.now()}`
 
-    // ✅ Calcular cantidades finales según el tipo de paquete
     let finalGems = 0
     let finalMessages = 0
     let baseGems = 0
@@ -118,18 +110,14 @@ export async function POST(request: Request) {
     let firstTimeBonus = 0
 
     if (isHybrid) {
-      // Usar los valores precalculados de crypto del paquete híbrido
       finalGems = (pkg as any).crypto_final_gems
       finalMessages = (pkg as any).crypto_final_messages
       baseGems = (pkg as any).gems
       baseMessages = (pkg as any).messages
     } else if (isMessages) {
-      // ✅ FIX #1: Aplicar getFinalCryptoMessages (bono crypto del 20%)
-      // Antes se usaba (pkg as any).messages base, lo que entregaba 300 en vez de 360
       finalMessages = getFinalCryptoMessages(pkg as any)
       baseMessages = (pkg as any).messages
     } else {
-      // Gemas regulares de crypto (usa getFinalCryptoGems que ya maneja pkg.bonus)
       finalGems = getFinalCryptoGems(pkg as any)
       baseGems = (pkg as any).gems
       firstTimeBonus = (pkg as any).first_time_bonus || 0
@@ -157,7 +145,6 @@ export async function POST(request: Request) {
   } catch (e: any) {
     console.error('[create-crypto-invoice] Error:', e)
 
-    // ✅ FIX #3: Manejo específico del error de package_type inválido
     if (e?.message === 'package_type inválido') {
       return NextResponse.json(
         { error: 'Tipo de paquete inválido' },
