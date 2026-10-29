@@ -443,6 +443,29 @@ export async function POST(request: Request) {
       level = getLevelFromMessages(999) 
     }
 
+    // ✅ NEW: Revisar si tiene un Photo Token de la Ruleta ANTES de calcular costos
+    let usedPhotoToken = false
+    if (!isFantasyPass && !isGiftPhoto) {
+      try {
+        const photoToken = await queryOne<{ id: number }>(
+          `SELECT id FROM user_inventory WHERE user_id = ? AND item_type = 'photo_token' LIMIT 1`,
+          [tid]
+        )
+        if (photoToken) {
+          await execute(`DELETE FROM user_inventory WHERE id = ?`, [photoToken.id])
+          usedPhotoToken = true
+          // Forzar nivel 3 o 4 si el nivel actual es menor (el premio promete "Foto Sorpresa Nivel 3 o 4")
+          if (level.level < 3) {
+            const forcedLevel = Math.random() < 0.5 ? 3 : 4
+            level = getLevelFromMessages(forcedLevel === 3 ? 15 : 40)
+          }
+          console.log(`[generate-image] 🎟️ Photo token consumed for user ${tid}, forced level ${level.level}`)
+        }
+      } catch (e) {
+        console.warn('[generate-image] photo_token check failed:', e)
+      }
+    }
+
     const imageCost = getImageCost(level.level)
     const faceVisibility = getFaceVisibility(level.level)
 
@@ -523,6 +546,10 @@ export async function POST(request: Request) {
     let isFree = totalImagesSent === 0
     if (r2Index !== null && r2Index > 1) {
       isFree = false
+    }
+    // ✅ NEW: Si se consumió un photo_token, la foto es gratis
+    if (usedPhotoToken) {
+      isFree = true
     }
     
     let useVipQuota = false
@@ -811,6 +838,7 @@ export async function POST(request: Request) {
       model: modelUsed,
       heat_score: heatScore,
       message_id: insertedMsgId,
+      photo_token_used: usedPhotoToken,
     })
   } catch (error: any) {
     console.error('[generate-image] error:', error)
