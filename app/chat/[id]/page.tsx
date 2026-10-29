@@ -123,7 +123,9 @@ export default function ChatPage() {
   const [isVip, setIsVip] = useState(false)
   const [activePass, setActivePass] = useState<any>(null)
   const [vipMessagesToday, setVipMessagesToday] = useState(0)
+  // ✅ FIX #1: Diferenciar entre "límite VIP alcanzado" (puede seguir con gemas) y "bloqueo total"
   const [showVipLimitModal, setShowVipLimitModal] = useState(false)
+  const [vipLimitModalMode, setVipLimitModalMode] = useState<'rest' | 'buy'>('rest')
 
   const [lowGemsWarning, setLowGemsWarning] = useState(false)
   const [lowGemsCount, setLowGemsCount] = useState(0)
@@ -165,7 +167,6 @@ export default function ChatPage() {
   const [reportError, setReportError] = useState<string | null>(null)
 
   const [characterLoading, setCharacterLoading] = useState(true)
-  // ✅ FIX #24: Estado para manejar errores de carga del personaje
   const [characterError, setCharacterError] = useState<string | null>(null)
   const [historyLoaded, setHistoryLoaded] = useState(false)
   const [autoStartAttempted, setAutoStartAttempted] = useState(false)
@@ -190,9 +191,7 @@ export default function ChatPage() {
   const longPressTimer = useRef<NodeJS.Timeout | null>(null)
   const longPressFired = useRef(false)
   const pressOrigin = useRef<{ x: number; y: number } | null>(null)
-  // ✅ FIX #10: useRef para evitar doble ejecución del autostart en React 18 StrictMode
   const autoStartRef = useRef(false)
-  // ✅ FIX #37: useRef para controlar el setTimeout de recentlyUnlocked
   const recentlyUnlockedTimer = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
@@ -238,7 +237,6 @@ export default function ChatPage() {
     if (userLoading) return
     if (!user?.telegram_id) return
 
-    // ✅ FIX #61: Resetear estado al cambiar de personaje
     setCharacterLoading(true)
     setCharacterError(null)
     setHistoryLoaded(false)
@@ -249,7 +247,6 @@ export default function ChatPage() {
       .then(async (res) => {
         if (!res.ok) {
           console.error('[chat] char load failed:', res.status)
-          // ✅ FIX #24: Guardar el error para mostrar mensaje
           setCharacterError(lang === 'es' ? 'No se pudo cargar el personaje.' : 'Could not load character.')
           setCharacterLoading(false)
           return
@@ -339,7 +336,6 @@ export default function ChatPage() {
   useEffect(() => {
     if (!historyLoaded || !user || !character) return
     if (messages.length > 0 || loading) return
-    // ✅ FIX #10: Usar useRef para evitar doble ejecución en StrictMode
     if (autoStartRef.current) return
 
     const startChat = async () => {
@@ -391,7 +387,6 @@ export default function ChatPage() {
     }, 300)
   }
 
-  // ✅ FIX #37: Función helper para limpiar recentlyUnlocked sin pisar un valor nuevo
   const clearRecentlyUnlocked = (url: string) => {
     if (recentlyUnlockedTimer.current) {
       clearTimeout(recentlyUnlockedTimer.current)
@@ -410,6 +405,7 @@ export default function ChatPage() {
     const gems = user.gems || 0
     const hookRemaining = user.hook_messages_remaining || 0
 
+    // ✅ FIX: Solo bloquear en cliente si el usuario NO es VIP, no tiene hook, no tiene pase, y no tiene gemas de NINGÚN tipo
     if (!acceptPenalty && !isVip && (bonusGems + gems) < GEM_COSTS.message && hookRemaining <= 0 && !activePass) {
       sendingRef.current = false
       setBlocked(true)
@@ -456,7 +452,17 @@ export default function ChatPage() {
         if (data.blocked) {
           if (data.vip_limit_reached) {
             setMessages((p) => p.slice(0, -1))
+            
+            // ✅ FIX #2 y #4: Diferenciar entre "cupo VIP agotado pero puede seguir con gemas" vs "sin nada"
+            if (data.no_bonus_gems) {
+              // VIP agotó los 200 mensajes Y no tiene bonus_gems → modal de compra
+              setVipLimitModalMode('buy')
+            } else {
+              // Solo cupo VIP agotado, pero tiene bonus_gems o algo más → modal de descanso
+              setVipLimitModalMode('rest')
+            }
             setShowVipLimitModal(true)
+            
             if (typeof data.vip_messages_today === 'number') {
               setVipMessagesToday(data.vip_messages_today)
             }
@@ -572,7 +578,6 @@ export default function ChatPage() {
             content: `*${getDisplayName(character)} te envía una foto*\n\n![Selfie](${data.image_url})`,
           },
         ])
-        // ✅ FIX #37: Usar helper en lugar de setTimeout directo
         setRecentlyUnlocked(data.image_url)
         clearRecentlyUnlocked(data.image_url)
         
@@ -613,7 +618,6 @@ export default function ChatPage() {
         owned: prev.owned.includes(outfitKey) ? prev.owned : [...prev.owned, outfitKey]
       }))
 
-      // ✅ FIX #6: Actualizar el estado del personaje para reflejar el nuevo outfit
       setCharacter((prev: any) => prev ? { ...prev, equipped_outfit: outfitKey } : prev)
 
       setShowWardrobe(false)
@@ -638,7 +642,6 @@ export default function ChatPage() {
               content: `*${getDisplayName(character)} se sonroja y te muestra cómo le queda*\n\n"¡No puedo creer que me hayas comprado esto! Espera, déjame mostrarte..."\n\n![Regalo](${imgData.image_url})`,
             },
           ])
-          // ✅ FIX #37: Usar helper
           setRecentlyUnlocked(imgData.image_url)
           clearRecentlyUnlocked(imgData.image_url)
           await refresh()
@@ -664,8 +667,9 @@ export default function ChatPage() {
 
     const currentAudioCost = getAudioCost(currentLevel.level)
 
-    const purchasedGems = user.purchased_gems || 0
-    if (!isVip && purchasedGems < currentAudioCost) {
+    // ✅ FIX #3: Si es VIP, NO bloquear en cliente aunque no tenga purchased_gems.
+    // El backend usará audio_tokens si están disponibles, o cobrará gemas si tiene.
+    if (!isVip && (user.purchased_gems || 0) < currentAudioCost) {
       return alert(
         lang === 'es'
           ? `Necesitas ${currentAudioCost} gemas compradas`
@@ -707,7 +711,6 @@ export default function ChatPage() {
         
         setIsPlayingAudio(true)
         audio.onended = () => setIsPlayingAudio(false)
-        // ✅ FIX #47: Manejar rechazo de play() (políticas de autoplay del navegador)
         audio.play().catch((playErr) => {
           console.warn('[chat] audio.play() failed:', playErr)
           setIsPlayingAudio(false)
@@ -731,7 +734,6 @@ export default function ChatPage() {
     }
   }
 
-  // ✅ FIX: Añadido parámetro isDirect (true = usuario la pide, false = personaje la envía)
   const generateImage = async (isDirect: boolean = true) => {
     if (!user || !character || generatingImage) return
 
@@ -743,8 +745,10 @@ export default function ChatPage() {
       return
     }
 
+    // ✅ FIX #3 (parte 2): Si es VIP, no bloquear en cliente aunque no tenga purchased_gems.
+    // El backend usará photo_tokens si están disponibles.
     const purchasedGems = user.purchased_gems || 0
-    if (isDirect && !isFirstImage && purchasedGems < currentImageCost) {
+    if (isDirect && !isFirstImage && !isVip && purchasedGems < currentImageCost) {
       return alert(`Necesitas ${currentImageCost} gemas compradas`)
     }
 
@@ -790,7 +794,6 @@ export default function ChatPage() {
               content: `*${getDisplayName(character)} te envía una foto*\n\n![Selfie](${data.image_url})`,
             },
           ])
-          // ✅ FIX #37: Usar helper
           setRecentlyUnlocked(data.image_url)
           clearRecentlyUnlocked(data.image_url)
         }
@@ -831,7 +834,8 @@ export default function ChatPage() {
   const handleUnlockPhoto = async (offerId: number, price: number) => {
     if (!user || unlockingPhoto) return
 
-    // ✅ FIX #15: Si es VIP, no bloquear por falta de gemas (el backend usará photo_tokens si están disponibles)
+    // ✅ FIX #3 (parte 3): Si es VIP, no bloquear en cliente aunque no tenga purchased_gems.
+    // El backend usará photo_tokens si están disponibles.
     if (!isVip && (user.purchased_gems || 0) < price) {
       alert(`Necesitas ${price} gemas compradas. Ve a la tienda para recargar.`)
       router.push('/shop')
@@ -860,7 +864,6 @@ export default function ChatPage() {
           })
         )
         
-        // ✅ FIX #37: Usar helper
         setRecentlyUnlocked(data.image_url)
         clearRecentlyUnlocked(data.image_url)
         await refresh()
@@ -906,7 +909,6 @@ export default function ChatPage() {
     const rect = e.currentTarget.getBoundingClientRect()
     longPressTimer.current = setTimeout(() => {
       longPressFired.current = true
-      // ✅ FIX #23: Considerar tanto borde superior como inferior para el menú de reacciones
       const nearTop = rect.top < 150
       const nearBottom = window.innerHeight - rect.bottom < 150
       setMenuDirection(nearTop && !nearBottom ? 'bottom' : 'top')
@@ -926,12 +928,10 @@ export default function ChatPage() {
     pressOrigin.current = null
   }
 
-  // ✅ FIX: handleBannerTap ahora simula la oferta del personaje (envía isDirect=false)
   const handleBannerTap = () => {
     generateImage(false) 
   }
 
-  // ✅ FIX: El botón de la cámara ahora simula la petición directa del usuario (envía isDirect=true)
   const handleCameraTap = () => {
     const isFirstImage = seenImageCount === 0
     const purchasedGems = user?.purchased_gems || 0
@@ -941,14 +941,14 @@ export default function ChatPage() {
       setShowPremiumModal(true)
       return
     }
-    if (!isFirstImage && purchasedGems < currentImageCost) {
+    // ✅ FIX: Si es VIP, no bloquear en cliente
+    if (!isFirstImage && !isVip && purchasedGems < currentImageCost) {
       router.push('/shop')
       return
     }
     generateImage(true)
   }
 
-  // ✅ FIX: Al subir de nivel, la sorpresa es una petición directa (visible)
   const handleLevelUpCTA = () => {
     setLevelUpModal(null)
     setTimeout(() => handleCameraTap(), 200)
@@ -1052,7 +1052,6 @@ export default function ChatPage() {
   const formatMessage = (content: string) => {
     const images: string[] = []
     
-    // ✅ FIX #46: Regex mejorado para manejar paréntesis en URLs (usado con balanceo simple)
     let text = content.replace(
       /!\[([^\]]*)\]\(((?:[^()]|\([^()]*\))+)\)/g,
       (_, alt, url) => {
@@ -1216,7 +1215,6 @@ export default function ChatPage() {
   const currentImageCost = getImageCost(currentLevel.level)
   const currentAudioCost = getAudioCost(currentLevel.level)
 
-  // ✅ FIX #24: Mostrar error si falló la carga del personaje
   if (characterError) {
     return (
       <div className="spinner-full" style={{ flexDirection: 'column', gap: 16, padding: 24 }}>
@@ -1246,7 +1244,6 @@ export default function ChatPage() {
   const characterDescription = getCharacterDescription(character.archetype, character.gender, lang)
 
   const isFirstImage = seenImageCount === 0
-  // ✅ FIX #55: Considerar VIP para mostrar el banner como asequible
   const canAfford = isVip || purchasedGems >= currentImageCost || isFirstImage
 
   let headerBadgeText = ''
@@ -2026,9 +2023,13 @@ export default function ChatPage() {
       {showVipLimitModal && (
         <div className="modal-backdrop">
           <div className="modal-box level-up-modal">
-            <div style={{ fontSize: 60, textAlign: 'center', marginBottom: 8 }}>🌙</div>
+            <div style={{ fontSize: 60, textAlign: 'center', marginBottom: 8 }}>
+              {vipLimitModalMode === 'buy' ? '💌' : '🌙'}
+            </div>
             <p style={{ fontSize: 10, fontWeight: 900, letterSpacing: '0.18em', color: '#fbbf24', textAlign: 'center', margin: 0 }}>
-              {lang === 'es' ? 'LÍMITE DIARIO' : 'DAILY LIMIT'}
+              {vipLimitModalMode === 'buy'
+                ? (lang === 'es' ? 'SIN MENSAJES DISPONIBLES' : 'NO MESSAGES LEFT')
+                : (lang === 'es' ? 'DESCANSO NECESARIO' : 'TIME FOR A BREAK')}
             </p>
             <h2
               className="modal-title"
@@ -2043,7 +2044,9 @@ export default function ChatPage() {
                 backgroundClip: 'text',
               }}
             >
-              {lang === 'es' ? 'Necesitas un descanso' : 'You need a break'}
+              {vipLimitModalMode === 'buy'
+                ? (lang === 'es' ? 'Has agotado tus 200' : 'You used your 200')
+                : (lang === 'es' ? 'Hora de descansar' : 'Time to rest')}
             </h2>
             <div
               style={{
@@ -2064,8 +2067,8 @@ export default function ChatPage() {
                 }}
               >
                 {lang === 'es'
-                  ? `${displayName} y tú han hablado MUCHO hoy. Incluso lo mejor necesita un descanso. Vuelve mañana y seguirán donde lo dejaron. ✨`
-                  : `You and ${displayName} have talked A LOT today. Even the best needs a break. Come back tomorrow and pick up where you left off. ✨`}
+                  ? `Has usado tus ${VIP_DAILY_MESSAGE_LIMIT} mensajes VIP de hoy. ${vipLimitModalMode === 'buy' ? 'Puedes comprar más mensajes o volver mañana.' : 'Vuelve mañana y seguimos donde lo dejamos.'} ✨`
+                  : `You've used your ${VIP_DAILY_MESSAGE_LIMIT} VIP messages today. ${vipLimitModalMode === 'buy' ? 'You can buy more messages or come back tomorrow.' : 'Come back tomorrow and we\'ll pick up where we left off.'} ✨`}
               </p>
             </div>
 
@@ -2080,25 +2083,30 @@ export default function ChatPage() {
               }}
             >
               <span style={{ fontSize: 12, color: '#a395c9' }}>
-                {lang === 'es' ? 'Mensajes hoy' : 'Messages today'}
+                {lang === 'es' ? 'Mensajes VIP hoy' : 'VIP messages today'}
               </span>
               <span style={{ fontSize: 13, color: '#fbbf24', fontWeight: 800 }}>
                 {vipMessagesToday}/{VIP_DAILY_MESSAGE_LIMIT}
               </span>
             </div>
 
-            <button
-              onClick={() => setShowVipLimitModal(false)}
-              className="modal-btn primary"
-              style={{
-                width: '100%',
-                marginTop: 20,
-                background: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)',
-                boxShadow: '0 4px 20px rgba(251, 191, 36, 0.5)',
-              }}
-            >
-              {lang === 'es' ? 'Entendido' : 'Got it'}
-            </button>
+            <div className="modal-btn-row" style={{ marginTop: 20 }}>
+              <button
+                onClick={() => setShowVipLimitModal(false)}
+                className="modal-btn secondary"
+              >
+                {lang === 'es' ? 'Cerrar' : 'Close'}
+              </button>
+              {vipLimitModalMode === 'buy' && (
+                <button
+                  onClick={() => { setShowVipLimitModal(false); router.push('/shop') }}
+                  className="modal-btn primary"
+                  style={{ background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)', boxShadow: '0 4px 20px rgba(34, 197, 94, 0.5)' }}
+                >
+                  {lang === 'es' ? '💌 Comprar Mensajes' : '💌 Buy Messages'}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
