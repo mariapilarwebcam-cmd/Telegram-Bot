@@ -1,3 +1,4 @@
+// app/shop/page.tsx
 "use client"
 
 import { useEffect, useState, useRef } from 'react'
@@ -51,6 +52,9 @@ export default function ShopPage() {
 
   const [tonConnectUI] = useTonConnectUI()
   const t = getTranslations(lang)
+
+  // ✅ FIX: Definimos isVipActive aquí para poder usarlo en las validaciones y el filtrado
+  const isVipActive = !!vipSub?.active
 
   const handleCryptoError = (error: any) => {
     const msg = error?.message || error?.toString() || String(error)
@@ -339,6 +343,19 @@ export default function ShopPage() {
 
   const buyWithStars = async (idx: number) => {
     if (!user) return
+    
+    // ✅ FIX: Validación de seguridad. Si es VIP y el paquete es "First Time", lo bloqueamos.
+    const pkg = premiumCategory === 'hybrid' 
+      ? HYBRID_PACKAGES[idx] 
+      : premiumCategory === 'gems' 
+        ? STAR_PACKAGES[idx] 
+        : MESSAGE_PACKAGES[idx]
+        
+    if ((pkg as any)?.first_time_only && isVipActive) {
+      alert(lang === 'es' ? 'Este paquete es solo para nuevos usuarios.' : 'This package is for new users only.')
+      return
+    }
+
     setPurchasing(idx)
     try {
       const res = await tgFetch('/api/create-invoice', {
@@ -365,18 +382,18 @@ export default function ShopPage() {
               if (user.telegram_id) purchaseCache[user.telegram_id] = true
               setHasPurchased(true)
 
-              const pkg = premiumCategory === 'hybrid' 
+              const pkgAnalytics = premiumCategory === 'hybrid' 
                 ? HYBRID_PACKAGES[idx] 
                 : premiumCategory === 'gems' 
                   ? STAR_PACKAGES[idx] 
                   : MESSAGE_PACKAGES[idx]
                   
-              if (pkg && premiumCategory === 'gems') {
+              if (pkgAnalytics && premiumCategory === 'gems') {
                 Analytics.gemsPurchased({
                   package_index: idx,
-                  gems: getFinalGems(pkg as any),
+                  gems: getFinalGems(pkgAnalytics as any),
                   method: 'stars',
-                  amount: pkg.stars,
+                  amount: pkgAnalytics.stars,
                 })
               }
             } else {
@@ -459,6 +476,19 @@ export default function ShopPage() {
 
   const buyWithCrypto = async (idx: number) => {
     if (!user) return
+    
+    // ✅ FIX: Validación de seguridad. Si es VIP y el paquete es "First Time", lo bloqueamos.
+    const pkg = premiumCategory === 'hybrid' 
+      ? HYBRID_PACKAGES[idx] 
+      : premiumCategory === 'gems' 
+        ? CRYPTO_PACKAGES[idx] 
+        : MESSAGE_PACKAGES[idx]
+        
+    if ((pkg as any)?.first_time_only && isVipActive) {
+      alert(lang === 'es' ? 'Este paquete es solo para nuevos usuarios.' : 'This package is for new users only.')
+      return
+    }
+
     setPurchasing(idx)
     try {
       const res = await tgFetch('/api/create-crypto-invoice', {
@@ -569,6 +599,7 @@ export default function ShopPage() {
     .filter((p) => {
       if (!p.first_time_only) return true
       if (checking) return true
+      if (isVipActive) return false // ✅ FIX: Ocultar paquete First Time si ya es VIP
       return !hasPurchased
     })
 
@@ -577,10 +608,9 @@ export default function ShopPage() {
     .filter((p) => {
       if (!p.first_time_only) return true
       if (checking) return true
+      if (isVipActive) return false // ✅ FIX: Ocultar paquete First Time si ya es VIP
       return !hasPurchased
     })
-
-  const isVipActive = !!vipSub?.active
 
   return (
     <div className="page">
@@ -1012,7 +1042,6 @@ export default function ShopPage() {
             </div>
           )}
 
-          {/* ✅ GRILLA DE PAQUETES CON DISEÑO BASE + BONO + TOTAL */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {paymentMethod === 'stars'
               ? visibleStarsPackages.map((pkg) => {
