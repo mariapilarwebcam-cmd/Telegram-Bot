@@ -16,14 +16,13 @@ export async function POST(request: Request) {
     const user = await ensureUser(tid)
     if (!user) return NextResponse.json({ error: 'Error cargando cuenta' }, { status: 500 })
 
-    // ✅ NUEVO: Verificar si es VIP y si tiene su tirada gratis semanal
+    // ✅ Verificar si es VIP y si tiene su tirada gratis semanal
     const vipSub = await getActiveSubscription(tid)
     const isVip = !!vipSub
     let cost = BASE_COST_GEMS
     let isFreeSpin = false
 
     if (isVip) {
-      // Buscar si ya hizo una tirada gratis en los últimos 7 días
       const recentFreeSpin = await queryOne<{ id: number }>(
         `SELECT id FROM gacha_history 
          WHERE user_id = ? AND cost_gems = 0 AND created_at >= datetime('now', '-7 days') 
@@ -97,6 +96,7 @@ export async function POST(request: Request) {
 
       // 4. Asignar Premio
       if (tier === 'mythic' || tier === 'legendary') {
+        // ✅ FIX #3: Si interested_in no está definido, asumimos que quiere ambos (o femenino por defecto como estaba)
         const isFemale = user.interested_in !== 'male'
         const pool = isFemale ? GACHA_CHARACTERS_FEMALE : GACHA_CHARACTERS_MALE
         const char = pool[Math.floor(Math.random() * pool.length)]
@@ -204,6 +204,7 @@ export async function POST(request: Request) {
           })
           rewardType = 'photo_token'
           rewardDetails = '¡Foto Sorpresa (Nivel 3 o 4)!'
+          itemKey = 'level_34' // ✅ FIX #1: Asignar itemKey para evitar que el frontend se rompa
         } else if (rareRoll < 66) {
           const audioAmount = Math.random() < 0.5 ? 1 : 2
           for (let i = 0; i < audioAmount; i++) {
@@ -214,6 +215,7 @@ export async function POST(request: Request) {
           }
           rewardType = 'audio_token'
           rewardDetails = `¡Has ganado ${audioAmount} Audio(s) Gratis!`
+          itemKey = 'free' // ✅ FIX #1: Asignar itemKey para evitar que el frontend se rompa
         } else {
           let randomMsg = 15
           const gemRoll = Math.random() * 100
@@ -263,25 +265,25 @@ export async function POST(request: Request) {
         args: [tid, cost, tier, `${rewardType}:${rewardDetails}`]
       })
 
-      await tx.commit()
-
+      // ✅ FIX #2: Movemos el registro de la transacción DENTRO de la transacción (tx.execute)
+      // para garantizar que si falla algo, se revierta el cobro de gemas.
       if (cost > 0) {
-        await insertGemTransaction({
-          telegram_id: tid,
-          amount: -cost,
-          transaction_type: 'gacha_spin',
-          description: `Tirada de ruleta (${tier})`
+        await tx.execute({
+          sql: `INSERT INTO gem_transactions (telegram_id, amount, transaction_type, description) VALUES (?, ?, ?, ?)`,
+          args: [tid, -cost, 'gacha_spin', `Tirada de ruleta (${tier})`]
         })
       }
+
+      await tx.commit()
 
       return NextResponse.json({
         success: true,
         tier,
         reward_type: rewardType,
         reward_details: rewardDetails,
-        item_key: itemKey,
+        item_key: itemKey, // ✅ Ahora siempre tiene un valor válido
         remaining_gems: Number(debit.rows[0]?.gems || 0),
-        is_free_spin: isFreeSpin // ✅ Enviamos esto al frontend por si quieres mostrarlo
+        is_free_spin: isFreeSpin 
       })
 
     } catch (txError) {
