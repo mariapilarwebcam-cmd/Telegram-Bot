@@ -177,7 +177,6 @@ export default function ChatPage() {
   const [wardrobeData, setWardrobeData] = useState<{ inventory: any[], owned: string[], equipped: string | null }>({ inventory: [], owned: [], equipped: null })
   const [equippingOutfit, setEquippingOutfit] = useState(false)
 
-  // ✅ ESTADOS PARA EL INTERCAMBIO
   const [showExchangeModal, setShowExchangeModal] = useState(false)
   const [exchangeAmount, setExchangeAmount] = useState(2)
   const [exchanging, setExchanging] = useState(false)
@@ -271,7 +270,6 @@ export default function ChatPage() {
         setTotalUserMessages(count)
 
         const currentLvl = getLevelFromMessages(count)
-        // ✅ FIX: Umbrales actualizados para coincidir con lib/levels.ts
         const thresholds: Record<number, number | null> = {
           1: 5, 2: 15, 3: 40, 4: 90, 5: null,
         }
@@ -374,7 +372,6 @@ export default function ChatPage() {
     }, 300)
   }
 
-  // ✅ FIX #2: Se añade `textOverride` para evitar que se borre el mensaje original si se requiere pagar penalización
   const send = async (acceptPenalty = false, textOverride?: string) => {
     const text = textOverride || input.trim()
     if (!text || !user || loading || sendingRef.current) return
@@ -419,7 +416,6 @@ export default function ChatPage() {
           
           const confirmPenalty = window.confirm(data.message)
           if (confirmPenalty) {
-            // ✅ FIX #2: Pasamos el texto original como override
             send(true, text)
           } else {
             setInput(text)
@@ -697,19 +693,20 @@ export default function ChatPage() {
     }
   }
 
-  const generateImage = async () => {
+  // ✅ FIX: Añadido parámetro isDirect (true = usuario la pide, false = personaje la envía)
+  const generateImage = async (isDirect: boolean = true) => {
     if (!user || !character || generatingImage) return
 
     const isFirstImage = seenImageCount === 0
 
-    if (!isFirstImage && !isPremium) {
+    if (isDirect && !isFirstImage && !isPremium) {
       setPremiumModalReason('image')
       setShowPremiumModal(true)
       return
     }
 
     const purchasedGems = user.purchased_gems || 0
-    if (!isFirstImage && purchasedGems < currentImageCost) {
+    if (isDirect && !isFirstImage && purchasedGems < currentImageCost) {
       return alert(`Necesitas ${currentImageCost} gemas compradas`)
     }
 
@@ -732,7 +729,7 @@ export default function ChatPage() {
         body: JSON.stringify({
           character_id: characterId,
           recent_messages: recentMessages,
-          is_direct_request: true,
+          is_direct_request: isDirect, // ✅ FIX: Enviamos true o false según corresponda
         }),
       })
       const data = await res.json()
@@ -885,7 +882,13 @@ export default function ChatPage() {
     pressOrigin.current = null
   }
 
+  // ✅ FIX: handleBannerTap ahora simula la oferta del personaje (envía isDirect=false)
   const handleBannerTap = () => {
+    generateImage(false) 
+  }
+
+  // ✅ FIX: El botón de la cámara ahora simula la petición directa del usuario (envía isDirect=true)
+  const handleCameraTap = () => {
     const isFirstImage = seenImageCount === 0
     const purchasedGems = user?.purchased_gems || 0
 
@@ -898,12 +901,13 @@ export default function ChatPage() {
       router.push('/shop')
       return
     }
-    generateImage()
+    generateImage(true)
   }
 
+  // ✅ FIX: Al subir de nivel, la sorpresa es una petición directa (visible)
   const handleLevelUpCTA = () => {
     setLevelUpModal(null)
-    setTimeout(() => handleBannerTap(), 200)
+    setTimeout(() => handleCameraTap(), 200)
   }
 
   const doRename = async () => {
@@ -1143,7 +1147,7 @@ export default function ChatPage() {
         await refresh()
         setShowExchangeModal(false)
         setExchangeAmount(2)
-        setBlocked(false) // Cierra el modal de bloqueo para que pueda seguir chateando
+        setBlocked(false) 
         alert(lang === 'es' 
           ? `✅ ¡Cambio exitoso! Has recibido ${data.exchanged.messages} mensajes.` 
           : `✅ Success! You received ${data.exchanged.messages} messages.`)
@@ -1296,7 +1300,6 @@ export default function ChatPage() {
             )}
           </div>
 
-          {/* ✅ BARRAS DE PROGRESO: VIP Y RELACIÓN APILADAS */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
             {isVip && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -1654,7 +1657,7 @@ export default function ChatPage() {
 
         {photoOfferActive && !hasFantasyPass && (
           <div
-            onClick={handleBannerTap}
+            onClick={handleBannerTap} // ✅ FIX: Este es el banner donde el personaje ofrece la foto
             style={{
               position: 'relative',
               marginBottom: 12,
@@ -1786,7 +1789,8 @@ export default function ChatPage() {
             )}
           </button>
 
-          <button onClick={handleBannerTap} disabled={generatingImage} className="chat-icon-btn" title={`${t.imageTooltip} (${currentImageCost} gemas)`} style={{ opacity: !isFirstImage && !isVip && isPremium && purchasedGems < currentImageCost ? 0.4 : 1, boxShadow: photoOfferActive ? '0 0 20px rgba(236,72,153,0.9), 0 0 30px rgba(168,85,247,0.6)' : undefined, borderColor: photoOfferActive ? '#ec4899' : undefined }}>
+          {/* ✅ FIX: La cámara ahora envía isDirect=true, por lo que la foto se ve visible */}
+          <button onClick={handleCameraTap} disabled={generatingImage} className="chat-icon-btn" title={`${t.imageTooltip} (${currentImageCost} gemas)`} style={{ opacity: !isFirstImage && !isVip && isPremium && purchasedGems < currentImageCost ? 0.4 : 1, boxShadow: photoOfferActive ? '0 0 20px rgba(236,72,153,0.9), 0 0 30px rgba(168,85,247,0.6)' : undefined, borderColor: photoOfferActive ? '#ec4899' : undefined }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
               <rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="2" />
               <circle cx="9" cy="10" r="2" stroke="currentColor" strokeWidth="2" />
@@ -2216,12 +2220,10 @@ export default function ChatPage() {
             )}
             <p className="modal-desc">{displayName} {t.blockedDesc}</p>
             
-            {/* ✅ OPCIÓN 1: COMPRAR MENSAJES */}
             <button onClick={() => router.push('/shop')} className="modal-btn primary" style={{ width: '100%', marginBottom: 8, background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)', boxShadow: '0 4px 16px rgba(34, 197, 94, 0.4)' }}>
               💌 {lang === 'es' ? 'Comprar Mensajes' : 'Buy Messages'}
             </button>
 
-            {/* ✅ OPCIÓN 2: CAMBIAR GEMAS POR MENSAJES */}
             <button onClick={() => { setShowExchangeModal(true); setBlocked(false); }} className="modal-btn primary" style={{ width: '100%', marginBottom: 8, background: 'linear-gradient(135deg, #a855f7 0%, #ec4899 100%)', boxShadow: '0 4px 16px rgba(236, 72, 153, 0.4)' }}>
               🔄 {lang === 'es' ? 'Cambiar Gemas por Mensajes' : 'Exchange Gems for Messages'}
             </button>
@@ -2235,7 +2237,6 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* ✅ MODAL DE INTERCAMBIO EN EL CHAT */}
       {showExchangeModal && (
         <div className="modal-backdrop" onClick={() => !exchanging && setShowExchangeModal(false)}>
           <div className="modal-box" onClick={(e) => e.stopPropagation()}>
