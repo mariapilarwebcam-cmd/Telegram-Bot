@@ -69,11 +69,13 @@ function getResultPrize(result: any): Prize {
   return { icon: '💬', imageKey: 'icon_gems', label: `+${result.item_key || '?'}`, color: tierColor, tier }
 }
 
-// ✅ FIX 2: Extensión .png por defecto (puedes cambiarla a .jpg si tus imágenes son JPG en R2)
+// ✅ FIX 2: Extensión .jpg y carpeta /item/ (singular) según tu captura de R2
 const getItemImageUrl = (itemId: string) => {
   const base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL
   if (!base) return ''
-  return `${base.replace(/\/$/, '')}/items/${itemId}.png`
+  const cleanBase = base.replace(/\/$/, '')
+  const folder = cleanBase.endsWith('/item') || cleanBase.endsWith('/items') ? '' : '/item'
+  return `${cleanBase}${folder}/${itemId}.jpg`
 }
 
 const SHOWCASE_OUTFITS = [
@@ -404,10 +406,10 @@ export default function GachaPage() {
         </div>
       </div>
 
-      {/* ✅ FIX 1: Usamos Flexbox para que la palanca siempre esté al lado de la máquina */}
-      <div style={{ position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'center', alignItems: 'flex-end', marginTop: 24, padding: '0 16px' }}>
+      {/* ✅ FIX 1: Contenedor sin wrap, con gap y máquina más estrecha para que la palanca quepa al lado */}
+      <div style={{ position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'center', alignItems: 'flex-end', marginTop: 24, padding: '0 8px', gap: '8px', flexWrap: 'nowrap', width: '100%' }}>
         
-        <div className={`cabinet ${isShaking ? 'shaking' : ''}`} style={{ marginRight: '20px', marginBottom: '10px' }}>
+        <div className={`cabinet ${isShaking ? 'shaking' : ''}`} style={{ flex: '1 1 auto', maxWidth: '260px' }}>
           <div className="marquee">
             <div className="marquee-body">
               <p className="marquee-title">Taboo Realm</p>
@@ -484,8 +486,8 @@ export default function GachaPage() {
           <div className="cab-base"><div className="cab-foot"></div></div>
         </div>
 
-        {/* ✅ FIX 1: La palanca ahora está en el flujo normal (flex) */}
-        <div className="lever-wrap" ref={leverRef} onClick={handleSpin}>
+        {/* ✅ La palanca con flex-shrink: 0 para que no se deforme ni salte de línea */}
+        <div className="lever-wrap" ref={leverRef} onClick={handleSpin} style={{ marginBottom: '15px' }}>
           <div className="lever-rail"></div>
           <div className="lever-arm"><div className="lever-ball"></div></div>
           <div className="lever-base"></div>
@@ -594,7 +596,6 @@ export default function GachaPage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
             {SHOWCASE_OUTFITS.map((outfit) => (
               <div key={outfit.id} style={{ borderRadius: 12, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                {/* ✅ FIX 2: Fallback en caso de que la imagen falle */}
                 <div style={{ width: '100%', aspectRatio: '3/4', backgroundColor: '#150f24', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <span style={{ fontSize: 48, opacity: 0.2 }}>👗</span>
                   <img 
@@ -656,7 +657,6 @@ export default function GachaPage() {
         .cabinet { 
           position: relative; 
           width: 100%; 
-          max-width: 280px; /* Reducido un poco para que quepa con la palanca */
           display: flex; 
           flex-direction: column; 
           align-items: center; 
@@ -800,17 +800,18 @@ export default function GachaPage() {
           box-shadow: 0 10px 20px rgba(0,0,0,0.9);
         }
 
-        /* ✅ FIX 1: Palanca en posición relativa */
+        /* ✅ Palanca más estilizada y con flex-shrink: 0 */
         .lever-wrap { 
           position: relative; 
-          width: 50px; 
-          height: 260px; 
+          width: 40px; 
+          height: 220px; 
           display: flex; 
           flex-direction: column; 
           align-items: center; 
           cursor: pointer; 
           user-select: none; 
           z-index: 1;
+          flex-shrink: 0;
         }
         
         .lever-rail { 
@@ -819,9 +820,9 @@ export default function GachaPage() {
           bottom: 20px; 
           left: 50%; 
           transform: translateX(-50%); 
-          width: 10px; 
+          width: 8px; 
           background: linear-gradient(90deg, #0a0510, #1f1733, #0a0510); 
-          border-radius: 5px; 
+          border-radius: 4px; 
           border: 1px solid rgba(168,85,247,0.3); 
           box-shadow: inset 0 5px 10px rgba(0,0,0,0.9);
         }
@@ -831,21 +832,21 @@ export default function GachaPage() {
           top: 30px; 
           left: 50%; 
           transform: translateX(-50%); 
-          width: 8px; 
-          height: 140px; 
+          width: 6px; 
+          height: 120px; 
           background: linear-gradient(90deg, #7a4f10, #c4b5fd 30%, #a5b4fc 60%, #3730a3); 
-          border-radius: 4px; 
+          border-radius: 3px; 
           transition: transform 0.15s ease; 
           box-shadow: 2px 2px 5px rgba(0,0,0,0.5);
         }
         
         .lever-ball { 
           position: absolute; 
-          top: -16px; 
+          top: -14px; 
           left: 50%; 
           transform: translateX(-50%); 
-          width: 30px; 
-          height: 30px; 
+          width: 24px; 
+          height: 24px; 
           border-radius: 50%; 
           background: radial-gradient(circle at 30% 30%, #fff 0%, #f472b6 20%, #c026d3 60%, #4c1d95 100%); 
           box-shadow: 
@@ -859,8 +860,8 @@ export default function GachaPage() {
           bottom: 10px; 
           left: 50%; 
           transform: translateX(-50%); 
-          width: 24px; 
-          height: 24px; 
+          width: 20px; 
+          height: 20px; 
           border-radius: 50%; 
           background: conic-gradient(from 90deg, #ffe066, #7a4f10, #0a0510, #7a4f10, #ffe066); 
           box-shadow: 0 4px 10px rgba(0,0,0,0.9);
@@ -869,8 +870,8 @@ export default function GachaPage() {
         .lever-tag { 
           position: absolute; 
           bottom: -10px; 
-          font-size: 9px; 
-          letter-spacing: 0.2em; 
+          font-size: 8px; 
+          letter-spacing: 0.1em; 
           color: #a78bfa; 
           text-transform: uppercase; 
           font-weight: 800;
