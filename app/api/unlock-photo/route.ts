@@ -5,22 +5,34 @@ import { unlockOffer, HttpError } from '@/lib/unlock-engine'
 export async function POST(request: Request) {
   try {
     const tid = request.headers.get('x-telegram-id-validated')
-    if (!tid) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (!tid) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    }
 
-    const { offer_id } = await request.json()
-    if (!offer_id) return NextResponse.json({ error: 'Falta offer_id' }, { status: 400 })
+    // ✅ FIX #2: Manejo seguro del parseo del JSON
+    const body = await request.json().catch(() => ({}))
+    const rawOfferId = body?.offer_id
+
+    // ✅ FIX #1: Validar que offer_id sea un número válido
+    const offer_id = Number(rawOfferId)
+    if (!rawOfferId || isNaN(offer_id) || offer_id <= 0) {
+      return NextResponse.json({ error: 'offer_id inválido o faltante' }, { status: 400 })
+    }
 
     const result = await unlockOffer(tid, offer_id)
 
-    // Generamos la URL pública de la imagen original
-    const base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || ''
-    const imageUrl = `${base.replace(/\/$/, '')}/${result.r2_key}`
+    // ✅ FIX #3: Construir la URL pública de forma robusta
+    // Si r2_key ya es una URL absoluta, no le añadimos la base.
+    const base = (process.env.NEXT_PUBLIC_R2_PUBLIC_URL || '').replace(/\/$/, '')
+    const imageUrl = result.r2_key.startsWith('http')
+      ? result.r2_key
+      : `${base}/${result.r2_key}`
 
     return NextResponse.json({
       success: true,
       image_url: imageUrl,
       already_unlocked: result.already_unlocked,
-      paid_with: result.paid_with
+      paid_with: result.paid_with,
     })
 
   } catch (error: any) {
