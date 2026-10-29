@@ -15,7 +15,7 @@ import {
 import {
   getCharacterFace, getCharacterImageUrl, VIP_LIMITS, MAX_GENERATIONS_PER_CONTEXT_PER_USER,
 } from '@/lib/constants'
-// ✅ CAMBIO 1: Importamos Wiro en lugar de Runware
+// ✅ Importamos Wiro
 import { generateWiroImage } from '@/lib/wiro'
 import { getLevelFromMessages, getImageCost, getClothingLevel, getFaceVisibility } from '@/lib/levels'
 import { r2Available, uploadToR2, downloadImage, buildR2Key, buildTagKey } from '@/lib/r2-upload'
@@ -460,9 +460,21 @@ export async function POST(request: Request) {
       }, { status: 429 })
     }
 
+    // ✅ CAMBIO 1: Lógica específica de imágenes estáticas por nivel
+    // Nivel 1-2: _1, _2
+    // Nivel 3: _1, _2, _3
+    // Nivel 4: _1, _2, _3, _4
+    // Nivel 5: Ninguna (siempre genera o usa pool)
     let r2Index: number | null = null
-    // ✅ CAMBIO 2: Aquí reactivamos las imágenes estáticas para niveles 1, 2 y 3
-    const candidateIndices = level.level <= 3 ? [1, 2, 3] : []
+    let candidateIndices: number[] = []
+    if (level.level <= 2) {
+      candidateIndices = [1, 2]
+    } else if (level.level === 3) {
+      candidateIndices = [1, 2, 3]
+    } else if (level.level === 4) {
+      candidateIndices = [1, 2, 3, 4]
+    }
+    
     for (const idx of candidateIndices) {
       if (!seenIndices.has(idx)) {
         r2Index = idx
@@ -511,11 +523,12 @@ export async function POST(request: Request) {
       await learnHeatTriggers(recent_messages)
     }
     
-    let freeChance = 0.15 
-    if (heatScore > 60) freeChance = 0.05 
-    else if (heatScore < 25 && userMsgCount > 15) freeChance = 0.70 
-
-    let isFree = totalImagesSent === 0 || (totalImagesSent > 0 && Math.random() < freeChance)
+    // ✅ CAMBIO 2: Solo _1 es gratis. Se elimina el freeChance aleatorio.
+    let isFree = totalImagesSent === 0
+    if (r2Index !== null && r2Index > 1) {
+      isFree = false
+    }
+    
     let useVipQuota = false
     let gemsCharged = false
 
@@ -659,7 +672,6 @@ export async function POST(request: Request) {
         const seedUrl = getCharacterImageUrl(character.archetype, character.gender)
         let rawUrl: string
         try {
-          // ✅ CAMBIO 3: Llamada a Wiro AI
           rawUrl = await generateWiroImage(imagePrompt, seedUrl, level.level)
         } catch (imgError) {
           await execute(`DELETE FROM image_generations WHERE id = ?`, [generationId])
@@ -678,7 +690,6 @@ export async function POST(request: Request) {
           return NextResponse.json({ error: 'Error al generar la imagen' }, { status: 500 })
         }
 
-        // ✅ CAMBIO 4: Actualizamos el nombre del modelo usado
         modelUsed = 'wiro-seedream-v4-5'
         
         const { buffer } = await downloadImage(rawUrl)
