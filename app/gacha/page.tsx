@@ -69,10 +69,11 @@ function getResultPrize(result: any): Prize {
   return { icon: '💬', imageKey: 'icon_gems', label: `+${result.item_key || '?'}`, color: tierColor, tier }
 }
 
+// ✅ FIX 2: Extensión .png por defecto (puedes cambiarla a .jpg si tus imágenes son JPG en R2)
 const getItemImageUrl = (itemId: string) => {
   const base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL
   if (!base) return ''
-  return `${base.replace(/\/$/, '')}/items/${itemId}.jpg`
+  return `${base.replace(/\/$/, '')}/items/${itemId}.png`
 }
 
 const SHOWCASE_OUTFITS = [
@@ -128,7 +129,6 @@ export default function GachaPage() {
   const targetPos = useRef(0)
   const currentPrize = useRef<Prize | null>(null)
   
-  // ✅ FIX: Ref para guardar el resultado real y evitar "stale closures"
   const currentResultData = useRef<any>(null)
   const hasFinished = useRef(false)
 
@@ -257,13 +257,11 @@ export default function GachaPage() {
     setTimeout(() => setIsShaking(false), 400)
 
     setTimeout(() => {
-      // ✅ FIX: Usar currentResultData.current en lugar de la variable obsoleta "result"
       setResult(currentResultData.current)
     }, 600)
   }
 
   const finishSpin = () => {
-    // ✅ FIX: Evitar que finishSpin se ejecute dos veces por el setTimeout de seguridad
     if (hasFinished.current) return
     hasFinished.current = true
 
@@ -304,8 +302,8 @@ export default function GachaPage() {
     setTierLabel('· GIRANDO ·')
     setTierColor('#ec4899')
     
-    hasFinished.current = false // ✅ Reseteamos el flag
-    currentResultData.current = null // ✅ Reseteamos el resultado
+    hasFinished.current = false
+    currentResultData.current = null
     animLever()
 
     try {
@@ -322,7 +320,6 @@ export default function GachaPage() {
         return
       }
 
-      // ✅ FIX: Guardar los datos reales en la ref
       currentResultData.current = data
 
       const resultPrize = getResultPrize(data)
@@ -407,16 +404,10 @@ export default function GachaPage() {
         </div>
       </div>
 
-      <div style={{ position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'center', marginTop: 24, padding: '0 16px' }}>
+      {/* ✅ FIX 1: Usamos Flexbox para que la palanca siempre esté al lado de la máquina */}
+      <div style={{ position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'center', alignItems: 'flex-end', marginTop: 24, padding: '0 16px' }}>
         
-        <div className="lever-wrap" ref={leverRef} onClick={handleSpin} style={{ position: 'absolute', right: '10px', bottom: '20px' }}>
-          <div className="lever-rail"></div>
-          <div className="lever-arm"><div className="lever-ball"></div></div>
-          <div className="lever-base"></div>
-          <span className="lever-tag">PULL</span>
-        </div>
-
-        <div className={`cabinet ${isShaking ? 'shaking' : ''}`} style={{ marginRight: '40px' }}>
+        <div className={`cabinet ${isShaking ? 'shaking' : ''}`} style={{ marginRight: '20px', marginBottom: '10px' }}>
           <div className="marquee">
             <div className="marquee-body">
               <p className="marquee-title">Taboo Realm</p>
@@ -491,6 +482,14 @@ export default function GachaPage() {
           </div>
           
           <div className="cab-base"><div className="cab-foot"></div></div>
+        </div>
+
+        {/* ✅ FIX 1: La palanca ahora está en el flujo normal (flex) */}
+        <div className="lever-wrap" ref={leverRef} onClick={handleSpin}>
+          <div className="lever-rail"></div>
+          <div className="lever-arm"><div className="lever-ball"></div></div>
+          <div className="lever-base"></div>
+          <span className="lever-tag">PULL</span>
         </div>
       </div>
 
@@ -595,7 +594,18 @@ export default function GachaPage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
             {SHOWCASE_OUTFITS.map((outfit) => (
               <div key={outfit.id} style={{ borderRadius: 12, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                <div style={{ width: '100%', aspectRatio: '3/4', backgroundImage: `url('${getItemImageUrl(outfit.id)}')`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundColor: '#150f24' }} />
+                {/* ✅ FIX 2: Fallback en caso de que la imagen falle */}
+                <div style={{ width: '100%', aspectRatio: '3/4', backgroundColor: '#150f24', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <span style={{ fontSize: 48, opacity: 0.2 }}>👗</span>
+                  <img 
+                    src={getItemImageUrl(outfit.id)} 
+                    alt={outfit.name}
+                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none'
+                    }}
+                  />
+                </div>
                 <div style={{ padding: '10px 8px', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: '#f5f0ff' }}>{outfit.name}</div>
                   <div style={{ fontSize: 9, color: TIER_COLORS[outfit.rarity as keyof typeof TIER_COLORS].color, fontWeight: 800 }}>{TIER_COLORS[outfit.rarity as keyof typeof TIER_COLORS].label}</div>
@@ -646,7 +656,7 @@ export default function GachaPage() {
         .cabinet { 
           position: relative; 
           width: 100%; 
-          max-width: 320px; 
+          max-width: 280px; /* Reducido un poco para que quepa con la palanca */
           display: flex; 
           flex-direction: column; 
           align-items: center; 
@@ -790,10 +800,9 @@ export default function GachaPage() {
           box-shadow: 0 10px 20px rgba(0,0,0,0.9);
         }
 
+        /* ✅ FIX 1: Palanca en posición relativa */
         .lever-wrap { 
-          position: absolute; 
-          right: 0px; 
-          bottom: 10px; 
+          position: relative; 
           width: 50px; 
           height: 260px; 
           display: flex; 
