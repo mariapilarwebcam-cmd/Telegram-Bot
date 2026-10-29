@@ -127,11 +127,16 @@ async def update_last_active(telegram_id: int):
 
 
 async def has_prior_purchase(telegram_id: int) -> bool:
-    """✅ FIX #3 y #4: Verifica si el usuario ya ha comprado alguna vez."""
+    """✅ FIX #9 CRÍTICO: Verifica compras previas Y suscripciones VIP.
+    Cierra el bypass del paquete 'first_time' para usuarios VIP que nunca
+    compraron un paquete pero sí pagaron una suscripción."""
     try:
         row = turso_query_one(
-            "SELECT id FROM star_purchases WHERE telegram_id = ? LIMIT 1",
-            [str(telegram_id)]
+            """SELECT id FROM star_purchases WHERE telegram_id = ? LIMIT 1
+               UNION
+               SELECT id FROM subscriptions WHERE telegram_id = ? LIMIT 1
+               LIMIT 1""",
+            [str(telegram_id), str(telegram_id)]
         )
         return row is not None
     except Exception as e:
@@ -926,7 +931,8 @@ async def cmd_shop(message: Message):
     language = user.get('language', 'es')
     telegram_id = message.from_user.id
 
-    # ✅ FIX #3: Ocultar paquetes "first_time" si el usuario ya compró
+    # ✅ FIX #3 y #9: Ocultar paquetes "first_time" si el usuario ya compró
+    # (incluye haber comprado una suscripción VIP)
     prior_purchase = await has_prior_purchase(telegram_id)
 
     builder = InlineKeyboardBuilder()
@@ -978,7 +984,7 @@ async def process_purchase(callback: CallbackQuery):
     if not user:
         return await callback.answer("⚠️ Usuario no encontrado", show_alert=True)
 
-    # ✅ FIX #3: Bloquear compra de paquete first_time si ya compró
+    # ✅ FIX #3 y #9: Bloquear compra de paquete first_time si ya compró (o es VIP)
     if pkg['first_time']:
         prior = await has_prior_purchase(telegram_id)
         if prior:
@@ -1045,7 +1051,7 @@ async def process_successful_payment(message: Message):
                 new_exp = current_exp + timedelta(days=days)
                 new_exp_str = new_exp.strftime('%Y-%m-%d %H:%M:%S')
 
-                # ✅ FIX #7: LIMIT 1 en el UPDATE para no extender múltiples suscripciones
+                # ✅ FIX #7: UPDATE por id específico
                 turso_execute(
                     """UPDATE subscriptions
                        SET expires_at = ?, telegram_charge_id = ?
@@ -1088,7 +1094,7 @@ async def process_successful_payment(message: Message):
         prefix = "gem_purchase_"
         active_packages = STAR_PACKAGES
     else:
-        # ✅ FIX: Payload desconocido → rechazar en lugar de asumir gem_purchase_
+        # ✅ FIX: Payload desconocido → rechazar
         logger.error(f"Unknown payment payload: {payload}")
         return await message.answer("⚠️ Error: payload de pago desconocido. Contacta a soporte.")
 
@@ -1108,18 +1114,14 @@ async def process_successful_payment(message: Message):
         logger.error(
             f"⚠️ Amount mismatch: paid {total_paid} but expected {expected_stars} for package {pkg_idx} ({payload})"
         )
-        # Aún así procesamos (el usuario ya pagó) pero loggeamos para revisión
-        # Telegram no permite pagar menos del precio de la factura, así que esto es defensa en profundidad
 
-    # ✅ FIX #3: Validar first_time en el procesamiento
+    # ✅ FIX #3 y #9: Validar first_time en el procesamiento
     if pkg.get('first_time', False):
         prior = await has_prior_purchase(telegram_id)
         if prior:
             logger.warning(
-                f"⚠️ User {telegram_id} paid for first_time package {pkg_idx} but already has prior purchases. Processing as regular package."
+                f"⚠️ User {telegram_id} paid for first_time package {pkg_idx} but already has prior purchases or VIP. Processing as regular package."
             )
-            # El usuario pagó, entregamos el paquete pero no lo registramos como "first"
-            # (En la práctica, el invoice debió ser bloqueado, pero si llegamos aquí, cumplimos)
 
     # Asignar montos según el tipo
     gems_amount = 0
@@ -1137,15 +1139,15 @@ async def process_successful_payment(message: Message):
         gems_amount = calc_final_gems(pkg)
         purchase_type = 'gems'
 
-    # ✅ FIX #4: Calcular is_first_purchase correctamente (basado en estado del usuario, no del paquete)
+    # ✅ FIX #4: Calcular is_first_purchase correctamente
     prior_purchase_exists = await has_prior_purchase(telegram_id)
     is_user_first_purchase = not prior_purchase_exists
 
     success = await record_star_purchase(
         telegram_id, pkg['stars'], gems_amount, messages_amount,
-        is_user_first_purchase,  # ✅ FIX #4
+        is_user_first_purchase,
         charge_id, purchase_type,
-        bot=message.bot,  # ✅ FIX #1
+        bot=message.bot,
     )
 
     if not success:
