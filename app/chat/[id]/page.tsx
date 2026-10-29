@@ -165,6 +165,8 @@ export default function ChatPage() {
   const [reportError, setReportError] = useState<string | null>(null)
 
   const [characterLoading, setCharacterLoading] = useState(true)
+  // ✅ FIX #24: Estado para manejar errores de carga del personaje
+  const [characterError, setCharacterError] = useState<string | null>(null)
   const [historyLoaded, setHistoryLoaded] = useState(false)
   const [autoStartAttempted, setAutoStartAttempted] = useState(false)
 
@@ -188,6 +190,10 @@ export default function ChatPage() {
   const longPressTimer = useRef<NodeJS.Timeout | null>(null)
   const longPressFired = useRef(false)
   const pressOrigin = useRef<{ x: number; y: number } | null>(null)
+  // ✅ FIX #10: useRef para evitar doble ejecución del autostart en React 18 StrictMode
+  const autoStartRef = useRef(false)
+  // ✅ FIX #37: useRef para controlar el setTimeout de recentlyUnlocked
+  const recentlyUnlockedTimer = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     const interval = setInterval(() => setRotationIndex((p) => p + 1), 5000)
@@ -232,10 +238,19 @@ export default function ChatPage() {
     if (userLoading) return
     if (!user?.telegram_id) return
 
+    // ✅ FIX #61: Resetear estado al cambiar de personaje
+    setCharacterLoading(true)
+    setCharacterError(null)
+    setHistoryLoaded(false)
+    setCharacter(null)
+    setMessages([])
+
     tgFetch(`/api/character/${characterId}`)
       .then(async (res) => {
         if (!res.ok) {
           console.error('[chat] char load failed:', res.status)
+          // ✅ FIX #24: Guardar el error para mostrar mensaje
+          setCharacterError(lang === 'es' ? 'No se pudo cargar el personaje.' : 'Could not load character.')
           setCharacterLoading(false)
           return
         }
@@ -283,9 +298,10 @@ export default function ChatPage() {
       })
       .catch((e) => {
         console.error('[chat] char load error:', e)
+        setCharacterError(lang === 'es' ? 'Error de conexión al cargar el personaje.' : 'Connection error loading character.')
         setCharacterLoading(false)
       })
-  }, [characterId, user?.telegram_id, userLoading])
+  }, [characterId, user?.telegram_id, userLoading, lang])
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -322,9 +338,12 @@ export default function ChatPage() {
 
   useEffect(() => {
     if (!historyLoaded || !user || !character) return
-    if (messages.length > 0 || autoStartAttempted || loading) return
+    if (messages.length > 0 || loading) return
+    // ✅ FIX #10: Usar useRef para evitar doble ejecución en StrictMode
+    if (autoStartRef.current) return
 
     const startChat = async () => {
+      autoStartRef.current = true
       setAutoStartAttempted(true)
       const bonusGems = (user as any)?.bonus_gems || 0
       const gems = user.gems || 0
@@ -370,6 +389,16 @@ export default function ChatPage() {
     setTimeout(() => {
       endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
     }, 300)
+  }
+
+  // ✅ FIX #37: Función helper para limpiar recentlyUnlocked sin pisar un valor nuevo
+  const clearRecentlyUnlocked = (url: string) => {
+    if (recentlyUnlockedTimer.current) {
+      clearTimeout(recentlyUnlockedTimer.current)
+    }
+    recentlyUnlockedTimer.current = setTimeout(() => {
+      setRecentlyUnlocked((current) => (current === url ? null : current))
+    }, 1000)
   }
 
   const send = async (acceptPenalty = false, textOverride?: string) => {
@@ -543,8 +572,9 @@ export default function ChatPage() {
             content: `*${getDisplayName(character)} te envía una foto*\n\n![Selfie](${data.image_url})`,
           },
         ])
+        // ✅ FIX #37: Usar helper en lugar de setTimeout directo
         setRecentlyUnlocked(data.image_url)
-        setTimeout(() => setRecentlyUnlocked(null), 1000)
+        clearRecentlyUnlocked(data.image_url)
         
         setHasFantasyPass(false)
         await refresh()
@@ -583,6 +613,9 @@ export default function ChatPage() {
         owned: prev.owned.includes(outfitKey) ? prev.owned : [...prev.owned, outfitKey]
       }))
 
+      // ✅ FIX #6: Actualizar el estado del personaje para reflejar el nuevo outfit
+      setCharacter((prev: any) => prev ? { ...prev, equipped_outfit: outfitKey } : prev)
+
       setShowWardrobe(false)
 
       if (data.is_new) {
@@ -605,8 +638,9 @@ export default function ChatPage() {
               content: `*${getDisplayName(character)} se sonroja y te muestra cómo le queda*\n\n"¡No puedo creer que me hayas comprado esto! Espera, déjame mostrarte..."\n\n![Regalo](${imgData.image_url})`,
             },
           ])
+          // ✅ FIX #37: Usar helper
           setRecentlyUnlocked(imgData.image_url)
-          setTimeout(() => setRecentlyUnlocked(null), 1000)
+          clearRecentlyUnlocked(imgData.image_url)
           await refresh()
         }
       }
@@ -673,7 +707,11 @@ export default function ChatPage() {
         
         setIsPlayingAudio(true)
         audio.onended = () => setIsPlayingAudio(false)
-        audio.play()
+        // ✅ FIX #47: Manejar rechazo de play() (políticas de autoplay del navegador)
+        audio.play().catch((playErr) => {
+          console.warn('[chat] audio.play() failed:', playErr)
+          setIsPlayingAudio(false)
+        })
 
         Analytics.audioGenerated({
           character_id: characterId,
@@ -729,7 +767,7 @@ export default function ChatPage() {
         body: JSON.stringify({
           character_id: characterId,
           recent_messages: recentMessages,
-          is_direct_request: isDirect, // ✅ FIX: Enviamos true o false según corresponda
+          is_direct_request: isDirect,
         }),
       })
       const data = await res.json()
@@ -752,8 +790,9 @@ export default function ChatPage() {
               content: `*${getDisplayName(character)} te envía una foto*\n\n![Selfie](${data.image_url})`,
             },
           ])
+          // ✅ FIX #37: Usar helper
           setRecentlyUnlocked(data.image_url)
-          setTimeout(() => setRecentlyUnlocked(null), 1000)
+          clearRecentlyUnlocked(data.image_url)
         }
 
         setGems(data.remaining_gems)
@@ -792,7 +831,8 @@ export default function ChatPage() {
   const handleUnlockPhoto = async (offerId: number, price: number) => {
     if (!user || unlockingPhoto) return
 
-    if ((user.purchased_gems || 0) < price) {
+    // ✅ FIX #15: Si es VIP, no bloquear por falta de gemas (el backend usará photo_tokens si están disponibles)
+    if (!isVip && (user.purchased_gems || 0) < price) {
       alert(`Necesitas ${price} gemas compradas. Ve a la tienda para recargar.`)
       router.push('/shop')
       return
@@ -820,8 +860,9 @@ export default function ChatPage() {
           })
         )
         
+        // ✅ FIX #37: Usar helper
         setRecentlyUnlocked(data.image_url)
-        setTimeout(() => setRecentlyUnlocked(null), 1000)
+        clearRecentlyUnlocked(data.image_url)
         await refresh()
       } else {
         alert(data.message || data.error || 'Error al desbloquear')
@@ -865,7 +906,10 @@ export default function ChatPage() {
     const rect = e.currentTarget.getBoundingClientRect()
     longPressTimer.current = setTimeout(() => {
       longPressFired.current = true
-      setMenuDirection(rect.top < 150 ? 'bottom' : 'top')
+      // ✅ FIX #23: Considerar tanto borde superior como inferior para el menú de reacciones
+      const nearTop = rect.top < 150
+      const nearBottom = window.innerHeight - rect.bottom < 150
+      setMenuDirection(nearTop && !nearBottom ? 'bottom' : 'top')
       setActiveReactionMsg(i)
       navigator.vibrate?.(50)
     }, 400)
@@ -1008,8 +1052,9 @@ export default function ChatPage() {
   const formatMessage = (content: string) => {
     const images: string[] = []
     
+    // ✅ FIX #46: Regex mejorado para manejar paréntesis en URLs (usado con balanceo simple)
     let text = content.replace(
-      /!\[([^\]]*)\]\(([^)]+)\)/g,
+      /!\[([^\]]*)\]\(((?:[^()]|\([^()]*\))+)\)/g,
       (_, alt, url) => {
         const idx = images.length
         const safeAlt = String(alt)
@@ -1171,6 +1216,22 @@ export default function ChatPage() {
   const currentImageCost = getImageCost(currentLevel.level)
   const currentAudioCost = getAudioCost(currentLevel.level)
 
+  // ✅ FIX #24: Mostrar error si falló la carga del personaje
+  if (characterError) {
+    return (
+      <div className="spinner-full" style={{ flexDirection: 'column', gap: 16, padding: 24 }}>
+        <p style={{ color: '#fca5a5', textAlign: 'center' }}>⚠️ {characterError}</p>
+        <button 
+          onClick={() => router.push('/chats')} 
+          className="btn-primary"
+          style={{ marginTop: 8 }}
+        >
+          {lang === 'es' ? 'Volver a Chats' : 'Back to Chats'}
+        </button>
+      </div>
+    )
+  }
+
   if (userLoading || characterLoading || !character) {
     return (
       <div className="spinner-full">
@@ -1185,7 +1246,8 @@ export default function ChatPage() {
   const characterDescription = getCharacterDescription(character.archetype, character.gender, lang)
 
   const isFirstImage = seenImageCount === 0
-  const canAfford = purchasedGems >= currentImageCost || isFirstImage
+  // ✅ FIX #55: Considerar VIP para mostrar el banner como asequible
+  const canAfford = isVip || purchasedGems >= currentImageCost || isFirstImage
 
   let headerBadgeText = ''
   let headerBadgeVariant: 'hook' | 'low-gems' | null = null
@@ -1213,7 +1275,6 @@ export default function ChatPage() {
       ? Math.min(100, (levelProgress.current / levelProgress.next) * 100)
       : 0
 
-  const vipMessagesLeft = isVip ? Math.max(0, VIP_DAILY_MESSAGE_LIMIT - vipMessagesToday) : 0
   const vipUsagePercent = isVip
     ? Math.min(100, (vipMessagesToday / VIP_DAILY_MESSAGE_LIMIT) * 100)
     : 0
@@ -1657,7 +1718,7 @@ export default function ChatPage() {
 
         {photoOfferActive && !hasFantasyPass && (
           <div
-            onClick={handleBannerTap} // ✅ FIX: Este es el banner donde el personaje ofrece la foto
+            onClick={handleBannerTap}
             style={{
               position: 'relative',
               marginBottom: 12,
@@ -1789,7 +1850,6 @@ export default function ChatPage() {
             )}
           </button>
 
-          {/* ✅ FIX: La cámara ahora envía isDirect=true, por lo que la foto se ve visible */}
           <button onClick={handleCameraTap} disabled={generatingImage} className="chat-icon-btn" title={`${t.imageTooltip} (${currentImageCost} gemas)`} style={{ opacity: !isFirstImage && !isVip && isPremium && purchasedGems < currentImageCost ? 0.4 : 1, boxShadow: photoOfferActive ? '0 0 20px rgba(236,72,153,0.9), 0 0 30px rgba(168,85,247,0.6)' : undefined, borderColor: photoOfferActive ? '#ec4899' : undefined }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
               <rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="2" />
