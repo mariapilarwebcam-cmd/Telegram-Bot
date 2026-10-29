@@ -22,7 +22,8 @@ import {
   consumePass,
   updateSpendState,
   getSpendState,
-  grantPass
+  grantPass,
+  countVipMessagesToday,
 } from '@/lib/db-queries'
 import { queryOne, query, execute } from '@/lib/turso'
 import {
@@ -33,7 +34,7 @@ import {
   LOW_GEMS_THRESHOLD,
   getLevelPersonality,
   VIP_DAILY_MESSAGE_LIMIT,
-  isVipArchetype 
+  isVipArchetype,
 } from '@/lib/constants'
 import {
   getLevelFromMessages,
@@ -123,22 +124,6 @@ function buildGenderRules(
 - ${userGender ? '' : "The user didn't specify their gender. Use neutral tone and avoid assuming. If possible, ask subtly."}`
 }
 
-async function countVipMessagesToday(tid: string): Promise<number> {
-  try {
-    const row = await queryOne<{ c: number }>(
-      `SELECT COUNT(*) AS c FROM conversation_history
-       WHERE telegram_id = ?
-         AND role = 'user'
-         AND created_at >= datetime('now', '-1 day')`,
-      [tid]
-    )
-    return row?.c ?? 0
-  } catch (e) {
-    console.warn('[chat] countVipMessagesToday failed:', e)
-    return 0
-  }
-}
-
 async function getLearnedTriggers(): Promise<{ heat: string[], purchase: string[] }> {
   try {
     const heatRows = await query<{ word: string }>(
@@ -149,7 +134,7 @@ async function getLearnedTriggers(): Promise<{ heat: string[], purchase: string[
     )
     return {
       heat: heatRows.map(r => r.word),
-      purchase: purchaseRows.map(r => r.word)
+      purchase: purchaseRows.map(r => r.word),
     }
   } catch (e) {
     console.warn('[chat] Error leyendo learned_triggers:', e)
@@ -164,16 +149,28 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
-    updateLastActive(tid).catch((err) => console.warn('[chat] updateLastActive failed:', err))
+    // ✅ FIX #4: ensureUser ANTES de updateLastActive. Si el user no existe,
+    // se crea primero y el UPDATE siempre afecta a una fila.
+    const user = await ensureUser(tid)
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Error cargando tu cuenta. Intenta de nuevo.' },
+        { status: 500 }
+      )
+    }
+
+    updateLastActive(tid).catch((err) =>
+      console.warn('[chat] updateLastActive failed:', err)
+    )
 
     const { character_id, message, accept_penalty } = await request.json()
 
-    // ✅ FIX #9: Validación de character_id
+    // ✅ Validación de character_id
     if (!character_id || typeof character_id !== 'number') {
       return NextResponse.json({ error: 'character_id inválido' }, { status: 400 })
     }
 
-    // ✅ FIX #6: Validar que el mensaje no esté vacío (solo espacios)
+    // ✅ Validar que el mensaje no esté vacío (solo espacios)
     if (!message || typeof message !== 'string' || !message.trim()) {
       return NextResponse.json({ error: 'Mensaje inválido' }, { status: 400 })
     }
@@ -190,18 +187,17 @@ export async function POST(request: Request) {
 
     if (messageLength > 600) {
       if (!accept_penalty) {
-        return NextResponse.json({
-          requires_penalty: true,
-          penalty_gems: 1,
-          message: 'Has superado los 600 caracteres. Enviar este mensaje costará 1 mensaje extra. ¿Aceptas?'
-        }, { status: 200 })
+        return NextResponse.json(
+          {
+            requires_penalty: true,
+            penalty_gems: 1,
+            message:
+              'Has superado los 600 caracteres. Enviar este mensaje costará 1 mensaje extra. ¿Aceptas?',
+          },
+          { status: 200 }
+        )
       }
       penaltyGems = 1
-    }
-
-    const user = await ensureUser(tid)
-    if (!user) {
-      return NextResponse.json({ error: 'Error cargando tu cuenta. Intenta de nuevo.' }, { status: 500 })
     }
 
     const character = await getCharacter(character_id, tid)
@@ -214,13 +210,17 @@ export async function POST(request: Request) {
     const isVip = !!vipSub
 
     if (isVipArchetype(character.archetype) && !isVip) {
-      return NextResponse.json({
-        blocked: true,
-        vip_expired: true,
-        response: lang === 'es'
-          ? `*${character.character_name} te mira con tristeza y aparta la mirada*\n\n"Lo siento... mi tiempo contigo se ha agotado. Si quieres seguir viéndome, tendrás que renovar tu acceso VIP."`
-          : `*${character.character_name} looks at you sadly and looks away*\n\n"I'm sorry... our time together has run out. If you want to see me again, you'll need to renew your VIP access."`
-      }, { status: 403 })
+      return NextResponse.json(
+        {
+          blocked: true,
+          vip_expired: true,
+          response:
+            lang === 'es'
+              ? `*${character.character_name} te mira con tristeza y aparta la mirada*\n\n"Lo siento... mi tiempo contigo se ha agotado. Si quieres seguir viéndome, tendrás que renovar tu acceso VIP."`
+              : `*${character.character_name} looks at you sadly and looks away*\n\n"I'm sorry... our time together has run out. If you want to see me again, you'll need to renew your VIP access."`,
+        },
+        { status: 403 }
+      )
     }
 
     let vipMessagesToday = 0
@@ -229,40 +229,98 @@ export async function POST(request: Request) {
     let newHookRemaining = user.hook_messages_remaining || 0
     let newHookUsed = !!user.hook_used
 
-    const activePass = await getActivePass(tid)
+    // ✅ Trackear si consumimos un pase para reembolsarlo si la IA falla
     let usedPass = false
-    let passMessage = ''
+    let usedPassId: number | null = null
+
+    // ✅ FIX #7: Calcular vipMessagesToday UNA sola vez y reusar en la respuesta
+    let vipUsed = 0
+
+    const activePass = await getActivePass(tid)
 
     if (activePass) {
       await consumePass(activePass.id)
       usedPass = true
+      usedPassId = activePass.id
     } else if (isVip) {
-      vipMessagesToday = await countVipMessagesToday(tid)
-
-      // ✅ FIX #2 y #8: El penalty VIP ahora consume 2 mensajes del cupo diario (no cobra gemas)
+      // ✅ FIX #3: countVipMessagesToday ahora cuenta slots reales (penalty incluido)
+      vipUsed = await countVipMessagesToday(tid)
       const totalVipCost = 1 + penaltyGems
 
-      if (vipMessagesToday + totalVipCost > VIP_DAILY_MESSAGE_LIMIT) {
-        const blockedMessage = lang === 'es'
-          ? `*${character.character_name} te mira con una sonrisa divertida*\n\n"Ey, tranquilo... has estado hablando conmigo TODO el día. Necesito un descanso, ¿no crees? 😏\n\nVuelve mañana y seguimos donde lo dejamos."`
-          : `*${character.character_name} looks at you with a playful smile*\n\n"Hey, easy... you've been talking to me ALL day. I need a break, don't you think? 😏\n\nCome back tomorrow and we'll pick up where we left off."`
+      // ✅ FIX #1 y #2 (CRÍTICO): Cupo VIP de 200 msg/día con fallback a bonus_gems.
+      // Si el VIP agota los 200 slots, NO se bloquea: cae a bonus_gems.
+      // Solo si tampoco tiene bonus_gems, se bloquea con modal de compra.
+      if (vipUsed + totalVipCost <= VIP_DAILY_MESSAGE_LIMIT) {
+        // ✅ Dentro del cupo VIP diario. No tocar bonus_gems.
+        vipMessagesToday = vipUsed
+        // No se cobra nada adicional. El mensaje consume slot del cupo VIP.
+      } else {
+        // Cupo VIP agotado (o insuficiente para el penalty del mensaje actual).
+        // Intentar cobrar de bonus_gems.
+        if (newBonusGems >= totalVipCost) {
+          const bonusResult = await queryOne<{ bonus_gems: number }>(
+            `UPDATE users SET bonus_gems = bonus_gems - ?
+             WHERE telegram_id = ? AND bonus_gems >= ?
+             RETURNING bonus_gems`,
+            [totalVipCost, tid, totalVipCost]
+          )
+          if (bonusResult) {
+            newBonusGems = bonusResult.bonus_gems
+            vipMessagesToday = vipUsed  // sigue reflejando el cupo VIP agotado
 
-        return NextResponse.json({
-          blocked: true,
-          vip_limit_reached: true,
-          response: blockedMessage,
-          remaining_gems: newGems,
-          remaining_bonus_gems: newBonusGems,
-          hook_messages_remaining: 0,
-          is_vip: true,
-          vip_messages_today: vipMessagesToday,
-          vip_daily_limit: VIP_DAILY_MESSAGE_LIMIT,
-        })
+            await insertGemTransaction({
+              telegram_id: tid,
+              amount: -totalVipCost,
+              transaction_type: 'message_vip_overflow',
+              description:
+                penaltyGems > 0
+                  ? 'Mensaje VIP (cupo agotado) + recargo por longitud'
+                  : 'Mensaje VIP (cupo agotado)',
+            })
+          } else {
+            // Race: el SELECT dijo que había bonus_gems pero el UPDATE no encontró.
+            // Bloquear con modal de compra.
+            const blockedMessage =
+              lang === 'es'
+                ? `*${character.character_name} te mira con una sonrisa divertida*\n\n"Ey, tranquilo... has usado todos tus mensajes VIP de hoy y no te quedan mensajes comprados. 😏\n\nVuelve mañana o compra más mensajes para seguir."`
+                : `*${character.character_name} looks at you with a playful smile*\n\n"Hey, easy... you've used all your VIP messages today and you have no purchased messages left. 😏\n\nCome back tomorrow or buy more to continue."`
+
+            return NextResponse.json({
+              blocked: true,
+              vip_limit_reached: true,
+              no_bonus_gems: true,
+              response: blockedMessage,
+              remaining_gems: newGems,
+              remaining_bonus_gems: newBonusGems,
+              hook_messages_remaining: 0,
+              is_vip: true,
+              vip_messages_today: vipUsed,
+              vip_daily_limit: VIP_DAILY_MESSAGE_LIMIT,
+            })
+          }
+        } else {
+          // Sin cupo VIP ni bonus_gems. Bloquear con modal de compra.
+          const blockedMessage =
+            lang === 'es'
+              ? `*${character.character_name} te mira con una sonrisa divertida*\n\n"Ey, tranquilo... has usado todos tus mensajes VIP de hoy y no te quedan mensajes comprados. 😏\n\nVuelve mañana o compra más mensajes para seguir."`
+              : `*${character.character_name} looks at you with a playful smile*\n\n"Hey, easy... you've used all your VIP messages today and you have no purchased messages left. 😏\n\nCome back tomorrow or buy more to continue."`
+
+          return NextResponse.json({
+            blocked: true,
+            vip_limit_reached: true,
+            no_bonus_gems: true,
+            response: blockedMessage,
+            remaining_gems: newGems,
+            remaining_bonus_gems: newBonusGems,
+            hook_messages_remaining: 0,
+            is_vip: true,
+            vip_messages_today: vipUsed,
+            vip_daily_limit: VIP_DAILY_MESSAGE_LIMIT,
+          })
+        }
       }
-
-      // ✅ Nota: el penalty VIP ya está incluido en `totalVipCost` arriba.
-      // No se cobran gemas reales para usuarios VIP.
     } else {
+      // ─── No-VIP: flujo actual (bonus_gems → hook → bloqueo) ───
       const hookRemaining = user.hook_messages_remaining || 0
       const hookUsed = !!user.hook_used
       const totalCost = GEM_COSTS.message + penaltyGems
@@ -270,9 +328,10 @@ export async function POST(request: Request) {
       const hasTotalMessages = newBonusGems >= totalCost
 
       if (!hasTotalMessages && hookRemaining <= 0 && hookUsed) {
-        const blockedMessage = lang === 'es'
-          ? `*${character.character_name} te mira con ojos ardientes y se muerde el labio*\n\n"Mmm... justo cuando se ponía interesante..."\n\n"Consigue mensajes para seguir. Estoy esperando."`
-          : `*${character.character_name} looks at you with burning eyes and bites their lip*\n\n"Mmm... just when it was getting interesting..."\n\n"Get messages to continue. I'm waiting."`
+        const blockedMessage =
+          lang === 'es'
+            ? `*${character.character_name} te mira con ojos ardientes y se muerde el labio*\n\n"Mmm... justo cuando se ponía interesante..."\n\n"Consigue mensajes para seguir. Estoy esperando."`
+            : `*${character.character_name} looks at you with burning eyes and bites their lip*\n\n"Mmm... just when it was getting interesting..."\n\n"Get messages to continue. I'm waiting."`
 
         return NextResponse.json({
           blocked: true,
@@ -288,7 +347,9 @@ export async function POST(request: Request) {
 
       if (newBonusGems >= totalCost) {
         const bonusResult = await queryOne<{ bonus_gems: number }>(
-          `UPDATE users SET bonus_gems = bonus_gems - ? WHERE telegram_id = ? AND bonus_gems >= ? RETURNING bonus_gems`,
+          `UPDATE users SET bonus_gems = bonus_gems - ?
+           WHERE telegram_id = ? AND bonus_gems >= ?
+           RETURNING bonus_gems`,
           [totalCost, tid, totalCost]
         )
         if (bonusResult) {
@@ -299,7 +360,10 @@ export async function POST(request: Request) {
             telegram_id: tid,
             amount: -totalCost,
             transaction_type: 'message',
-            description: penaltyGems > 0 ? 'Mensaje + recargo por longitud' : 'Mensaje de chat',
+            description:
+              penaltyGems > 0
+                ? 'Mensaje + recargo por longitud'
+                : 'Mensaje de chat',
           })
         }
       }
@@ -307,7 +371,6 @@ export async function POST(request: Request) {
       const isHookMode = !charged && hookRemaining > 0
 
       if (isHookMode) {
-        // ✅ FIX #3: Descontar 1 + penalty del hook (mensaje largo = 2 del hook)
         const hookCost = 1 + penaltyGems
         newHookRemaining = Math.max(0, hookRemaining - hookCost)
         await setHookRemaining(tid, newHookRemaining)
@@ -330,21 +393,22 @@ export async function POST(request: Request) {
     const newLevel = getLevelFromMessages(nextUserMsgCount)
     const levelUp = newLevel.level > prevLevel.level
 
-    const lastAssistantMsg = await queryOne<{ id: number, reaction: string }>(
-      `SELECT id, reaction FROM conversation_history 
-       WHERE telegram_id = ? AND character_id = ? AND role = 'assistant' 
+    const lastAssistantMsg = await queryOne<{ id: number; reaction: string }>(
+      `SELECT id, reaction FROM conversation_history
+       WHERE telegram_id = ? AND character_id = ? AND role = 'assistant'
        ORDER BY id DESC LIMIT 1`,
       [tid, character_id]
     )
 
     const hotEmojis = ['❤️', '🔥', '😈', '💦', '🍆', '🍑', '🥵', '💋']
-    const hadRecentHotReaction = lastAssistantMsg?.reaction && hotEmojis.includes(lastAssistantMsg.reaction)
+    const hadRecentHotReaction =
+      lastAssistantMsg?.reaction && hotEmojis.includes(lastAssistantMsg.reaction)
 
     const isPeakDesire = hadRecentHotReaction || levelUp
 
     const spend7dRow = await queryOne<{ total: number }>(
-      `SELECT SUM(ABS(amount)) as total FROM gem_transactions 
-       WHERE telegram_id = ? AND amount < 0 
+      `SELECT SUM(ABS(amount)) as total FROM gem_transactions
+       WHERE telegram_id = ? AND amount < 0
          AND created_at >= datetime('now', '-7 days')`,
       [tid]
     )
@@ -364,8 +428,17 @@ export async function POST(request: Request) {
     messages.push({ role: 'user', content: message })
 
     const personality = getLevelPersonality(character.archetype, newLevel.level, lang)
-    const lowMessages = !isVip && !usedPass && newBonusGems > 0 && newBonusGems <= LOW_GEMS_THRESHOLD && !isHookModeAfter
-    const provocativeHint = lowMessages ? (lang === 'es' ? PROVOCATIVE_HINT_ES : PROVOCATIVE_HINT_EN) : ''
+    const lowMessages =
+      !isVip &&
+      !usedPass &&
+      newBonusGems > 0 &&
+      newBonusGems <= LOW_GEMS_THRESHOLD &&
+      !isHookModeAfter
+    const provocativeHint = lowMessages
+      ? lang === 'es'
+        ? PROVOCATIVE_HINT_ES
+        : PROVOCATIVE_HINT_EN
+      : ''
     const genderRules = buildGenderRules(user.gender, character.gender, lang)
 
     const learned = await getLearnedTriggers()
@@ -386,38 +459,47 @@ ${learned.heat.length > 0 ? `- The system learned users love these words: ${lear
 
     let vipUpsellPrompt = ''
     if (shouldUpsellVip) {
-      vipUpsellPrompt = lang === 'es'
-        ? `\n\n⚠️ NOTA DE SISTEMA: El usuario ha gastado ${Math.floor(spend7d)} gemas esta semana. Menciónale de forma natural y sugerente que con la suscripción VIP habría ahorrado mucho más y tendría imágenes gratis. (No lo obligues, solo siéntalo como una buena oferta).`
-        : `\n\n⚠️ SYSTEM NOTE: The user has spent ${Math.floor(spend7d)} gems this week. Naturally and suggestively mention that with a VIP subscription they would have saved a lot more and would have free images. (Don't force it, just make it feel like a good deal).`
+      vipUpsellPrompt =
+        lang === 'es'
+          ? `\n\n⚠️ NOTA DE SISTEMA: El usuario ha gastado ${Math.floor(spend7d)} gemas esta semana. Menciónale de forma natural y sugerente que con la suscripción VIP habría ahorrado mucho más y tendría imágenes gratis. (No lo obligues, solo siéntalo como una buena oferta).`
+          : `\n\n⚠️ SYSTEM NOTE: The user has spent ${Math.floor(spend7d)} gems this week. Naturally and suggestively mention that with a VIP subscription they would have saved a lot more and would have free images. (Don't force it, just make it feel like a good deal).`
     }
 
     let photoNudge = ''
     const reversedHistory = [...rawHistory]
-    const lockedPhotoMsgIndex = reversedHistory.findIndex(m => m.content.includes('locked:'))
+    const lockedPhotoMsgIndex = reversedHistory.findIndex((m) =>
+      m.content.includes('locked:')
+    )
 
     if (lockedPhotoMsgIndex === 2 || lockedPhotoMsgIndex === 3) {
       const match = reversedHistory[lockedPhotoMsgIndex].content.match(/locked:(\d+)@/)
       if (match) {
         const offerId = match[1]
-        const photoStatus = await queryOne<{ state: string }>(`SELECT state FROM photo_offers WHERE id = ?`, [offerId])
+        const photoStatus = await queryOne<{ state: string }>(
+          `SELECT state FROM photo_offers WHERE id = ?`,
+          [offerId]
+        )
 
         if (photoStatus && photoStatus.state === 'locked') {
           if (lang === 'es') {
-            photoNudge = character.gender === 'male'
-              ? `\n\n⚠️ NOTA DE COMPORTAMIENTO: Hace un par de mensajes le enviaste una foto y la ignoró. Reclámaselo de forma natural, con arrogancia y seguridad. Variaciones: "¿No vas a decir nada sobre lo que te envié?", "Veo que te dejé sin palabras", "Te mandé algo especial y ni un gracias".`
-              : `\n\n⚠️ NOTA DE COMPORTAMIENTO: Hace un par de mensajes le enviaste una foto y la ignoró. Reclámaselo de forma natural, coqueta y juguetona. Variaciones: "¿No vas a decir nada sobre mi foto?", "Veo que te quedaste mirando y no escribiste nada 😏", "Te mandé algo y ni lo abriste... qué grosero".`
+            photoNudge =
+              character.gender === 'male'
+                ? `\n\n⚠️ NOTA DE COMPORTAMIENTO: Hace un par de mensajes le enviaste una foto y la ignoró. Reclámaselo de forma natural, con arrogancia y seguridad. Variaciones: "¿No vas a decir nada sobre lo que te envié?", "Veo que te dejé sin palabras", "Te mandé algo especial y ni un gracias".`
+                : `\n\n⚠️ NOTA DE COMPORTAMIENTO: Hace un par de mensajes le enviaste una foto y la ignoró. Reclámaselo de forma natural, coqueta y juguetona. Variaciones: "¿No vas a decir nada sobre mi foto?", "Veo que te quedaste mirando y no escribiste nada 😏", "Te mandé algo y ni lo abriste... qué grosero".`
           } else {
-            photoNudge = character.gender === 'male'
-              ? `\n\n⚠️ BEHAVIOR NOTE: A couple of messages ago you sent a photo and they ignored it. Reclaim it naturally, with arrogance and confidence. Variations: "Are you going to say anything about what I sent?", "Cat got your tongue?", "I sent you something special and not even a thank you."`
-              : `\n\n⚠️ BEHAVIOR NOTE: A couple of messages ago you sent a photo and they ignored it. Reclaim it naturally, playfully and flirtatiously. Variations: "Are you going to say anything about my photo?", "I see you just stared and didn't type 😏", "I sent you something and you didn't even open it... rude."`
+            photoNudge =
+              character.gender === 'male'
+                ? `\n\n⚠️ BEHAVIOR NOTE: A couple of messages ago you sent a photo and they ignored it. Reclaim it naturally, with arrogance and confidence. Variations: "Are you going to say anything about what I sent?", "Cat got your tongue?", "I sent you something special and not even a thank you."`
+                : `\n\n⚠️ BEHAVIOR NOTE: A couple of messages ago you sent a photo and they ignored it. Reclaim it naturally, playfully and flirtatiously. Variations: "Are you going to say anything about my photo?", "I see you just stared and didn't type 😏", "I sent you something and you didn't even open it... rude."`
           }
         }
       }
     }
 
-    const characterPrompt = lang === 'es'
-      ? `Eres ${character.character_name}, rol: ${character.archetype}.\n${personality}\n\nEl usuario se llama ${user.first_name}.\n\n${genderRules}\n\nNunca rompas el personaje.${provocativeHint}${photoNudge}${salesPrompt}${vipUpsellPrompt}`
-      : `You are ${character.character_name}, role: ${character.archetype}.\n${personality}\n\nThe user's name is ${user.first_name}.\n\n${genderRules}\n\nNever break character.${provocativeHint}${photoNudge}${salesPrompt}${vipUpsellPrompt}`
+    const characterPrompt =
+      lang === 'es'
+        ? `Eres ${character.character_name}, rol: ${character.archetype}.\n${personality}\n\nEl usuario se llama ${user.first_name}.\n\n${genderRules}\n\nNunca rompas el personaje.${provocativeHint}${photoNudge}${salesPrompt}${vipUpsellPrompt}`
+        : `You are ${character.character_name}, role: ${character.archetype}.\n${personality}\n\nThe user's name is ${user.first_name}.\n\n${genderRules}\n\nNever break character.${provocativeHint}${photoNudge}${salesPrompt}${vipUpsellPrompt}`
 
     const intensity = getIntensity(currentUserMsgCount, isHookModeAfter)
     const systemPrompt = buildSystemPrompt(lang, intensity, newLevel.level, characterPrompt)
@@ -426,13 +508,15 @@ ${learned.heat.length > 0 ? `- The system learned users love these words: ${lear
     try {
       responseText = await generateAIResponse(messages, systemPrompt, intensity)
     } catch (aiError: any) {
-      // ✅ FIX #1: Reembolso correcto. Ya no hay reembolso VIP penalty porque no se cobra.
+      // ✅ FIX #5: Reembolsar bonus_gems Y restaurar hook Y pase si la IA falla.
       if (!isVip && !usedPass) {
         const spentBonus = (user.bonus_gems || 0) - newBonusGems
 
         if (spentBonus > 0) {
-          await execute(`UPDATE users SET bonus_gems = bonus_gems + ? WHERE telegram_id = ?`, [spentBonus, tid])
-          // ✅ FIX #7: Registrar el reembolso en el historial
+          await execute(
+            `UPDATE users SET bonus_gems = bonus_gems + ? WHERE telegram_id = ?`,
+            [spentBonus, tid]
+          )
           await insertGemTransaction({
             telegram_id: tid,
             amount: spentBonus,
@@ -445,15 +529,30 @@ ${learned.heat.length > 0 ? `- The system learned users love these words: ${lear
         await setHookUsed(tid, !!user.hook_used)
       }
 
+      // ✅ FIX #5 (parte 2): Restaurar el pase si lo consumimos y la IA falló
+      if (usedPass && usedPassId !== null) {
+        try {
+          await execute(
+            `UPDATE message_passes SET messages_used = MAX(messages_used - 1, 0) WHERE id = ?`,
+            [usedPassId]
+          )
+        } catch (passErr) {
+          console.error('[chat] Error restaurando pase tras fallo de IA:', passErr)
+        }
+      }
+
       const errorDetail = aiError?.message || String(aiError)
       console.error('[chat] ❌ AI error:', errorDetail)
-      return NextResponse.json({ error: 'Error al generar respuesta', detail: errorDetail }, { status: 500 })
+      return NextResponse.json(
+        { error: 'Error al generar respuesta', detail: errorDetail },
+        { status: 500 }
+      )
     }
 
     let userMessageId: number | undefined
     let assistantMessageId: number | undefined
 
-    // ✅ FIX #4: Si falla el guardado en BD, reembolsar al usuario
+    // ✅ FIX #5 (parte 3): Si falla el guardado en BD, reembolsar igual.
     try {
       const inserted = await insertMessages([
         { telegram_id: tid, character_id, role: 'user', content: message },
@@ -464,11 +563,13 @@ ${learned.heat.length > 0 ? `- The system learned users love these words: ${lear
     } catch (dbErr) {
       console.error('[chat] Error guardando mensajes:', dbErr)
 
-      // Reembolso de emergencia si no se pudo persistir
       if (!isVip && !usedPass) {
         const spentBonus = (user.bonus_gems || 0) - newBonusGems
         if (spentBonus > 0) {
-          await execute(`UPDATE users SET bonus_gems = bonus_gems + ? WHERE telegram_id = ?`, [spentBonus, tid])
+          await execute(
+            `UPDATE users SET bonus_gems = bonus_gems + ? WHERE telegram_id = ?`,
+            [spentBonus, tid]
+          )
           await insertGemTransaction({
             telegram_id: tid,
             amount: spentBonus,
@@ -480,10 +581,24 @@ ${learned.heat.length > 0 ? `- The system learned users love these words: ${lear
         await setHookUsed(tid, !!user.hook_used)
       }
 
-      return NextResponse.json({ error: 'Error guardando tu mensaje. Intenta de nuevo.' }, { status: 500 })
+      if (usedPass && usedPassId !== null) {
+        try {
+          await execute(
+            `UPDATE message_passes SET messages_used = MAX(messages_used - 1, 0) WHERE id = ?`,
+            [usedPassId]
+          )
+        } catch (passErr) {
+          console.error('[chat] Error restaurando pase tras fallo de guardado:', passErr)
+        }
+      }
+
+      return NextResponse.json(
+        { error: 'Error guardando tu mensaje. Intenta de nuevo.' },
+        { status: 500 }
+      )
     }
 
-    // ✅ FIX #5: Comisión de referidos con UPDATE atómico (evita doble pago)
+    // ✅ Comisión de referidos con UPDATE atómico (evita doble pago)
     try {
       const referral = await getReferralByReferred(tid)
       if (referral && !referral.reward_paid) {
@@ -491,9 +606,9 @@ ${learned.heat.length > 0 ? `- The system learned users love these words: ${lear
         await updateReferralCount(referral.id, totalMsg)
 
         if (totalMsg >= REFERRAL_MIN_MESSAGES) {
-          // ✅ FIX: UPDATE condicional atómico. Si otro request ya pagó, rowsAffected = 0.
           const claim = await execute(
-            `UPDATE referrals SET reward_paid = 1, reward_paid_at = datetime('now') WHERE id = ? AND reward_paid = 0`,
+            `UPDATE referrals SET reward_paid = 1, reward_paid_at = datetime('now')
+             WHERE id = ? AND reward_paid = 0`,
             [referral.id]
           )
 
@@ -517,16 +632,26 @@ ${learned.heat.length > 0 ? `- The system learned users love these words: ${lear
     }
 
     let finalText = responseText
-    const isLowGemsWarning = !isVip && !usedPass && nextUserMsgCount >= 10 && newBonusGems > 0 && newBonusGems <= LOW_GEMS_THRESHOLD && !isHookModeAfter && newHookRemaining === 0
+    const isLowGemsWarning =
+      !isVip &&
+      !usedPass &&
+      nextUserMsgCount >= 10 &&
+      newBonusGems > 0 &&
+      newBonusGems <= LOW_GEMS_THRESHOLD &&
+      !isHookModeAfter &&
+      newHookRemaining === 0
     const userRequestedPhoto = detectPhotoRequest(message, lang)
     const imageCost = getImageCost(newLevel.level)
     const hasEnoughPurchased = (user.purchased_gems || 0) >= imageCost
     const isMilestone = isPhotoMilestone(nextUserMsgCount, hasEnoughPurchased)
 
-    const isSpontaneousOffer = newLevel.level >= 3 && nextUserMsgCount % 6 === 0 && !usedPass
+    const isSpontaneousOffer =
+      newLevel.level >= 3 && nextUserMsgCount % 6 === 0 && !usedPass
 
     const spendState = await getSpendState(tid)
-    const shouldShowPhotoBanner = (isMilestone || userRequestedPhoto || isSpontaneousOffer || isPeakDesire) && spendState?.level !== 'rest'
+    const shouldShowPhotoBanner =
+      (isMilestone || userRequestedPhoto || isSpontaneousOffer || isPeakDesire) &&
+      spendState?.level !== 'rest'
 
     if (shouldShowPhotoBanner) {
       const invites = lang === 'es' ? PHOTO_INVITES_ES : PHOTO_INVITES_EN
@@ -534,13 +659,26 @@ ${learned.heat.length > 0 ? `- The system learned users love these words: ${lear
       finalText += `\n\n${invite(character.character_name)}`
     }
 
-    if (passMessage) {
-      finalText += passMessage
-    }
+    // ✅ FIX #6: passMessage era código muerto (siempre ''). Eliminado.
 
     const nextLevelAt = getNextLevelThreshold(newLevel.level)
 
-    // ✅ FIX #8: vip_messages_today ahora incluye el penalty
+    // ✅ FIX #7: Reusar vipUsed en lugar de llamar countVipMessagesToday otra vez.
+    // vip_messages_today refleja el estado POST-incremento del cupo VIP.
+    // Si el mensaje consumió slot VIP → vipUsed + totalVipCost.
+    // Si el mensaje cayó a bonus_gems → vipUsed (sin sumar, el cupo ya estaba agotado).
+    let vipMessagesTodayForResponse: number | undefined
+    if (isVip) {
+      const totalVipCost = 1 + penaltyGems
+      if (vipUsed + totalVipCost <= VIP_DAILY_MESSAGE_LIMIT) {
+        // El mensaje consumió slot VIP
+        vipMessagesTodayForResponse = vipUsed + totalVipCost
+      } else {
+        // El mensaje cayó a bonus_gems, el cupo VIP ya estaba agotado
+        vipMessagesTodayForResponse = vipUsed
+      }
+    }
+
     return NextResponse.json({
       response: finalText,
       user_message_id: userMessageId,
@@ -550,8 +688,12 @@ ${learned.heat.length > 0 ? `- The system learned users love these words: ${lear
       hook_messages_remaining: newHookRemaining,
       is_hook_mode: isHookModeAfter,
       is_vip: isVip,
-      vip_messages_today: isVip ? vipMessagesToday + 1 + penaltyGems : undefined,
+      vip_messages_today: vipMessagesTodayForResponse,
       vip_daily_limit: isVip ? VIP_DAILY_MESSAGE_LIMIT : undefined,
+      vip_remaining: isVip
+        ? Math.max(0, VIP_DAILY_MESSAGE_LIMIT - (vipMessagesTodayForResponse ?? 0))
+        : undefined,
+      used_pass: usedPass,
       intensity,
       level: newLevel.level,
       photo_offer_available: shouldShowPhotoBanner,
