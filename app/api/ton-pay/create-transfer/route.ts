@@ -39,10 +39,15 @@ export async function POST(request: Request) {
       .storeStringTail(reference) // El reference para identificar el pago
       .endCell()
 
+    // ✅ FIX CRÍTICO: USDT tiene 6 decimales en la red TON. 
+    // toNano() usa 9 decimales (para TON), lo cual enviaba 1000x más USDT.
+    // Usamos BigInt(numericAmount * 1_000_000) para enviar la cantidad exacta.
+    const usdtAmountInUnits = BigInt(Math.round(numericAmount * 1_000_000))
+
     const payload = beginCell()
       .storeUint(0xf8a7ea5, 32) // Opcode para transferencia de Jetton
       .storeUint(0, 64) // query_id
-      .storeCoins(toNano(numericAmount.toString())) // Cantidad en unidades mínimas (6 decimales)
+      .storeCoins(usdtAmountInUnits) // ✅ Cantidad correcta en unidades mínimas (6 decimales)
       .storeAddress(Address.parse(recipientAddr)) // Destinatario
       .storeAddress(Address.parse(senderAddr)) // Dirección de respuesta (quien envía)
       .storeBit(0) // custom_payload (null)
@@ -54,7 +59,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       // La dirección a la que se enviará el mensaje es la Jetton Wallet del usuario
       address: userJettonWalletAddress.toString({ bounceable: true, testOnly: false }),
-      // ✅ FIX: Gas en TON reducido a 0.06 para mayor comodidad del usuario
+      // ✅ Gas en TON para la transacción (0.06 TON es suficiente)
       amount: toNano('0.06').toString(), 
       payload: payload.toBoc().toString('base64'),
     })
