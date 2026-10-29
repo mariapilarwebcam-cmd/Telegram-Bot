@@ -8,6 +8,7 @@ import {
   createSubscription,
   cancelActiveSubscription,
 } from '@/lib/db-queries'
+import { execute } from '@/lib/turso' // ✅ FIX #4: Necesario para el UPDATE de extensión
 import { VIP_PLANS, usdtToUnits } from '@/lib/constants'
 
 export const dynamic = 'force-dynamic'
@@ -19,6 +20,23 @@ const RECIPIENT_WALLET =
   'UQCt76T3JPW3WrpsfIz6Tc1eVrvkrQpwV0-3sk1so4P8Vd4-'
 
 const USDT_MASTER = 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs'
+
+// ✅ FIX #1 y #2: Parsers estrictos de reference para validar tid y planId
+// Formato Stars: vip_sub_<planId>_<tid>_<timestamp>
+// Formato Crypto: VIP_<planId>_<tid>_<timestamp>
+function parseStarsVipReference(reference: string): { planId: string; tid: string } | null {
+  const parts = reference.split('_')
+  if (parts.length < 5) return null
+  if (parts[0] !== 'vip' || parts[1] !== 'sub') return null
+  return { planId: parts[2], tid: parts[3] }
+}
+
+function parseCryptoVipReference(reference: string): { planId: string; tid: string } | null {
+  const parts = reference.split('_')
+  if (parts.length < 4) return null
+  if (parts[0] !== 'VIP') return null
+  return { planId: parts[1], tid: parts[2] }
+}
 
 function toSqliteDate(date: Date): string {
   return date.toISOString().slice(0, 19).replace('T', ' ')
@@ -189,9 +207,20 @@ async function handleConfirm(tid: string, body: any) {
     return NextResponse.json({ error: 'Faltan datos: reference' }, { status: 400 })
   }
 
-  // ✅ FIX DE SEGURIDAD: Ya NO activamos la suscripción aquí. 
-  // Solo comprobamos si el webhook de Python ya lo hizo en la base de datos.
-  // Esto evita que cualquiera se haga VIP gratis sin pagar.
+  // ✅ FIX #1: Validar que el reference pertenezca al usuario
+  const parsed = parseStarsVipReference(reference)
+  if (!parsed) {
+    return NextResponse.json({ error: 'Reference inválido' }, { status: 400 })
+  }
+  if (parsed.tid !== tid) {
+    console.warn('[subscription confirm] Reference no coincide con tid:', {
+      refTid: parsed.tid,
+      tid,
+    })
+    return NextResponse.json({ error: 'Reference no coincide con la sesión' }, { status: 403 })
+  }
+
+  // Búsqueda directa: si el `telegram_charge_id` coincide con el `reference` (flujo crypto o casos previos)
   const existing = await getSubscriptionByChargeId(reference)
   if (existing) {
     return NextResponse.json({
@@ -201,8 +230,28 @@ async function handleConfirm(tid: string, body: any) {
     })
   }
 
-  // Si no está en la DB, es porque el webhook aún no ha llegado
-  return NextResponse.json({ ok: false, status: 'pending', message: 'Esperando confirmación de Telegram...' })
+  // ✅ FIX #3: Fallback. El bot de Python guarda el `telegram_payment_charge_id` de Telegram
+  // (NO nuestro `reference`) en `subscriptions.telegram_charge_id`. Por eso la búsqueda directa
+  // falla siempre. Si el usuario tiene una suscripción activa, asumimos que el bot ya la procesó.
+  const activeSub = await getActiveSubscription(tid)
+  if (activeSub) {
+    return NextResponse.json({
+      ok: true,
+      already: true,
+      subscription: {
+        plan: activeSub.plan,
+        expires_at: activeSub.expires_at,
+        status: activeSub.status,
+      },
+    })
+  }
+
+  // Ni por reference ni por tid: el webhook aún no ha llegado
+  return NextResponse.json({
+    ok: false,
+    status: 'pending',
+    message: 'Esperando confirmación de Telegram...',
+  })
 }
 
 async function handleCreateCryptoInvoice(tid: string, body: any, user: any) {
@@ -218,7 +267,7 @@ async function handleCreateCryptoInvoice(tid: string, body: any, user: any) {
   return NextResponse.json({
     payment_data: {
       amount: plan.crypto_price,
-      amountUnits: units, // ✅ Enviamos las unidades exactas para la blockchain
+      amountUnits: units,
       recipientAddr: RECIPIENT_WALLET,
       reference,
     },
@@ -231,6 +280,28 @@ async function handleConfirmCrypto(tid: string, body: any) {
   const reference = String(body?.reference || '')
 
   if (!planId || !reference) return NextResponse.json({ error: 'Faltan datos: plan y reference' }, { status: 400 })
+
+  // ✅ FIX #1 (seguridad): Validar que el reference pertenezca al usuario
+  const parsed = parseCryptoVipReference(reference)
+  if (!parsed) {
+    return NextResponse.json({ error: 'Reference inválido' }, { status: 400 })
+  }
+  if (parsed.tid !== tid) {
+    console.warn('[subscription confirm_crypto] Reference no coincide con tid:', {
+      refTid: parsed.tid,
+      tid,
+    })
+    return NextResponse.json({ error: 'Reference no coincide con la sesión' }, { status: 403 })
+  }
+
+  // ✅ FIX #2 (seguridad): Validar que el planId del reference coincida con el del body
+  if (parsed.planId !== planId) {
+    console.warn('[subscription confirm_crypto] Plan mismatch:', {
+      refPlan: parsed.planId,
+      bodyPlan: planId,
+    })
+    return NextResponse.json({ error: 'Plan no coincide con el reference' }, { status: 400 })
+  }
 
   const plan = VIP_PLANS.find((p) => p.id === planId)
   if (!plan) return NextResponse.json({ error: 'Plan inválido' }, { status: 400 })
@@ -263,7 +334,11 @@ async function handleConfirmCrypto(tid: string, body: any) {
 async function activateSubscription(tid: string, plan: any, reference: string) {
   const existing = await getSubscriptionByChargeId(reference)
   if (existing) {
-    return NextResponse.json({ ok: true, already: true, subscription: { plan: existing.plan, expires_at: existing.expires_at, status: existing.status } })
+    return NextResponse.json({
+      ok: true,
+      already: true,
+      subscription: { plan: existing.plan, expires_at: existing.expires_at, status: existing.status },
+    })
   }
 
   const currentSub = await getActiveSubscription(tid)
@@ -275,10 +350,48 @@ async function activateSubscription(tid: string, plan: any, reference: string) {
 
   const expiresAt = new Date(baseDate.getTime() + plan.days * 24 * 60 * 60 * 1000)
 
+  // ✅ FIX #4: Si ya hay una suscripción activa, EXTENDERLA en lugar de crear una nueva.
+  // Esto mantiene el mismo comportamiento que el bot de Python (que hace UPDATE)
+  // y evita acumular filas "active" en la tabla.
+  if (currentSub) {
+    try {
+      await execute(
+        `UPDATE subscriptions
+         SET expires_at = ?, plan = ?, telegram_charge_id = ?, stars_paid = ?, status = 'active'
+         WHERE id = ?`,
+        // ✅ FIX #5: stars_paid = 0 en crypto (no hay stars reales)
+        [toSqliteDate(expiresAt), plan.id, reference, 0, currentSub.id]
+      )
+
+      return NextResponse.json({
+        ok: true,
+        subscription: {
+          plan: plan.id,
+          expires_at: toSqliteDate(expiresAt),
+          days: plan.days,
+        },
+      })
+    } catch (extendError: any) {
+      // Si falla por UNIQUE (reference ya usado en otra fila), retornar already
+      if (String(extendError?.message || '').toLowerCase().includes('unique')) {
+        const existing2 = await getSubscriptionByChargeId(reference)
+        return NextResponse.json({
+          ok: true,
+          already: true,
+          subscription: existing2
+            ? { plan: existing2.plan, expires_at: existing2.expires_at }
+            : null,
+        })
+      }
+      throw extendError
+    }
+  }
+
+  // No hay suscripción activa: crear nueva fila
   const created = await createSubscription({
     telegram_id: tid,
     plan: plan.id,
-    stars_paid: plan.stars,
+    stars_paid: 0, // ✅ FIX #5: crypto no tiene stars reales
     telegram_charge_id: reference,
     expires_at: toSqliteDate(expiresAt),
   })
@@ -286,12 +399,17 @@ async function activateSubscription(tid: string, plan: any, reference: string) {
   if (!created) {
     const existing2 = await getSubscriptionByChargeId(reference)
     return NextResponse.json({
-      ok: true, already: true, subscription: existing2 ? { plan: existing2.plan, expires_at: existing2.expires_at } : null,
+      ok: true,
+      already: true,
+      subscription: existing2
+        ? { plan: existing2.plan, expires_at: existing2.expires_at }
+        : null,
     })
   }
 
   return NextResponse.json({
-    ok: true, subscription: { plan: plan.id, expires_at: toSqliteDate(expiresAt), days: plan.days },
+    ok: true,
+    subscription: { plan: plan.id, expires_at: toSqliteDate(expiresAt), days: plan.days },
   })
 }
 
