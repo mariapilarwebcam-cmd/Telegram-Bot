@@ -36,7 +36,6 @@ REFERRAL_TOP_TIER_PCT = 7
 REFERRAL_ELITE_TIER_THRESHOLD = 20
 REFERRAL_ELITE_TIER_PCT = 10
 
-# ✅ PAQUETES SINCRONIZADOS CON lib/constants.ts (Bono Stars: 5%)
 STAR_PACKAGES = [
     {"stars": 100,  "gems": 200,  "bonus": 100, "first_time": True,  "flat_bonus": 0},
     {"stars": 150,  "gems": 300,  "bonus": 5,   "first_time": False, "flat_bonus": 0},
@@ -45,21 +44,18 @@ STAR_PACKAGES = [
     {"stars": 1000, "gems": 2000, "bonus": 5,   "first_time": False, "flat_bonus": 0},
 ]
 
-# ✅ FIX #2: Mensajes con bono del 5% YA INCLUIDO (sincronizado con shop page del frontend)
 MESSAGE_PACKAGES = [
     {"stars": 100,  "messages": 315,  "first_time": False},   # 300 base + 5% = 315
     {"stars": 250,  "messages": 840,  "first_time": False},   # 800 base + 5% = 840
     {"stars": 500,  "messages": 2100, "first_time": False},   # 2000 base + 5% = 2100
 ]
 
-# ✅ PAQUETES HÍBRIDOS (Valores finales ya incluyen el 5% de bono en Stars)
 HYBRID_PACKAGES = [
     {"stars": 200,  "gems": 155,  "messages": 315,  "first_time": False},
     {"stars": 350,  "gems": 315,  "messages": 630,  "first_time": False},
     {"stars": 650,  "gems": 630,  "messages": 1260, "first_time": False},
 ]
 
-# ✅ FIX #6: Planes VIP válidos (para validar payloads)
 VIP_PLAN_DAYS = {
     "weekly": 7,
     "monthly": 30,
@@ -127,9 +123,7 @@ async def update_last_active(telegram_id: int):
 
 
 async def has_prior_purchase(telegram_id: int) -> bool:
-    """✅ FIX #9 CRÍTICO: Verifica compras previas Y suscripciones VIP.
-    Cierra el bypass del paquete 'first_time' para usuarios VIP que nunca
-    compraron un paquete pero sí pagaron una suscripción."""
+    """Verifica compras previas Y suscripciones VIP."""
     try:
         row = turso_query_one(
             """SELECT id FROM star_purchases WHERE telegram_id = ? LIMIT 1
@@ -234,7 +228,6 @@ async def pay_referral_commission(
     reference: str,
     bot: Optional[Bot] = None,
 ):
-    """✅ FIX #1: Acepta bot como parámetro para evitar memory leak."""
     try:
         buyer = await get_user(buyer_id)
         if not buyer:
@@ -317,7 +310,6 @@ async def pay_referral_commission(
 
         logger.info(f"Commission paid: {commission} gems to {referrer_id} ({pct}%)")
 
-        # ✅ FIX #1: Solo enviar notificación si tenemos bot
         if bot is not None:
             try:
                 lang = referrer.get('language', 'es')
@@ -361,7 +353,6 @@ async def record_star_purchase(
     purchase_type: str = 'gems',
     bot: Optional[Bot] = None,
 ) -> bool:
-    """✅ FIX #1: Acepta bot para pasar a pay_referral_commission."""
     try:
         turso_execute(
             """INSERT INTO star_purchases
@@ -381,7 +372,6 @@ async def record_star_purchase(
     try:
         now_iso = datetime.now(timezone.utc).isoformat()
 
-        # ✅ Actualizar GEMAS si aplica
         if gems_amount > 0:
             turso_query_one(
                 """UPDATE users
@@ -394,7 +384,6 @@ async def record_star_purchase(
                 [gems_amount, gems_amount, now_iso, str(telegram_id)]
             )
 
-        # ✅ Actualizar MENSAJES si aplica
         if messages_amount > 0:
             turso_query_one(
                 """UPDATE users
@@ -408,7 +397,6 @@ async def record_star_purchase(
     except Exception as e:
         logger.error(f"Error incrementando balance post-compra: {e}")
 
-    # Registrar transacción principal (usamos gems_amount para el historial de gemas)
     if gems_amount > 0:
         turso_execute(
             """INSERT INTO gem_transactions
@@ -417,8 +405,14 @@ async def record_star_purchase(
             [str(telegram_id), gems_amount, 'purchase', f'Compra con {stars} stars']
         )
 
-    # ✅ Calcular comisión base (si es híbrido, sumamos el valor equivalente de los mensajes)
-    commission_base = gems_amount + int(messages_amount / 3) if purchase_type == 'hybrid' else gems_amount
+    # ✅ FIX: Comisión justa también para paquetes de solo mensajes
+    if purchase_type == 'hybrid':
+        commission_base = gems_amount + int(messages_amount / 3)
+    elif purchase_type == 'messages':
+        commission_base = int(messages_amount / 3) # ✅ AHORA SÍ SE CALCULA
+    else:
+        commission_base = gems_amount
+
     await pay_referral_commission(telegram_id, commission_base, 'stars', charge_id, bot=bot)
     return True
 
@@ -560,7 +554,6 @@ async def route_onboarding_state(message: Message, user: dict, language: str, is
 # ==================== REFERRAL APPLICATION ====================
 
 async def apply_pending_referral(telegram_id: int, ref_code: str, bot: Optional[Bot] = None) -> bool:
-    """✅ FIX #1: Acepta bot como parámetro para evitar memory leak."""
     if not ref_code:
         return False
 
@@ -609,7 +602,6 @@ async def apply_pending_referral(telegram_id: int, ref_code: str, bot: Optional[
             [str(referrer['telegram_id']), str(telegram_id)]
         )
 
-        # ✅ FIX #1: Solo notificar si tenemos bot
         if bot is not None:
             try:
                 lang = referrer.get('language', 'es')
@@ -661,7 +653,6 @@ async def send_mini_app_message(message: Message, lang: str, is_new_user: bool =
         else:
             user = await get_user(message.from_user.id)
             gems = user['gems'] if user else 0
-            # ✅ FIX #8: Mostrar también bonus_gems (mensajes de chat)
             bonus = user.get('bonus_gems', 0) if user else 0
             text = (
                 f"👋 *¡Hola de nuevo!*\n\n"
@@ -782,7 +773,6 @@ async def on_age_confirm(callback: CallbackQuery):
 
     pending_ref = user.get('pending_referral_code')
     if pending_ref:
-        # ✅ FIX #1: Pasar el bot al handler
         await apply_pending_referral(telegram_id, pending_ref, bot=callback.bot)
 
     try:
@@ -931,8 +921,6 @@ async def cmd_shop(message: Message):
     language = user.get('language', 'es')
     telegram_id = message.from_user.id
 
-    # ✅ FIX #3 y #9: Ocultar paquetes "first_time" si el usuario ya compró
-    # (incluye haber comprado una suscripción VIP)
     prior_purchase = await has_prior_purchase(telegram_id)
 
     builder = InlineKeyboardBuilder()
@@ -943,7 +931,6 @@ async def cmd_shop(message: Message):
         text = "💎 *Gem Store*\n\nSelect a package:\n\n"
 
     for i, pkg in enumerate(STAR_PACKAGES):
-        # ✅ FIX #3: Saltar paquetes first_time si ya compró
         if pkg['first_time'] and prior_purchase:
             continue
 
@@ -984,7 +971,6 @@ async def process_purchase(callback: CallbackQuery):
     if not user:
         return await callback.answer("⚠️ Usuario no encontrado", show_alert=True)
 
-    # ✅ FIX #3 y #9: Bloquear compra de paquete first_time si ya compró (o es VIP)
     if pkg['first_time']:
         prior = await has_prior_purchase(telegram_id)
         if prior:
@@ -1026,7 +1012,6 @@ async def process_successful_payment(message: Message):
     charge_id = message.successful_payment.telegram_payment_charge_id
     total_paid = message.successful_payment.total_amount
 
-    # ✅ FIX #6: VIP subscription con validación de plan
     if payload.startswith("vip_sub_"):
         parts = payload.split("_")
         if len(parts) < 3:
@@ -1051,7 +1036,6 @@ async def process_successful_payment(message: Message):
                 new_exp = current_exp + timedelta(days=days)
                 new_exp_str = new_exp.strftime('%Y-%m-%d %H:%M:%S')
 
-                # ✅ FIX #7: UPDATE por id específico
                 turso_execute(
                     """UPDATE subscriptions
                        SET expires_at = ?, telegram_charge_id = ?
@@ -1079,7 +1063,6 @@ async def process_successful_payment(message: Message):
             await message.answer("⚠️ Pago recibido pero hubo un error activando VIP. Contacta a soporte.")
             return
 
-    # ✅ NUEVO: Diferenciar entre Híbrido, Mensajes o Gemas
     is_hybrid = payload.startswith("hybrid_purchase_")
     is_messages = payload.startswith("message_purchase_")
     is_gems = payload.startswith("gem_purchase_")
@@ -1094,7 +1077,6 @@ async def process_successful_payment(message: Message):
         prefix = "gem_purchase_"
         active_packages = STAR_PACKAGES
     else:
-        # ✅ FIX: Payload desconocido → rechazar
         logger.error(f"Unknown payment payload: {payload}")
         return await message.answer("⚠️ Error: payload de pago desconocido. Contacta a soporte.")
 
@@ -1108,14 +1090,12 @@ async def process_successful_payment(message: Message):
 
     pkg = active_packages[pkg_idx]
 
-    # ✅ FIX #5: Validar que el monto pagado coincida con el precio del paquete
     expected_stars = pkg['stars']
     if total_paid != expected_stars:
         logger.error(
             f"⚠️ Amount mismatch: paid {total_paid} but expected {expected_stars} for package {pkg_idx} ({payload})"
         )
 
-    # ✅ FIX #3 y #9: Validar first_time en el procesamiento
     if pkg.get('first_time', False):
         prior = await has_prior_purchase(telegram_id)
         if prior:
@@ -1123,7 +1103,6 @@ async def process_successful_payment(message: Message):
                 f"⚠️ User {telegram_id} paid for first_time package {pkg_idx} but already has prior purchases or VIP. Processing as regular package."
             )
 
-    # Asignar montos según el tipo
     gems_amount = 0
     messages_amount = 0
     purchase_type = 'gems'
@@ -1139,7 +1118,6 @@ async def process_successful_payment(message: Message):
         gems_amount = calc_final_gems(pkg)
         purchase_type = 'gems'
 
-    # ✅ FIX #4: Calcular is_first_purchase correctamente
     prior_purchase_exists = await has_prior_purchase(telegram_id)
     is_user_first_purchase = not prior_purchase_exists
 
