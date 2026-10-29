@@ -460,19 +460,15 @@ export async function POST(request: Request) {
       }, { status: 429 })
     }
 
-    // ✅ CAMBIO 1: Lógica específica de imágenes estáticas por nivel
-    // Nivel 1-2: _1, _2
-    // Nivel 3: _1, _2, _3
-    // Nivel 4: _1, _2, _3, _4
-    // Nivel 5: Ninguna (siempre genera o usa pool)
+    // ✅ LÓGICA CORREGIDA EXACTA:
+    // Niveles 1-3: _1, _2, _3
+    // Niveles 4-5: _1, _3, _4 (se salta la _2)
     let r2Index: number | null = null
     let candidateIndices: number[] = []
-    if (level.level <= 2) {
-      candidateIndices = [1, 2]
-    } else if (level.level === 3) {
+    if (level.level <= 3) {
       candidateIndices = [1, 2, 3]
-    } else if (level.level === 4) {
-      candidateIndices = [1, 2, 3, 4]
+    } else {
+      candidateIndices = [1, 3, 4]
     }
     
     for (const idx of candidateIndices) {
@@ -523,7 +519,7 @@ export async function POST(request: Request) {
       await learnHeatTriggers(recent_messages)
     }
     
-    // ✅ CAMBIO 2: Solo _1 es gratis. Se elimina el freeChance aleatorio.
+    // ✅ FIX: Solo _1 es gratis. Las demás se cobran según el nivel.
     let isFree = totalImagesSent === 0
     if (r2Index !== null && r2Index > 1) {
       isFree = false
