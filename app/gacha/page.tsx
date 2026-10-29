@@ -69,7 +69,6 @@ function getResultPrize(result: any): Prize {
   return { icon: '💬', imageKey: 'icon_gems', label: `+${result.item_key || '?'}`, color: tierColor, tier }
 }
 
-// ✅ FIX 2: Extensión .jpg y carpeta /item/ (singular) según tu captura de R2
 const getItemImageUrl = (itemId: string) => {
   const base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL
   if (!base) return ''
@@ -99,7 +98,7 @@ const SHOWCASE_OUTFITS = [
 
 export default function GachaPage() {
   const router = useRouter()
-  const { user, loading: userLoading, lang, refresh } = useUser()
+  const { user, loading: userLoading, lang, refresh, setUser } = useUser() // ✅ Añadido setUser
   const t = getTranslations(lang)
 
   const [spinning, setSpinning] = useState(false)
@@ -324,6 +323,17 @@ export default function GachaPage() {
 
       currentResultData.current = data
 
+      // ✅ FIX 1: Actualizar las gemas en el contexto global al instante
+      if (typeof data.remaining_purchased_gems === 'number') {
+        setUser({
+          ...user,
+          purchased_gems: data.remaining_purchased_gems,
+          gems: data.remaining_gems ?? user.gems
+        })
+      } else {
+        refresh().catch(() => {})
+      }
+
       const resultPrize = getResultPrize(data)
       currentPrize.current = resultPrize
 
@@ -346,7 +356,6 @@ export default function GachaPage() {
         reelRef.current.style.transform = 'translateX(0px)'
       }
 
-      refresh().catch(() => {})
       if (data.reward_type === 'gacha_character') {
         setOwnedCharacters(prev => [...prev, data.item_key])
       }
@@ -406,7 +415,6 @@ export default function GachaPage() {
         </div>
       </div>
 
-      {/* ✅ FIX 1: Contenedor sin wrap, con gap y máquina más estrecha para que la palanca quepa al lado */}
       <div style={{ position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'center', alignItems: 'flex-end', marginTop: 24, padding: '0 8px', gap: '8px', flexWrap: 'nowrap', width: '100%' }}>
         
         <div className={`cabinet ${isShaking ? 'shaking' : ''}`} style={{ flex: '1 1 auto', maxWidth: '260px' }}>
@@ -486,7 +494,6 @@ export default function GachaPage() {
           <div className="cab-base"><div className="cab-foot"></div></div>
         </div>
 
-        {/* ✅ La palanca con flex-shrink: 0 para que no se deforme ni salte de línea */}
         <div className="lever-wrap" ref={leverRef} onClick={handleSpin} style={{ marginBottom: '15px' }}>
           <div className="lever-rail"></div>
           <div className="lever-arm"><div className="lever-ball"></div></div>
@@ -643,17 +650,36 @@ export default function GachaPage() {
               ¡HAS OBTENIDO UN PREMIO {TIER_COLORS[result.tier as keyof typeof TIER_COLORS]?.label || 'COMÚN'}!
             </p>
             <h2 style={{ fontSize: 22, fontWeight: 900, color: '#fff', margin: '12px 0', lineHeight: 1.3 }}>{result.reward_details}</h2>
+            
+            {/* ✅ FIX 3: Aviso de tirada gratis VIP */}
+            {result.is_free_spin && (
+              <div style={{ marginBottom: 12, padding: '8px 12px', background: 'rgba(34, 197, 94, 0.15)', borderRadius: 12, border: '1px solid rgba(34, 197, 94, 0.4)' }}>
+                <p style={{ fontSize: 12, fontWeight: 800, color: '#22c55e', margin: 0 }}>
+                  👑 ¡Tirada Gratis VIP!
+                </p>
+              </div>
+            )}
+
             <div style={{ background: TIER_COLORS[result.tier as keyof typeof TIER_COLORS]?.bg || 'rgba(163, 149, 201, 0.1)', padding: 16, borderRadius: 16, border: `1px solid ${TIER_COLORS[result.tier as keyof typeof TIER_COLORS]?.border || 'rgba(163, 149, 201, 0.3)'}`, margin: '20px 0' }}>
               <p style={{ fontSize: 13, color: '#c4b5fd', margin: 0 }}>{result.tier === 'common' ? 'Se han añadido a tu saldo de chat.' : 'Se ha guardado en tu inventario.'}</p>
             </div>
-            <button onClick={() => setResult(null)} className="modal-btn primary" style={{ width: '100%', padding: 16, fontSize: 15, fontWeight: 800, background: TIER_COLORS[result.tier as keyof typeof TIER_COLORS]?.color || '#a395c9', color: '#000', boxShadow: `0 8px 24px ${TIER_COLORS[result.tier as keyof typeof TIER_COLORS]?.color || '#a395c9'}60` }}>
-              ¡GENIAL!
-            </button>
+
+            {/* ✅ FIX 4: Botón para ir a usar el personaje si es un gacha_character */}
+            {result.reward_type === 'gacha_character' ? (
+              <button onClick={() => { setResult(null); router.push('/') }} className="modal-btn primary" style={{ width: '100%', padding: 16, fontSize: 15, fontWeight: 800, background: TIER_COLORS[result.tier as keyof typeof TIER_COLORS]?.color || '#a395c9', color: '#000', boxShadow: `0 8px 24px ${TIER_COLORS[result.tier as keyof typeof TIER_COLORS]?.color || '#a395c9'}60` }}>
+                ¡USAR PERSONAJE AHORA!
+              </button>
+            ) : (
+              <button onClick={() => setResult(null)} className="modal-btn primary" style={{ width: '100%', padding: 16, fontSize: 15, fontWeight: 800, background: TIER_COLORS[result.tier as keyof typeof TIER_COLORS]?.color || '#a395c9', color: '#000', boxShadow: `0 8px 24px ${TIER_COLORS[result.tier as keyof typeof TIER_COLORS]?.color || '#a395c9'}60` }}>
+                ¡GENIAL!
+              </button>
+            )}
           </div>
         </div>
       )}
 
       <style jsx>{`
+        /* ... (Mantén todos tus estilos CSS exactamente igual) ... */
         .cabinet { 
           position: relative; 
           width: 100%; 
@@ -800,7 +826,6 @@ export default function GachaPage() {
           box-shadow: 0 10px 20px rgba(0,0,0,0.9);
         }
 
-        /* ✅ Palanca más estilizada y con flex-shrink: 0 */
         .lever-wrap { 
           position: relative; 
           width: 40px; 
