@@ -442,6 +442,37 @@ export async function countAllUserMessages(telegram_id: string) {
   return row?.c ?? 0
 }
 
+/**
+ * ✅ FIX CRÍTICO: Cuenta los SLOTS REALES consumidos del cupo VIP diario.
+ * Cada mensaje consume 1 slot base + 1 extra si supera 600 caracteres
+ * (penalty por longitud). Usa día calendario UTC (reset a las 00:00 UTC).
+ *
+ * Antes se contaban filas (COUNT(*)), lo que hacía que el penalty NO
+ * afectara el cupo VIP real del usuario. Ahora el penalty SÍ cuenta.
+ *
+ * Reset a las 00:00 UTC = DATE(created_at) = DATE('now').
+ * Ejemplo: si un VIP manda 1 msg de 700 chars, consume 2 slots.
+ */
+export async function countVipMessagesToday(telegram_id: string): Promise<number> {
+  try {
+    const row = await queryOne<{ c: number }>(
+      `SELECT
+         COALESCE(SUM(
+           CASE WHEN LENGTH(content) > 600 THEN 2 ELSE 1 END
+         ), 0) AS c
+       FROM conversation_history
+       WHERE telegram_id = ?
+         AND role = 'user'
+         AND DATE(created_at) = DATE('now')`,
+      [telegram_id]
+    )
+    return Number(row?.c ?? 0)
+  } catch (e) {
+    console.warn('[db-queries] countVipMessagesToday failed:', e)
+    return 0
+  }
+}
+
 export async function hasAnyMessage(
   telegram_id: string,
   character_id: number
