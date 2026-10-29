@@ -71,6 +71,9 @@ export default function HomePage() {
   const [vipBannerVisible, setVipBannerVisible] = useState(false)
   const [inviteBannerVisible, setInviteBannerVisible] = useState(false)
 
+  // ✅ FIX 1: Estado para guardar los personajes de ruleta que el usuario ya posee
+  const [ownedGacha, setOwnedGacha] = useState<string[]>([])
+
   useEffect(() => {
     if (typeof window === 'undefined') return
     try {
@@ -136,6 +139,21 @@ export default function HomePage() {
       .catch((e) => console.warn('[home] active char error:', e))
   }, [user?.telegram_id])
 
+  // ✅ FIX 2: Cargar los personajes de ruleta que el usuario ya posee
+  useEffect(() => {
+    if (!user?.telegram_id) return
+    tgFetch('/api/characters')
+      .then(async (res) => {
+        if (!res.ok) return
+        const data = await res.json()
+        const owned = (data?.characters || [])
+          .map((c: any) => c.archetype)
+          .filter((a: string) => GACHA_ARCHETYPES.includes(a))
+        setOwnedGacha(owned)
+      })
+      .catch((e) => console.warn('[home] owned gacha error:', e))
+  }, [user?.telegram_id])
+
   const t = getTranslations(lang)
 
   const all: Char[] = []
@@ -171,7 +189,8 @@ export default function HomePage() {
       if (tab === 'vip') return isVipChar && !isGachaChar
       if (tab === 'gacha') return isGachaChar
       
-      if (isGachaChar) return false
+      // ✅ FIX 3: Si es un personaje de la ruleta y NO lo tiene, ocultarlo de las pestañas normales
+      if (isGachaChar && !ownedGacha.includes(c.archetype)) return false
 
       if (tab === 'all') return true
       return c.gender === tab
@@ -194,7 +213,8 @@ export default function HomePage() {
     const isVipChar = isVipArchetype(c.archetype)
     const isGachaChar = GACHA_ARCHETYPES.includes(c.archetype)
 
-    if (isGachaChar) {
+    // ✅ FIX 4: Bloquear solo si es de la ruleta Y NO lo tiene
+    if (isGachaChar && !ownedGacha.includes(c.archetype)) {
       setGachaBlockedChar(c)
       setShowGachaModal(true)
       return
@@ -319,7 +339,6 @@ export default function HomePage() {
           borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
         }}
       >
-        {/* ✅ HEADER CORREGIDO SIN ETIQUETA VIP PARA EVITAR CORTES */}
         <div
           style={{
             display: 'flex',
@@ -810,7 +829,9 @@ export default function HomePage() {
           const isGachaChar = GACHA_ARCHETYPES.includes(c.archetype)
           
           const isLockedVip = isVipChar && !isVip && !isGachaChar
-          const isLockedGacha = isGachaChar
+          
+          // ✅ FIX 5: Solo bloquear si es de la ruleta Y NO lo tiene
+          const isLockedGacha = isGachaChar && !ownedGacha.includes(c.archetype)
 
           return (
             <button
@@ -1159,8 +1180,8 @@ export default function HomePage() {
                   }}
                 >
                   {lang === 'es'
-                    ? `${gachaBlockedChar.name} es un personaje ultra-exclusivo de la Ruleta de lo Prohibido. ¡Tira de la palanca para ver si tienes suerte!`
-                    : `${gachaBlockedChar.name} is an ultra-exclusive character from the Roulette of the Forbidden. Pull the lever to see if you get lucky!`}
+                    ? `${gachaBlockedChar.name} es un personaje ultra-exclusivo de la Ruleta de lo Prohibido. ¡Gira la ruleta para ver si tienes suerte!`
+                    : `${gachaBlockedChar.name} is an ultra-exclusive character from the Roulette of the Forbidden. Spin the roulette and see if you get lucky!`}
                 </p>
               </div>
 
