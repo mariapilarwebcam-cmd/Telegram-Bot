@@ -8,7 +8,8 @@ import {
   insertCharacter,
   getActiveSubscription,          // ✅ VIP
 } from '@/lib/db-queries'
-import { PERSONALITIES, isVipArchetype } from '@/lib/constants'  // ✅ isVipArchetype
+import { queryOne } from '@/lib/turso'
+import { PERSONALITIES, isVipArchetype, GACHA_ARCHETYPES } from '@/lib/constants'
 
 export async function POST(request: Request) {
   try {
@@ -46,6 +47,23 @@ export async function POST(request: Request) {
             error: 'vip_required',
             message: 'Este personaje es exclusivo para usuarios VIP',
           },
+          { status: 403 }
+        )
+      }
+    }
+
+    // ✅ FIX DE SEGURIDAD: Validar personajes de la ruleta
+    if (GACHA_ARCHETYPES.includes(archetype)) {
+      // Verificamos si lo tiene en el inventario (tiradas viejas) o en user_characters (nuevas tiradas)
+      const owned = await queryOne<{ id: number }>(
+        `SELECT id FROM user_inventory WHERE user_id = ? AND item_type = 'gacha_character' AND item_key = ? LIMIT 1`,
+        [tid, archetype]
+      )
+      const existingChar = await findCharacterByArchetype(tid, archetype, gender)
+      
+      if (!owned && !existingChar) {
+        return NextResponse.json(
+          { error: 'gacha_required', message: 'Este personaje solo se consigue en la ruleta' },
           { status: 403 }
         )
       }
