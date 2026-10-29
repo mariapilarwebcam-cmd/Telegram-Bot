@@ -367,8 +367,6 @@ const MOOD_FRAGMENTS: Record<string, string> = {
   playful_laughing: 'playful laughing mood, genuine smile, relaxed happy energy',
 }
 
-// ✅ FIX: buildR2VariantUrl eliminado, ahora se construye la ruta relativa directamente en el bloque useR2Static
-
 function getLevelBucket(level: number): 'sfw' | 'nsfw' {
   return level <= 3 ? 'sfw' : 'nsfw'
 }
@@ -386,8 +384,15 @@ async function makeBlur(buf: Buffer): Promise<Buffer> {
     .toBuffer()
 }
 
-async function consumeVipPhotoToken(user: any): Promise<boolean> {
+// ✅ FIX #4: Función atómica para evitar race conditions en los tokens VIP
+async function consumeVipPhotoToken(tid: string): Promise<boolean> {
   const now = Math.floor(Date.now() / 1000)
+  
+  const user = await queryOne<{ photo_tokens: number, photo_tokens_at: number }>(
+    `SELECT photo_tokens, photo_tokens_at FROM users WHERE telegram_id = ?`, [tid]
+  )
+  if (!user) return false
+
   let tokens = user.photo_tokens || 0
   let lastAt = user.photo_tokens_at || now
 
@@ -395,16 +400,18 @@ async function consumeVipPhotoToken(user: any): Promise<boolean> {
   if (daysPassed > 0) {
     tokens = Math.min(5, tokens + daysPassed)
     lastAt = tokens >= 5 ? now : lastAt + (daysPassed * 86400)
+    await execute(`UPDATE users SET photo_tokens = ?, photo_tokens_at = ? WHERE telegram_id = ?`, [tokens, lastAt, tid])
   }
 
   if (tokens < 1) return false
 
-  await execute(
-    `UPDATE users SET photo_tokens = ?, photo_tokens_at = ? WHERE telegram_id = ?`,
-    [tokens - 1, lastAt, user.telegram_id]
+  // El WHERE photo_tokens > 0 asegura que no se reste si otra petición ya lo agotó
+  const res = await execute(
+    `UPDATE users SET photo_tokens = photo_tokens - 1 WHERE telegram_id = ? AND photo_tokens > 0 RETURNING photo_tokens`,
+    [tid]
   )
   
-  return true
+  return res.rowsAffected > 0
 }
 
 export async function POST(request: Request) {
@@ -448,7 +455,7 @@ export async function POST(request: Request) {
         if (photoToken) {
           await execute(`DELETE FROM user_inventory WHERE id = ?`, [photoToken.id])
           usedPhotoToken = true
-          // Forzar nivel 3 o 4 si el nivel actual es menor (el premio promete "Foto Sorpresa Nivel 3 o 4")
+          // Forzar nivel 3 o 4 si el nivel actual es menor
           if (level.level < 3) {
             const forcedLevel = Math.random() < 0.5 ? 3 : 4
             level = getLevelFromMessages(forcedLevel === 3 ? 15 : 40)
@@ -478,8 +485,6 @@ export async function POST(request: Request) {
     }
 
     // ✅ LÓGICA CORREGIDA EXACTA:
-    // Niveles 1-3: _1, _2, _3
-    // Niveles 4-5: _1, _3, _4 (se salta la _2)
     let r2Index: number | null = null
     let candidateIndices: number[] = []
     if (level.level <= 3) {
@@ -536,12 +541,9 @@ export async function POST(request: Request) {
       await learnHeatTriggers(recent_messages)
     }
     
-    // ✅ FIX: Solo _1 es gratis. Las demás se cobran según el nivel.
+    // ✅ FIX #6: Si es el PRIMER mensaje de foto, siempre es gratis, sin importar el índice de R2.
     let isFree = totalImagesSent === 0
-    if (r2Index !== null && r2Index > 1) {
-      isFree = false
-    }
-    // ✅ NEW: Si se consumió un photo_token, la foto es gratis
+    
     if (usedPhotoToken) {
       isFree = true
     }
@@ -554,7 +556,8 @@ export async function POST(request: Request) {
       useVipQuota = false
     } else {
       if (isVip && !isFree && !isDirectRequest) {
-        const hasToken = await consumeVipPhotoToken(user)
+        // ✅ FIX #4: Llamada atómica pasando solo el tid
+        const hasToken = await consumeVipPhotoToken(tid)
         if (hasToken) {
           useVipQuota = true
         }
@@ -590,14 +593,11 @@ export async function POST(request: Request) {
     if (useR2Static) {
       source = 'r2_static'
       
-      // ✅ FIX CRÍTICO: Construimos la ruta relativa para evitar el bug de la doble barra (https://.../https://...)
       const r2FileName = `${genderKey}_${character.archetype}_${r2Index}.jpg?v=8`
       imageUrl = r2FileName
       blurUrl = r2FileName
       modelUsed = 'r2'
       
-      // ✅ FIX CRÍTICO: Insertamos un registro en generated_images para que unlock-engine.ts 
-      // pueda encontrar el r2_key y NO haga crash cuando el usuario intenta desbloquear la foto.
       const r2BaseUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL?.replace(/\/$/, '') || ''
       const fullOrigUrl = `${r2BaseUrl}/${r2FileName}`
       const tagKeyForR2 = `r2_${character.archetype}_${genderKey}_${r2Index}_${level.level}`
@@ -656,73 +656,123 @@ export async function POST(request: Request) {
           [tid, character_id, normalizedTagKey, level.level, tid, normalizedTagKey, MAX_GENERATIONS_PER_CONTEXT_PER_USER]
         )
 
+        // ✅ FIX #5: Si falla el límite de contexto, reembolsamos TODO (gemas, tokens, pases)
         if (reservation.rowsAffected === 0) {
           if (gemsCharged) {
-            await incrementGems(tid, imageCost)
+            await execute(`UPDATE users SET purchased_gems = purchased_gems + ?, gems = gems + ? WHERE telegram_id = ?`, [imageCost, imageCost, tid])
             await insertGemTransaction({ telegram_id: tid, amount: imageCost, transaction_type: 'refund', description: 'Reembolso por límite de contexto' })
+          }
+          if (useVipQuota) {
+            await execute(`UPDATE users SET photo_tokens = photo_tokens + 1 WHERE telegram_id = ?`, [tid])
+          }
+          if (usedPhotoToken) {
+            await execute(`INSERT INTO user_inventory (user_id, item_type, item_key) VALUES (?, 'photo_token', 'gacha')`, [tid])
+          }
+          if (isFantasyPass && fantasyPassId) {
+            await execute(`INSERT INTO user_inventory (user_id, item_type, item_key) VALUES (?, 'fantasy_pass', 'level_5')`, [tid])
           }
           return NextResponse.json({ error: 'context_limit_reached', message: getContextLimitMessage(lang, character.character_name) }, { status: 429 })
         }
 
         const generationId = Number(reservation.lastInsertRowid)
 
-        const autoScenes = character.gender === 'male' ? AUTO_SCENES_MALE : AUTO_SCENES_FEMALE
-        const sceneHint = userHint || autoScenes[level.level] || autoScenes[1]
-        const NO_GENITALIA = 'tasteful artistic composition, strategic coverage, high-end boudoir photography aesthetic, safe for platform, elegant, implied nudity only, no visible nipples, no exposed genitals'
-
-        let imagePrompt: string
-        const genderTag = character.gender === 'male' ? '1boy, male' : '1girl, female'
-        const dna = CHARACTER_DNA[`${character.gender}_${character.archetype}`] || 'anime character'
-        
-        // ✅ IDENTITY LOCK REFORZADO CON EL DNA
-        const IDENTITY_LOCK = `(exact same character, identical face, consistent facial features, same eye color, same hair color:1.8, recognizable identity:2.0), ${dna}`
-        
-        // ✅ QUALITY CONTROL CON PIERNAS Y PIES PERFECTOS
-        const QUALITY_CONTROL_PROMPT = `(masterpiece, best quality, highres:1.2), solo, single character, ${genderTag}, only one person in frame, perfect anatomy, perfect hands, five fingers, perfect legs, perfect feet, smooth detailed skin, correct proportions, no mutations, no extra limbs, no missing limbs, no multiple people, no deformed hands, no extra fingers, perfectly sized hands, correct hand size, hand in mid-ground, no giant hands touching the lens, natural pose`
-
-        let outfitPrompt = ''
-        if (character.equipped_outfit) {
-          const outfitData = await queryOne<{ prompt_tag: string }>(
-            `SELECT prompt_tag FROM gacha_outfits WHERE id = ?`,
-            [character.equipped_outfit]
-          )
-          if (outfitData) {
-            outfitPrompt = `${outfitData.prompt_tag}, `
-          }
-        }
-
-        if (level.level <= 3) {
-          const scene = SFW_SCENE_PROMPTS[level.level] || SFW_SCENE_PROMPTS[1]
-          let faceRule = ''
-          if (faceVisibility === 'hidden') faceRule = FACE_HIDDEN_FRAGMENT
-          else if (faceVisibility === 'partial') faceRule = FACE_PARTIAL_FRAGMENT
-          
-          imagePrompt = [QUALITY_CONTROL_PROMPT, IDENTITY_LOCK, outfitPrompt, 'highly detailed anime illustration, cel shading, soft cinematic lighting', scene, sceneHint, faceRule, userTopTagsPrompt, 'muted color palette, elegant composition, best quality, masterpiece', 'safe for work, no nudity, no explicit content'].filter((s) => s && s.length > 0).join(', ')
-        } else {
-          const facePrompt = getCharacterFace(character.archetype, character.gender)
-          const clothing = getClothingLevel(level.level)
-          const scene = NSFW_SCENE_PROMPTS[level.level] || NSFW_SCENE_PROMPTS[4]
-          const archetypeHint = ARCHETYPE_IMAGE_HINTS[`${character.gender}_${character.archetype}`] || ''
-          const moodFragment = mood ? MOOD_FRAGMENTS[mood] || '' : ''
-          
-          const fantasyPrefix = isFantasyPass 
-            ? 'ultra rare secret intimate moment, highly exclusive fantasy scene, ultimate seduction, peak desire, cinematic masterpiece, ' 
-            : isGiftPhoto 
-              ? 'thankful expression, showing off new clothes, exclusive gift, ' 
-              : ''
-
-          imagePrompt = [QUALITY_CONTROL_PROMPT, IDENTITY_LOCK, fantasyPrefix, outfitPrompt, facePrompt, 'anime style, cel shading, moody atmospheric lighting, deep shadows, muted color palette, cinematic dark tones, detailed anime eyes', clothing, scene, archetypeHint, moodFragment, sceneHint, userTopTagsPrompt, NO_GENITALIA, 'beautiful cinematic lighting, 2D illustration, best quality, dynamic camera angle, shallow depth of field, cinematic composition'].filter((s) => s && s.length > 0).join(', ')
-        }
-
-        promptUsed = imagePrompt
-        const seedUrl = getCharacterImageUrl(character.archetype, character.gender)
-        let rawUrl: string
         try {
-          rawUrl = await generateWiroImage(imagePrompt, seedUrl, level.level)
+          const autoScenes = character.gender === 'male' ? AUTO_SCENES_MALE : AUTO_SCENES_FEMALE
+          const sceneHint = userHint || autoScenes[level.level] || autoScenes[1]
+          const NO_GENITALIA = 'tasteful artistic composition, strategic coverage, high-end boudoir photography aesthetic, safe for platform, elegant, implied nudity only, no visible nipples, no exposed genitals'
+
+          let imagePrompt: string
+          const genderTag = character.gender === 'male' ? '1boy, male' : '1girl, female'
+          const dna = CHARACTER_DNA[`${character.gender}_${character.archetype}`] || 'anime character'
+          
+          const IDENTITY_LOCK = `(exact same character, identical face, consistent facial features, same eye color, same hair color:1.8, recognizable identity:2.0), ${dna}`
+          const QUALITY_CONTROL_PROMPT = `(masterpiece, best quality, highres:1.2), solo, single character, ${genderTag}, only one person in frame, perfect anatomy, perfect hands, five fingers, perfect legs, perfect feet, smooth detailed skin, correct proportions, no mutations, no extra limbs, no missing limbs, no multiple people, no deformed hands, no extra fingers, perfectly sized hands, correct hand size, hand in mid-ground, no giant hands touching the lens, natural pose`
+
+          let outfitPrompt = ''
+          if (character.equipped_outfit) {
+            const outfitData = await queryOne<{ prompt_tag: string }>(
+              `SELECT prompt_tag FROM gacha_outfits WHERE id = ?`,
+              [character.equipped_outfit]
+            )
+            if (outfitData) {
+              outfitPrompt = `${outfitData.prompt_tag}, `
+            }
+          }
+
+          if (level.level <= 3) {
+            const scene = SFW_SCENE_PROMPTS[level.level] || SFW_SCENE_PROMPTS[1]
+            let faceRule = ''
+            if (faceVisibility === 'hidden') faceRule = FACE_HIDDEN_FRAGMENT
+            else if (faceVisibility === 'partial') faceRule = FACE_PARTIAL_FRAGMENT
+            
+            imagePrompt = [QUALITY_CONTROL_PROMPT, IDENTITY_LOCK, outfitPrompt, 'highly detailed anime illustration, cel shading, soft cinematic lighting', scene, sceneHint, faceRule, userTopTagsPrompt, 'muted color palette, elegant composition, best quality, masterpiece', 'safe for work, no nudity, no explicit content'].filter((s) => s && s.length > 0).join(', ')
+          } else {
+            const facePrompt = getCharacterFace(character.archetype, character.gender)
+            const clothing = getClothingLevel(level.level)
+            const scene = NSFW_SCENE_PROMPTS[level.level] || NSFW_SCENE_PROMPTS[4]
+            const archetypeHint = ARCHETYPE_IMAGE_HINTS[`${character.gender}_${character.archetype}`] || ''
+            const moodFragment = mood ? MOOD_FRAGMENTS[mood] || '' : ''
+            
+            const fantasyPrefix = isFantasyPass 
+              ? 'ultra rare secret intimate moment, highly exclusive fantasy scene, ultimate seduction, peak desire, cinematic masterpiece, ' 
+              : isGiftPhoto 
+                ? 'thankful expression, showing off new clothes, exclusive gift, ' 
+                : ''
+
+            imagePrompt = [QUALITY_CONTROL_PROMPT, IDENTITY_LOCK, fantasyPrefix, outfitPrompt, facePrompt, 'anime style, cel shading, moody atmospheric lighting, deep shadows, muted color palette, cinematic dark tones, detailed anime eyes', clothing, scene, archetypeHint, moodFragment, sceneHint, userTopTagsPrompt, NO_GENITALIA, 'beautiful cinematic lighting, 2D illustration, best quality, dynamic camera angle, shallow depth of field, cinematic composition'].filter((s) => s && s.length > 0).join(', ')
+          }
+
+          promptUsed = imagePrompt
+          const seedUrl = getCharacterImageUrl(character.archetype, character.gender)
+          const rawUrl = await generateWiroImage(imagePrompt, seedUrl, level.level)
+          
+          modelUsed = 'wiro-seedream-v4-5'
+          
+          const { buffer } = await downloadImage(rawUrl)
+          const blurBuffer = await makeBlur(buffer)
+          
+          const key = crypto.randomUUID()
+          const origKey = `orig/${key}.webp`
+          const blurKey = `blur/${key}.webp`
+          
+          await Promise.all([
+            uploadToR2(origKey, buffer, 'image/webp'),
+            uploadToR2(blurKey, blurBuffer, 'image/webp')
+          ])
+          
+          imageUrl = origKey
+          blurUrl = blurKey
+
+          const r2BaseUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL?.replace(/\/$/, '') || ''
+          const fullOrigUrl = `${r2BaseUrl}/${origKey}`
+
+          const ins = await execute(
+            `INSERT INTO generated_images 
+             (tag_key, archetype, gender, mood, level_bucket, r2_key, blur_r2_key, character_key, max_level, status, r2_url, prompt_used, first_user_id) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)`,
+            [
+              normalizedTagKey, 
+              character.archetype, 
+              genderKey, 
+              mood || 'default', 
+              levelBucket, 
+              origKey, 
+              blurKey, 
+              characterKey, 
+              level.level, 
+              fullOrigUrl, 
+              imagePrompt, 
+              tid
+            ]
+          )
+          imageId = Number(ins.lastInsertRowid)
+
         } catch (imgError) {
+          // ✅ FIX #2, #3: Reembolso robusto si falla la generación o R2
           await execute(`DELETE FROM image_generations WHERE id = ?`, [generationId])
+          
           if (gemsCharged) {
-            await incrementGems(tid, imageCost)
+            await execute(`UPDATE users SET purchased_gems = purchased_gems + ?, gems = gems + ? WHERE telegram_id = ?`, [imageCost, imageCost, tid])
             await insertGemTransaction({ telegram_id: tid, amount: imageCost, transaction_type: 'refund', description: 'Reembolso por fallo en generación' })
           }
           
@@ -730,52 +780,17 @@ export async function POST(request: Request) {
             await execute(`UPDATE users SET photo_tokens = photo_tokens + 1 WHERE telegram_id = ?`, [tid])
           }
 
+          if (usedPhotoToken) {
+            await execute(`INSERT INTO user_inventory (user_id, item_type, item_key) VALUES (?, 'photo_token', 'gacha')`, [tid])
+          }
+
           if (isFantasyPass && fantasyPassId) {
             await execute(`INSERT INTO user_inventory (user_id, item_type, item_key) VALUES (?, 'fantasy_pass', 'level_5')`, [tid])
           }
+          
+          console.error('[generate-image] generation pipeline failed:', imgError)
           return NextResponse.json({ error: 'Error al generar la imagen' }, { status: 500 })
         }
-
-        modelUsed = 'wiro-seedream-v4-5'
-        
-        const { buffer } = await downloadImage(rawUrl)
-        const blurBuffer = await makeBlur(buffer)
-        
-        const key = crypto.randomUUID()
-        const origKey = `orig/${key}.webp`
-        const blurKey = `blur/${key}.webp`
-        
-        await Promise.all([
-          uploadToR2(origKey, buffer, 'image/webp'),
-          uploadToR2(blurKey, blurBuffer, 'image/webp')
-        ])
-        
-        imageUrl = origKey
-        blurUrl = blurKey
-
-        const r2BaseUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL?.replace(/\/$/, '') || ''
-        const fullOrigUrl = `${r2BaseUrl}/${origKey}`
-
-        const ins = await execute(
-          `INSERT INTO generated_images 
-           (tag_key, archetype, gender, mood, level_bucket, r2_key, blur_r2_key, character_key, max_level, status, r2_url, prompt_used, first_user_id) 
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)`,
-          [
-            normalizedTagKey, 
-            character.archetype, 
-            genderKey, 
-            mood || 'default', 
-            levelBucket, 
-            origKey, 
-            blurKey, 
-            characterKey, 
-            level.level, 
-            fullOrigUrl, 
-            imagePrompt, 
-            tid
-          ]
-        )
-        imageId = Number(ins.lastInsertRowid)
       }
     }
 
@@ -784,6 +799,7 @@ export async function POST(request: Request) {
     
     let offerId: number | null = null
     let publicBlurUrl = ''
+    let isLocked = false
 
     if (isDirectRequest || isFantasyPass || isGiftPhoto) {
       if (gemsCharged) {
@@ -794,8 +810,6 @@ export async function POST(request: Request) {
       const offerPrice = isFree || useVipQuota ? 0 : imageCost
       const base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || ''
       
-      // ✅ FIX: Como blurUrl ahora es SIEMPRE una ruta relativa (para R2, Pool y Generated), 
-      // esta construcción ya no genera el error de doble barra (https://.../https://...)
       publicBlurUrl = `${base.replace(/\/$/, '')}/${blurUrl}`
 
       await execute(
@@ -807,11 +821,18 @@ export async function POST(request: Request) {
         `SELECT id FROM photo_offers WHERE user_id = ? AND image_id = ?`,
         [tid, imageId]
       )
-      offerId = offer!.id
+      
+      if (offer) {
+        offerId = offer.id
+      }
 
       if (offerPrice === 0) {
-        await execute(`UPDATE photo_offers SET state = 'unlocked', unlocked_at = unixepoch() WHERE id = ?`, [offerId])
+        if (offerId) {
+          await execute(`UPDATE photo_offers SET state = 'unlocked', unlocked_at = unixepoch() WHERE id = ?`, [offerId])
+        }
         await execute(`UPDATE generated_images SET status = 'active' WHERE id = ?`, [imageId])
+      } else {
+        isLocked = true
       }
     }
 
@@ -824,7 +845,8 @@ export async function POST(request: Request) {
       const base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || ''
       const fullOrigUrl = `${base.replace(/\/$/, '')}/${imageUrl}`
       
-      const imageMessageContent = (offerId && !isDirectRequest && !isFantasyPass && !isGiftPhoto)
+      // ✅ FIX #1: Usar isLocked real en lugar de solo verificar offerId
+      const imageMessageContent = isLocked
         ? `*${character.character_name} te envía una foto*\n\n![Selfie](locked:${offerId}@${publicBlurUrl})`
         : `*${character.character_name} te envía una foto*\n\n![Selfie](${fullOrigUrl})`
 
@@ -845,11 +867,12 @@ export async function POST(request: Request) {
       }
     }
 
+    // ✅ FIX #1: Devolver las URLs correctas según si está bloqueada o no
     return NextResponse.json({
-      is_locked: !!offerId && !isDirectRequest && !isFantasyPass && !isGiftPhoto,
-      offer_id: offerId,
-      blur_url: (offerId && !isDirectRequest) ? publicBlurUrl : undefined,
-      image_url: (!offerId || isDirectRequest || isFantasyPass || isGiftPhoto) ? `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL?.replace(/\/$/, '')}/${imageUrl}` : undefined,
+      is_locked: isLocked,
+      offer_id: isLocked ? offerId : null,
+      blur_url: isLocked ? publicBlurUrl : undefined,
+      image_url: !isLocked ? `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL?.replace(/\/$/, '')}/${imageUrl}` : undefined,
       remaining_gems: newGems, 
       remaining_purchased_gems: newPurchasedGems,
       level: level.level,
@@ -867,7 +890,7 @@ export async function POST(request: Request) {
       photo_token_used: usedPhotoToken,
     })
   } catch (error: any) {
-    console.error('[generate-image] error:', error)
+    console.error('[generate-image] fatal error:', error)
     return NextResponse.json({ error: 'Error al generar la imagen' }, { status: 500 })
   }
 }
