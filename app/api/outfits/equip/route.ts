@@ -1,6 +1,6 @@
 // app/api/outfits/equip/route.ts
 import { NextResponse } from 'next/server'
-import { db, queryOne } from '@/lib/turso'
+import { db } from '@/lib/turso'
 
 export async function POST(request: Request) {
   try {
@@ -28,7 +28,6 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Personaje no encontrado' }, { status: 404 })
       }
 
-      const currentOutfit = charRes.rows[0].equipped_outfit
       let ownedOutfits: string[] = []
       
       try {
@@ -60,11 +59,16 @@ export async function POST(request: Request) {
 
       const inventoryId = invItem.rows[0].id
 
-      // Borrar del inventario global (se consume)
-      await tx.execute({
-        sql: `DELETE FROM user_inventory WHERE id = ?`,
-        args: [inventoryId]
+      // ✅ FIX #1: Verificar que el DELETE realmente afectó a una fila (evita race conditions)
+      const delRes = await tx.execute({
+        sql: `DELETE FROM user_inventory WHERE id = ? AND user_id = ? RETURNING id`,
+        args: [inventoryId, tid]
       })
+
+      if (delRes.rows.length === 0) {
+        await tx.rollback()
+        return NextResponse.json({ error: 'Outfit ya no disponible en el inventario' }, { status: 409 })
+      }
 
       // Añadir al armario del personaje
       ownedOutfits.push(outfit_key)
