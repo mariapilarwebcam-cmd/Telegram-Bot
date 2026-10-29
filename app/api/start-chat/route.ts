@@ -6,9 +6,15 @@ import {
   getCharacter,
   getActiveSubscription,
   getActivePass,
+  countVipMessagesToday,
 } from '@/lib/db-queries'
 import { db } from '@/lib/turso'
-import { OPENING_LINES, GEM_COSTS, isVipArchetype } from '@/lib/constants'
+import {
+  OPENING_LINES,
+  GEM_COSTS,
+  isVipArchetype,
+  VIP_DAILY_MESSAGE_LIMIT,
+} from '@/lib/constants'
 
 export async function POST(request: Request) {
   try {
@@ -20,7 +26,6 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => ({}))
     const character_id = body?.character_id
 
-    // ✅ FIX #4: Validar character_id como número
     if (!character_id || typeof character_id !== 'number') {
       return NextResponse.json({ error: 'character_id inválido' }, { status: 400 })
     }
@@ -39,17 +44,17 @@ export async function POST(request: Request) {
     const isVip = !!vipSub
 
     if (isVipArchetype(character.archetype) && !isVip) {
-      return NextResponse.json({ 
-        blocked: true, 
-        vip_expired: true,
-        response: 'Este personaje es exclusivo VIP. Renueva tu suscripción para hablar con él.' 
-      }, { status: 403 })
+      return NextResponse.json(
+        {
+          blocked: true,
+          vip_expired: true,
+          response: 'Este personaje es exclusivo VIP. Renueva tu suscripción para hablar con él.',
+        },
+        { status: 403 }
+      )
     }
 
-    // ✅ FIX #3: Verificar si el usuario tiene un Pase de Mensajes activo.
-    // Si lo tiene, la apertura es GRATIS (el pase se consume solo con mensajes de usuario).
     const activePass = await getActivePass(tid)
-
     const lang = (user.language === 'en' ? 'en' : 'es') as 'es' | 'en'
 
     // Construir el mensaje de apertura ANTES de la transacción (es JS puro, no toca BD)
@@ -61,8 +66,7 @@ export async function POST(request: Request) {
     const template = openingTemplate ? openingTemplate[lang] : fallback
     const openingMessage = template.replace(/{name}/g, character.character_name)
 
-    // ✅ FIX #1, #2, #5: Transacción atómica para evitar doble cobro y garantizar consistencia.
-    // Todo lo que modifica saldos o inserta mensajes ocurre DENTRO de la transacción.
+    // ✅ Transacción atómica: verificación + cobro + insert ocurren juntos o no ocurren.
     const tx = await db.transaction('write')
 
     try {
@@ -82,13 +86,48 @@ export async function POST(request: Request) {
       let newBonusGems = user.bonus_gems || 0
       let newGems = user.gems || 0
       let newHookRemaining = user.hook_messages_remaining || 0
+      let paymentMode: 'vip_daily' | 'vip_bonus' | 'pass' | 'bonus_gems' | 'hook' | 'none' = 'none'
 
-      if (isVip || activePass) {
-        // ✅ VIP y usuarios con Pase de Mensajes no pagan por iniciar el chat.
-        // El pase se consume en /api/chat (por cada mensaje del usuario).
+      if (isVip) {
+        // ✅ FIX #1 (CRÍTICO): VIP consume cupo VIP diario. Si está agotado,
+        // cae a bonus_gems. Si tampoco tiene, se bloquea.
+        // La apertura consume 1 slot (no hay penalty porque no es mensaje del usuario).
+        const vipUsed = await countVipMessagesToday(tid)
+        const totalVipCost = 1 // La apertura es 1 slot, sin penalty
+
+        if (vipUsed + totalVipCost <= VIP_DAILY_MESSAGE_LIMIT) {
+          // Dentro del cupo VIP diario. No tocar bonus_gems.
+          charged = true
+          paymentMode = 'vip_daily'
+        } else if (newBonusGems >= GEM_COSTS.message) {
+          // Cupo VIP agotado → cobrar de bonus_gems
+          const bonusResult = await tx.execute({
+            sql: `UPDATE users 
+                  SET bonus_gems = COALESCE(bonus_gems, 0) - ? 
+                  WHERE telegram_id = ? AND COALESCE(bonus_gems, 0) >= ? 
+                  RETURNING bonus_gems`,
+            args: [GEM_COSTS.message, tid, GEM_COSTS.message],
+          })
+
+          if (bonusResult.rows.length > 0) {
+            newBonusGems = Number(bonusResult.rows[0].bonus_gems)
+            charged = true
+            paymentMode = 'vip_bonus'
+
+            await tx.execute({
+              sql: `INSERT INTO gem_transactions (telegram_id, amount, transaction_type, description) VALUES (?, ?, ?, ?)`,
+              args: [tid, -GEM_COSTS.message, 'message_vip_overflow', 'Apertura VIP (cupo agotado)'],
+            })
+          }
+        }
+        // Si no hay cupo VIP ni bonus_gems → charged = false → bloqueado
+      } else if (activePass) {
+        // ✅ No-VIP con pase activo: la apertura es GRATIS (el pase se consume
+        // con los mensajes del usuario, no con la apertura).
         charged = true
+        paymentMode = 'pass'
       } else {
-        // 2a. Intentar cobrar 1 mensaje de bonus_gems
+        // No-VIP sin pase: cobrar de bonus_gems o hook
         const bonusResult = await tx.execute({
           sql: `UPDATE users 
                 SET bonus_gems = COALESCE(bonus_gems, 0) - ? 
@@ -100,14 +139,14 @@ export async function POST(request: Request) {
         if (bonusResult.rows.length > 0) {
           newBonusGems = Number(bonusResult.rows[0].bonus_gems)
           charged = true
+          paymentMode = 'bonus_gems'
 
-          // ✅ FIX #5: Log DENTRO de la transacción (si algo falla, se revierte también)
           await tx.execute({
             sql: `INSERT INTO gem_transactions (telegram_id, amount, transaction_type, description) VALUES (?, ?, ?, ?)`,
             args: [tid, -GEM_COSTS.message, 'message', 'Mensaje de apertura'],
           })
         } else {
-          // 2b. Intentar consumir del Hook Mode (mensajes gratis de bienvenida)
+          // Intentar consumir del Hook Mode
           const hookRemaining = user.hook_messages_remaining || 0
           if (hookRemaining > 0) {
             const hookResult = await tx.execute({
@@ -120,6 +159,7 @@ export async function POST(request: Request) {
             if (hookResult.rows.length > 0) {
               newHookRemaining = Number(hookResult.rows[0].hook_messages_remaining)
               charged = true
+              paymentMode = 'hook'
             }
           }
         }
@@ -130,12 +170,18 @@ export async function POST(request: Request) {
         await tx.rollback()
         return NextResponse.json({
           blocked: true,
-          response: lang === 'es' 
-            ? 'Necesitas al menos 1 mensaje para empezar a chatear.' 
-            : 'You need at least 1 message to start chatting.',
+          response:
+            lang === 'es'
+              ? isVip
+                ? 'Has agotado tus mensajes VIP de hoy y no te quedan mensajes comprados.'
+                : 'Necesitas al menos 1 mensaje para empezar a chatear.'
+              : isVip
+                ? "You've used your VIP messages today and have no purchased messages left."
+                : 'You need at least 1 message to start chatting.',
           remaining_gems: newGems,
           remaining_bonus_gems: newBonusGems,
           hook_messages_remaining: newHookRemaining,
+          is_vip: isVip,
         })
       }
 
@@ -153,10 +199,10 @@ export async function POST(request: Request) {
         remaining_gems: newGems,
         remaining_bonus_gems: newBonusGems,
         hook_messages_remaining: newHookRemaining,
+        is_vip: isVip,
+        payment_mode: paymentMode,
       })
     } catch (txError) {
-      // ✅ FIX #2: Si algo falla dentro de la transacción, se revierte TODO automáticamente.
-      // El usuario no pierde gemas ni mensajes, y no queda un log fantasma.
       await tx.rollback().catch(() => {})
       throw txError
     }
