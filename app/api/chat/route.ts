@@ -28,7 +28,7 @@ import { queryOne, query, execute } from '@/lib/turso'
 import {
   GEM_COSTS,
   HOOK_MODE_MESSAGES,
-  REFERRAL_MESSAGES, // ✅ FIX: Reemplazado GEMS_PER_REFERRAL
+  REFERRAL_MESSAGES,
   REFERRAL_MIN_MESSAGES,
   LOW_GEMS_THRESHOLD,
   getLevelPersonality,
@@ -168,7 +168,13 @@ export async function POST(request: Request) {
 
     const { character_id, message, accept_penalty } = await request.json()
 
-    if (!message || typeof message !== 'string') {
+    // ✅ FIX #9: Validación de character_id
+    if (!character_id || typeof character_id !== 'number') {
+      return NextResponse.json({ error: 'character_id inválido' }, { status: 400 })
+    }
+
+    // ✅ FIX #6: Validar que el mensaje no esté vacío (solo espacios)
+    if (!message || typeof message !== 'string' || !message.trim()) {
       return NextResponse.json({ error: 'Mensaje inválido' }, { status: 400 })
     }
 
@@ -187,7 +193,6 @@ export async function POST(request: Request) {
         return NextResponse.json({
           requires_penalty: true,
           penalty_gems: 1,
-          // ✅ FIX: ahora el penalty también se cobra en mensajes
           message: 'Has superado los 600 caracteres. Enviar este mensaje costará 1 mensaje extra. ¿Aceptas?'
         }, { status: 200 })
       }
@@ -234,7 +239,10 @@ export async function POST(request: Request) {
     } else if (isVip) {
       vipMessagesToday = await countVipMessagesToday(tid)
 
-      if (vipMessagesToday >= VIP_DAILY_MESSAGE_LIMIT) {
+      // ✅ FIX #2 y #8: El penalty VIP ahora consume 2 mensajes del cupo diario (no cobra gemas)
+      const totalVipCost = 1 + penaltyGems
+
+      if (vipMessagesToday + totalVipCost > VIP_DAILY_MESSAGE_LIMIT) {
         const blockedMessage = lang === 'es'
           ? `*${character.character_name} te mira con una sonrisa divertida*\n\n"Ey, tranquilo... has estado hablando conmigo TODO el día. Necesito un descanso, ¿no crees? 😏\n\nVuelve mañana y seguimos donde lo dejamos."`
           : `*${character.character_name} looks at you with a playful smile*\n\n"Hey, easy... you've been talking to me ALL day. I need a break, don't you think? 😏\n\nCome back tomorrow and we'll pick up where we left off."`
@@ -252,24 +260,13 @@ export async function POST(request: Request) {
         })
       }
 
-      if (penaltyGems > 0) {
-        const vipCharge = await queryOne<{ gems: number }>(
-          `UPDATE users SET gems = gems - ? WHERE telegram_id = ? AND gems >= ? RETURNING gems`,
-          [penaltyGems, tid, penaltyGems]
-        )
-        if (!vipCharge) {
-          return NextResponse.json({ blocked: true, response: 'No tienes gemas suficientes para el recargo.' }, { status: 402 })
-        }
-        newGems = vipCharge.gems
-        await insertGemTransaction({ telegram_id: tid, amount: -penaltyGems, transaction_type: 'message_penalty', description: 'Recargo por mensaje largo (VIP)' })
-      }
+      // ✅ Nota: el penalty VIP ya está incluido en `totalVipCost` arriba.
+      // No se cobran gemas reales para usuarios VIP.
     } else {
       const hookRemaining = user.hook_messages_remaining || 0
       const hookUsed = !!user.hook_used
       const totalCost = GEM_COSTS.message + penaltyGems
-      
-      // ✅ FIX: solo se puede pagar con bonus_gems (mensajes de chat).
-      // NUNCA se descuentan gemas pagadas para chatear.
+
       const hasTotalMessages = newBonusGems >= totalCost
 
       if (!hasTotalMessages && hookRemaining <= 0 && hookUsed) {
@@ -288,8 +285,7 @@ export async function POST(request: Request) {
       }
 
       let charged = false
-      
-      // ✅ FIX: Solo cobrar de bonus_gems. Eliminado el fallback a gems.
+
       if (newBonusGems >= totalCost) {
         const bonusResult = await queryOne<{ bonus_gems: number }>(
           `UPDATE users SET bonus_gems = bonus_gems - ? WHERE telegram_id = ? AND bonus_gems >= ? RETURNING bonus_gems`,
@@ -311,7 +307,9 @@ export async function POST(request: Request) {
       const isHookMode = !charged && hookRemaining > 0
 
       if (isHookMode) {
-        newHookRemaining = Math.max(0, hookRemaining - 1)
+        // ✅ FIX #3: Descontar 1 + penalty del hook (mensaje largo = 2 del hook)
+        const hookCost = 1 + penaltyGems
+        newHookRemaining = Math.max(0, hookRemaining - hookCost)
         await setHookRemaining(tid, newHookRemaining)
       } else if (!charged && !hookUsed) {
         newHookRemaining = HOOK_MODE_MESSAGES
@@ -321,7 +319,6 @@ export async function POST(request: Request) {
       }
     }
 
-    // ✅ FIX: hook mode ahora depende solo de bonus_gems (mensajes)
     const isHookModeAfter = !isVip && newBonusGems <= 0 && newHookRemaining > 0
     const rawHistory = await getRecentMessages(tid, character_id, 8)
     const userMsgCount = await countUserMessages(tid, character_id)
@@ -339,10 +336,10 @@ export async function POST(request: Request) {
        ORDER BY id DESC LIMIT 1`,
       [tid, character_id]
     )
-    
+
     const hotEmojis = ['❤️', '🔥', '😈', '💦', '🍆', '🍑', '🥵', '💋']
     const hadRecentHotReaction = lastAssistantMsg?.reaction && hotEmojis.includes(lastAssistantMsg.reaction)
-    
+
     const isPeakDesire = hadRecentHotReaction || levelUp
 
     const spend7dRow = await queryOne<{ total: number }>(
@@ -367,13 +364,12 @@ export async function POST(request: Request) {
     messages.push({ role: 'user', content: message })
 
     const personality = getLevelPersonality(character.archetype, newLevel.level, lang)
-    // ✅ FIX: lowGems ahora se basa solo en bonus_gems (mensajes)
     const lowMessages = !isVip && !usedPass && newBonusGems > 0 && newBonusGems <= LOW_GEMS_THRESHOLD && !isHookModeAfter
     const provocativeHint = lowMessages ? (lang === 'es' ? PROVOCATIVE_HINT_ES : PROVOCATIVE_HINT_EN) : ''
     const genderRules = buildGenderRules(user.gender, character.gender, lang)
 
     const learned = await getLearnedTriggers()
-    
+
     let salesPrompt = ''
     if (lang === 'es') {
       salesPrompt = `\n\n=== CONOCIMIENTO DE VENTAS (CRÍTICO) ===
@@ -396,15 +392,15 @@ ${learned.heat.length > 0 ? `- The system learned users love these words: ${lear
     }
 
     let photoNudge = ''
-    const reversedHistory = [...rawHistory] 
+    const reversedHistory = [...rawHistory]
     const lockedPhotoMsgIndex = reversedHistory.findIndex(m => m.content.includes('locked:'))
-    
+
     if (lockedPhotoMsgIndex === 2 || lockedPhotoMsgIndex === 3) {
       const match = reversedHistory[lockedPhotoMsgIndex].content.match(/locked:(\d+)@/)
       if (match) {
         const offerId = match[1]
         const photoStatus = await queryOne<{ state: string }>(`SELECT state FROM photo_offers WHERE id = ?`, [offerId])
-        
+
         if (photoStatus && photoStatus.state === 'locked') {
           if (lang === 'es') {
             photoNudge = character.gender === 'male'
@@ -430,18 +426,23 @@ ${learned.heat.length > 0 ? `- The system learned users love these words: ${lear
     try {
       responseText = await generateAIResponse(messages, systemPrompt, intensity)
     } catch (aiError: any) {
-      // ✅ FIX: Reembolso ahora solo de bonus_gems (para non-VIP) o gems (para VIP penalty)
+      // ✅ FIX #1: Reembolso correcto. Ya no hay reembolso VIP penalty porque no se cobra.
       if (!isVip && !usedPass) {
         const spentBonus = (user.bonus_gems || 0) - newBonusGems
 
         if (spentBonus > 0) {
           await execute(`UPDATE users SET bonus_gems = bonus_gems + ? WHERE telegram_id = ?`, [spentBonus, tid])
+          // ✅ FIX #7: Registrar el reembolso en el historial
+          await insertGemTransaction({
+            telegram_id: tid,
+            amount: spentBonus,
+            transaction_type: 'refund',
+            description: 'Reembolso por fallo en generación de IA',
+          })
         }
-        
+
         await setHookRemaining(tid, user.hook_messages_remaining || 0)
         await setHookUsed(tid, !!user.hook_used)
-      } else if (penaltyGems > 0) {
-        await incrementGems(tid, penaltyGems)
       }
 
       const errorDetail = aiError?.message || String(aiError)
@@ -452,6 +453,7 @@ ${learned.heat.length > 0 ? `- The system learned users love these words: ${lear
     let userMessageId: number | undefined
     let assistantMessageId: number | undefined
 
+    // ✅ FIX #4: Si falla el guardado en BD, reembolsar al usuario
     try {
       const inserted = await insertMessages([
         { telegram_id: tid, character_id, role: 'user', content: message },
@@ -461,33 +463,68 @@ ${learned.heat.length > 0 ? `- The system learned users love these words: ${lear
       assistantMessageId = inserted[1]?.id
     } catch (dbErr) {
       console.error('[chat] Error guardando mensajes:', dbErr)
+
+      // Reembolso de emergencia si no se pudo persistir
+      if (!isVip && !usedPass) {
+        const spentBonus = (user.bonus_gems || 0) - newBonusGems
+        if (spentBonus > 0) {
+          await execute(`UPDATE users SET bonus_gems = bonus_gems + ? WHERE telegram_id = ?`, [spentBonus, tid])
+          await insertGemTransaction({
+            telegram_id: tid,
+            amount: spentBonus,
+            transaction_type: 'refund',
+            description: 'Reembolso por fallo al guardar el mensaje',
+          })
+        }
+        await setHookRemaining(tid, user.hook_messages_remaining || 0)
+        await setHookUsed(tid, !!user.hook_used)
+      }
+
+      return NextResponse.json({ error: 'Error guardando tu mensaje. Intenta de nuevo.' }, { status: 500 })
     }
 
+    // ✅ FIX #5: Comisión de referidos con UPDATE atómico (evita doble pago)
     try {
       const referral = await getReferralByReferred(tid)
       if (referral && !referral.reward_paid) {
         const totalMsg = await countAllUserMessages(tid)
         await updateReferralCount(referral.id, totalMsg)
+
         if (totalMsg >= REFERRAL_MIN_MESSAGES) {
-          // ✅ FIX: Entregar mensajes de chat (bonus_gems) en lugar de gemas de pago
-          await execute(`UPDATE users SET bonus_gems = COALESCE(bonus_gems, 0) + ? WHERE telegram_id = ?`, [REFERRAL_MESSAGES, String(referral.referrer_id)])
-          await incrementTotalReferrals(String(referral.referrer_id))
-          await insertGemTransaction({ telegram_id: String(referral.referrer_id), amount: REFERRAL_MESSAGES, transaction_type: 'referral', description: `Referido verificado (${REFERRAL_MIN_MESSAGES}+ mensajes)` })
-          await markReferralPaid(referral.id)
+          // ✅ FIX: UPDATE condicional atómico. Si otro request ya pagó, rowsAffected = 0.
+          const claim = await execute(
+            `UPDATE referrals SET reward_paid = 1, reward_paid_at = datetime('now') WHERE id = ? AND reward_paid = 0`,
+            [referral.id]
+          )
+
+          if (claim.rowsAffected > 0) {
+            await execute(
+              `UPDATE users SET bonus_gems = COALESCE(bonus_gems, 0) + ? WHERE telegram_id = ?`,
+              [REFERRAL_MESSAGES, String(referral.referrer_id)]
+            )
+            await incrementTotalReferrals(String(referral.referrer_id))
+            await insertGemTransaction({
+              telegram_id: String(referral.referrer_id),
+              amount: REFERRAL_MESSAGES,
+              transaction_type: 'referral',
+              description: `Referido verificado (${REFERRAL_MIN_MESSAGES}+ mensajes)`,
+            })
+          }
         }
       }
-    } catch (refErr) {}
+    } catch (refErr) {
+      console.warn('[chat] Referral processing failed:', refErr)
+    }
 
     let finalText = responseText
-    // ✅ FIX: isLowGemsWarning ahora se basa solo en bonus_gems (mensajes)
     const isLowGemsWarning = !isVip && !usedPass && nextUserMsgCount >= 10 && newBonusGems > 0 && newBonusGems <= LOW_GEMS_THRESHOLD && !isHookModeAfter && newHookRemaining === 0
     const userRequestedPhoto = detectPhotoRequest(message, lang)
     const imageCost = getImageCost(newLevel.level)
     const hasEnoughPurchased = (user.purchased_gems || 0) >= imageCost
     const isMilestone = isPhotoMilestone(nextUserMsgCount, hasEnoughPurchased)
-    
+
     const isSpontaneousOffer = newLevel.level >= 3 && nextUserMsgCount % 6 === 0 && !usedPass
-    
+
     const spendState = await getSpendState(tid)
     const shouldShowPhotoBanner = (isMilestone || userRequestedPhoto || isSpontaneousOffer || isPeakDesire) && spendState?.level !== 'rest'
 
@@ -503,16 +540,17 @@ ${learned.heat.length > 0 ? `- The system learned users love these words: ${lear
 
     const nextLevelAt = getNextLevelThreshold(newLevel.level)
 
+    // ✅ FIX #8: vip_messages_today ahora incluye el penalty
     return NextResponse.json({
       response: finalText,
-      user_message_id: userMessageId,          
-      assistant_message_id: assistantMessageId, 
+      user_message_id: userMessageId,
+      assistant_message_id: assistantMessageId,
       remaining_gems: newGems,
-      remaining_bonus_gems: newBonusGems, 
+      remaining_bonus_gems: newBonusGems,
       hook_messages_remaining: newHookRemaining,
       is_hook_mode: isHookModeAfter,
       is_vip: isVip,
-      vip_messages_today: isVip ? vipMessagesToday + 1 : undefined,
+      vip_messages_today: isVip ? vipMessagesToday + 1 + penaltyGems : undefined,
       vip_daily_limit: isVip ? VIP_DAILY_MESSAGE_LIMIT : undefined,
       intensity,
       level: newLevel.level,
