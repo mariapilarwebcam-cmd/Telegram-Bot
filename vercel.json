@@ -9,10 +9,16 @@
     "app/api/chat/route.ts": {
       "maxDuration": 60
     },
+    "app/api/start-chat/route.ts": {
+      "maxDuration": 60
+    },
     "app/api/generate-image/route.ts": {
       "maxDuration": 60
     },
     "app/api/generate-audio/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/check-crypto-payment/route.ts": {
       "maxDuration": 60
     },
     "app/api/cron/proactive/route.ts": {
