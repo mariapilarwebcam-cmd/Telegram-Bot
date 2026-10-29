@@ -35,7 +35,6 @@ interface Prize {
 const getPrizeImageUrl = (imageKey: string) => {
   const base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL
   if (!base) return ''
-  // ✅ FIX: Unificado a 'items/' en plural
   return `${base.replace(/\/$/, '')}/items/gacha/${imageKey}.png`
 }
 
@@ -67,13 +66,12 @@ function getResultPrize(result: any): Prize {
   if (result.reward_type === 'outfit') return { icon: '👗', imageKey: 'icon_outfit', label: 'Outfit', color: tierColor, tier }
   if (result.reward_type === 'photo_token') return { icon: '📸', imageKey: 'icon_photo', label: 'Foto', color: tierColor, tier }
   if (result.reward_type === 'audio_token') return { icon: '🎵', imageKey: 'icon_audio', label: 'Audio', color: tierColor, tier }
-  return { icon: '💬', imageKey: 'icon_gems', label: `+${result.item_key}`, color: tierColor, tier }
+  return { icon: '💬', imageKey: 'icon_gems', label: `+${result.item_key || '?'}`, color: tierColor, tier }
 }
 
 const getItemImageUrl = (itemId: string) => {
   const base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL
   if (!base) return ''
-  // ✅ FIX: Unificado a 'items/' en plural y .jpg para coincidir con chat/[id]/page.tsx
   return `${base.replace(/\/$/, '')}/items/${itemId}.jpg`
 }
 
@@ -106,7 +104,7 @@ export default function GachaPage() {
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'characters' | 'outfits'>('characters')
   const [ownedCharacters, setOwnedCharacters] = useState<string[]>([])
-  const [isVip, setIsVip] = useState(false) // ✅ FIX: Estado para VIP
+  const [isVip, setIsVip] = useState(false)
   
   const [reelItems, setReelItems] = useState<Prize[]>([])
   const [showSkip, setShowSkip] = useState(false)
@@ -129,8 +127,11 @@ export default function GachaPage() {
   const startPos = useRef(0)
   const targetPos = useRef(0)
   const currentPrize = useRef<Prize | null>(null)
+  
+  // ✅ FIX: Ref para guardar el resultado real y evitar "stale closures"
+  const currentResultData = useRef<any>(null)
+  const hasFinished = useRef(false)
 
-  // ✅ FIX: Comprobar estado VIP al cargar
   useEffect(() => {
     if (!user?.telegram_id) return
     tgFetch('/api/subscription')
@@ -256,11 +257,16 @@ export default function GachaPage() {
     setTimeout(() => setIsShaking(false), 400)
 
     setTimeout(() => {
-      setResult(result)
+      // ✅ FIX: Usar currentResultData.current en lugar de la variable obsoleta "result"
+      setResult(currentResultData.current)
     }, 600)
   }
 
   const finishSpin = () => {
+    // ✅ FIX: Evitar que finishSpin se ejecute dos veces por el setTimeout de seguridad
+    if (hasFinished.current) return
+    hasFinished.current = true
+
     cancelAnimationFrame(rafId.current)
     setSpinning(false)
     setShowSkip(false)
@@ -269,7 +275,7 @@ export default function GachaPage() {
 
   const frame = (now: number) => {
     const t = Math.min(1, Math.max(0, (now - animStart.current) / SPIN_DURATION))
-    const eased = 1 - Math.pow(1 - t, 3) // easeOutCubic
+    const eased = 1 - Math.pow(1 - t, 3)
     const pos = startPos.current + (targetPos.current - startPos.current) * eased
     if (reelRef.current) reelRef.current.style.transform = `translateX(${pos}px)`
     if (t < 1) rafId.current = requestAnimationFrame(frame)
@@ -286,7 +292,6 @@ export default function GachaPage() {
   const handleSpin = async () => {
     if (!user || spinning) return
 
-    // ✅ FIX: Si NO es VIP y no tiene gemas, bloqueamos. Si es VIP, dejamos que el backend decida si es gratis.
     if (!isVip && (user.purchased_gems || 0) < COST) {
       setError(lang === 'es' ? 'Necesitas 50 gemas compradas para tirar.' : 'You need 50 purchased gems to spin.')
       return
@@ -298,6 +303,9 @@ export default function GachaPage() {
     setGlowClass('')
     setTierLabel('· GIRANDO ·')
     setTierColor('#ec4899')
+    
+    hasFinished.current = false // ✅ Reseteamos el flag
+    currentResultData.current = null // ✅ Reseteamos el resultado
     animLever()
 
     try {
@@ -306,7 +314,6 @@ export default function GachaPage() {
 
       if (!res.ok) {
         setSpinning(false)
-        // ✅ FIX: Manejo amigable del error de gemas insuficientes desde el servidor
         if (res.status === 402 || data.error === 'insufficient_gems') {
           setError(lang === 'es' ? 'Necesitas 50 gemas compradas para tirar.' : 'You need 50 purchased gems to spin.')
         } else {
@@ -314,6 +321,9 @@ export default function GachaPage() {
         }
         return
       }
+
+      // ✅ FIX: Guardar los datos reales en la ref
+      currentResultData.current = data
 
       const resultPrize = getResultPrize(data)
       currentPrize.current = resultPrize
@@ -614,18 +624,18 @@ export default function GachaPage() {
 
       {result && (
         <div className="modal-backdrop" style={{ zIndex: 9999, background: 'rgba(5, 2, 10, 0.95)', backdropFilter: 'blur(10px)' }}>
-          <div className="modal-box level-up-modal" style={{ textAlign: 'center', border: `2px solid ${TIER_COLORS[result.tier as keyof typeof TIER_COLORS].color}`, boxShadow: `0 0 40px ${TIER_COLORS[result.tier as keyof typeof TIER_COLORS].color}40` }}>
+          <div className="modal-box level-up-modal" style={{ textAlign: 'center', border: `2px solid ${TIER_COLORS[result.tier as keyof typeof TIER_COLORS]?.color || '#a395c9'}`, boxShadow: `0 0 40px ${TIER_COLORS[result.tier as keyof typeof TIER_COLORS]?.color || '#a395c9'}40` }}>
             <div style={{ fontSize: 64, marginBottom: 16, animation: 'levelUpSparkle 1.5s infinite' }}>
               {result.tier === 'common' ? '💬' : result.tier === 'rare' ? '📸' : result.tier === 'epic' ? '🎟️' : result.tier === 'legendary' ? '👑' : '🔥'}
             </div>
-            <p style={{ fontSize: 12, fontWeight: 900, letterSpacing: '0.2em', color: TIER_COLORS[result.tier as keyof typeof TIER_COLORS].color, margin: 0, textShadow: `0 0 10px ${TIER_COLORS[result.tier as keyof typeof TIER_COLORS].color}` }}>
-              ¡HAS OBTENIDO UN PREMIO {TIER_COLORS[result.tier as keyof typeof TIER_COLORS].label}!
+            <p style={{ fontSize: 12, fontWeight: 900, letterSpacing: '0.2em', color: TIER_COLORS[result.tier as keyof typeof TIER_COLORS]?.color || '#a395c9', margin: 0, textShadow: `0 0 10px ${TIER_COLORS[result.tier as keyof typeof TIER_COLORS]?.color || '#a395c9'}` }}>
+              ¡HAS OBTENIDO UN PREMIO {TIER_COLORS[result.tier as keyof typeof TIER_COLORS]?.label || 'COMÚN'}!
             </p>
             <h2 style={{ fontSize: 22, fontWeight: 900, color: '#fff', margin: '12px 0', lineHeight: 1.3 }}>{result.reward_details}</h2>
-            <div style={{ background: TIER_COLORS[result.tier as keyof typeof TIER_COLORS].bg, padding: 16, borderRadius: 16, border: `1px solid ${TIER_COLORS[result.tier as keyof typeof TIER_COLORS].border}`, margin: '20px 0' }}>
+            <div style={{ background: TIER_COLORS[result.tier as keyof typeof TIER_COLORS]?.bg || 'rgba(163, 149, 201, 0.1)', padding: 16, borderRadius: 16, border: `1px solid ${TIER_COLORS[result.tier as keyof typeof TIER_COLORS]?.border || 'rgba(163, 149, 201, 0.3)'}`, margin: '20px 0' }}>
               <p style={{ fontSize: 13, color: '#c4b5fd', margin: 0 }}>{result.tier === 'common' ? 'Se han añadido a tu saldo de chat.' : 'Se ha guardado en tu inventario.'}</p>
             </div>
-            <button onClick={() => setResult(null)} className="modal-btn primary" style={{ width: '100%', padding: 16, fontSize: 15, fontWeight: 800, background: TIER_COLORS[result.tier as keyof typeof TIER_COLORS].color, color: '#000', boxShadow: `0 8px 24px ${TIER_COLORS[result.tier as keyof typeof TIER_COLORS].color}60` }}>
+            <button onClick={() => setResult(null)} className="modal-btn primary" style={{ width: '100%', padding: 16, fontSize: 15, fontWeight: 800, background: TIER_COLORS[result.tier as keyof typeof TIER_COLORS]?.color || '#a395c9', color: '#000', boxShadow: `0 8px 24px ${TIER_COLORS[result.tier as keyof typeof TIER_COLORS]?.color || '#a395c9'}60` }}>
               ¡GENIAL!
             </button>
           </div>
