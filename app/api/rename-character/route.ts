@@ -1,13 +1,8 @@
 // app/api/rename-character/route.ts
 
 import { NextResponse } from 'next/server'
-import {
-  ensureUser,
-  getCharacter,
-  insertGemTransaction,
-  renameCharacter,
-} from '@/lib/db-queries'
-import { queryOne } from '@/lib/turso'
+import { db } from '@/lib/turso'
+import { ensureUser } from '@/lib/db-queries'
 import { GEM_COSTS } from '@/lib/constants'
 
 export async function POST(request: Request) {
@@ -44,60 +39,86 @@ export async function POST(request: Request) {
 
     const lang = (user.language || 'es') as 'es' | 'en'
 
-    const character = await getCharacter(cid, tid)
-    if (!character) {
-      return NextResponse.json(
-        { error: 'Personaje no encontrado' },
-        { status: 404 }
-      )
-    }
+    // ✅ FIX #2 y #3: Usar transacción atómica para evitar dobles cobros y desincronización
+    const tx = await db.transaction('write')
 
-    if (character.character_name === name) {
+    try {
+      // 1. Obtener personaje DENTRO de la transacción
+      const charRes = await tx.execute({
+        sql: `SELECT character_name FROM user_characters WHERE id = ? AND telegram_id = ?`,
+        args: [cid, tid]
+      })
+
+      if (charRes.rows.length === 0) {
+        await tx.rollback()
+        return NextResponse.json(
+          { error: 'Personaje no encontrado' },
+          { status: 404 }
+        )
+      }
+
+      const currentName = String(charRes.rows[0].character_name)
+
+      // Si el nombre es el mismo, no cobramos
+      if (currentName === name) {
+        await tx.rollback()
+        return NextResponse.json({
+          ok: true,
+          character_name: name,
+          remaining_gems: user.gems,
+          unchanged: true,
+        })
+      }
+
+      // ✅ FIX #1: Restar de gems Y purchased_gems de forma atómica
+      const charged = await tx.execute({
+        sql: `UPDATE users
+              SET gems = gems - ?,
+                  purchased_gems = MAX(COALESCE(purchased_gems, 0) - ?, 0)
+              WHERE telegram_id = ? AND gems >= ?
+              RETURNING gems`,
+        args: [GEM_COSTS.rename_character, GEM_COSTS.rename_character, tid, GEM_COSTS.rename_character]
+      })
+
+      if (charged.rows.length === 0) {
+        await tx.rollback()
+        return NextResponse.json(
+          {
+            error: 'insufficient_gems',
+            message:
+              lang === 'es'
+                ? `Necesitas ${GEM_COSTS.rename_character} gemas`
+                : `You need ${GEM_COSTS.rename_character} gems`,
+            required: GEM_COSTS.rename_character,
+          },
+          { status: 402 }
+        )
+      }
+
+      // 2. Renombrar personaje
+      await tx.execute({
+        sql: `UPDATE user_characters SET character_name = ? WHERE id = ? AND telegram_id = ?`,
+        args: [name, cid, tid]
+      })
+
+      // 3. Registrar el cobro en el historial
+      await tx.execute({
+        sql: `INSERT INTO gem_transactions (telegram_id, amount, transaction_type, description) VALUES (?, ?, ?, ?)`,
+        args: [tid, -GEM_COSTS.rename_character, 'rename_character', `Renombrar personaje a "${name}"`]
+      })
+
+      await tx.commit()
+
       return NextResponse.json({
         ok: true,
         character_name: name,
-        remaining_gems: user.gems,
-        unchanged: true,
+        remaining_gems: Number(charged.rows[0].gems),
       })
+
+    } catch (txError) {
+      await tx.rollback().catch(() => {})
+      throw txError
     }
-
-    // 🛡️ FIX: COBRO ATÓMICO (Evita saldo negativo con doble clic)
-    const charged = await queryOne<{ gems: number }>(
-      `UPDATE users
-       SET gems = gems - ?
-       WHERE telegram_id = ? AND gems >= ?
-       RETURNING gems`,
-      [GEM_COSTS.rename_character, tid, GEM_COSTS.rename_character]
-    )
-
-    if (!charged) {
-      return NextResponse.json(
-        {
-          error: 'insufficient_gems',
-          message:
-            lang === 'es'
-              ? `Necesitas ${GEM_COSTS.rename_character} gemas`
-              : `You need ${GEM_COSTS.rename_character} gems`,
-          required: GEM_COSTS.rename_character,
-        },
-        { status: 402 }
-      )
-    }
-
-    await insertGemTransaction({
-      telegram_id: tid,
-      amount: -GEM_COSTS.rename_character,
-      transaction_type: 'rename_character',
-      description: `Renombrar personaje a "${name}"`,
-    })
-
-    await renameCharacter(cid, tid, name)
-
-    return NextResponse.json({
-      ok: true,
-      character_name: name,
-      remaining_gems: charged.gems,
-    })
   } catch (e: any) {
     console.error('Error en rename-character:', e)
     return NextResponse.json({ error: 'Error interno' }, { status: 500 })
