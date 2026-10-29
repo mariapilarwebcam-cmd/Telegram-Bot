@@ -2,7 +2,13 @@
 
 import { NextResponse } from 'next/server'
 import { getLastPurchase } from '@/lib/db-queries'
-import { STAR_PACKAGES, MESSAGE_PACKAGES, HYBRID_PACKAGES, getFinalGems } from '@/lib/constants'
+import {
+  STAR_PACKAGES,
+  MESSAGE_PACKAGES,
+  HYBRID_PACKAGES,
+  getFinalGems,
+  getFinalStarMessages, // ✅ FIX #1: Importamos el helper
+} from '@/lib/constants'
 
 export async function POST(request: Request) {
   try {
@@ -14,13 +20,14 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => ({}))
     const { package_id, package_type } = body
 
-    // ✅ NUEVO: Determinamos qué paquete usar (Híbrido, Mensajes o Gemas)
     const isMessages = package_type === 'messages'
     const isHybrid = package_type === 'hybrid'
     const activePackages = isHybrid ? HYBRID_PACKAGES : (isMessages ? MESSAGE_PACKAGES : STAR_PACKAGES)
 
+    // ✅ FIX #2: Validar que package_id sea un número entero
     if (
       typeof package_id !== 'number' ||
+      !Number.isInteger(package_id) ||
       package_id >= activePackages.length ||
       package_id < 0
     ) {
@@ -29,8 +36,8 @@ export async function POST(request: Request) {
 
     const pkg = activePackages[package_id]
 
-    // Validar first_time_only: solo si el usuario nunca ha comprado
-    if (pkg.first_time_only) {
+    // Validar first_time_only (getLastPurchase ya incluye suscripciones VIP)
+    if ((pkg as any).first_time_only) {
       const purchase = await getLastPurchase(tid)
       if (purchase) {
         return NextResponse.json(
@@ -40,7 +47,6 @@ export async function POST(request: Request) {
       }
     }
 
-    // ✅ NUEVO: Formatear título, descripción y payload según el tipo
     let title = ''
     let description = ''
     let payload = ''
@@ -52,9 +58,10 @@ export async function POST(request: Request) {
       payload = `hybrid_purchase_${package_id}`
       label = 'Hybrid Pack'
     } else if (isMessages) {
-      const finalAmount = (pkg as any).messages
+      // ✅ FIX #1: Aplicamos el bono del 5% de Stars a los mensajes
+      const finalAmount = getFinalStarMessages(pkg as any)
       title = `${finalAmount} Messages`
-      description = `${finalAmount} messages for chatting`
+      description = `${finalAmount} messages for chatting (includes star bonus)`
       payload = `message_purchase_${package_id}`
       label = 'Messages'
     } else {
@@ -63,6 +70,10 @@ export async function POST(request: Request) {
       description = `${finalAmount} gems${(pkg as any).bonus > 0 ? ` (+${(pkg as any).bonus}% bonus)` : ''}`
       payload = `gem_purchase_${package_id}`
       label = 'Gems'
+    }
+
+    if (!process.env.TELEGRAM_BOT_TOKEN) {
+      return NextResponse.json({ error: 'Configuración incompleta' }, { status: 500 })
     }
 
     const response = await fetch(
