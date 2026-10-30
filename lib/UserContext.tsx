@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useState, useRef, ReactNode } fro
 import { useRouter } from 'next/navigation'
 import { getLanguage, Language } from '@/lib/i18n'
 import { setInitDataRaw } from '@/lib/telegram-fetch'
-import { identifyUser } from '@/lib/posthog'                    // ✅ PostHog
+import { identifyUser } from '@/lib/posthog'
 
 export interface UserData {
   telegram_id: string
@@ -12,7 +12,7 @@ export interface UserData {
   username: string | null
   gems: number
   purchased_gems?: number
-  bonus_gems?: number          // ✅ NUEVO: Mensajes de chat (💌)
+  bonus_gems?: number
   language: string
   hook_messages_remaining: number
   hook_used?: boolean
@@ -26,7 +26,7 @@ export interface UserData {
   gender?: string | null
   interested_in?: string | null
   onboarding_complete?: boolean
-  is_vip?: boolean             // ✅ NUEVO: reflejar VIP en el contexto
+  is_vip?: boolean
 }
 
 interface UserContextType {
@@ -66,18 +66,13 @@ function isTrue(v: any): boolean {
 
 export function UserProvider({ children }: { children: ReactNode }) {
   const [user, setUserState] = useState<UserData | null>(memUserCache)
-  const [loading, setLoading] = useState(!memUserCache)
+  const [loading, setLoading] = useState(true)
   const [lang, setLang] = useState<Language>('es')
   const [isTelegram, setIsTelegram] = useState(false)
   const [telegramId, setTelegramId] = useState<number | null>(null)
   const referralProcessed = useRef(false)
   const initStarted = useRef(false)
   const router = useRouter()
-
-  useEffect(() => {
-    const t = setTimeout(() => setLoading(false), 8000)
-    return () => clearTimeout(t)
-  }, [])
 
   // Gate de onboarding
   useEffect(() => {
@@ -92,15 +87,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     const hasInterest = !!user.interested_in
     const onboardingOk = isTrue(user.onboarding_complete)
 
-    const isComplete = ageOk && hasGender && hasInterest && onboardingOk
-
-    if (!isComplete) {
-      console.log('[UserContext] onboarding incompleto → /onboarding', {
-        ageOk,
-        hasGender,
-        hasInterest,
-        onboardingOk,
-      })
+    if (!(ageOk && hasGender && hasInterest && onboardingOk)) {
       router.replace('/onboarding')
     }
   }, [user, loading, router])
@@ -108,63 +95,58 @@ export function UserProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (initStarted.current) return
     initStarted.current = true
+    let cancelled = false
 
     const init = async () => {
       try {
-        const mod: any = await Promise.race([
-          import('@twa-dev/sdk'),
-          new Promise((resolve) => setTimeout(() => resolve(null), 3000)),
-        ])
-
-        const sdk = mod?.default
-        try { sdk?.ready?.() } catch {}
-        try { sdk?.expand?.() } catch {}
-
-        let initDataUnsafe = sdk?.initDataUnsafe
-        let initDataRaw = sdk?.initData || ''
-
-        if (!initDataUnsafe?.user?.id) {
-          const tg = getTelegramWebApp()
-          if (tg?.initDataUnsafe?.user?.id) {
-            initDataUnsafe = tg.initDataUnsafe
-            initDataRaw = tg.initData || initDataRaw
-            try { tg.ready?.() } catch {}
-            try { tg.expand?.() } catch {}
+        // La API oficial puede tardar en aparecer al iniciar el WebView.
+        // No dependemos de un import dinamico que podria expirar antes.
+        let tg: any = null
+        for (let attempt = 0; attempt < 40 && !cancelled; attempt++) {
+          const candidate = getTelegramWebApp()
+          if (candidate?.initData && candidate?.initDataUnsafe?.user?.id) {
+            tg = candidate
+            break
           }
+          await new Promise((resolve) => setTimeout(resolve, 250))
         }
 
-        if (!initDataUnsafe?.user?.id) {
-          await new Promise((r) => setTimeout(r, 500))
-          const tg = getTelegramWebApp()
-          if (tg?.initDataUnsafe?.user?.id) {
-            initDataUnsafe = tg.initDataUnsafe
-            initDataRaw = tg.initData || initDataRaw
-          }
-        }
-
-        const u = initDataUnsafe?.user
-        if (!u?.id) {
-          console.warn('[UserContext] No Telegram user found after all retries')
+        if (cancelled) return
+        if (!tg) {
+          console.warn('[UserContext] Telegram initData no disponible')
           setLoading(false)
           return
         }
 
-        if (initDataRaw) {
-          setInitDataRaw(initDataRaw)
-          console.log('[UserContext] initData registrado, length:', initDataRaw.length)
-        } else {
-          console.warn('[UserContext] No initData raw disponible')
+        const initDataRaw: string = tg.initData
+        const initDataUnsafe = tg.initDataUnsafe
+        const u = initDataUnsafe.user
+        if (!initDataRaw || !u?.id) {
+          setLoading(false)
+          return
         }
 
-        setIsTelegram(true)
+        try { tg.ready?.() } catch {}
+        try { tg.expand?.() } catch {}
+
+        // El backend verifica la firma HMAC; initDataUnsafe NO es autenticacion.
+        setInitDataRaw(initDataRaw)
         setTelegramId(u.id)
         setLang(getLanguage(u.language_code))
 
-        await loadUserWithRetry(u.id, {
+        const authenticated = await loadUserWithRetry(u.id, {
           first_name: u.first_name || '',
           username: u.username || null,
           language: getLanguage(u.language_code),
         })
+        if (cancelled) return
+        if (!authenticated) {
+          console.error('[UserContext] No se pudo validar/inicializar usuario')
+          setLoading(false)
+          return
+        }
+        setIsTelegram(true)
+        setLoading(false)
 
         const startParam = initDataUnsafe?.start_param
         if (startParam && !referralProcessed.current) {
@@ -184,11 +166,12 @@ export function UserProvider({ children }: { children: ReactNode }) {
         }
       } catch (e) {
         console.error('[UserContext] init error:', e)
-        setLoading(false)
+        if (!cancelled) setLoading(false)
       }
     }
 
-    init()
+    void init()
+    return () => { cancelled = true }
   }, [])
 
   useEffect(() => {
@@ -196,7 +179,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
-        loadUser(telegramId)
+        void loadUser(telegramId)
       }
     }
 
@@ -218,7 +201,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
       if (ok) return true
       await new Promise((r) => setTimeout(r, 500 + attempt * 1000))
     }
-    console.error('[UserContext] loadUser falló después de 3 intentos')
+    console.error('[UserContext] loadUser fallo despues de 3 intentos')
     return false
   }
 
@@ -237,15 +220,12 @@ export function UserProvider({ children }: { children: ReactNode }) {
             const u = data.user as UserData
             memUserCache = u
             setUserState(u)
-
-            // ✅ PostHog: identificar al usuario
             identifyUser(u.telegram_id, {
               language: u.language,
               gender: u.gender || 'unknown',
               interested_in: u.interested_in || 'unknown',
               is_vip: (u as any).is_vip || false,
             })
-
             return true
           }
         } else {
@@ -276,15 +256,12 @@ export function UserProvider({ children }: { children: ReactNode }) {
           const u = initData.user as UserData
           memUserCache = u
           setUserState(u)
-
-          // ✅ PostHog: identificar al usuario
           identifyUser(u.telegram_id, {
             language: u.language,
             gender: u.gender || 'unknown',
             interested_in: u.interested_in || 'unknown',
             is_vip: (u as any).is_vip || false,
           })
-
           return true
         }
       } catch (e) {
@@ -295,8 +272,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       console.error('[UserContext] loadUser error:', e)
       return false
-    } finally {
-      setLoading(false)
     }
   }
 
