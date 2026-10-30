@@ -1,4 +1,5 @@
 import { Metadata, Viewport } from 'next'
+import Script from 'next/script'
 import './globals.css'
 import BottomNav from '@/components/BottomNav'
 import SwipeBack from '@/components/SwipeBack'
@@ -26,6 +27,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es" suppressHydrationWarning>
+      <head>
+        <Script src="https://telegram.org/js/telegram-web-app.js" strategy="beforeInteractive" />
+      </head>
       <body className="antialiased">
         <PostHogProvider>
           <UserProvider>
