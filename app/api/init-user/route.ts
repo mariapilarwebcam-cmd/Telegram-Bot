@@ -2,17 +2,35 @@
 
 import { NextResponse } from 'next/server'
 import { ensureUser } from '@/lib/db-queries'
+import { authenticateTelegramRequest } from '@/lib/telegram-auth'
 
 export async function POST(request: Request) {
+  let tid: string
+  let first_name: string
+  let username: string | null
+
   try {
-    const tid = request.headers.get('x-telegram-id-validated')
-    if (!tid) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    const authentication = await authenticateTelegramRequest(request)
+
+    if (authentication.ok === false) {
+      return NextResponse.json(
+        { error: authentication.error },
+        { status: authentication.status }
+      )
     }
 
+    tid = authentication.telegramId
+    first_name = authentication.data.user.first_name
+    username = authentication.data.user.username ?? null
+  } catch {
+    return NextResponse.json(
+      { error: 'Error interno del servidor' },
+      { status: 500 }
+    )
+  }
+
+  try {
     const body = await request.json().catch(() => ({}))
-    const first_name = typeof body.first_name === 'string' ? body.first_name : ''
-    const username = typeof body.username === 'string' ? body.username : null
     const language = body.language === 'en' ? 'en' : 'es'
 
     // ensureUser crea si no existe; si existe, lo devuelve tal cual

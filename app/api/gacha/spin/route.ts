@@ -1,8 +1,9 @@
 // app/api/gacha/spin/route.ts
 import { NextResponse } from 'next/server'
-import { db, queryOne, execute } from '@/lib/turso'
-import { ensureUser, insertGemTransaction, getActiveSubscription } from '@/lib/db-queries'
+import { db, execute } from '@/lib/turso'
+import { ensureUser, insertGemTransaction } from '@/lib/db-queries'
 import { CHARACTER_NAMES_FEMALE, CHARACTER_NAMES_MALE, PERSONALITIES } from '@/lib/constants' // ✅ NUEVO
+import { authenticateTelegramRequest } from '@/lib/telegram-auth'
 
 const BASE_COST_GEMS = 50
 
@@ -10,38 +11,72 @@ const GACHA_CHARACTERS_FEMALE = ['succubus', 'fallen_angel', 'werewolf_f', 'cybo
 const GACHA_CHARACTERS_MALE = ['demon_lord', 'dragon_lord', 'werewolf_m', 'incubus_lord']
 
 export async function POST(request: Request) {
-  try {
-    const tid = request.headers.get('x-telegram-id-validated')
-    if (!tid) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  let tid: string
 
+  try {
+    const authentication = await authenticateTelegramRequest(request)
+
+    if (authentication.ok === false) {
+      return NextResponse.json(
+        { error: authentication.error },
+        { status: authentication.status }
+      )
+    }
+
+    tid = authentication.telegramId
+  } catch {
+    return NextResponse.json(
+      { error: 'Error interno del servidor' },
+      { status: 500 }
+    )
+  }
+
+  try {
     const user = await ensureUser(tid)
     if (!user) return NextResponse.json({ error: 'Error cargando cuenta' }, { status: 500 })
-
-    // ✅ Verificar si es VIP y si tiene su tirada gratis semanal
-    const vipSub = await getActiveSubscription(tid)
-    const isVip = !!vipSub
-    let cost = BASE_COST_GEMS
-    let isFreeSpin = false
-
-    if (isVip) {
-      const recentFreeSpin = await queryOne<{ id: number }>(
-        `SELECT id FROM gacha_history 
-         WHERE user_id = ? AND cost_gems = 0 AND created_at >= datetime('now', '-7 days') 
-         LIMIT 1`,
-        [tid]
-      )
-      
-      if (!recentFreeSpin) {
-        cost = 0
-        isFreeSpin = true
-      }
-    }
 
     const tx = await db.transaction('write')
 
     try {
+      // Verificar la elegibilidad VIP dentro de la transacción de escritura.
+      const subscriptions = await tx.execute({
+        sql: `SELECT * FROM subscriptions
+              WHERE telegram_id = ?
+                AND status = 'active'
+                AND expires_at > datetime('now')
+              ORDER BY expires_at DESC
+              LIMIT 1`,
+        args: [tid]
+      })
+      let cost = BASE_COST_GEMS
+      let isFreeSpin = false
+
+      if (subscriptions.rows.length > 0) {
+        const recentFreeSpin = await tx.execute({
+          sql: `SELECT id FROM gacha_history
+                WHERE user_id = ? AND cost_gems = 0 AND created_at >= unixepoch('now', '-7 days')
+                LIMIT 1`,
+          args: [tid]
+        })
+
+        if (recentFreeSpin.rows.length === 0) {
+          cost = 0
+          isFreeSpin = true
+        }
+      }
+
+      const balances = await tx.execute({
+        sql: `SELECT purchased_gems, gems FROM users WHERE telegram_id = ?`,
+        args: [tid]
+      })
+      const currentBalances = balances.rows[0]
+      if (!currentBalances) throw new Error('Gacha user not found inside transaction')
+
       // 1. Cobrar las gemas (si no es gratis)
-      let debit = { rowsAffected: 1, rows: [{ purchased_gems: user.purchased_gems, gems: user.gems }] }
+      let debit = { rowsAffected: 1, rows: [{
+        purchased_gems: Number(currentBalances.purchased_gems ?? 0),
+        gems: Number(currentBalances.gems ?? 0)
+      }] }
       
       if (cost > 0) {
         const res = await tx.execute({
@@ -52,7 +87,7 @@ export async function POST(request: Request) {
           args: [cost, cost, tid, cost]
         })
         
-        if (res.rowsAffected === 0) {
+        if (res.rows.length === 0) {
           await tx.rollback()
           return NextResponse.json({ error: 'insufficient_gems', message: 'Necesitas 50 gemas compradas.' }, { status: 402 })
         }

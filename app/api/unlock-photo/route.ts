@@ -1,14 +1,30 @@
 // app/api/unlock-photo/route.ts
 import { NextResponse } from 'next/server'
 import { unlockOffer, HttpError } from '@/lib/unlock-engine'
+import { authenticateTelegramRequest } from '@/lib/telegram-auth'
 
 export async function POST(request: Request) {
+  let tid: string
+
   try {
-    const tid = request.headers.get('x-telegram-id-validated')
-    if (!tid) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    const authentication = await authenticateTelegramRequest(request)
+
+    if (authentication.ok === false) {
+      return NextResponse.json(
+        { error: authentication.error },
+        { status: authentication.status }
+      )
     }
 
+    tid = authentication.telegramId
+  } catch {
+    return NextResponse.json(
+      { error: 'Error interno del servidor' },
+      { status: 500 }
+    )
+  }
+
+  try {
     // ✅ FIX #2: Manejo seguro del parseo del JSON
     const body = await request.json().catch(() => ({}))
     const rawOfferId = body?.offer_id

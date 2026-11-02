@@ -1,6 +1,7 @@
 // app/api/check-crypto-payment/route.ts
 
 import { NextResponse } from 'next/server'
+import { authenticateTelegramRequest } from '@/lib/telegram-auth'
 import { queryOne } from '@/lib/turso'
 import {
   getUser,
@@ -108,12 +109,27 @@ async function payReferralCommission(
 // POST /api/check-crypto-payment
 // ═══════════════════════════════════════════════════════════════
 export async function POST(request: Request) {
+  let tidFromAuth: string
+
   try {
-    const tidFromAuth = request.headers.get('x-telegram-id-validated')
-    if (!tidFromAuth) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    const authentication = await authenticateTelegramRequest(request)
+
+    if (authentication.ok === false) {
+      return NextResponse.json(
+        { error: authentication.error },
+        { status: authentication.status }
+      )
     }
 
+    tidFromAuth = authentication.telegramId
+  } catch {
+    return NextResponse.json(
+      { error: 'Error interno del servidor' },
+      { status: 500 }
+    )
+  }
+
+  try {
     const body = await request.json().catch(() => ({}))
     const reference = typeof body.reference === 'string' ? body.reference : ''
 

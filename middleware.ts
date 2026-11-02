@@ -4,10 +4,7 @@ import { NextResponse, NextRequest } from 'next/server'
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis/cloudflare'
 
-import {
-  validateTelegramInitData,
-  extractInitData,
-} from '@/lib/validate-telegram'
+import { authenticateTelegramRequest } from '@/lib/telegram-auth'
 
 let redis: Redis | null = null
 let ratelimiters: {
@@ -77,11 +74,6 @@ const PUBLIC_ENDPOINTS = [
   '/api/tonconnect-manifest', // ✅ Necesario para que las wallets lean el manifest sin token de Telegram
 ]
 
-const DEV_BYPASS =
-  process.env.AUTH_BYPASS_DEV === 'true' &&
-  process.env.NODE_ENV === 'development'
-const DEV_TELEGRAM_ID = process.env.DEV_TELEGRAM_ID || '123456789'
-
 function getClientIp(req: NextRequest): string {
   return (
     req.headers.get('x-real-ip') ||
@@ -146,31 +138,30 @@ export async function middleware(req: NextRequest) {
   }
 
   // ══════════ AUTH ══════════
-  if (DEV_BYPASS) {
-    const requestHeaders = new Headers(req.headers)
-    requestHeaders.set('x-telegram-id-validated', DEV_TELEGRAM_ID)
-    return NextResponse.next({ request: { headers: requestHeaders } })
-  }
-
   try {
-    const initData = extractInitData(req)
-    const validated = await validateTelegramInitData(initData)
+    const authentication = await authenticateTelegramRequest(req)
+
+    if (authentication.ok === false) {
+      return NextResponse.json(
+        { error: authentication.error },
+        { status: authentication.status }
+      )
+    }
 
     const requestHeaders = new Headers(req.headers)
-    requestHeaders.set('x-telegram-id-validated', String(validated.user.id))
+    requestHeaders.set('x-telegram-id-validated', authentication.telegramId)
     requestHeaders.set(
       'x-telegram-language',
-      validated.user.language_code || 'en'
+      authentication.data.user.language_code || 'en'
     )
 
     return NextResponse.next({
       request: { headers: requestHeaders },
     })
-  } catch (e: any) {
-    console.warn('[middleware] Auth failed:', pathname, e.message)
+  } catch {
     return NextResponse.json(
-      { error: 'No autorizado', detail: e.message },
-      { status: 401 }
+      { error: 'Error interno del servidor' },
+      { status: 500 }
     )
   }
 }

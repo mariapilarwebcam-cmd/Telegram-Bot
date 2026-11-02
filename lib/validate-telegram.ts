@@ -2,10 +2,22 @@
 // Validación de initData de Telegram compatible con Edge Runtime
 // Usa Web Crypto API nativa (crypto.subtle) — sin dependencias de Node.js
 
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN
+export class TelegramAuthError extends Error {
+  readonly status = 401
 
-if (!BOT_TOKEN) {
-  throw new Error('❌ FATAL: Falta TELEGRAM_BOT_TOKEN')
+  constructor() {
+    super('No autorizado')
+    this.name = 'TelegramAuthError'
+  }
+}
+
+export class TelegramAuthConfigurationError extends Error {
+  readonly status = 503
+
+  constructor() {
+    super('Servicio de autenticación no disponible')
+    this.name = 'TelegramAuthConfigurationError'
+  }
 }
 
 // ── Helpers HMAC ─────────────────────────────────────────────
@@ -21,12 +33,6 @@ async function hmacSha256(
     ['sign']
   )
   return crypto.subtle.sign('HMAC', cryptoKey, new TextEncoder().encode(data))
-}
-
-function bufferToHex(buffer: ArrayBuffer): string {
-  return Array.from(new Uint8Array(buffer))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('')
 }
 
 // ── Tipos ────────────────────────────────────────────────────
@@ -49,7 +55,9 @@ export interface ValidatedInitData {
 // ── Validador principal ──────────────────────────────────────
 /**
  * Valida el initData crudo de Telegram usando HMAC-SHA256.
- * Lanza Error si la firma es inválida o el auth_date expiró.
+ * Lanza TelegramAuthError si las credenciales son inválidas.
+ * Lanza TelegramAuthConfigurationError si la configuración es inválida.
+ * Los errores inesperados de Web Crypto se propagan sin normalizarlos.
  *
  * @param initData - String crudo (window.Telegram.WebApp.initData)
  * @param maxAgeSeconds - Máximo tiempo desde auth_date (default 24h)
@@ -58,62 +66,160 @@ export async function validateTelegramInitData(
   initData: string,
   maxAgeSeconds = 86400
 ): Promise<ValidatedInitData> {
+  // Resolver el token al validar, no durante la importación del módulo.
+  const botToken = process.env.TELEGRAM_BOT_TOKEN
+
+  if (
+    typeof botToken !== 'string' ||
+    !botToken.trim() ||
+    !Number.isSafeInteger(maxAgeSeconds) ||
+    maxAgeSeconds < 0
+  ) {
+    throw new TelegramAuthConfigurationError()
+  }
+
   if (!initData || typeof initData !== 'string') {
-    throw new Error('initData vacío o inválido')
+    throw new TelegramAuthError()
   }
 
   const params = new URLSearchParams(initData)
+  const seen = new Set<string>()
+
+  // URLSearchParams ya ha decodificado las claves: también se rechazan
+  // duplicados equivalentes como "user" y "%75ser".
+  for (const key of params.keys()) {
+    if (!key || seen.has(key)) {
+      throw new TelegramAuthError()
+    }
+    seen.add(key)
+  }
+
   const hash = params.get('hash')
-  if (!hash) throw new Error('Falta hash en initData')
+  if (!hash || !/^[a-fA-F0-9]{64}$/.test(hash)) {
+    throw new TelegramAuthError()
+  }
   params.delete('hash')
 
   // 1. Construir data_check_string (pares ordenados por key, unidos por \n)
+  // Incluir todos los campos recibidos salvo hash.
+  params.sort()
   const dataCheckString = Array.from(params.entries())
     .map(([k, v]) => `${k}=${v}`)
-    .sort()
     .join('\n')
 
-  // 2. secret_key = HMAC_SHA256("WebAppData", BOT_TOKEN)
+  // 2. secret_key = HMAC_SHA256(key="WebAppData", data=botToken)
   const secretKeyBuffer = await hmacSha256(
     new TextEncoder().encode('WebAppData'),
-    BOT_TOKEN!
+    botToken
   )
 
-  // 3. computed_hash = HMAC_SHA256(secret_key, data_check_string)
-  const computedHashBuffer = await hmacSha256(secretKeyBuffer, dataCheckString)
-  const computedHex = bufferToHex(computedHashBuffer)
+  // 3. Importar secret_key para verificar HMAC-SHA256(data_check_string).
+  const verificationKey = await crypto.subtle.importKey(
+    'raw',
+    secretKeyBuffer,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['verify']
+  )
 
-  // 4. Comparar con el hash recibido
-  if (computedHex !== hash) {
-    throw new Error('Firma HMAC inválida')
+  const signature = new Uint8Array(32)
+
+  for (let index = 0; index < signature.length; index++) {
+    signature[index] = Number.parseInt(
+      hash.slice(index * 2, index * 2 + 2),
+      16
+    )
+  }
+
+  // 4. Verificar los bytes de la firma mediante Web Crypto.
+  const validSignature = await crypto.subtle.verify(
+    'HMAC',
+    verificationKey,
+    signature,
+    new TextEncoder().encode(dataCheckString)
+  )
+
+  if (!validSignature) {
+    throw new TelegramAuthError()
   }
 
   // 5. Verificar auth_date
   const authDateRaw = params.get('auth_date')
-  if (!authDateRaw) throw new Error('Falta auth_date')
+  if (!authDateRaw || !/^\d+$/.test(authDateRaw)) {
+    throw new TelegramAuthError()
+  }
 
-  const authDateUnix = parseInt(authDateRaw, 10)
-  if (isNaN(authDateUnix)) throw new Error('auth_date inválido')
-
+  const authDateUnix = Number(authDateRaw)
   const authDate = new Date(authDateUnix * 1000)
-  const ageSeconds = (Date.now() - authDate.getTime()) / 1000
 
-  if (ageSeconds > maxAgeSeconds) {
-    throw new Error(`initData expirado (${Math.floor(ageSeconds)}s de antigüedad)`)
+  if (
+    !Number.isSafeInteger(authDateUnix) ||
+    !Number.isFinite(authDate.getTime())
+  ) {
+    throw new TelegramAuthError()
+  }
+
+  const now = Date.now()
+  if (!Number.isFinite(now)) {
+    throw new TelegramAuthConfigurationError()
+  }
+
+  const ageSeconds = (now - authDate.getTime()) / 1000
+
+  // Mantener las 24 horas por defecto y admitir como máximo 60 s de futuro.
+  if (ageSeconds > maxAgeSeconds || ageSeconds < -60) {
+    throw new TelegramAuthError()
   }
 
   // 6. Extraer user
   const userRaw = params.get('user')
-  if (!userRaw) throw new Error('Falta user en initData')
+  if (!userRaw) throw new TelegramAuthError()
 
-  let user: TelegramUser
+  let parsedUser: unknown
   try {
-    user = JSON.parse(userRaw)
+    parsedUser = JSON.parse(userRaw)
   } catch {
-    throw new Error('user no es JSON válido')
+    throw new TelegramAuthError()
   }
 
-  if (!user?.id) throw new Error('user.id ausente')
+  if (
+    !parsedUser ||
+    typeof parsedUser !== 'object' ||
+    Array.isArray(parsedUser)
+  ) {
+    throw new TelegramAuthError()
+  }
+
+  const candidate = parsedUser as Record<string, unknown>
+
+  if (
+    typeof candidate.id !== 'number' ||
+    !Number.isSafeInteger(candidate.id) ||
+    candidate.id <= 0 ||
+    typeof candidate.first_name !== 'string'
+  ) {
+    throw new TelegramAuthError()
+  }
+
+  for (const key of [
+    'last_name',
+    'username',
+    'language_code',
+    'photo_url',
+  ]) {
+    if (candidate[key] !== undefined && typeof candidate[key] !== 'string') {
+      throw new TelegramAuthError()
+    }
+  }
+
+  if (
+    candidate.is_premium !== undefined &&
+    typeof candidate.is_premium !== 'boolean'
+  ) {
+    throw new TelegramAuthError()
+  }
+
+  const user = parsedUser as TelegramUser
 
   return {
     user,
@@ -127,12 +233,19 @@ export async function validateTelegramInitData(
  */
 export function extractInitData(request: Request): string {
   const authHeader = request.headers.get('authorization')
-  if (!authHeader) throw new Error('Falta header Authorization')
 
-  const parts = authHeader.split(' ')
-  if (parts.length !== 2 || parts[0] !== 'tma') {
-    throw new Error('Formato Authorization inválido (debe ser "tma <initData>")')
+  // Rechazar controles antes de interpretar el esquema y las credenciales.
+  if (!authHeader || /[\u0000-\u001f\u007f-\u009f]/.test(authHeader)) {
+    throw new TelegramAuthError()
   }
 
-  return parts[1]
+  // Un solo espacio separador, sin espacios en las credenciales ni comas
+  // que puedan representar valores Authorization combinados.
+  const match = authHeader.match(/^tma ([^\s,]+)$/)
+
+  if (!match) {
+    throw new TelegramAuthError()
+  }
+
+  return match[1]
 }
