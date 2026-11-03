@@ -30,6 +30,10 @@
   },
   "crons": [
     {
+      "path": "/api/cron/vip-payments",
+      "schedule": "0 1 * * *"
+    },
+    {
       "path": "/api/cron/proactive",
       "schedule": "0 6 * * *"
     },

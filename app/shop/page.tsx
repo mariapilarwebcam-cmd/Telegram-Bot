@@ -216,6 +216,7 @@ export default function ShopPage() {
 
     let attempts = 0
     const MAX_ATTEMPTS = 25
+    let discoveryCursor: unknown = null
 
     vipPollRef.current = setInterval(async () => {
       attempts++
@@ -229,10 +230,11 @@ export default function ShopPage() {
         const res = await tgFetch('/api/subscription', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'confirm_crypto', plan: planId, reference }),
+          body: JSON.stringify({ action: 'confirm_crypto', plan: planId, reference, discovery_cursor: discoveryCursor }),
         })
         const data = await res.json()
 
+        if ('discovery_cursor' in data) discoveryCursor = data.discovery_cursor
         if (data.status === 'paid') {
           stopVipPolling()
           setShowVipSuccess(true)

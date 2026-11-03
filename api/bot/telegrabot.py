@@ -1013,55 +1013,11 @@ async def process_successful_payment(message: Message):
     total_paid = message.successful_payment.total_amount
 
     if payload.startswith("vip_sub_"):
-        parts = payload.split("_")
-        if len(parts) < 3:
-            logger.error(f"Invalid VIP payload: {payload}")
-            return await message.answer("⚠️ Error: payload VIP inválido. Contacta a soporte.")
-
-        plan_id = parts[2]
-        days = VIP_PLAN_DAYS.get(plan_id)
-
-        if days is None:
-            logger.error(f"Invalid VIP plan_id: {plan_id}")
-            return await message.answer("⚠️ Error: plan VIP desconocido. Contacta a soporte.")
-
-        try:
-            current_sub = turso_query_one(
-                "SELECT id, expires_at FROM subscriptions WHERE telegram_id = ? AND status = 'active' AND expires_at > datetime('now') ORDER BY expires_at DESC LIMIT 1",
-                [str(telegram_id)]
-            )
-
-            if current_sub and current_sub.get('expires_at'):
-                current_exp = datetime.fromisoformat(str(current_sub['expires_at']).replace('Z', '+00:00'))
-                new_exp = current_exp + timedelta(days=days)
-                new_exp_str = new_exp.strftime('%Y-%m-%d %H:%M:%S')
-
-                turso_execute(
-                    """UPDATE subscriptions
-                       SET expires_at = ?, telegram_charge_id = ?
-                       WHERE id = ?""",
-                    [new_exp_str, charge_id, current_sub['id']]
-                )
-            else:
-                new_exp = datetime.now(timezone.utc) + timedelta(days=days)
-                new_exp_str = new_exp.strftime('%Y-%m-%d %H:%M:%S')
-
-                turso_execute(
-                    """INSERT INTO subscriptions
-                      (telegram_id, plan, stars_paid, telegram_charge_id, expires_at, status)
-                     VALUES (?, ?, ?, ?, ?, 'active')""",
-                    [str(telegram_id), plan_id, total_paid, charge_id, new_exp_str]
-                )
-
-            user = await get_user(telegram_id)
-            lang = user.get('language', 'es') if user else 'es'
-            text = "✅ ¡Suscripción VIP activada! Gracias por tu apoyo." if lang == 'es' else "✅ VIP Subscription activated! Thanks for your support."
-            await message.answer(text, reply_markup=get_main_keyboard(lang))
-            return
-        except Exception as e:
-            logger.error(f"Error activando VIP por stars: {e}")
-            await message.answer("⚠️ Pago recibido pero hubo un error activando VIP. Contacta a soporte.")
-            return
+        # Polling shares the durable path. Webhook intercepts before Dispatcher.
+        # Neither path credits VIP in Python; TS ledger owns idempotency.
+        from vip_inbox import receive_vip_payment
+        await receive_vip_payment(message, message.bot.id)
+        return
 
     is_hybrid = payload.startswith("hybrid_purchase_")
     is_messages = payload.startswith("message_purchase_")

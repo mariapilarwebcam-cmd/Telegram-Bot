@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 load_dotenv()
 
 from telegrabot import router
+from vip_inbox import receive_vip_payment
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -44,6 +45,9 @@ async def catch_all(request: Request, path: str):
     try:
         body = await request.json()
         update = Update(**body)
+        # Persist outside Dispatcher handlers. Failed storage reaches HTTP 500.
+        if await receive_vip_payment(update.message, bot.id):
+            return {"status": "ok"}
         await dp.feed_update(bot, update)
         return {"status": "ok"}
     except Exception:

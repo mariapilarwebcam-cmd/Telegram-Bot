@@ -4,22 +4,18 @@ import { NextResponse } from 'next/server'
 import {
   ensureUser,
   getActiveSubscription,
-  getSubscriptionByChargeId,
-  createSubscription,
   cancelActiveSubscription,
 } from '@/lib/db-queries'
-import { execute } from '@/lib/turso' // ✅ FIX #4: Necesario para el UPDATE de extensión
+import { db } from '@/lib/turso'
+import { randomUUID } from 'crypto'
+import { confirmVipCrypto, findCreditedVip } from '@/lib/vip-subscription'
 import { VIP_PLANS, usdtToUnits } from '@/lib/constants'
 
 export const dynamic = 'force-dynamic'
 
-const TONAPI_KEY = process.env.TONAPI_KEY || ''
+export const maxDuration = 60
 const RECIPIENT_WALLET =
-  process.env.TON_RECIPIENT_WALLET ||
-  process.env.NEXT_PUBLIC_TON_RECIPIENT_WALLET ||
-  'UQCt76T3JPW3WrpsfIz6Tc1eVrvkrQpwV0-3sk1so4P8Vd4-'
-
-const USDT_MASTER = 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs'
+  process.env.TON_RECIPIENT_WALLET || ''
 
 // ✅ FIX #1 y #2: Parsers estrictos de reference para validar tid y planId
 // Formato Stars: vip_sub_<planId>_<tid>_<timestamp>
@@ -36,53 +32,6 @@ function parseCryptoVipReference(reference: string): { planId: string; tid: stri
   if (parts.length < 4) return null
   if (parts[0] !== 'VIP') return null
   return { planId: parts[1], tid: parts[2] }
-}
-
-function toSqliteDate(date: Date): string {
-  return date.toISOString().slice(0, 19).replace('T', ' ')
-}
-
-async function verifyCryptoPayment(
-  reference: string,
-  expectedUnits: number
-): Promise<{ ok: boolean; reason?: string }> {
-  try {
-    const url = `https://tonapi.io/v2/accounts/${RECIPIENT_WALLET}/events?limit=100`
-    const headers: Record<string, string> = { Accept: 'application/json' }
-    if (TONAPI_KEY) headers['Authorization'] = `Bearer ${TONAPI_KEY}`
-
-    const res = await fetch(url, { headers, cache: 'no-store' })
-    if (!res.ok) {
-      console.warn('[subscription] TonAPI error:', res.status)
-      return { ok: false, reason: 'tonapi_error' }
-    }
-
-    const data = await res.json()
-    const events = data.events || []
-
-    for (const ev of events) {
-      for (const action of ev.actions || []) {
-        if (action.type !== 'JettonTransfer') continue
-        const jt = action.JettonTransfer
-        if (!jt) continue
-        if (jt.comment !== reference) continue
-        if (jt.jetton?.address !== USDT_MASTER) continue
-
-        const receivedUnits = parseInt(jt.amount || '0', 10)
-        if (receivedUnits < expectedUnits - 1000) {
-          console.warn('[subscription] Amount mismatch:', { expectedUnits, receivedUnits })
-          return { ok: false, reason: 'amount_mismatch' }
-        }
-
-        return { ok: true }
-      }
-    }
-
-    return { ok: false, reason: 'not_found' }
-  } catch (e: any) {
-    console.error('[subscription] verifyCryptoPayment error:', e?.message)
-    return { ok: false, reason: 'exception' }
-  }
 }
 
 export async function GET(request: Request) {
@@ -154,8 +103,8 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Acción inválida' }, { status: 400 })
     }
   } catch (e: any) {
-    console.error('[subscription POST] error:', e)
-    return NextResponse.json({ error: 'Error interno', detail: e?.message || String(e) }, { status: 500 })
+    console.error('[subscription POST] error')
+    return NextResponse.json({ error: 'Error interno' }, { status: 503 })
   }
 }
 
@@ -165,7 +114,14 @@ async function handleCreateInvoice(tid: string, body: any, user: any) {
 
   if (!plan) return NextResponse.json({ error: 'Plan inválido' }, { status: 400 })
 
-  const reference = `vip_sub_${planId}_${tid}_${Date.now()}`
+  const reference = `vip_sub_${planId}_${tid}_${randomUUID()}`
+  if (!process.env.TELEGRAM_BOT_TOKEN) throw new Error('bot_not_configured')
+  await db.execute({
+    sql: `INSERT INTO vip_invoices
+          (reference, telegram_id, payment_method, plan, days, expected_amount_units, currency)
+          VALUES (?, ?, 'stars', ?, ?, ?, 'XTR')`,
+    args: [reference, tid, plan.id, plan.days, plan.stars],
+  })
   const lang = user.language === 'en' ? 'en' : 'es'
 
   const title = lang === 'en' ? `Taboo Realm VIP — ${plan.label.en}` : `Taboo Realm VIP — ${plan.label.es}`
@@ -221,7 +177,7 @@ async function handleConfirm(tid: string, body: any) {
   }
 
   // Búsqueda directa: si el `telegram_charge_id` coincide con el `reference` (flujo crypto o casos previos)
-  const existing = await getSubscriptionByChargeId(reference)
+  const existing = await findCreditedVip(db, reference, tid)
   if (existing) {
     return NextResponse.json({
       ok: true,
@@ -230,21 +186,8 @@ async function handleConfirm(tid: string, body: any) {
     })
   }
 
-  // ✅ FIX #3: Fallback. El bot de Python guarda el `telegram_payment_charge_id` de Telegram
-  // (NO nuestro `reference`) en `subscriptions.telegram_charge_id`. Por eso la búsqueda directa
-  // falla siempre. Si el usuario tiene una suscripción activa, asumimos que el bot ya la procesó.
-  const activeSub = await getActiveSubscription(tid)
-  if (activeSub) {
-    return NextResponse.json({
-      ok: true,
-      already: true,
-      subscription: {
-        plan: activeSub.plan,
-        expires_at: activeSub.expires_at,
-        status: activeSub.status,
-      },
-    })
-  }
+  // Only the permanent ledger proves this invoice; a pre-existing VIP or an
+  // inbox receipt still pending is never confirmation of payment.
 
   // Ni por reference ni por tid: el webhook aún no ha llegado
   return NextResponse.json({
@@ -261,8 +204,14 @@ async function handleCreateCryptoInvoice(tid: string, body: any, user: any) {
   if (!plan) return NextResponse.json({ error: 'Plan inválido' }, { status: 400 })
   if (!RECIPIENT_WALLET || RECIPIENT_WALLET.length < 40) return NextResponse.json({ error: 'Configuración incompleta: falta wallet de destino' }, { status: 500 })
 
-  const reference = `VIP_${planId}_${tid}_${Date.now()}`
+  const reference = `VIP_${planId}_${tid}_${randomUUID()}`
   const units = usdtToUnits(plan.crypto_price)
+  await db.execute({
+    sql: `INSERT INTO vip_invoices
+          (reference, telegram_id, payment_method, plan, days, expected_amount_units, currency)
+          VALUES (?, ?, 'crypto', ?, ?, ?, 'USDT')`,
+    args: [reference, tid, plan.id, plan.days, units],
+  })
 
   return NextResponse.json({
     payment_data: {
@@ -306,111 +255,7 @@ async function handleConfirmCrypto(tid: string, body: any) {
   const plan = VIP_PLANS.find((p) => p.id === planId)
   if (!plan) return NextResponse.json({ error: 'Plan inválido' }, { status: 400 })
 
-  const existing = await getSubscriptionByChargeId(reference)
-  if (existing) {
-    return NextResponse.json({
-      status: 'paid',
-      already: true,
-      subscription: { plan: existing.plan, expires_at: existing.expires_at, status: existing.status },
-    })
-  }
-
-  const expectedUnits = usdtToUnits(plan.crypto_price)
-  const verification = await verifyCryptoPayment(reference, expectedUnits)
-
-  if (!verification.ok) {
-    if (verification.reason === 'not_found') return NextResponse.json({ status: 'pending' })
-    return NextResponse.json({ status: 'pending', reason: verification.reason })
-  }
-
-  const activation = await activateSubscription(tid, plan, reference)
-  const activationData = await activation.json()
-
-  if (!activationData.ok) return NextResponse.json(activationData, { status: activation.status })
-
-  return NextResponse.json({ status: 'paid', subscription: activationData.subscription })
-}
-
-async function activateSubscription(tid: string, plan: any, reference: string) {
-  const existing = await getSubscriptionByChargeId(reference)
-  if (existing) {
-    return NextResponse.json({
-      ok: true,
-      already: true,
-      subscription: { plan: existing.plan, expires_at: existing.expires_at, status: existing.status },
-    })
-  }
-
-  const currentSub = await getActiveSubscription(tid)
-  let baseDate = new Date()
-  if (currentSub) {
-    const currentExpiry = new Date(currentSub.expires_at.replace(' ', 'T') + 'Z')
-    if (currentExpiry > baseDate) baseDate = currentExpiry
-  }
-
-  const expiresAt = new Date(baseDate.getTime() + plan.days * 24 * 60 * 60 * 1000)
-
-  // ✅ FIX #4: Si ya hay una suscripción activa, EXTENDERLA en lugar de crear una nueva.
-  // Esto mantiene el mismo comportamiento que el bot de Python (que hace UPDATE)
-  // y evita acumular filas "active" en la tabla.
-  if (currentSub) {
-    try {
-      await execute(
-        `UPDATE subscriptions
-         SET expires_at = ?, plan = ?, telegram_charge_id = ?, stars_paid = ?, status = 'active'
-         WHERE id = ?`,
-        // ✅ FIX #5: stars_paid = 0 en crypto (no hay stars reales)
-        [toSqliteDate(expiresAt), plan.id, reference, 0, currentSub.id]
-      )
-
-      return NextResponse.json({
-        ok: true,
-        subscription: {
-          plan: plan.id,
-          expires_at: toSqliteDate(expiresAt),
-          days: plan.days,
-        },
-      })
-    } catch (extendError: any) {
-      // Si falla por UNIQUE (reference ya usado en otra fila), retornar already
-      if (String(extendError?.message || '').toLowerCase().includes('unique')) {
-        const existing2 = await getSubscriptionByChargeId(reference)
-        return NextResponse.json({
-          ok: true,
-          already: true,
-          subscription: existing2
-            ? { plan: existing2.plan, expires_at: existing2.expires_at }
-            : null,
-        })
-      }
-      throw extendError
-    }
-  }
-
-  // No hay suscripción activa: crear nueva fila
-  const created = await createSubscription({
-    telegram_id: tid,
-    plan: plan.id,
-    stars_paid: 0, // ✅ FIX #5: crypto no tiene stars reales
-    telegram_charge_id: reference,
-    expires_at: toSqliteDate(expiresAt),
-  })
-
-  if (!created) {
-    const existing2 = await getSubscriptionByChargeId(reference)
-    return NextResponse.json({
-      ok: true,
-      already: true,
-      subscription: existing2
-        ? { plan: existing2.plan, expires_at: existing2.expires_at }
-        : null,
-    })
-  }
-
-  return NextResponse.json({
-    ok: true,
-    subscription: { plan: plan.id, expires_at: toSqliteDate(expiresAt), days: plan.days },
-  })
+  return NextResponse.json(await confirmVipCrypto(db, tid, body, RECIPIENT_WALLET))
 }
 
 async function handleCancel(tid: string) {
