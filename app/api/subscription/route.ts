@@ -10,6 +10,7 @@ import { db } from '@/lib/turso'
 import { randomUUID } from 'crypto'
 import { confirmVipCrypto, findCreditedVip } from '@/lib/vip-subscription'
 import { VIP_PLANS, usdtToUnits } from '@/lib/constants'
+import { VIP_PURCHASES_ENABLED } from '@/lib/vip-availability'
 
 export const dynamic = 'force-dynamic'
 
@@ -82,6 +83,13 @@ export async function POST(request: Request) {
 
     const body = await request.json().catch(() => ({}))
     const action = String(body?.action || '')
+
+    if (!VIP_PURCHASES_ENABLED && (action === 'create_invoice' || action === 'create_crypto_invoice')) {
+      return NextResponse.json({
+        error: 'Las compras VIP están temporalmente no disponibles.',
+        code: 'vip_purchases_disabled',
+      }, { status: 503 })
+    }
 
     const user = await ensureUser(tid)
     if (!user) {
