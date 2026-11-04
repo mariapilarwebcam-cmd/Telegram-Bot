@@ -10,6 +10,7 @@ import {
 import { db } from '@/lib/turso'
 import {
   OPENING_LINES,
+  renderOpeningLine,
   GEM_COSTS,
   isVipArchetype,
   VIP_DAILY_MESSAGE_LIMIT,
@@ -64,7 +65,13 @@ export async function POST(request: Request) {
         ? `*{name} te mira al entrar y sonríe con intención*\n\n"Hola... estaba esperándote. ¿Qué te trae por aquí?"`
         : `*{name} looks at you as you enter and smiles with intent*\n\n"Hey... I was waiting for you. What brings you here?"`
     const template = openingTemplate ? openingTemplate[lang] : fallback
-    const openingMessage = template.replace(/{name}/g, character.character_name)
+    // Concordancia doble: el personaje consigo mismo y el mensaje hacia el usuario.
+    const openingMessage = renderOpeningLine(
+      template,
+      character.character_name,
+      character.gender,
+      user.gender
+    )
 
     // ✅ Transacción atómica para evitar doble cobro y garantizar consistencia.
     const tx = await db.transaction('write')

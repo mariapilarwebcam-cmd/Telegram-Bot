@@ -24,6 +24,7 @@ import {
   countVipMessagesToday,
 } from '@/lib/db-queries'
 import { db, queryOne, query, execute } from '@/lib/turso'
+import { buildGenderRules } from '@/lib/gender'
 import {
   GEM_COSTS,
   HOOK_MODE_MESSAGES,
@@ -82,45 +83,8 @@ const PROVOCATIVE_HINT_ES = `\n\n⚠️ CONTEXTO CRÍTICO: Al usuario le quedan 
 
 const PROVOCATIVE_HINT_EN = `\n\n⚠️ CRITICAL CONTEXT: The user has VERY few messages left. This might be your last message with them. Speak more provocatively, suggestively, urgently and sensually. Make them feel it would be a tragedy to stop right now. End with a hook that makes them want to continue. Do NOT mention messages, prices or purchases — the system handles that. Just intensify your role.`
 
-function buildGenderRules(
-  userGender: string | null | undefined,
-  charGender: string,
-  lang: 'es' | 'en'
-): string {
-  const u = userGender === 'male' ? 'hombre' : userGender === 'female' ? 'mujer' : 'sin especificar'
-  const c = charGender === 'male' ? 'hombre' : 'mujer'
-
-  if (lang === 'es') {
-    const sameGender = userGender === charGender
-    return `REGLA DE GÉNERO (CRÍTICA):
-- El USUARIO es ${u}. TÚ (el personaje) eres ${c}.
-- Adapta TODOS los pronombres, adjetivos y términos cariñosos al género del usuario.
-- NUNCA uses términos del género opuesto:
-  · A un hombre: "guapo", "apuesto", "muchacho" (NO "hermosa", "bonita", "chica")
-  · A una mujer: "hermosa", "bonita", "chica" (NO "guapo", "apuesto", "muchacho")
-- Cuando uses "soy tuyo/tuya" o "hazme tuyo/tuya", usa la forma que corresponde a TU género (el del personaje):
-  · Si tú eres hombre → "soy tuyo", "hazme tuyo"
-  · Si tú eres mujer → "soy tuya", "hazme tuya"
-- ${sameGender ? 'El usuario y tú son del MISMO género: la relación es gay/lésbica. Es totalmente natural, no lo cuestiones ni lo comentes a menos que sea parte de la escena.' : 'El usuario y tú son de géneros distintos: la relación es heterosexual.'}
-- ${userGender ? '' : 'El usuario no especificó su género. Usa un tono neutro y evita asumir. Si puedes, pregunta sutilmente.'}`
-  }
-
-  const uEN = userGender === 'male' ? 'a man' : userGender === 'female' ? 'a woman' : 'unspecified'
-  const cEN = charGender === 'male' ? 'a man' : 'a woman'
-  const sameGender = userGender === charGender
-
-  return `GENDER RULE (CRITICAL):
-- The USER is ${uEN}. YOU (the character) are ${cEN}.
-- Adapt ALL pronouns, adjectives and pet names to the user's gender.
-- NEVER use terms from the opposite gender:
-  · To a man: "handsome", "good-looking", "boy" (NOT "beautiful", "pretty", "girl")
-  · To a woman: "beautiful", "pretty", "girl" (NOT "handsome", "good-looking", "boy")
-- When using "I'm yours", use the form matching YOUR gender (the character):
-  · If you're a man → masculine forms
-  · If you're a woman → feminine forms
-- ${sameGender ? "The user and you are the SAME gender: the relationship is gay/lesbian. Completely natural, don't question it unless the scene calls for it." : "The user and you are different genders: the relationship is straight."}
-- ${userGender ? '' : "The user didn't specify their gender. Use neutral tone and avoid assuming. If possible, ask subtly."}`
-}
+// Las reglas de concordancia de género viven en lib/gender.ts (buildGenderRules)
+// para poder probarlas sin cargar el handler completo.
 
 async function getLearnedTriggers(): Promise<{ heat: string[], purchase: string[] }> {
   try {
