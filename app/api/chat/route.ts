@@ -4,7 +4,6 @@ import { NextResponse } from 'next/server'
 import {
   ensureUser,
   getCharacter,
-  incrementGems,
   setHookRemaining,
   setHookUsed,
   insertGemTransaction,
@@ -14,7 +13,6 @@ import {
   insertMessages,
   getReferralByReferred,
   updateReferralCount,
-  markReferralPaid,
   incrementTotalReferrals,
   updateLastActive,
   getActiveSubscription,
@@ -25,7 +23,7 @@ import {
   grantPass,
   countVipMessagesToday,
 } from '@/lib/db-queries'
-import { queryOne, query, execute } from '@/lib/turso'
+import { db, queryOne, query, execute } from '@/lib/turso'
 import {
   GEM_COSTS,
   HOOK_MODE_MESSAGES,
@@ -606,24 +604,56 @@ ${learned.heat.length > 0 ? `- The system learned users love these words: ${lear
         await updateReferralCount(referral.id, totalMsg)
 
         if (totalMsg >= REFERRAL_MIN_MESSAGES) {
-          const claim = await execute(
-            `UPDATE referrals SET reward_paid = 1, reward_paid_at = datetime('now')
-             WHERE id = ? AND reward_paid = 0`,
-            [referral.id]
-          )
-
-          if (claim.rowsAffected > 0) {
-            await execute(
-              `UPDATE users SET bonus_gems = COALESCE(bonus_gems, 0) + ? WHERE telegram_id = ?`,
-              [REFERRAL_MESSAGES, String(referral.referrer_id)]
-            )
-            await incrementTotalReferrals(String(referral.referrer_id))
-            await insertGemTransaction({
-              telegram_id: String(referral.referrer_id),
-              amount: REFERRAL_MESSAGES,
-              transaction_type: 'referral',
-              description: `Referido verificado (${REFERRAL_MIN_MESSAGES}+ mensajes)`,
+          // Claim + acreditación + asiento en UNA sola transacción: si algo
+          // falla, la recompensa no se pierde ni queda marcada como pagada.
+          const tx = await db.transaction('write')
+          let rewarded = false
+          try {
+            const claim = await tx.execute({
+              sql: `UPDATE referrals SET reward_paid = 1, reward_paid_at = datetime('now')
+                    WHERE id = ? AND reward_paid = 0`,
+              args: [referral.id],
             })
+
+            if (claim.rowsAffected > 0) {
+              const credit = await tx.execute({
+                sql: `UPDATE users SET bonus_gems = COALESCE(bonus_gems, 0) + ? WHERE telegram_id = ?`,
+                args: [REFERRAL_MESSAGES, String(referral.referrer_id)],
+              })
+              if (credit.rowsAffected !== 1) {
+                // Referente inexistente: el catch de la transaccion hace el
+                // rollback completo, incluido reward_paid.
+                throw new Error('referrer_missing')
+              }
+              // Mismo esquema y valores que insertGemTransaction().
+              await tx.execute({
+                sql: `INSERT INTO gem_transactions
+                        (telegram_id, amount, transaction_type, description)
+                      VALUES (?, ?, 'referral', ?)`,
+                args: [
+                  String(referral.referrer_id),
+                  REFERRAL_MESSAGES,
+                  `Referido verificado (${REFERRAL_MIN_MESSAGES}+ mensajes)`,
+                ],
+              })
+              await tx.commit()
+              rewarded = true
+            } else {
+              await tx.rollback()
+            }
+          } catch (rewardErr) {
+            await tx.rollback().catch(() => {})
+            throw rewardErr
+          }
+
+          if (rewarded) {
+            // Contador no económico. Su fallo NUNCA debe afectar a la recompensa
+            // ya confirmada ni cambiar la respuesta al cliente.
+            try {
+              await incrementTotalReferrals(String(referral.referrer_id))
+            } catch (counterErr) {
+              console.warn('[chat] total_referrals no actualizado:', counterErr)
+            }
           }
         }
       }

@@ -1,7 +1,16 @@
 // lib/db-queries.ts
 // Todas las queries a Turso centralizadas por dominio
 
-import { query, queryOne, execute, transaction } from './turso'
+import { db, query, queryOne, execute, transaction } from './turso'
+import type { Transaction } from '@libsql/client'
+import type { GemPurchasePlan } from './gem-payments'
+import {
+  REFERRAL_PURCHASE_COMMISSION_PCT,
+  REFERRAL_TOP_TIER_THRESHOLD,
+  REFERRAL_TOP_TIER_PCT,
+  REFERRAL_ELITE_TIER_THRESHOLD,
+  REFERRAL_ELITE_TIER_PCT,
+} from './constants'
 
 const nowISO = () => new Date().toISOString()
 
@@ -177,59 +186,9 @@ export async function completeOnboarding(telegram_id: string) {
 // GEM OPERATIONS
 // ═══════════════════════════════════════════════════════════════
 
-export async function incrementGems(
-  telegram_id: string,
-  amount: number
-): Promise<number> {
-  const row = await queryOne<{ gems: number }>(
-    `UPDATE users
-     SET gems = COALESCE(gems, 0) + ?,
-         updated_at = ?
-     WHERE telegram_id = ?
-     RETURNING gems`,
-    [amount, nowISO(), telegram_id]
-  )
-  return row?.gems ?? 0
-}
-
-export async function incrementGemsAndPurchased(
-  telegram_id: string,
-  amount: number
-): Promise<{ new_gems: number; new_purchased: number }> {
-  const row = await queryOne<{ gems: number; purchased_gems: number }>(
-    `UPDATE users
-     SET gems = COALESCE(gems, 0) + ?,
-         purchased_gems = COALESCE(purchased_gems, 0) + ?,
-         hook_messages_remaining = 0,
-         updated_at = ?
-     WHERE telegram_id = ?
-     RETURNING gems, purchased_gems`,
-    [amount, amount, nowISO(), telegram_id]
-  )
-  return {
-    new_gems: row?.gems ?? 0,
-    new_purchased: row?.purchased_gems ?? 0,
-  }
-}
-
-export async function decrementGemsAndPurchased(
-  telegram_id: string,
-  amount: number
-): Promise<{ new_gems: number; new_purchased: number }> {
-  const row = await queryOne<{ gems: number; purchased_gems: number }>(
-    `UPDATE users
-     SET gems = COALESCE(gems, 0) - ?,
-         purchased_gems = MAX(COALESCE(purchased_gems, 0) - ?, 0),
-         updated_at = ?
-     WHERE telegram_id = ?
-     RETURNING gems, purchased_gems`,
-    [amount, amount, nowISO(), telegram_id]
-  )
-  return {
-    new_gems: row?.gems ?? 0,
-    new_purchased: row?.purchased_gems ?? 0,
-  }
-}
+// incrementGems / incrementGemsAndPurchased / decrementGemsAndPurchased se
+// retiraron (R4): escribian saldos sin asiento contable y no tenian llamadores.
+// Toda acreditacion debe pasar por una transaccion con movimientos contables.
 
 export async function setHookRemaining(telegram_id: string, remaining: number) {
   return execute(
@@ -581,12 +540,8 @@ export async function updateReferralCount(
   )
 }
 
-export async function markReferralPaid(referral_id: number) {
-  return execute(
-    `UPDATE referrals SET reward_paid = 1, reward_paid_at = ? WHERE id = ?`,
-    [nowISO(), referral_id]
-  )
-}
+// markReferralPaid se retiro (R4): actualizaba reward_paid sin condicion y sin
+// acreditar la recompensa. El claim condicional vive en la transaccion del chat.
 
 // ═══════════════════════════════════════════════════════════════
 // REFERRAL COMMISSIONS
@@ -684,6 +639,978 @@ export async function getPurchaseByChargeId(charge_id: string) {
     [charge_id]
   )
 }
+
+export type GemPurchaseOutcome =
+  | {
+      status: 'applied'
+      gems: number
+      purchased_gems: number
+      bonus_gems: number
+      commission_applied: boolean
+      commission_note?: 'commission_transient_failure'
+    }
+  | { status: 'duplicate' }
+  | { status: 'user_missing' }
+  | { status: 'conflict'; reason: GemPurchaseConflict }
+
+export type CommissionTarget = {
+  referrer_id: string
+  base_gems: number
+}
+
+type CommissionDecision = {
+  referrer_id: string
+  base_gems: number
+  commission_pct: number
+  commission_gems: number
+  total_unique: number
+}
+
+export type CommissionEvidence =
+  | { state: 'absent' }
+  | { state: 'recorded' }
+  | {
+      state: 'conflict'
+      reason:
+        | 'commission_mismatch'
+        | 'ledger_missing'
+        | 'ledger_mismatch'
+        | 'ledger_orphan'
+    }
+
+export type GemPurchaseInput = {
+  telegram_id: string
+  telegram_charge_id: string
+  is_first_purchase: boolean
+  plan: GemPurchasePlan
+  commission?: CommissionTarget | null
+}
+
+export type GemPurchaseConflict =
+  | 'purchase_absent'
+  | 'purchase_not_applied'
+  | 'purchase_mismatch'
+  | 'ledger_missing'
+  | 'ledger_mismatch'
+  | 'commission_conflict'
+
+export class GemPurchaseTransactionError extends Error {
+  constructor(code: string, readonly detail?: unknown) {
+    super(code)
+    this.name = 'GemPurchaseTransactionError'
+  }
+}
+
+type AppliedPurchaseRow = {
+  status: string
+  telegram_id: string
+  stars_amount: number
+  gems_amount: number
+  payment_method: string
+}
+
+// Un fallo de Turso solo puede considerarse "posible duplicado" ante una
+// violación UNIQUE real. isUniqueError() acepta además cualquier mensaje con
+// CONSTRAINT (CHECK, NOT NULL, FOREIGN KEY), lo que clasificaría errores
+// transitorios o de integridad como pagos duplicados.
+const isUniqueViolation = (e: any): boolean =>
+  /UNIQUE constraint failed/i.test(String(e?.message || ''))
+
+// Reglas comerciales vigentes: 5 % base, 7 % desde 5 compradores únicos y
+// 10 % desde 20. `buyerAlready` reproduce el add(buyerTid) previo al conteo
+// que hacían ambos rails.
+export function commissionFromCounts(
+  existingUnique: number,
+  buyerAlready: boolean,
+  baseGems: number
+): Omit<CommissionDecision, 'base_gems' | 'referrer_id'> {
+  const total_unique = existingUnique + (buyerAlready ? 0 : 1)
+  let commission_pct = REFERRAL_PURCHASE_COMMISSION_PCT
+  if (total_unique >= REFERRAL_ELITE_TIER_THRESHOLD) {
+    commission_pct = REFERRAL_ELITE_TIER_PCT
+  } else if (total_unique >= REFERRAL_TOP_TIER_THRESHOLD) {
+    commission_pct = REFERRAL_TOP_TIER_PCT
+  }
+  return {
+    total_unique,
+    commission_pct,
+    commission_gems: Math.floor((baseGems * commission_pct) / 100),
+  }
+}
+
+// Colisión del asiento contable de la comisión. Se lanza SOLO desde el insert
+// de `"<charge>:commission"`, de modo que el asiento del comprador (mismo
+// charge_id sin sufijo) nunca puede confundirse con una comisión duplicada.
+class CommissionLedgerConflict extends Error {
+  constructor(readonly original: unknown) {
+    super('commission_ledger_conflict')
+    this.name = 'CommissionLedgerConflict'
+  }
+}
+
+// Solo señales de duplicidad de comisión: trigger de la migración 003, índice
+// UNIQUE de referral_commissions o la colisión tipada del asiento de comisión.
+const isCommissionGateError = (e: any): boolean => {
+  if (e instanceof CommissionLedgerConflict) return true
+  const message = String(e?.message || '')
+  return (
+    /duplicate_referral_commission/i.test(message) ||
+    /UNIQUE constraint failed: referral_commissions\./i.test(message)
+  )
+}
+
+// Marca un fallo de la sentencia de comisión para reintentar sin confundirlo
+// con un pago duplicado.
+class GemPurchaseStageError extends Error {
+  constructor(readonly stage: 'commission', readonly original: unknown) {
+    super(`gem_purchase_stage_${stage}`)
+    this.name = 'GemPurchaseStageError'
+  }
+}
+
+// Contadores de tramo leídos DENTRO de la transacción.
+async function readCommissionCounts(
+  executor: Pick<Transaction, 'execute'>,
+  referrerId: string,
+  buyerId: string
+): Promise<{ existing: number; buyerAlready: boolean }> {
+  const result = await executor.execute({
+    sql: `SELECT COUNT(DISTINCT referred_id) AS unique_total,
+                 SUM(CASE WHEN referred_id = ? THEN 1 ELSE 0 END) AS buyer_rows
+            FROM referral_commissions
+           WHERE referrer_id = ?`,
+    args: [buyerId, referrerId],
+  })
+
+  const row: any = result.rows[0] ?? {}
+  return {
+    existing: Number(row.unique_total ?? 0),
+    buyerAlready: Number(row.buyer_rows ?? 0) > 0,
+  }
+}
+
+// Resultado explícito de resolver el referidor de una compra NUEVA.
+// Solo lecturas: no escribe nada ni altera la decisión persistida.
+export type CommissionTargetResult =
+  | { status: 'resolved'; target: CommissionTarget }
+  | { status: 'no_referrer' }
+  | { status: 'referrer_missing' }
+  | { status: 'not_applicable' }
+
+// El referidor sale EXCLUSIVAMENTE de users.referred_by (nunca del cliente) y
+// la base la aporta el plan validado del servidor. Los errores de lectura se
+// propagan: no se convierten en "sin comisión".
+export async function resolveCommissionTarget(
+  buyerTid: string,
+  baseGems: number
+): Promise<CommissionTargetResult> {
+  if (!Number.isFinite(baseGems) || baseGems <= 0) {
+    return { status: 'not_applicable' }
+  }
+
+  const buyer = await getUser(buyerTid)
+  if (!buyer) return { status: 'not_applicable' }
+  if (!buyer.referred_by) return { status: 'no_referrer' }
+
+  const referrerId = String(buyer.referred_by)
+  const referrer = await getUser(referrerId)
+  if (!referrer) return { status: 'referrer_missing' }
+
+  return {
+    status: 'resolved',
+    target: { referrer_id: referrerId, base_gems: Math.floor(baseGems) },
+  }
+}
+
+export type PurchaseEvidence =
+  | { state: 'applied' }
+  | { state: 'conflict'; reason: GemPurchaseConflict }
+
+// ✅ H-3: prueba de que un cargo ya fue aplicado, sin coincidencias de texto.
+//   1. La fila debe existir con status = 'applied'. Ese estado se escribe en
+//      la MISMA transacción que el saldo, así que solo existe si se confirmó.
+//      Las compras antiguas quedan en 'review_required' y nunca se dan por
+//      duplicadas ni se vuelven a acreditar.
+//   2. Los datos del pago deben coincidir (is_first_purchase no se compara:
+//      un reintento lo recalcula y puede diferir legítimamente).
+//   3. Si el pago genera movimiento contable, debe existir una fila de
+//      gem_transactions con ese charge_id exacto (índice UNIQUE).
+// Si una lectura falla, el error se propaga: nunca se inventa evidencia.
+export async function proveAppliedPurchase(
+  data: { telegram_id: string; telegram_charge_id: string },
+  plan: GemPurchasePlan
+): Promise<PurchaseEvidence> {
+  const purchase = await queryOne<AppliedPurchaseRow>(
+    `SELECT status, telegram_id, stars_amount, gems_amount, payment_method
+       FROM star_purchases
+      WHERE telegram_charge_id = ?
+      LIMIT 1`,
+    [data.telegram_charge_id]
+  )
+
+  if (!purchase) return { state: 'conflict', reason: 'purchase_absent' }
+  if (String(purchase.status) !== 'applied') {
+    return { state: 'conflict', reason: 'purchase_not_applied' }
+  }
+
+  // Se compara contra el plan derivado del catálogo, no contra valores del
+  // llamador. is_first_purchase no se compara: un reintento lo recalcula.
+  const samePayment =
+    String(purchase.telegram_id) === String(data.telegram_id) &&
+    Number(purchase.stars_amount) === Number(plan.stars_amount) &&
+    Number(purchase.gems_amount) === Number(plan.gems_amount) &&
+    String(purchase.payment_method) === String(plan.payment_method)
+
+  if (!samePayment) return { state: 'conflict', reason: 'purchase_mismatch' }
+
+  // La exigencia del movimiento contable depende del tipo de compra validado
+  // (plan.requiresLedger), nunca de un booleano enviado por el llamador.
+  if (plan.requiresLedger) {
+    if (!plan.ledger) return { state: 'conflict', reason: 'ledger_missing' }
+
+    const ledger = await queryOne<{
+      id: number
+      telegram_id: string
+      amount: number
+      transaction_type: string
+    }>(
+      `SELECT id, telegram_id, amount, transaction_type
+         FROM gem_transactions
+        WHERE charge_id = ?
+        LIMIT 1`,
+      [data.telegram_charge_id]
+    )
+
+    if (!ledger) return { state: 'conflict', reason: 'ledger_missing' }
+
+    const sameLedger =
+      String(ledger.telegram_id) === String(data.telegram_id) &&
+      Number(ledger.amount) === Number(plan.ledger.amount) &&
+      String(ledger.transaction_type) === String(plan.ledger.type)
+
+    if (!sameLedger) return { state: 'conflict', reason: 'ledger_mismatch' }
+  }
+
+  return { state: 'applied' }
+}
+
+// ✅ H-3: cargo + entrega de recursos + movimiento contable + status='applied'
+// confirmados en UNA sola transacción de escritura (BEGIN IMMEDIATE, misma
+// conexión). Si algo falla se revierte todo: nunca queda una compra aplicada
+// sin recursos, ni recursos sin compra.
+//
+// Todos los importes provienen de `plan`, derivado del catálogo del servidor.
+// Semántica de saldos idéntica a la anterior:
+//   gems     → gems += g, purchased_gems += g, hook_messages_remaining = 0
+//   messages → bonus_gems += m, hook_messages_remaining = 0
+//   hybrid   → gems += g, purchased_gems += g, bonus_gems += m, hook = 0
+// El movimiento contable solo se escribe si el plan lo define
+// (Stars no lo crea para paquetes de solo mensajes, igual que antes).
+// Único punto que mueve dinero de comisiones. Se ejecuta SIEMPRE dentro de una
+// transacción abierta por el llamador (nunca en escrituras sueltas).
+async function applyCommissionInTransaction(
+  tx: Transaction,
+  params: {
+    referrer_id: string
+    buyer_id: string
+    charge_id: string
+    rail: 'stars' | 'crypto'
+    decision: CommissionDecision
+  }
+): Promise<{ applied: boolean }> {
+  if (params.decision.commission_gems <= 0) return { applied: false }
+
+  const referrer = await tx.execute({
+    sql: `UPDATE users
+           SET gems = COALESCE(gems, 0) + ?, updated_at = ?
+           WHERE telegram_id = ?
+           RETURNING gems`,
+    args: [params.decision.commission_gems, nowISO(), params.referrer_id],
+  })
+  if (referrer.rows.length === 0) return { applied: false }
+
+  await tx.execute({
+    sql: `INSERT INTO referral_commissions
+            (referrer_id, referred_id, purchase_gems, commission_gems,
+             commission_pct, source, reference)
+          VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    args: [
+      params.referrer_id,
+      params.buyer_id,
+      params.decision.base_gems,
+      params.decision.commission_gems,
+      params.decision.commission_pct,
+      params.rail,
+      params.charge_id,
+    ],
+  })
+
+  await tx.execute({
+    sql: `UPDATE users
+           SET paying_referrals_count = MAX(COALESCE(paying_referrals_count, 0), ?),
+               updated_at = ?
+           WHERE telegram_id = ?`,
+    args: [params.decision.total_unique, nowISO(), params.referrer_id],
+  })
+
+  try {
+    await tx.execute({
+      sql: `INSERT INTO gem_transactions
+              (telegram_id, amount, transaction_type, description, charge_id)
+            VALUES (?, ?, 'referral_commission', ?, ?)`,
+      args: [
+        params.referrer_id,
+        params.decision.commission_gems,
+        `Comisión ${params.decision.commission_pct}% por compra de referido`,
+        `${params.charge_id}:commission`,
+      ],
+    })
+  } catch (error) {
+    if (isUniqueViolation(error)) throw new CommissionLedgerConflict(error)
+    throw error
+  }
+
+  return { applied: true }
+}
+
+// Tres estados. `recorded` exige fila + asiento correctos: una fila suelta no
+// demuestra que el saldo del referidor se acreditó.
+export async function commissionEvidence(
+  executor: Pick<Transaction, 'execute'>,
+  expected: {
+    buyer_id: string
+    charge_id: string
+    referrer_id: string
+    rail: 'stars' | 'crypto'
+    purchase_gems: number
+    commission_gems: number
+    commission_pct: number
+  }
+): Promise<CommissionEvidence> {
+  const found = await executor.execute({
+    sql: `SELECT referrer_id, referred_id, source, reference,
+                 purchase_gems, commission_gems, commission_pct
+            FROM referral_commissions
+           WHERE referred_id = ? AND reference = ?
+           LIMIT 1`,
+    args: [expected.buyer_id, expected.charge_id],
+  })
+
+  const row: any = found.rows[0]
+
+  if (!row) {
+    const orphan = await executor.execute({
+      sql: `SELECT 1 AS present FROM gem_transactions WHERE charge_id = ? LIMIT 1`,
+      args: [`${expected.charge_id}:commission`],
+    })
+    return orphan.rows.length > 0
+      ? { state: 'conflict', reason: 'ledger_orphan' }
+      : { state: 'absent' }
+  }
+
+  const sameCommission =
+    String(row.referrer_id) === expected.referrer_id &&
+    String(row.referred_id) === expected.buyer_id &&
+    String(row.reference) === expected.charge_id &&
+    String(row.source) === expected.rail &&
+    Number(row.purchase_gems) === expected.purchase_gems &&
+    Number(row.commission_gems) === expected.commission_gems &&
+    Number(row.commission_pct) === expected.commission_pct
+
+  if (!sameCommission) return { state: 'conflict', reason: 'commission_mismatch' }
+
+  const entry = await executor.execute({
+    sql: `SELECT telegram_id, amount, transaction_type
+            FROM gem_transactions
+           WHERE charge_id = ?
+           LIMIT 1`,
+    args: [`${expected.charge_id}:commission`],
+  })
+
+  const ledger: any = entry.rows[0]
+  if (!ledger) return { state: 'conflict', reason: 'ledger_missing' }
+
+  const sameLedger =
+    String(ledger.telegram_id) === expected.referrer_id &&
+    Number(ledger.amount) === expected.commission_gems &&
+    String(ledger.transaction_type) === 'referral_commission'
+
+  return sameLedger
+    ? { state: 'recorded' }
+    : { state: 'conflict', reason: 'ledger_mismatch' }
+}
+
+type CommissionEvidenceState =
+  | { kind: 'recorded' }
+  | { kind: 'absent' }
+  | {
+      kind: 'conflict'
+      reason: 'commission_mismatch' | 'ledger_missing' | 'ledger_mismatch' | 'ledger_orphan'
+    }
+  | { kind: 'unavailable'; error: unknown }
+
+// Evidencia con la decisión PERSISTIDA (nunca recalcula el porcentaje ni usa
+// users.referred_by). Un fallo de lectura NUNCA se interpreta como ausencia.
+async function readCommissionEvidenceState(
+  data: GemPurchaseInput
+): Promise<CommissionEvidenceState> {
+  try {
+    const purchase = await queryOne<{
+      status: string
+      payment_method: string
+      commission_referrer_id: string | null
+      commission_base_gems: number | null
+      commission_pct: number | null
+    }>(
+      `SELECT status, payment_method, commission_referrer_id,
+              commission_base_gems, commission_pct
+         FROM star_purchases
+        WHERE telegram_charge_id = ? AND telegram_id = ?
+        LIMIT 1`,
+      [data.telegram_charge_id, data.telegram_id]
+    )
+
+    if (!purchase || String(purchase.status) !== 'applied') return { kind: 'absent' }
+    if (
+      purchase.commission_referrer_id == null ||
+      purchase.commission_base_gems == null ||
+      purchase.commission_pct == null
+    ) {
+      return { kind: 'absent' }
+    }
+
+    const base = Number(purchase.commission_base_gems)
+    const pct = Number(purchase.commission_pct)
+
+    const tx = await db.transaction('read')
+    try {
+      const evidence = await commissionEvidence(tx, {
+        buyer_id: data.telegram_id,
+        charge_id: data.telegram_charge_id,
+        referrer_id: String(purchase.commission_referrer_id),
+        rail: String(purchase.payment_method).startsWith('crypto') ? 'crypto' : 'stars',
+        purchase_gems: base,
+        commission_gems: Math.floor((base * pct) / 100),
+        commission_pct: pct,
+      })
+
+      if (evidence.state === 'recorded') return { kind: 'recorded' }
+      if (evidence.state === 'absent') return { kind: 'absent' }
+      return { kind: 'conflict', reason: evidence.reason }
+    } finally {
+      tx.close()
+    }
+  } catch (error) {
+    return { kind: 'unavailable', error }
+  }
+}
+
+// Conflicto: ni reintento ni compra pendiente automática. El estado del pago
+// decide la respuesta; nunca se vuelve a acreditar.
+async function settleCommissionConflict(
+  data: GemPurchaseInput,
+  reason: string
+): Promise<GemPurchaseOutcome> {
+  const payment = await proveAppliedPurchase(data, data.plan)
+
+  if (payment.state === 'applied') {
+    console.error(
+      '[db-queries] comisión en conflicto con pago aplicado:',
+      data.telegram_charge_id,
+      reason
+    )
+    return { status: 'conflict', reason: 'commission_conflict' }
+  }
+
+  throw new GemPurchaseTransactionError('commission_review_required', reason)
+}
+
+// Resultado incierto: se conserva el error original (commit_uncertain,
+// rollback_failed, close_failed...) y nunca se autoriza una nueva acreditación.
+async function settleUncertainPurchase(
+  data: GemPurchaseInput,
+  original: GemPurchaseTransactionError
+): Promise<GemPurchaseOutcome> {
+  const payment = await proveAppliedPurchase(data, data.plan)
+
+  if (payment.state !== 'applied') throw original
+
+  const commission = await readCommissionEvidenceState(data)
+  if (commission.kind === 'unavailable') {
+    throw new GemPurchaseTransactionError(
+      'commission_evidence_unavailable',
+      commission.error
+    )
+  }
+  if (commission.kind === 'conflict') {
+    return { status: 'conflict', reason: 'commission_conflict' }
+  }
+  if (commission.kind !== 'recorded') {
+    console.error(
+      '[db-queries] pago aplicado con comisión pendiente (resultado incierto):',
+      data.telegram_charge_id
+    )
+  }
+  return { status: 'duplicate' }
+}
+
+export async function applyGemPurchaseAtomic(
+  data: GemPurchaseInput
+): Promise<GemPurchaseOutcome> {
+  const target = data.commission ?? null
+  if (!target) return runGemPurchaseTransaction(data, null)
+
+  let firstError: unknown
+  try {
+    return await runGemPurchaseTransaction(data, target)
+  } catch (error) {
+    firstError = error
+  }
+
+  // Incierto (commit / rollback / cierre): verificar, jamás reejecutar.
+  if (firstError instanceof GemPurchaseTransactionError) {
+    return settleUncertainPurchase(data, firstError)
+  }
+  if (!(firstError instanceof GemPurchaseStageError)) throw firstError
+
+  // Comisión con rollback CONFIRMADO: un único reintento controlado.
+  try {
+    return await runGemPurchaseTransaction(data, target)
+  } catch (retryError) {
+    if (retryError instanceof GemPurchaseTransactionError) {
+      return settleUncertainPurchase(data, retryError)
+    }
+    if (!(retryError instanceof GemPurchaseStageError)) throw retryError
+
+    const commission = await readCommissionEvidenceState(data)
+
+    if (commission.kind === 'unavailable') {
+      throw new GemPurchaseTransactionError(
+        'commission_evidence_unavailable',
+        commission.error
+      )
+    }
+    if (commission.kind === 'conflict') {
+      return settleCommissionConflict(data, commission.reason)
+    }
+    if (commission.kind === 'recorded') {
+      return settleUncertainPurchase(
+        data,
+        new GemPurchaseTransactionError('commission_already_recorded')
+      )
+    }
+
+    console.error(
+      '[db-queries] comisión no aplicada; compra con comisión pendiente:',
+      data.telegram_charge_id,
+      target.referrer_id,
+      retryError.original
+    )
+
+    try {
+      return await runGemPurchaseTransaction(
+        data,
+        target,
+        'commission_transient_failure'
+      )
+    } catch (finalError) {
+      if (finalError instanceof GemPurchaseTransactionError) {
+        return settleUncertainPurchase(data, finalError)
+      }
+      throw finalError
+    }
+  }
+}
+
+async function runGemPurchaseTransaction(
+  data: GemPurchaseInput,
+  target: CommissionTarget | null,
+  commissionNote?: 'commission_transient_failure'
+): Promise<GemPurchaseOutcome> {
+  const { plan } = data
+  const tx = await db.transaction('write')
+  let committed = false
+  let rolledBack = false
+  // Sentencia en curso: una violación UNIQUE solo es posible al insertar el
+  // cargo o su movimiento contable, nunca al acreditar saldo.
+  let stage: 'purchase' | 'credit' | 'ledger' | 'commission' | 'commit' = 'purchase'
+
+  const rollback = async () => {
+    await tx.rollback()
+    rolledBack = true
+  }
+
+  try {
+    // Decisión de comisión calculada DENTRO de esta transacción, con la base
+    // validada del pago (nunca importes externos).
+    let decision: CommissionDecision | null = null
+    if (target) {
+      const counts = await readCommissionCounts(tx, target.referrer_id, data.telegram_id)
+      decision = {
+        referrer_id: target.referrer_id,
+        base_gems: target.base_gems,
+        ...commissionFromCounts(counts.existing, counts.buyerAlready, target.base_gems),
+      }
+    }
+
+    // La decisión (referidor, base y porcentaje) se persiste en la MISMA
+    // transacción que confirma la compra.
+    await tx.execute({
+      sql: `INSERT INTO star_purchases
+              (telegram_id, stars_amount, gems_amount, is_first_purchase,
+               telegram_charge_id, payment_method, status, applied_at,
+               commission_referrer_id, commission_base_gems, commission_pct)
+            VALUES (?, ?, ?, ?, ?, ?, 'applied', ?, ?, ?, ?)`,
+      args: [
+        data.telegram_id,
+        plan.stars_amount,
+        plan.gems_amount,
+        data.is_first_purchase ? 1 : 0,
+        data.telegram_charge_id,
+        plan.payment_method,
+        nowISO(),
+        decision ? decision.referrer_id : null,
+        decision ? decision.base_gems : null,
+        decision ? decision.commission_pct : null,
+      ],
+    })
+
+    stage = 'credit'
+    // Una sola sentencia: gemas de pago, gemas compradas y mensajes.
+    const credited = await tx.execute({
+      sql: `UPDATE users
+            SET gems = COALESCE(gems, 0) + ?,
+                purchased_gems = COALESCE(purchased_gems, 0) + ?,
+                bonus_gems = COALESCE(bonus_gems, 0) + ?,
+                hook_messages_remaining = 0,
+                updated_at = ?
+            WHERE telegram_id = ?
+            RETURNING gems, purchased_gems, bonus_gems`,
+      args: [
+        plan.credit_gems,
+        plan.credit_gems,
+        plan.credit_messages,
+        nowISO(),
+        data.telegram_id,
+      ],
+    })
+
+    if (credited.rows.length === 0) {
+      await rollback()
+      return { status: 'user_missing' }
+    }
+
+    stage = 'ledger'
+    if (plan.ledger) {
+      await tx.execute({
+        sql: `INSERT INTO gem_transactions
+                (telegram_id, amount, transaction_type, description, charge_id)
+              VALUES (?, ?, ?, ?, ?)`,
+        args: [
+          data.telegram_id,
+          plan.ledger.amount,
+          plan.ledger.type,
+          plan.ledger.description,
+          data.telegram_charge_id,
+        ],
+      })
+    }
+
+    let commissionApplied = false
+    if (decision && !commissionNote) {
+      stage = 'commission'
+      commissionApplied = (
+        await applyCommissionInTransaction(tx, {
+          referrer_id: decision.referrer_id,
+          buyer_id: data.telegram_id,
+          charge_id: data.telegram_charge_id,
+          rail: plan.rail,
+          decision,
+        })
+      ).applied
+    }
+
+    stage = 'commit'
+    await tx.commit()
+    committed = true
+
+    const row = credited.rows[0] as any
+    return {
+      status: 'applied',
+      gems: Number(row.gems ?? 0),
+      purchased_gems: Number(row.purchased_gems ?? 0),
+      bonus_gems: Number(row.bonus_gems ?? 0),
+      commission_applied: commissionApplied,
+      ...(commissionNote ? { commission_note: commissionNote } : {}),
+    }
+  } catch (error: any) {
+    // Commit incierto: se clasifica de inmediato con el error ORIGINAL. El
+    // resultado del rollback posterior no cambia la clasificación ni autoriza
+    // reintentos.
+    if (stage === 'commit') {
+      try {
+        await tx.rollback()
+      } catch (rollbackError) {
+        console.error(
+          '[db-queries] rollback tras commit incierto falló (estado sigue incierto):',
+          rollbackError
+        )
+      }
+      throw new GemPurchaseTransactionError('gem_purchase_commit_uncertain', error)
+    }
+
+    // Errores previos al commit: primero se revierte de verdad. Sin rollback
+    // confirmado no se emite GemPurchaseStageError ni se autoriza reintento.
+    if (!committed && !rolledBack) {
+      try {
+        await rollback()
+      } catch (rollbackError) {
+        console.error(
+          '[db-queries] rollback falló tras fallo previo al commit:',
+          rollbackError
+        )
+        throw new GemPurchaseTransactionError(
+          'gem_purchase_rollback_failed',
+          rollbackError
+        )
+      }
+    }
+
+    // Solo con rollback confirmado la etapa de comisión es reintentable.
+    if (stage === 'commission') {
+      throw new GemPurchaseStageError('commission', error)
+    }
+
+    // Solo una violación UNIQUE real, y solo en las sentencias que pueden
+    // provocarla, habilita la investigación de duplicado.
+    if ((stage === 'purchase' || stage === 'ledger') && isUniqueViolation(error)) {
+      const evidence = await proveAppliedPurchase(data, plan)
+      if (evidence.state === 'applied') return { status: 'duplicate' }
+      return { status: 'conflict', reason: evidence.reason }
+    }
+
+    throw error
+  } finally {
+    // finally NUNCA lanza: no puede ocultar el error principal.
+    try {
+      // API real de libSQL: close() es síncrono, idempotente y revierte si la
+      // transacción no llegó a confirmarse.
+      tx.close()
+    } catch (closeError) {
+      if (!committed && !rolledBack) {
+        console.error(
+          '[db-queries] CRÍTICO: close() falló con transacción en estado incierto:',
+          closeError
+        )
+      } else {
+        console.error(
+          '[db-queries] Error cerrando transacción ya confirmada:',
+          closeError
+        )
+      }
+    }
+  }
+}
+
+// Conciliación de una comisión pendiente. Usa EXCLUSIVAMENTE la decisión
+// persistida (referidor original, base y porcentaje) y nunca recalcula tramos.
+export async function reconcileCommissionByCharge(
+  buyerTid: string,
+  chargeId: string
+): Promise<
+  | { status: 'applied'; commission_gems: number }
+  | { status: 'already_applied' }
+  | { status: 'referrer_missing' }
+  | { status: 'not_applied_purchase' }
+  | {
+      status: 'review_required'
+      reason:
+        | 'decision_missing'
+        | 'commission_mismatch'
+        | 'ledger_missing'
+        | 'ledger_mismatch'
+        | 'ledger_orphan'
+        | 'commission_absent'
+    }
+> {
+  const purchase = await queryOne<{
+    status: string
+    payment_method: string
+    commission_referrer_id: string | null
+    commission_base_gems: number | null
+    commission_pct: number | null
+  }>(
+    `SELECT status, payment_method, commission_referrer_id,
+            commission_base_gems, commission_pct
+       FROM star_purchases
+      WHERE telegram_charge_id = ? AND telegram_id = ?
+      LIMIT 1`,
+    [chargeId, buyerTid]
+  )
+
+  if (!purchase || String(purchase.status) !== 'applied') {
+    return { status: 'not_applied_purchase' }
+  }
+
+  if (
+    purchase.commission_referrer_id == null ||
+    purchase.commission_base_gems == null ||
+    purchase.commission_pct == null
+  ) {
+    return { status: 'review_required', reason: 'decision_missing' }
+  }
+
+  const referrerId = String(purchase.commission_referrer_id)
+  const base = Number(purchase.commission_base_gems)
+  const pct = Number(purchase.commission_pct)
+  const commissionGems = Math.floor((base * pct) / 100)
+  const rail: 'stars' | 'crypto' = String(purchase.payment_method).startsWith('crypto')
+    ? 'crypto'
+    : 'stars'
+
+  const expected = {
+    buyer_id: buyerTid,
+    charge_id: chargeId,
+    referrer_id: referrerId,
+    rail,
+    purchase_gems: base,
+    commission_gems: commissionGems,
+    commission_pct: pct,
+  }
+
+  const tx = await db.transaction('write')
+  let committed = false
+  // idle = no iniciado, confirmed = aplicado, failed = falló.
+  const rollbackState = { value: 'idle' as 'idle' | 'confirmed' | 'failed' }
+  let stage: 'evidence' | 'credit' | 'commit' = 'evidence'
+
+  const rollback = async () => {
+    if (rollbackState.value !== 'idle') return
+    try {
+      await tx.rollback()
+      rollbackState.value = 'confirmed'
+    } catch (error) {
+      rollbackState.value = 'failed'
+      throw error
+    }
+  }
+
+  try {
+    const counts = await readCommissionCounts(tx, referrerId, buyerTid)
+    const evidence = await commissionEvidence(tx, expected)
+
+    if (evidence.state === 'recorded') {
+      await rollback()
+      return { status: 'already_applied' }
+    }
+    if (evidence.state === 'conflict') {
+      await rollback()
+      return { status: 'review_required', reason: evidence.reason }
+    }
+
+    stage = 'credit'
+    const result = await applyCommissionInTransaction(tx, {
+      referrer_id: referrerId,
+      buyer_id: buyerTid,
+      charge_id: chargeId,
+      rail,
+      decision: {
+        referrer_id: referrerId,
+        base_gems: base,
+        commission_pct: pct,
+        commission_gems: commissionGems,
+        total_unique: counts.existing + (counts.buyerAlready ? 0 : 1),
+      },
+    })
+
+    // Referidor inexistente: no se confirma una transacción sin efecto.
+    if (!result.applied) {
+      await rollback()
+      return { status: 'referrer_missing' }
+    }
+
+    stage = 'commit'
+    await tx.commit()
+    committed = true
+
+    return { status: 'applied', commission_gems: commissionGems }
+  } catch (error) {
+    // Commit incierto: clasificación inmediata con el error ORIGINAL.
+    // El rollback posterior es best-effort y no la modifica.
+    if (stage === 'commit') {
+      if (rollbackState.value === 'idle') {
+        try {
+          await rollback()
+        } catch (rollbackError) {
+          console.error(
+            '[db-queries] reconcile: rollback best-effort tras commit incierto falló:',
+            rollbackError
+          )
+        }
+      }
+      throw new GemPurchaseTransactionError('gem_purchase_commit_uncertain', error)
+    }
+
+    // Fallo previo al commit: un único intento. Si falla, se propaga sin
+    // segundo intento y sin investigar duplicados.
+    if (!committed && rollbackState.value === 'idle') {
+      try {
+        await rollback()
+      } catch (rollbackError) {
+        console.error('[db-queries] reconcile: rollback falló:', rollbackError)
+        throw new GemPurchaseTransactionError(
+          'gem_purchase_rollback_failed',
+          rollbackError
+        )
+      }
+    }
+
+    if (rollbackState.value !== 'confirmed') {
+      throw new GemPurchaseTransactionError('gem_purchase_rollback_failed', error)
+    }
+
+    // Solo con rollback confirmado y sin commit incierto se investiga duplicidad.
+    if (!isCommissionGateError(error)) throw error
+
+    const verify = await db.transaction('read')
+    try {
+      const evidence = await commissionEvidence(verify, expected)
+      if (evidence.state === 'recorded') return { status: 'already_applied' }
+      return {
+        status: 'review_required',
+        reason: evidence.state === 'absent' ? 'commission_absent' : evidence.reason,
+      }
+    } finally {
+      // close() de la verificación tampoco puede ocultar el resultado.
+      try {
+        verify.close()
+      } catch (closeError) {
+        console.error(
+          '[db-queries] reconcile: error cerrando verificación:',
+          closeError
+        )
+      }
+    }
+  } finally {
+    // finally nunca lanza: no oculta el error principal.
+    try {
+      tx.close()
+    } catch (closeError) {
+      if (!committed && rollbackState.value !== 'confirmed') {
+        console.error(
+          '[db-queries] CRÍTICO: reconcile close() con transacción en estado incierto:',
+          closeError
+        )
+      } else {
+        console.error(
+          '[db-queries] reconcile: error cerrando transacción confirmada:',
+          closeError
+        )
+      }
+    }
+  }
+}
+
 
 // ═══════════════════════════════════════════════════════════════
 // CHAT LIST

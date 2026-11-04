@@ -8,7 +8,6 @@ import {
   getSeenR2Indices, markImageSeen, getAvailablePoolImage, markPoolImageViewed,
   incrementPoolImageUse, insertPoolImage, insertMessage, getActiveSubscription,
   insertImageGeneration,
-  incrementGems,
   getSpendState, updateSpendState,
   saveContentTags, getUserTopTags
 } from '@/lib/db-queries'

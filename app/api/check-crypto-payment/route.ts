@@ -2,30 +2,20 @@
 
 import { NextResponse } from 'next/server'
 import { authenticateTelegramRequest } from '@/lib/telegram-auth'
-import { queryOne } from '@/lib/turso'
 import {
   getUser,
-  getPurchaseByChargeId,
-  insertStarPurchase,
-  incrementGemsAndPurchased,
-  insertGemTransaction,
-  getUniqueBuyers,
-  insertReferralCommission,
-  incrementPayingReferrals,
-  incrementGems,
+  proveAppliedPurchase,
+  applyGemPurchaseAtomic,
+  resolveCommissionTarget,
+  type CommissionTarget,
+  type GemPurchaseOutcome,
   getLastPurchase, // ✅ FIX #1: Importado para unificar lógica de VIPs
 } from '@/lib/db-queries'
+import { resolveCryptoPurchase } from '@/lib/gem-payments'
 import {
   CRYPTO_PACKAGES,
   MESSAGE_PACKAGES,
   HYBRID_PACKAGES,
-  getFinalCryptoGems,
-  getFinalCryptoMessages,
-  REFERRAL_PURCHASE_COMMISSION_PCT,
-  REFERRAL_TOP_TIER_THRESHOLD,
-  REFERRAL_TOP_TIER_PCT,
-  REFERRAL_ELITE_TIER_THRESHOLD,
-  REFERRAL_ELITE_TIER_PCT,
 } from '@/lib/constants'
 
 const TONAPI_KEY = process.env.TONAPI_KEY || ''
@@ -39,70 +29,6 @@ type PackageType = (typeof VALID_PACKAGE_TYPES)[number]
 
 function isPackageType(v: any): v is PackageType {
   return VALID_PACKAGE_TYPES.includes(v)
-}
-
-// ═══════════════════════════════════════════════════════════════
-// Comisión al referidor (Turso)
-// ═══════════════════════════════════════════════════════════════
-async function payReferralCommission(
-  buyerTid: string,
-  gemsEquivalent: number,
-  source: string,
-  reference: string
-): Promise<void> {
-  try {
-    const buyer = await getUser(buyerTid)
-    if (!buyer?.referred_by) return
-
-    const referrerId = String(buyer.referred_by)
-
-    const referrer = await getUser(referrerId)
-    if (!referrer) return
-
-    const uniqueBuyers = await getUniqueBuyers(referrerId)
-    uniqueBuyers.add(buyerTid)
-
-    const totalUnique = uniqueBuyers.size
-
-    let pct = REFERRAL_PURCHASE_COMMISSION_PCT
-    if (totalUnique >= REFERRAL_ELITE_TIER_THRESHOLD) {
-      pct = REFERRAL_ELITE_TIER_PCT
-    } else if (totalUnique >= REFERRAL_TOP_TIER_THRESHOLD) {
-      pct = REFERRAL_TOP_TIER_PCT
-    }
-
-    const commission = Math.floor((gemsEquivalent * pct) / 100)
-    if (commission <= 0) return
-
-    await incrementGems(referrerId, commission)
-    await incrementPayingReferrals(referrerId, totalUnique)
-
-    await insertGemTransaction({
-      telegram_id: referrerId,
-      amount: commission,
-      transaction_type: 'referral_commission',
-      description: `Comisión ${pct}% por compra de referido`,
-    })
-
-    await insertReferralCommission({
-      referrer_id: referrerId,
-      referred_id: buyerTid,
-      purchase_gems: gemsEquivalent,
-      commission_gems: commission,
-      commission_pct: pct,
-      source,
-      reference,
-    })
-
-    console.log('[commission] ✅ Pagada:', {
-      referrerId,
-      commission,
-      pct,
-      totalUnique,
-    })
-  } catch (e) {
-    console.error('[commission] Error:', e)
-  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -179,9 +105,34 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Package index inválido' }, { status: 400 })
     }
 
-    // ─── Idempotencia por reference ───
-    const existing = await getPurchaseByChargeId(reference)
-    if (existing) {
+    // ─── Plan derivado del catálogo (importes y recursos del servidor) ───
+    const resolvedPlan = resolveCryptoPurchase({
+      package_type: packageType,
+      package_index: packageIndex,
+      reference,
+    })
+
+    if (!resolvedPlan.ok) {
+      console.error('[check-crypto-payment] Paquete no resoluble:', {
+        reference,
+        reason: resolvedPlan.reason,
+      })
+      return NextResponse.json({ error: 'Paquete no válido' }, { status: 400 })
+    }
+
+    const plan = resolvedPlan.plan
+
+    // ─── Idempotencia estricta por reference ───
+    // Se reutiliza la misma prueba que aplica la transacción: usuario, cargo,
+    // método, importes y movimiento contable esperado. Una compra antigua
+    // ('review_required') o inconsistente NUNCA se da por duplicada: se
+    // responde conflicto sin acreditar.
+    const previous = await proveAppliedPurchase(
+      { telegram_id: telegramId, telegram_charge_id: reference },
+      plan
+    )
+
+    if (previous.state === 'applied') {
       const u = await getUser(telegramId)
       return NextResponse.json({
         status: 'paid',
@@ -189,6 +140,19 @@ export async function POST(request: Request) {
         remaining_gems: u?.gems || 0,
         remaining_purchased_gems: u?.purchased_gems || 0,
         remaining_bonus_gems: u?.bonus_gems || 0,
+      })
+    }
+
+    if (previous.state === 'conflict' && previous.reason !== 'purchase_absent') {
+      console.error('[check-crypto-payment] ⚠️ Cargo requiere conciliación:', {
+        reference,
+        reason: previous.reason,
+      })
+      return NextResponse.json({
+        status: 'error',
+        reason: 'conflict',
+        reference,
+        message: `El pago (${reference}) figura registrado pero no pudimos verificar su acreditación. Contacta a soporte con esta referencia.`,
       })
     }
 
@@ -271,40 +235,76 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
     }
 
-    let gemsToAdd = 0
-    let messagesToAdd = 0
+    // (1) Base de comisión EXCLUSIVAMENTE del plan validado del servidor.
+    const commissionBase =
+      plan.credit_gems + Math.floor(plan.credit_messages / 3)
 
-    if (isHybrid) {
-      gemsToAdd = (pkg as any).crypto_final_gems
-      messagesToAdd = (pkg as any).crypto_final_messages
-    } else if (isMessages) {
-      messagesToAdd = getFinalCryptoMessages(pkg as any)
-    } else {
-      gemsToAdd = getFinalCryptoGems(pkg as any)
+    // (2) Referidor resuelto en servidor (users.referred_by), después de
+    // verificar pago, importe y referencia, y antes de la transacción.
+    // Contrato: commission_lookup_failed ⇒ 503 reintentable;
+    // commission_referrer_missing ⇒ 200 con review_required. Ninguno consume
+    // el reference, por lo que el pago puede aplicarse después.
+    let commission: CommissionTarget | null = null
+    try {
+      const resolvedCommission = await resolveCommissionTarget(
+        telegramId,
+        commissionBase
+      )
+      if (resolvedCommission.status === 'resolved') {
+        commission = resolvedCommission.target
+      } else if (resolvedCommission.status === 'referrer_missing') {
+        console.error(
+          '[check-crypto-payment] referidor inexistente; pago pendiente de revisión:',
+          { reference, telegramId }
+        )
+        return NextResponse.json({
+          status: 'error',
+          reason: 'commission_referrer_missing',
+          reference,
+          review_required: true,
+        })
+      }
+    } catch (lookupError: any) {
+      console.error(
+        '[check-crypto-payment] comisión no resoluble; pago pendiente:',
+        { reference, message: lookupError?.message }
+      )
+      return NextResponse.json(
+        {
+          status: 'error',
+          reason: 'commission_lookup_failed',
+          reference,
+          retryable: true,
+        },
+        { status: 503 }
+      )
     }
 
-    // ✅ FIX #3: Cálculo de comisión justo usando el valor real de las gemas + equivalencia en mensajes
-    // (1 mensaje ≈ 1/3 de gema, según los paquetes base)
-    const commissionBase = isHybrid || isMessages
-      ? gemsToAdd + Math.floor(messagesToAdd / 3)
-      : gemsToAdd
+    // ─── Aplicación atómica: cargo + recursos + movimiento contable ───
+    // H-3: registro, acreditación, asiento y status='applied' se confirman en
+    // una única transacción. Si algo falla se revierte todo y el sondeo del
+    // cliente puede reintentar el mismo reference.
+    let outcome: GemPurchaseOutcome
+    try {
+      outcome = await applyGemPurchaseAtomic({
+        telegram_id: telegramId,
+        telegram_charge_id: reference,
+        is_first_purchase: isUserFirstPurchase,
+        plan,
+        ...(commission ? { commission } : {}),
+      })
+    } catch (creditError: any) {
+      console.error('[check-crypto-payment] ❌ Error acreditando balance:', creditError)
+      return NextResponse.json({
+        status: 'error',
+        reason: 'credit_failed',
+        reference,
+        message: `Pago recibido (${reference}) pero hubo un error acreditando tu balance. Contacta a soporte con esta referencia.`,
+      })
+    }
 
-    // ─── Insertar purchase (con UNIQUE constraint anti-doble) ───
-    const inserted = await insertStarPurchase({
-      telegram_id: telegramId,
-      stars_amount: 0,
-      gems_amount: isHybrid ? gemsToAdd : isMessages ? 0 : gemsToAdd,
-      is_first_purchase: isUserFirstPurchase,
-      telegram_charge_id: reference,
-      payment_method: isHybrid
-        ? 'crypto_hybrid'
-        : isMessages
-          ? 'crypto_messages'
-          : 'crypto',
-    })
-
-    if (!inserted) {
-      // Race: ya se procesó en otra request concurrente
+    if (outcome.status === 'duplicate') {
+      // Cargo ya aplicado y verificado: se informa sin volver a acreditar.
       console.log('[check-crypto-payment] Charge ya procesado, ignorando')
       const u = await getUser(telegramId)
       return NextResponse.json({
@@ -316,93 +316,43 @@ export async function POST(request: Request) {
       })
     }
 
-    // ─── Acreditar saldo ───
-    let newGems = user.gems || 0
-    let newPurchasedGems = user.purchased_gems || 0
-    let newBonusGems = user.bonus_gems || 0
-
-    try {
-      if (isHybrid) {
-        if (gemsToAdd > 0) {
-          const rpcGems = await incrementGemsAndPurchased(telegramId, gemsToAdd)
-          newGems = rpcGems.new_gems
-          newPurchasedGems = rpcGems.new_purchased
-        }
-
-        if (messagesToAdd > 0) {
-          const rpcMessages = await queryOne<{ bonus_gems: number }>(
-            `UPDATE users 
-             SET bonus_gems = COALESCE(bonus_gems, 0) + ?, 
-                 hook_messages_remaining = 0,
-                 updated_at = datetime('now')
-             WHERE telegram_id = ? 
-             RETURNING bonus_gems`,
-            [messagesToAdd, telegramId]
-          )
-          newBonusGems = rpcMessages?.bonus_gems ?? newBonusGems
-        }
-      } else if (isMessages) {
-        const rpc = await queryOne<{ bonus_gems: number }>(
-          `UPDATE users 
-           SET bonus_gems = COALESCE(bonus_gems, 0) + ?, 
-               hook_messages_remaining = 0,
-               updated_at = datetime('now')
-           WHERE telegram_id = ? 
-           RETURNING bonus_gems`,
-          [messagesToAdd, telegramId]
-        )
-        newBonusGems = rpc?.bonus_gems ?? newBonusGems
-      } else {
-        const rpc = await incrementGemsAndPurchased(telegramId, gemsToAdd)
-        newGems = rpc.new_gems
-        newPurchasedGems = rpc.new_purchased
-      }
-    } catch (creditError: any) {
-      console.error('[check-crypto-payment] ❌ Error acreditando balance:', creditError)
+    if (outcome.status === 'conflict') {
+      console.error('[check-crypto-payment] ⚠️ Cargo requiere conciliación:', {
+        reference,
+        reason: outcome.reason,
+      })
       return NextResponse.json({
         status: 'error',
-        reason: 'credit_failed',
+        reason: 'conflict',
         reference,
-        message: `Pago recibido (${reference}) pero hubo un error acreditando tu balance. Contacta a soporte con esta referencia.`,
+        message: `El pago (${reference}) figura registrado pero no pudimos verificar su acreditación. Contacta a soporte con esta referencia.`,
       })
     }
 
-    // ─── Registrar transacción ───
-    const txAmount = isMessages ? 0 : gemsToAdd
-    const txType = isHybrid
-      ? 'crypto_purchase_hybrid'
-      : isMessages
-        ? 'crypto_purchase_messages'
-        : 'crypto_purchase'
-    
-    // ✅ FIX #4: Usar `expectedUnits / 1_000_000` en lugar de `pkg.usdt`
-    const usdtAmount = expectedUnits / 1_000_000
-    const txDesc = isHybrid
-      ? `Compra crypto híbrida ${usdtAmount} USDT - ${gemsToAdd} gemas + ${messagesToAdd} mensajes (${reference})`
-      : isMessages
-        ? `Compra crypto ${usdtAmount} USDT - ${messagesToAdd} mensajes (${reference})`
-        : `Compra crypto ${usdtAmount} USDT - ${gemsToAdd} gemas (${reference})`
+    if (outcome.status === 'user_missing') {
+      return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
+    }
 
-    await insertGemTransaction({
-      telegram_id: telegramId,
-      amount: txAmount,
-      transaction_type: txType,
-      description: txDesc,
-    })
-
-    // ─── Pagar comisión al referidor ───
-    await payReferralCommission(telegramId, commissionBase, 'crypto', reference)
+    if (outcome.commission_note === 'commission_transient_failure') {
+      console.error(
+        '[check-crypto-payment] comisión pendiente de conciliación:',
+        { reference }
+      )
+    }
 
     return NextResponse.json({
       status: 'paid',
-      amount_added: isMessages ? messagesToAdd : gemsToAdd,
-      gems_added: gemsToAdd,
-      messages_added: messagesToAdd,
+      commission_applied: outcome.commission_applied,
+      commission_pending:
+        outcome.commission_note === 'commission_transient_failure',
+      amount_added: isMessages ? plan.credit_messages : plan.credit_gems,
+      gems_added: plan.credit_gems,
+      messages_added: plan.credit_messages,
       is_messages: isMessages,
       is_hybrid: isHybrid,
-      remaining_gems: newGems,
-      remaining_purchased_gems: newPurchasedGems,
-      remaining_bonus_gems: newBonusGems,
+      remaining_gems: outcome.gems,
+      remaining_purchased_gems: outcome.purchased_gems,
+      remaining_bonus_gems: outcome.bonus_gems,
     })
   } catch (e: any) {
     console.error('[check-crypto-payment] Error:', e)

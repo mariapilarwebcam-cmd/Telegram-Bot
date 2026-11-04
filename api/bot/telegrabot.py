@@ -2,6 +2,9 @@ import os
 import random
 import string
 import logging
+import asyncio
+import time
+import httpx
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 from dotenv import load_dotenv
@@ -13,6 +16,10 @@ from aiogram.types import (
     InlineKeyboardMarkup,
 )
 from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
+from aiogram.exceptions import (
+    TelegramBadRequest, TelegramForbiddenError, TelegramRetryAfter,
+    TelegramServerError, TelegramNetworkError,
+)
 
 from turso_client import turso_query, turso_query_one, turso_execute
 
@@ -197,151 +204,590 @@ async def create_user_immediately(
         return None
 
 
-async def add_gems(telegram_id: int, amount: int, transaction_type: str, description: str = ''):
-    try:
-        turso_query_one(
-            """UPDATE users
-             SET gems = COALESCE(gems, 0) + ?,
-                 updated_at = ?
-             WHERE telegram_id = ?
-             RETURNING gems""",
-            [amount, datetime.now(timezone.utc).isoformat(), str(telegram_id)]
-        )
-        turso_execute(
-            """INSERT INTO gem_transactions
-              (telegram_id, amount, transaction_type, description)
-             VALUES (?, ?, ?, ?)""",
-            [str(telegram_id), amount, transaction_type, description]
-        )
-        return True
-    except Exception as e:
-        logger.error(f"Error en add_gems: {e}")
-        return False
+# add_gems se retiro (R4): acreditaba gemas en dos escrituras independientes
+# (saldo + asiento) y no tenia llamadores. Toda acreditacion pasa por el
+# procesador transaccional.
 
 
 # ==================== REFERRAL COMMISSION ====================
-
-async def pay_referral_commission(
-    buyer_id: int,
-    gems_purchased: int,
-    source: str,
-    reference: str,
-    bot: Optional[Bot] = None,
-):
-    try:
-        buyer = await get_user(buyer_id)
-        if not buyer:
-            return
-
-        referrer_id = buyer.get('referred_by')
-        if not referrer_id:
-            return
-
-        referrer = await get_user(int(referrer_id))
-        if not referrer:
-            return
-
-        existing_rows = turso_query(
-            "SELECT referred_id FROM referral_commissions WHERE referrer_id = ?",
-            [str(referrer_id)]
-        )
-
-        unique_buyers = set()
-        for row in existing_rows:
-            unique_buyers.add(str(row['referred_id']))
-        unique_buyers.add(str(buyer_id))
-
-        total_unique = len(unique_buyers)
-
-        if total_unique >= REFERRAL_ELITE_TIER_THRESHOLD:
-            pct = REFERRAL_ELITE_TIER_PCT
-        elif total_unique >= REFERRAL_TOP_TIER_THRESHOLD:
-            pct = REFERRAL_TOP_TIER_PCT
-        else:
-            pct = REFERRAL_PURCHASE_COMMISSION_PCT
-
-        commission = int(gems_purchased * pct / 100)
-        if commission <= 0:
-            return
-
-        now_iso = datetime.now(timezone.utc).isoformat()
-        rpc_row = turso_query_one(
-            """UPDATE users
-             SET gems = COALESCE(gems, 0) + ?,
-                 updated_at = ?
-             WHERE telegram_id = ?
-             RETURNING gems""",
-            [commission, now_iso, str(referrer_id)]
-        )
-        new_ref_gems = rpc_row['gems'] if rpc_row else 0
-
-        turso_execute(
-            "UPDATE users SET paying_referrals_count = ?, updated_at = ? WHERE telegram_id = ?",
-            [total_unique, now_iso, str(referrer_id)]
-        )
-
-        turso_execute(
-            """INSERT INTO gem_transactions
-              (telegram_id, amount, transaction_type, description)
-             VALUES (?, ?, ?, ?)""",
-            [
-                str(referrer_id),
-                commission,
-                'referral_commission',
-                f'Comisión {pct}% por compra de referido',
-            ]
-        )
-
-        turso_execute(
-            """INSERT INTO referral_commissions
-              (referrer_id, referred_id, purchase_gems, commission_gems,
-               commission_pct, source, reference)
-             VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            [
-                str(referrer_id),
-                str(buyer_id),
-                gems_purchased,
-                commission,
-                pct,
-                source,
-                reference,
-            ]
-        )
-
-        logger.info(f"Commission paid: {commission} gems to {referrer_id} ({pct}%)")
-
-        if bot is not None:
-            try:
-                lang = referrer.get('language', 'es')
-                if lang == 'es':
-                    text = (
-                        f"🎉 *¡Tu referido compró gemas!*\n\n"
-                        f"💎 Compra: *{gems_purchased}* gemas\n"
-                        f"💰 Comisión ({pct}%): *+{commission}* gemas\n\n"
-                        f"💎 Tus gemas totales: *{new_ref_gems}*"
-                    )
-                else:
-                    text = (
-                        f"🎉 *Your referral bought gems!*\n\n"
-                        f"💎 Purchase: *{gems_purchased}* gems\n"
-                        f"💰 Commission ({pct}%): *+{commission}* gems\n\n"
-                        f"💎 Your total gems: *{new_ref_gems}*"
-                    )
-                await bot.send_message(
-                    chat_id=int(referrer_id),
-                    text=text,
-                    parse_mode="Markdown",
-                )
-            except Exception as e:
-                logger.error(f"Error notificando comisión: {e}")
-        else:
-            logger.warning(f"[commission] no bot instance, skipping notification for {referrer_id}")
-
-    except Exception as e:
-        logger.error(f"Error pagando comisión: {e}")
+# pay_referral_commission se retiro (R4): pagaba la comision con cuatro
+# escrituras HTTP independientes (saldo, contador, asiento y comision) y no
+# tenia llamadores. La comision la acredita ahora applyGemPurchaseAtomic en una
+# unica transaccion; la notificacion usa _notify_referral_commission.
 
 
 # ==================== PURCHASE HELPERS ====================
+
+class StarPurchaseTransientError(RuntimeError):
+    """Fallo recuperable al aplicar un pago de Stars.
+
+    El procesador no registra nada si falla, así que el cargo NO queda
+    consumido y un reintento posterior puede acreditarlo.
+    """
+
+
+GEM_PROCESSOR_TIMEOUT = 20.0
+GEM_PROCESSOR_ATTEMPTS = 3
+
+
+async def _call_gem_processor(payment_facts: dict) -> dict:
+    """Llama al procesador interno (TypeScript) que aplica el pago de forma atómica.
+
+    Autenticación entre servicios con GEM_PROCESSOR_SECRET. Solo se envían
+    hechos del pago: el procesador deriva paquete, gemas y mensajes del
+    catálogo y jamás acepta importes del llamador.
+    """
+    secret = os.getenv('GEM_PROCESSOR_SECRET', '').strip()
+    if not secret:
+        # Sin secreto no hay acreditación posible: nunca se cae a escrituras
+        # directas ni se confirma la compra al usuario.
+        raise StarPurchaseTransientError('GEM_PROCESSOR_SECRET no configurado')
+
+    url = f"{MINI_APP_URL.rstrip('/')}/api/bot/gem-payments"
+    headers = {
+        'Authorization': f'Bearer {secret}',
+        'Content-Type': 'application/json',
+    }
+
+    last_error: Optional[Exception] = None
+
+    for attempt in range(1, GEM_PROCESSOR_ATTEMPTS + 1):
+        try:
+            # AsyncClient: no bloquea el event loop del bot.
+            async with httpx.AsyncClient(timeout=GEM_PROCESSOR_TIMEOUT) as client:
+                response = await client.post(url, headers=headers, json=payment_facts)
+        except Exception as e:  # red, DNS, timeout
+            last_error = e
+            logger.warning(f'[stars] procesador inaccesible (intento {attempt}): {e}')
+            await asyncio.sleep(0.5 * attempt)
+            continue
+
+        if response.status_code == 200:
+            try:
+                return response.json()
+            except Exception as e:
+                last_error = e
+                logger.warning(f'[stars] respuesta no-JSON (intento {attempt}): {e}')
+                await asyncio.sleep(0.5 * attempt)
+                continue
+
+        if response.status_code == 409:
+            # El cargo existe pero no se puede probar su acreditación: requiere
+            # conciliación. NO es un rechazo: se conserva como conflicto.
+            reason = ''
+            try:
+                reason = str((response.json() or {}).get('reason') or '')
+            except Exception:
+                reason = ''
+            logger.error(f'[stars] cargo en conflicto (HTTP 409): {reason}')
+            return {'status': 'conflict', 'reason': reason, 'http_status': 409}
+
+        if response.status_code in (400, 401, 404):
+            # Rechazo definitivo: no se reintenta y nunca se confirma.
+            return {'status': 'rejected', 'http_status': response.status_code}
+
+        last_error = RuntimeError(f'HTTP {response.status_code}')
+        logger.warning(f'[stars] procesador HTTP {response.status_code} (intento {attempt})')
+        await asyncio.sleep(0.5 * attempt)
+
+    raise StarPurchaseTransientError(f'procesador no disponible: {last_error}')
+
+
+# _pay_purchase_commission se retiro (R4): calculaba la base con los importes
+# del procesador y delegaba en pay_referral_commission. Ambos quedaron sin
+# llamadores cuando la comision paso a applyGemPurchaseAtomic (transaccional).
+
+
+# ==================== REFERRAL NOTIFICATION (Stars) ====================
+# Python NO mueve dinero: solo lee referral_commissions/users y escribe en
+# referral_commission_notifications. La comisión la acredita TypeScript.
+#
+# Taxonomía de last_error (no cambia el esquema de 006):
+#   rejected_permanent  → Telegram rechazó definitivamente. No se entregó.
+#   attempts_exhausted  → 5 intentos sin rechazo definitivo. Entrega DESCONOCIDA.
+#   unknown_delivery    → red/timeout/400 no reconocido. Entrega INCIERTA.
+#   db_error            → fallo de preparación; nada se envió.
+#   referrer_missing    → el referidor ya no existe; nada se envió.
+# IMPORTANTE: status='failed' NO prueba que Telegram no entregara el mensaje;
+# significa "sin más intentos automáticos" y requiere revisión manual.
+
+NOTIFICATION_LEASE_MINUTES = 15
+NOTIFICATION_MAX_ATTEMPTS = 5
+NOTIFICATION_UNKNOWN_DELAY_SECONDS = 900  # 15 min para entrega incierta
+
+_PERMANENT_BAD_REQUEST = (
+    'chat not found',
+    'user not found',
+    'bot was blocked',
+    'peer_id_invalid',
+    'chat_id is empty',
+    'message is too long',
+    "can't parse entities",
+    'unsupported parse_mode',
+)
+
+
+def _iso_ms(dt: datetime) -> str:
+    """ISO-8601 UTC con milisegundos (mismo formato que strftime('%f') de SQLite)."""
+    return dt.strftime('%Y-%m-%dT%H:%M:%S.') + f'{dt.microsecond // 1000:03d}Z'
+
+
+def _backoff_seconds(attempts: int) -> int:
+    return min(2 ** max(attempts, 1), 16) * 60
+
+
+def _notification_state() -> Optional[dict]:
+    return turso_query_one(
+        "SELECT enabled, min_commission_id FROM referral_notification_state WHERE id = 1"
+    )
+
+
+def _star_commission(buyer_id: int, charge_id: str) -> Optional[dict]:
+    return turso_query_one(
+        """SELECT id, referrer_id, referred_id, reference, purchase_gems,
+                  commission_gems, commission_pct
+             FROM referral_commissions
+            WHERE referred_id = ? AND reference = ? AND source = 'stars'
+            LIMIT 1""",
+        [str(buyer_id), str(charge_id)],
+    )
+
+
+def _claim_notification(notification_id: int, now: str) -> Optional[str]:
+    """Claim atómico: verifica enabled=1, source='stars', corte y attempt_count."""
+    token = os.urandom(16).hex()
+    lease = _iso_ms(datetime.now(timezone.utc) + timedelta(minutes=NOTIFICATION_LEASE_MINUTES))
+    res = turso_execute(
+        """UPDATE referral_commission_notifications
+              SET status = 'sending', claim_token = ?, lease_until = ?,
+                  attempt_count = attempt_count + 1, updated_at = ?
+            WHERE id = ?
+              AND attempt_count < ?
+              AND EXISTS (
+                    SELECT 1
+                      FROM referral_notification_state s
+                      JOIN referral_commissions c
+                        ON c.id = referral_commission_notifications.referral_commission_id
+                     WHERE s.id = 1
+                       AND s.enabled = 1
+                       AND c.source = 'stars'
+                       AND c.id > s.min_commission_id
+              )
+              AND (
+                   (status = 'pending'
+                    AND (next_attempt_at IS NULL OR next_attempt_at <= ?))
+                   OR
+                   (status = 'sending'
+                    AND lease_until IS NOT NULL AND lease_until <= ?)
+              )""",
+        [token, lease, now, notification_id, NOTIFICATION_MAX_ATTEMPTS, now, now],
+    )
+    return token if int(res.get('affected_row_count') or 0) == 1 else None
+
+
+def _finish_notification(notification_id: int, token: str, status: str,
+                         error: Optional[str] = None,
+                         next_attempt_at: Optional[str] = None) -> int:
+    """Devuelve affected_row_count. 0 ⇒ el token ya no es nuestro (claim_lost)."""
+    now = _iso_ms(datetime.now(timezone.utc))
+    if status == 'sent':
+        res = turso_execute(
+            """UPDATE referral_commission_notifications
+                  SET status = 'sent', sent_at = ?, updated_at = ?,
+                      claim_token = NULL, lease_until = NULL, last_error = NULL
+                WHERE id = ? AND claim_token = ? AND status = 'sending'""",
+            [now, now, notification_id, token],
+        )
+        return int(res.get('affected_row_count') or 0)
+    res = turso_execute(
+        """UPDATE referral_commission_notifications
+              SET status = ?, claim_token = NULL, lease_until = NULL,
+                  next_attempt_at = ?, last_error = ?, updated_at = ?
+            WHERE id = ? AND claim_token = ? AND status = 'sending'""",
+        [status, next_attempt_at, error, now, notification_id, token],
+    )
+    return int(res.get('affected_row_count') or 0)
+
+
+def _exhaust_notification(notification_id: int) -> int:
+    """Punto de entrada de 4b-3 para filas agotadas: marca 'failed' SIN reenviar.
+
+    Solo actúa sobre 'pending' o 'sending' con lease vencido: nunca roba un envío vivo.
+    """
+    now = _iso_ms(datetime.now(timezone.utc))
+    res = turso_execute(
+        """UPDATE referral_commission_notifications
+              SET status = 'failed', claim_token = NULL, lease_until = NULL,
+                  last_error = 'attempts_exhausted', updated_at = ?
+            WHERE id = ?
+              AND attempt_count >= ?
+              AND (
+                   status = 'pending'
+                   OR (status = 'sending'
+                       AND lease_until IS NOT NULL AND lease_until <= ?)
+              )""",
+        [now, notification_id, NOTIFICATION_MAX_ATTEMPTS, now],
+    )
+    return int(res.get('affected_row_count') or 0)
+
+
+def _release_preparation_claim(notification_id: int, token: str, attempts: int) -> None:
+    """Libera un claim cuando la preparación falló (nada se envió).
+
+    Si ya se consumió el último intento, marca 'failed' (sin sexto envío).
+    """
+    try:
+        if attempts >= NOTIFICATION_MAX_ATTEMPTS:
+            if _finish_notification(notification_id, token, 'failed',
+                                    'attempts_exhausted') == 0:
+                logger.error(f'[notify] claim_lost al marcar failed id={notification_id}')
+            return
+        nxt = _iso_ms(datetime.now(timezone.utc)
+                      + timedelta(seconds=_backoff_seconds(attempts)))
+        if _finish_notification(notification_id, token, 'pending', 'db_error', nxt) == 0:
+            logger.error(f'[notify] claim_lost en preparación id={notification_id}')
+    except Exception:
+        logger.error(f'[notify] no se pudo liberar el claim id={notification_id}')
+
+
+def _classify_telegram_error(exc: Exception):
+    """Devuelve (clase, código, retry_after_segundos). Sin datos sensibles."""
+    if isinstance(exc, TelegramRetryAfter):
+        return 'transient', 'retry_after', int(getattr(exc, 'retry_after', 1) or 1)
+    if isinstance(exc, TelegramForbiddenError):
+        return 'permanent', 'forbidden', None
+    if isinstance(exc, TelegramBadRequest):
+        text = str(getattr(exc, 'message', '') or exc).lower()
+        for marker in _PERMANENT_BAD_REQUEST:
+            if marker in text:
+                return 'permanent', 'bad_request_permanent', None
+        return 'unknown', 'bad_request_unknown', None
+    if isinstance(exc, TelegramServerError):
+        return 'transient', 'server_error', None
+    if isinstance(exc, TelegramNetworkError):
+        return 'unknown', 'unknown_delivery', None
+    return 'unknown', 'unknown_delivery', None
+
+
+def _build_notification_text(commission: dict, referrer: dict) -> str:
+    pct = int(commission['commission_pct'] or 0)
+    gems = int(commission['commission_gems'] or 0)
+    purchased = int(commission['purchase_gems'] or 0)
+    total = int(referrer.get('gems') or 0)
+    if referrer.get('language', 'es') == 'es':
+        return (f"🎉 *¡Tu referido compró gemas!*\n\n"
+                f"💎 Compra: *{purchased}* gemas\n"
+                f"💰 Comisión ({pct}%): *+{gems}* gemas\n\n"
+                f"💎 Tus gemas totales: *{total}*")
+    return (f"🎉 *Your referral bought gems!*\n\n"
+            f"💎 Purchase: *{purchased}* gems\n"
+            f"💰 Commission ({pct}%): *+{gems}* gems\n\n"
+            f"💎 Your total gems: *{total}*")
+
+
+async def _notify_referral_commission(result: dict, buyer_id: int,
+                                      charge_id: str, bot: Optional[Bot] = None) -> None:
+    """Notifica al referidor una comisión YA acreditada. Nunca lanza.
+
+    Fases: A preparación (nada enviado) · B envío · C confirmación (estado incierto).
+    """
+    try:
+        if bot is None:
+            return
+        if result.get('commission_pending'):
+            return
+        if not result.get('commission_applied'):
+            return
+
+        state = _notification_state()
+        if not state or int(state.get('enabled') or 0) != 1:
+            return
+
+        commission = _star_commission(buyer_id, charge_id)
+        if not commission:
+            return
+        if int(commission['id']) <= int(state.get('min_commission_id') or 0):
+            return
+
+        now = _iso_ms(datetime.now(timezone.utc))
+        turso_execute(
+            """INSERT OR IGNORE INTO referral_commission_notifications
+                 (referral_commission_id, referrer_id, referred_id, reference,
+                  status, created_at, updated_at)
+               VALUES (?, ?, ?, ?, 'pending', ?, ?)""",
+            [commission['id'], str(commission['referrer_id']),
+             str(commission['referred_id']), str(commission['reference']), now, now],
+        )
+
+        row = turso_query_one(
+            """SELECT id, status, attempt_count
+                 FROM referral_commission_notifications
+                WHERE referral_commission_id = ?""",
+            [commission['id']],
+        )
+        if not row:
+            return
+        if row['status'] in ('sent', 'failed'):
+            return
+        if int(row['attempt_count'] or 0) >= NOTIFICATION_MAX_ATTEMPTS:
+            _exhaust_notification(int(row['id']))
+            return
+
+        token = _claim_notification(int(row['id']), now)
+        if not token:
+            return
+
+        notification_id = int(row['id'])
+
+        # attempt_count REAL tras el claim: nunca el de la lectura previa.
+        try:
+            claimed = turso_query_one(
+                """SELECT attempt_count FROM referral_commission_notifications
+                    WHERE id = ? AND claim_token = ?""",
+                [notification_id, token],
+            )
+        except Exception as e:
+            # No conocemos el intento real: NO se libera el claim, NO se devuelve
+            # a 'pending' y NO se envía nada. La fila queda 'sending' con su
+            # claim_token y lease_until hasta que venza el lease (recuperación 4b-3).
+            logger.error(f'[notify] error leyendo attempt_count id={notification_id}: '
+                         f'{type(e).__name__}')
+            return
+
+        if not claimed:
+            logger.error(f'[notify] claim_lost tras reclamar id={notification_id}')
+            return
+
+        attempts = int(claimed['attempt_count'] or 0)
+
+
+        # FASE A: preparación (post-claim, pre-envío).
+        # A1. Lectura del referidor (solo lectura).
+        try:
+            referrer = turso_query_one(
+                "SELECT gems, language FROM users WHERE telegram_id = ? LIMIT 1",
+                [str(commission['referrer_id'])],
+            )
+        except Exception as e:
+            _release_preparation_claim(notification_id, token, attempts)
+            logger.error(f'[notify] error de preparación id={notification_id}: '
+                         f'{type(e).__name__}')
+            return
+
+        # A2. Referidor inexistente: clasificación PROPIA, fuera del except de
+        # preparación. Un fallo al registrar 'failed' no se reclasifica.
+        if not referrer:
+            try:
+                if _finish_notification(notification_id, token, 'failed',
+                                        'referrer_missing') == 0:
+                    logger.error(f'[notify] claim_lost al marcar referrer_missing '
+                                 f'id={notification_id}')
+            except Exception:
+                logger.error(f'[notify] no se pudo registrar referrer_missing '
+                             f'id={notification_id}')
+            return
+
+        # A3. Construcción del texto (si falla, es preparación).
+        try:
+            text = _build_notification_text(commission, referrer)
+        except Exception as e:
+            _release_preparation_claim(notification_id, token, attempts)
+            logger.error(f'[notify] error de preparación id={notification_id}: '
+                         f'{type(e).__name__}')
+            return
+
+        # FASE B: envío.
+        try:
+            await bot.send_message(chat_id=int(commission['referrer_id']),
+                                   text=text, parse_mode="Markdown")
+        except Exception as exc:
+            kind, code, retry_after = _classify_telegram_error(exc)
+            if kind == 'permanent':
+                next_status, final_code, delay = 'failed', 'rejected_permanent', None
+            elif attempts >= NOTIFICATION_MAX_ATTEMPTS:
+                next_status, final_code, delay = 'failed', 'attempts_exhausted', None
+            else:
+                next_status, final_code = 'pending', code
+                if retry_after:
+                    delay = retry_after
+                elif kind == 'unknown':
+                    delay = NOTIFICATION_UNKNOWN_DELAY_SECONDS
+                else:
+                    delay = _backoff_seconds(attempts)
+            nxt = (_iso_ms(datetime.now(timezone.utc) + timedelta(seconds=delay))
+                   if delay else None)
+            try:
+                if _finish_notification(notification_id, token, next_status,
+                                        final_code, nxt) == 0:
+                    logger.error(f'[notify] claim_lost al registrar fallo id={notification_id}')
+            except Exception:
+                logger.error(f'[notify] no se pudo registrar el fallo id={notification_id}')
+            logger.error(f'[notify] entrega no confirmada id={notification_id} code={code}')
+            return
+
+        # FASE C: confirmación (Telegram YA aceptó).
+        # Si falla, el estado es INCIERTO: no se libera ni se devuelve a pending.
+        try:
+            confirmed = _finish_notification(notification_id, token, 'sent')
+        except Exception as e:
+            logger.error(f'[notify] confirmación fallida id={notification_id} '
+                         f'code=confirm_error type={type(e).__name__}')
+            return
+        if confirmed == 0:
+            logger.error(f'[notify] claim_lost al confirmar id={notification_id}')
+        return
+
+    except Exception as e:
+        # Nunca altera el resultado de la compra.
+        logger.error(f'[notify] error no controlado: {type(e).__name__}')
+
+
+# ==================== REFERRAL NOTIFICATION SWEEP (4b-3) ====================
+# Una sola pasada acotada por invocacion, disparada por el cron diario.
+# No crea tareas en segundo plano ni bucles infinitos.
+#
+# LIMITE DE DURACION (importante): turso_client usa httpx SINCRONO dentro de
+# funciones async. Una consulta de BD bloqueada NO puede ser interrumpida por
+# asyncio.wait_for ni por el deadline: ambos solo deciden si se INICIA un nuevo
+# elemento. La duracion real la acota el timeout HTTP de turso_client (30 s por
+# llamada) y el maxDuration de la plataforma. La proteccion frente a un corte es
+# la IDEMPOTENCIA: la fila queda 'pending'/'sending' y la siguiente pasada la
+# recupera. SWEEP_ITEM_TIMEOUT solo puede cancelar la llamada async a Telegram.
+
+SWEEP_LIMIT = 20
+SWEEP_BUDGET_SECONDS = 25.0
+SWEEP_ITEM_TIMEOUT = 10
+
+_sweep_lock = asyncio.Lock()
+
+SWEEP_STATE_SQL = (
+    "SELECT enabled, min_commission_id, activated_at "
+    "FROM referral_notification_state WHERE id = 1"
+)
+
+SWEEP_DISCOVERY_SQL = """INSERT OR IGNORE INTO referral_commission_notifications
+    (referral_commission_id, referrer_id, referred_id, reference,
+     status, created_at, updated_at)
+SELECT c.id, c.referrer_id, c.referred_id, c.reference, 'pending', ?, ?
+  FROM referral_commissions c
+ WHERE c.source = 'stars'
+   AND EXISTS (
+        SELECT 1 FROM referral_notification_state s
+         WHERE s.id = 1
+           AND s.enabled = 1
+           AND s.activated_at IS NOT NULL
+           AND c.id > s.min_commission_id
+   )
+   AND NOT EXISTS (
+        SELECT 1 FROM referral_commission_notifications n
+         WHERE n.referral_commission_id = c.id
+   )
+ LIMIT ?"""
+
+SWEEP_CANDIDATES_SQL = """SELECT n.id AS notification_id,
+       n.referral_commission_id AS commission_id,
+       n.status, n.attempt_count,
+       c.referred_id, c.reference
+  FROM referral_commission_notifications n
+  JOIN referral_commissions c ON c.id = n.referral_commission_id
+ WHERE c.source = 'stars'
+   AND EXISTS (
+        SELECT 1 FROM referral_notification_state s
+         WHERE s.id = 1
+           AND s.enabled = 1
+           AND s.activated_at IS NOT NULL
+           AND c.id > s.min_commission_id
+   )
+   AND (
+        (n.status = 'pending'
+         AND (n.next_attempt_at IS NULL OR n.next_attempt_at <= ?))
+        OR
+        (n.status = 'sending'
+         AND n.lease_until IS NOT NULL AND n.lease_until <= ?)
+   )
+ ORDER BY n.id
+ LIMIT ?"""
+
+
+async def sweep_referral_notifications(bot, limit: int = SWEEP_LIMIT) -> dict:
+    """Una pasada acotada del barrido de notificaciones. Nunca lanza.
+
+    Reutiliza _notify_referral_commission: no duplica claim, envio ni confirmacion.
+    `limit` solo admite 1..SWEEP_LIMIT (nunca negativos, cero ni ampliaciones).
+    """
+    summary = {'processed': 0, 'sent': 0, 'failed': 0, 'skipped': 0,
+               'truncated': False, 'error': None, 'skipped_reason': None}
+
+    if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1 or limit > SWEEP_LIMIT:
+        summary['error'] = 'invalid_limit'
+        logger.error('[sweep] limite invalido rechazado')
+        return summary
+
+    if _sweep_lock.locked():
+        summary['skipped_reason'] = 'in_progress'
+        return summary
+
+    async with _sweep_lock:
+        # El presupuesto arranca ANTES de cualquier consulta.
+        deadline = time.monotonic() + SWEEP_BUDGET_SECONDS
+
+        try:
+            state = turso_query_one(SWEEP_STATE_SQL)
+        except Exception as e:
+            summary['error'] = 'lookup_failed'
+            logger.error(f'[sweep] estado ilegible: {type(e).__name__}')
+            return summary
+
+        if (not state or int(state.get('enabled') or 0) != 1
+                or not state.get('activated_at')):
+            summary['skipped_reason'] = 'disabled'
+            return summary
+
+        now = _iso_ms(datetime.now(timezone.utc))
+        try:
+            turso_execute(SWEEP_DISCOVERY_SQL, [now, now, limit])
+            rows = turso_query(SWEEP_CANDIDATES_SQL, [now, now, limit])
+        except Exception as e:
+            summary['error'] = 'lookup_failed'
+            logger.error(f'[sweep] consulta global fallida: {type(e).__name__}')
+            return summary
+
+        for row in rows:
+            if time.monotonic() >= deadline:
+                summary['truncated'] = True
+                break
+            summary['processed'] += 1
+            notification_id = int(row['notification_id'])
+            try:
+                await asyncio.wait_for(
+                    _notify_referral_commission(
+                        {'commission_applied': True},
+                        int(row['referred_id']),
+                        str(row['reference']),
+                        bot,
+                    ),
+                    timeout=SWEEP_ITEM_TIMEOUT,
+                )
+            except Exception as e:
+                summary['failed'] += 1
+                logger.error(f'[sweep] fallo id={notification_id}: {type(e).__name__}')
+                continue
+            try:
+                after = turso_query_one(
+                    "SELECT status FROM referral_commission_notifications WHERE id = ?",
+                    [notification_id],
+                )
+            except Exception:
+                after = None
+            status = str((after or {}).get('status') or '')
+            if status == 'sent':
+                summary['sent'] += 1
+            elif status == 'failed':
+                summary['failed'] += 1
+            else:
+                summary['skipped'] += 1
+        return summary
+
 
 async def record_star_purchase(
     telegram_id: int,
@@ -352,69 +798,68 @@ async def record_star_purchase(
     charge_id: str,
     purchase_type: str = 'gems',
     bot: Optional[Bot] = None,
-) -> bool:
-    try:
-        turso_execute(
-            """INSERT INTO star_purchases
-              (telegram_id, stars_amount, gems_amount, is_first_purchase,
-               telegram_charge_id, payment_method)
-             VALUES (?, ?, ?, ?, ?, ?)""",
-            [str(telegram_id), stars, gems_amount, 1 if is_first_purchase else 0, charge_id, purchase_type]
-        )
-    except Exception as e:
-        err_str = str(e)
-        if 'UNIQUE' in err_str or 'unique' in err_str.lower() or 'constraint' in err_str.lower():
-            logger.warning(f"⚠️ Charge {charge_id} ya procesado, ignorando")
-            return False
-        logger.error(f"Error insertando star_purchase: {err_str}")
-        return False
+    invoice_payload: str = '',
+) -> str:
+    """Aplica el pago de Stars mediante el procesador transaccional interno.
 
-    try:
-        now_iso = datetime.now(timezone.utc).isoformat()
+    Devuelve 'applied' | 'duplicate' | 'conflict' | 'rejected' | 'review_required'.
+    Lanza StarPurchaseTransientError si no se pudo confirmar.
 
-        if gems_amount > 0:
-            turso_query_one(
-                """UPDATE users
-                 SET gems = COALESCE(gems, 0) + ?,
-                     purchased_gems = COALESCE(purchased_gems, 0) + ?,
-                     hook_messages_remaining = 0,
-                     updated_at = ?
-                 WHERE telegram_id = ?
-                 RETURNING gems, purchased_gems""",
-                [gems_amount, gems_amount, now_iso, str(telegram_id)]
-            )
-
-        if messages_amount > 0:
-            turso_query_one(
-                """UPDATE users
-                 SET bonus_gems = COALESCE(bonus_gems, 0) + ?,
-                     hook_messages_remaining = 0,
-                     updated_at = ?
-                 WHERE telegram_id = ?
-                 RETURNING bonus_gems""",
-                [messages_amount, now_iso, str(telegram_id)]
-            )
-    except Exception as e:
-        logger.error(f"Error incrementando balance post-compra: {e}")
-
-    if gems_amount > 0:
-        turso_execute(
-            """INSERT INTO gem_transactions
-              (telegram_id, amount, transaction_type, description)
-             VALUES (?, ?, ?, ?)""",
-            [str(telegram_id), gems_amount, 'purchase', f'Compra con {stars} stars']
+    Este bot ya no escribe saldos, asientos ni estado de la compra: el
+    procesador los confirma en una única transacción (H-3). `gems_amount`,
+    `messages_amount` y `purchase_type` se conservan solo por compatibilidad de
+    firma; la comisión la calcula y acredita el procesador.
+    """
+    if not invoice_payload:
+        raise StarPurchaseTransientError(
+            f'payload de factura ausente para el cargo {charge_id}'
         )
 
-    # ✅ FIX: Comisión justa también para paquetes de solo mensajes
-    if purchase_type == 'hybrid':
-        commission_base = gems_amount + int(messages_amount / 3)
-    elif purchase_type == 'messages':
-        commission_base = int(messages_amount / 3) # ✅ AHORA SÍ SE CALCULA
-    else:
-        commission_base = gems_amount
+    result = await _call_gem_processor({
+        'provider': 'stars',
+        'telegram_id': str(telegram_id),
+        'telegram_charge_id': charge_id,
+        'invoice_payload': invoice_payload,
+        'currency': 'XTR',
+        'total_amount': stars,
+    })
 
-    await pay_referral_commission(telegram_id, commission_base, 'stars', charge_id, bot=bot)
-    return True
+    status = str(result.get('status') or '')
+
+    if status == 'applied':
+        # La compra ya está aplicada. La comisión se acredita DENTRO de la
+        # transacción del procesador (applyGemPurchaseAtomic): Python no vuelve
+        # a mover gemas ni a insertar comisiones. La notificación al referidor
+        # se trata aparte (Parche 4b).
+        await _notify_referral_commission(result, telegram_id, charge_id, bot)
+        return 'applied'
+
+    if status == 'duplicate':
+        return 'duplicate'
+
+    if status == 'conflict':
+        logger.error(
+            f'[stars] cargo {charge_id} requiere conciliación: {result.get("reason")}'
+        )
+        return 'conflict'
+
+    if status == 'rejected':
+        logger.error(
+            f'[stars] cargo {charge_id} rechazado (HTTP {result.get("http_status")})'
+        )
+        return 'rejected'
+
+    if status == 'review_required':
+        # Pago verificado pero no acreditable automáticamente (p. ej. referidor
+        # inexistente). No es transitorio: reintentar no cambia el resultado.
+        logger.error(
+            f'[stars] cargo {charge_id} requiere revisión: {result.get("reason")}'
+        )
+        return 'review_required'
+
+    raise StarPurchaseTransientError(
+        f'respuesta inesperada del procesador: {status or result}'
+    )
 
 
 # ==================== AGE VERIFICATION ====================
@@ -1077,15 +1522,48 @@ async def process_successful_payment(message: Message):
     prior_purchase_exists = await has_prior_purchase(telegram_id)
     is_user_first_purchase = not prior_purchase_exists
 
-    success = await record_star_purchase(
-        telegram_id, pkg['stars'], gems_amount, messages_amount,
-        is_user_first_purchase,
-        charge_id, purchase_type,
-        bot=message.bot,
-    )
+    try:
+        purchase_status = await record_star_purchase(
+            telegram_id, pkg['stars'], gems_amount, messages_amount,
+            is_user_first_purchase,
+            charge_id, purchase_type,
+            bot=message.bot,
+            invoice_payload=payload,
+        )
+    except StarPurchaseTransientError as e:
+        logger.critical(
+            f"[stars] pago sin acreditar charge={charge_id} user={telegram_id} "
+            f"payload={payload} stars={total_paid}: {e}"
+        )
+        return await message.answer(
+            "⚠️ Hemos recibido tu pago, pero aún no pudimos acreditarlo. "
+            f"Guarda este identificador y contacta a soporte: {charge_id}"
+        )
 
-    if not success:
+    # Comparación explícita de estados: nunca se usa el resultado como booleano
+    # (en Python cualquier cadena no vacía es truthy, incluido 'rejected').
+    if purchase_status == 'duplicate':
         return await message.answer("⚠️ Esta compra ya fue procesada anteriormente.")
+
+    if purchase_status in ('conflict', 'rejected', 'review_required'):
+        logger.critical(
+            f"[stars] pago no confirmado charge={charge_id} user={telegram_id} "
+            f"status={purchase_status} payload={payload} stars={total_paid}"
+        )
+        return await message.answer(
+            "⚠️ Tu pago figura en revisión y todavía no se ha acreditado. "
+            f"Contacta a soporte con este identificador: {charge_id}"
+        )
+
+    if purchase_status != 'applied':
+        # Defensivo: nunca se confirma una compra sin estado 'applied'.
+        logger.critical(
+            f"[stars] estado inesperado charge={charge_id} status={purchase_status}"
+        )
+        return await message.answer(
+            "⚠️ No pudimos confirmar tu compra. "
+            f"Contacta a soporte con este identificador: {charge_id}"
+        )
 
     user = await get_user(telegram_id)
     lang = user.get('language', 'es') if user else 'es'
