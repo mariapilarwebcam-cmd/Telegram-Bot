@@ -508,7 +508,19 @@ export default function GachaPage() {
               <span className="panel-dot" /><span className="panel-dot" /><span className="panel-dot" />
             </div>
             <button className="spin-btn" onClick={handleSpin} disabled={spinning}>
-              {spinning ? '✦ GIRANDO...' : '⚡ GIRAR'}
+              {spinning ? (
+                <>
+                  <span style={{ position: 'absolute', left: 16, fontSize: 18 }}>✦</span>
+                  <span>GIRANDO...</span>
+                  <span style={{ position: 'absolute', right: 16, fontSize: 18 }}>✦</span>
+                </>
+              ) : (
+                <>
+                  <span style={{ position: 'absolute', left: 16, fontSize: 20 }}>⚡</span>
+                  <span>GIRAR</span>
+                  <span style={{ position: 'absolute', right: 16, fontSize: 20 }}>⚡</span>
+                </>
+              )}
             </button>
           </div>
           
@@ -800,7 +812,7 @@ export default function GachaPage() {
 
         .control-panel { 
           background: linear-gradient(180deg, #150f24 0%, #0a0510 100%); 
-          padding: 8px 10px 18px; /* Modificado para dar espacio y no cortar */
+          padding: 10px 10px 14px; /* Ajustado para dar más aire vertical */
           display: flex; 
           align-items: center;
           justify-content: center; 
@@ -838,11 +850,9 @@ export default function GachaPage() {
           text-shadow: 0 1px 0 rgba(255,255,255,0.45);
           transition: transform 0.1s, box-shadow 0.2s; 
           overflow: hidden; 
-          /* Nuevas propiedades para centrar el texto y el emoji */
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: 8px;
           line-height: 1;
         }
         .spin-btn:hover { background-position: 100% 0; transform: translateY(-1px); }
@@ -880,22 +890,22 @@ export default function GachaPage() {
           order: 1;
           flex: 1 1 0;
           min-width: 0;
-          height: 58px; /* Modificado de 64px a 58px */
-          border-radius: 12px;
+          height: 52px; /* Reducido de 64px a 52px para evitar el recorte por desbordamiento */
+          border-radius: 8px;
           background:
             linear-gradient(180deg, rgba(38,20,54,0.98) 0%, rgba(10,5,20,1) 100%),
             repeating-linear-gradient(180deg, rgba(255,224,102,0.05) 0 1px, transparent 1px 6px);
           border: 1.5px solid rgba(236,72,153,0.65);
           box-shadow: inset 0 0 12px rgba(236,72,153,0.30), inset 0 1px 0 rgba(255,255,255,0.14), inset 0 -10px 16px rgba(0,0,0,0.9), 0 0 12px rgba(236,72,153,0.28);
-          display: flex; flex-direction: column; justify-content: center; gap: 7px;
+          display: flex; flex-direction: column; justify-content: center; gap: 5px; /* Gap reducido */
           align-items: flex-start; padding-left: 9px;
           pointer-events: none;
-          clip-path: polygon(0 5%, 100% 0, 100% 100%, 0 95%); /* Modificado para que no se corte feo */
+          clip-path: polygon(0 6%, 100% 0, 100% 100%, 0 94%); /* Ajustado para no cortar la punta */
         }
         .panel-side.left { order: 1; }
         .panel-side.right {
           order: 3; align-items: flex-end; padding-right: 8px; padding-left: 0;
-          clip-path: polygon(0 0, 100% 5%, 100% 95%, 0 100%); /* Modificado para que no se corte feo */
+          clip-path: polygon(0 0, 100% 6%, 100% 94%, 0 100%); /* Ajustado para no cortar la punta */
         }
         .panel-dot {
           width: 6px; height: 6px; border-radius: 50%;
