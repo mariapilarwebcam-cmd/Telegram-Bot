@@ -694,7 +694,6 @@ export default function GachaPage() {
       )}
 
       <style jsx>{`
-        /* ... (Mantén todos tus estilos CSS exactamente igual) ... */
         .cabinet { 
           position: relative; 
           width: 100%; 
@@ -801,7 +800,7 @@ export default function GachaPage() {
 
         .control-panel { 
           background: linear-gradient(180deg, #150f24 0%, #0a0510 100%); 
-          padding: 6px 10px 12px; 
+          padding: 8px 10px 18px; /* Modificado para dar espacio y no cortar */
           display: flex; 
           align-items: center;
           justify-content: center; 
@@ -839,6 +838,12 @@ export default function GachaPage() {
           text-shadow: 0 1px 0 rgba(255,255,255,0.45);
           transition: transform 0.1s, box-shadow 0.2s; 
           overflow: hidden; 
+          /* Nuevas propiedades para centrar el texto y el emoji */
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          line-height: 1;
         }
         .spin-btn:hover { background-position: 100% 0; transform: translateY(-1px); }
         .spin-btn:active { transform: scale(0.97); }
@@ -875,7 +880,7 @@ export default function GachaPage() {
           order: 1;
           flex: 1 1 0;
           min-width: 0;
-          height: 64px;
+          height: 58px; /* Modificado de 64px a 58px */
           border-radius: 12px;
           background:
             linear-gradient(180deg, rgba(38,20,54,0.98) 0%, rgba(10,5,20,1) 100%),
@@ -885,12 +890,12 @@ export default function GachaPage() {
           display: flex; flex-direction: column; justify-content: center; gap: 7px;
           align-items: flex-start; padding-left: 9px;
           pointer-events: none;
-          clip-path: polygon(0 10%, 100% 0, 100% 100%, 0 90%);
+          clip-path: polygon(0 5%, 100% 0, 100% 100%, 0 95%); /* Modificado para que no se corte feo */
         }
         .panel-side.left { order: 1; }
         .panel-side.right {
           order: 3; align-items: flex-end; padding-right: 8px; padding-left: 0;
-          clip-path: polygon(0 0, 100% 8%, 100% 92%, 0 100%);
+          clip-path: polygon(0 0, 100% 5%, 100% 95%, 0 100%); /* Modificado para que no se corte feo */
         }
         .panel-dot {
           width: 6px; height: 6px; border-radius: 50%;
