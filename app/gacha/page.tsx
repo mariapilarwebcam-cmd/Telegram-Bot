@@ -723,7 +723,7 @@ export default function GachaPage() {
           backdrop-filter: blur(10px);
           border-radius: 16px 16px 0 0; 
           padding: 14px 20px 12px; 
-          border: 2px solid #c4b5fd; 
+          border: 2px solid #b8860b; 
           border-bottom: none; 
           box-shadow: inset 0 4px 15px rgba(255,255,255,0.1), 0 0 15px rgba(196, 181, 253, 0.4);
         }
@@ -808,11 +808,12 @@ export default function GachaPage() {
           box-shadow: inset 0 5px 15px rgba(0,0,0,0.8), 0 0 14px rgba(168,85,247,0.16);
           position: relative;
           overflow: hidden;
+          width: 100%;
         }
         
         .spin-btn { 
           position: relative; 
-          width: 85%; 
+          width: 32%; 
           height: 50px; 
           border: none; 
           cursor: pointer; 
@@ -860,7 +861,7 @@ export default function GachaPage() {
         /* ── Paneles decorativos amplios (por debajo del botón) ── */
         .panel-side {
           position: absolute; top: 6px; bottom: 6px;
-          width: calc(50% - 6px);
+          width: calc(34% - 6px);
           border-radius: 10px;
           background:
             linear-gradient(180deg, rgba(24,17,44,0.95) 0%, rgba(9,5,18,0.98) 100%),
@@ -904,6 +905,16 @@ export default function GachaPage() {
           .arcane-sigil, .panel-dot, .control-panel::after, .cab-foot::after,
           .spin-btn::after, .mlight { animation: none !important; }
         }
+
+        /* ── Hombros dorados: conectan el encabezado con los laterales ── */
+        .cab-body::before, .cab-body::after {
+          content: ''; position: absolute; top: 0; width: 26px; height: 4px;
+          background: linear-gradient(90deg, #7a4f10 0%, #b8860b 100%);
+          box-shadow: 0 0 8px rgba(184,134,11,0.45);
+          pointer-events: none; z-index: 0;
+        }
+        .cab-body::before { left: 0; }
+        .cab-body::after { right: 0; background: linear-gradient(270deg, #7a4f10 0%, #b8860b 100%); }
 
         .glow-common { box-shadow: inset 0 0 30px rgba(129,140,248,0.3), 0 0 20px rgba(129,140,248,0.4); }
         .glow-rare { box-shadow: inset 0 0 30px rgba(6,182,212,0.5), 0 0 30px rgba(6,182,212,0.6); }
