@@ -2,6 +2,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from 'react'
+import { flushSync } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { useUser } from '@/lib/UserContext'
 import { tgFetch } from '@/lib/telegram-fetch'
@@ -98,7 +99,7 @@ const SHOWCASE_OUTFITS = [
 
 export default function GachaPage() {
   const router = useRouter()
-  const { user, loading: userLoading, lang, refresh, setUser } = useUser() // ✅ Añadido setUser
+  const { user, loading: userLoading, lang, refresh, setUser } = useUser()
   const t = getTranslations(lang)
 
   const [spinning, setSpinning] = useState(false)
@@ -331,7 +332,6 @@ export default function GachaPage() {
 
       currentResultData.current = data
 
-      // ✅ FIX 1: Actualizar las gemas en el contexto global al instante
       if (typeof data.remaining_purchased_gems === 'number') {
         setUser({
           ...user,
@@ -357,27 +357,32 @@ export default function GachaPage() {
       newItems[WIN_INDEX - 2] = decoy2
       newItems[WIN_INDEX - 3] = decoy3
 
-      setReelItems(newItems)
-
-      if (reelRef.current) {
-        reelRef.current.style.transition = 'none'
-        reelRef.current.style.transform = 'translateX(0px)'
-      }
-
       if (data.reward_type === 'gacha_character') {
         setOwnedCharacters(prev => [...prev, data.item_key])
       }
 
       if (instantSpin) {
-        setTimeout(() => {
-          const cw = reelWindowRef.current?.offsetWidth || 340
-          targetPos.current = (cw / 2) - (WIN_INDEX * ITEM_WIDTH + ITEM_WIDTH / 2)
-          if (reelRef.current) {
-            reelRef.current.style.transform = `translateX(${targetPos.current}px)`
-          }
-          finishSpin()
-        }, 100)
+        // ✅ FIX: render new items synchronously, then snap to the winner.
+        // No intermediate frame shows random prizes. flushSync guarantees the DOM
+        // contains the winning item at WIN_INDEX before we translate the strip.
+        flushSync(() => {
+          setReelItems(newItems)
+        })
+        const cw = reelWindowRef.current?.offsetWidth || 340
+        targetPos.current = (cw / 2) - (WIN_INDEX * ITEM_WIDTH + ITEM_WIDTH / 2)
+        if (reelRef.current) {
+          reelRef.current.style.transition = 'none'
+          reelRef.current.style.transform = `translateX(${targetPos.current}px)`
+        }
+        finishSpin()
       } else {
+        // Normal spin: reset to start position and animate. The "position 0" here
+        // is the legitimate animation start, not a bug.
+        setReelItems(newItems)
+        if (reelRef.current) {
+          reelRef.current.style.transition = 'none'
+          reelRef.current.style.transform = 'translateX(0px)'
+        }
         setTimeout(() => {
           const cw = reelWindowRef.current?.offsetWidth || 340
           targetPos.current = (cw / 2) - (WIN_INDEX * ITEM_WIDTH + ITEM_WIDTH / 2)
@@ -678,7 +683,6 @@ export default function GachaPage() {
             </p>
             <h2 style={{ fontSize: 22, fontWeight: 900, color: '#fff', margin: '12px 0', lineHeight: 1.3 }}>{result.reward_details}</h2>
             
-            {/* ✅ FIX 3: Aviso de tirada gratis VIP */}
             {result.is_free_spin && (
               <div style={{ marginBottom: 12, padding: '8px 12px', background: 'rgba(34, 197, 94, 0.15)', borderRadius: 12, border: '1px solid rgba(34, 197, 94, 0.4)' }}>
                 <p style={{ fontSize: 12, fontWeight: 800, color: '#22c55e', margin: 0 }}>
@@ -691,7 +695,6 @@ export default function GachaPage() {
               <p style={{ fontSize: 13, color: '#c4b5fd', margin: 0 }}>{result.tier === 'common' ? 'Se han añadido a tu saldo de chat.' : 'Se ha guardado en tu inventario.'}</p>
             </div>
 
-            {/* ✅ FIX 4: Botón para ir a usar el personaje si es un gacha_character */}
             {result.reward_type === 'gacha_character' ? (
               <button onClick={() => { setResult(null); router.push('/') }} className="modal-btn primary" style={{ width: '100%', padding: 16, fontSize: 15, fontWeight: 800, background: TIER_COLORS[result.tier as keyof typeof TIER_COLORS]?.color || '#a395c9', color: '#000', boxShadow: `0 8px 24px ${TIER_COLORS[result.tier as keyof typeof TIER_COLORS]?.color || '#a395c9'}60` }}>
                 ¡USAR PERSONAJE AHORA!
@@ -879,7 +882,6 @@ export default function GachaPage() {
           overflow: hidden;
         }
 
-        /* ── Símbolo arcano (detrás del título, decorativo) ── */
         .arcane-sigil {
           position: absolute; top: 50%; left: 50%;
           width: 74px; height: 74px; margin: -37px 0 0 -37px;
@@ -890,7 +892,6 @@ export default function GachaPage() {
         .marquee-title, .marquee-name { position: relative; z-index: 1; }
         @keyframes sigilPulse { 0%,100% { opacity: 0.10; } 50% { opacity: 0.18; } }
 
-        /* ── Paneles decorativos amplios (por debajo del botón) ── */
         .panel-side {
           position: relative;
           order: 1;
@@ -923,7 +924,6 @@ export default function GachaPage() {
         .panel-dot:nth-child(3) { animation-delay: 2.4s; }
         @keyframes panelGlow { 0%,100% { opacity: 0.35; } 50% { opacity: 1; } }
 
-        /* ── Barrido luminoso del marco (solo panel y base, nunca el carrete) ── */
         .control-panel::after, .cab-foot::after {
           content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 0;
           background: linear-gradient(115deg, transparent 44%, rgba(255,224,102,0.16) 50%, rgba(236,72,153,0.10) 54%, transparent 60%);
@@ -932,7 +932,6 @@ export default function GachaPage() {
         }
         @keyframes frameSweep { 0% { background-position: -70% -30%; } 55%,100% { background-position: 170% 130%; } }
 
-        /* ── Pulsación luminosa del botón (solo cuando está disponible) ── */
         .spin-btn::after {
           content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
           background: radial-gradient(ellipse at 50% 130%, rgba(255,255,255,0.55), transparent 62%);
@@ -955,7 +954,6 @@ export default function GachaPage() {
         .skip-btn { position: fixed; bottom: 24px; right: 24px; z-index: 200; padding: 8px 16px; border-radius: 8px; border: 1px solid rgba(129,140,248,0.4); background: rgba(7,6,26,0.85); color: rgba(196,181,253,0.8); font-size: 11px; font-weight: 700; cursor: pointer; backdrop-filter: blur(4px); transition: opacity 0.2s; }
         .skip-btn:hover { border-color: rgba(34,211,238,0.6); color: #22d3ee; }
 
-        /* Doble marco luminoso exterior del gabinete (rosa/magenta + dorado) */
         .cabinet::before {
           content: ''; position: absolute; inset: -7px; border-radius: 33px;
           border: 2px solid rgba(236,72,153,0.55);
