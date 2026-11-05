@@ -122,7 +122,6 @@ export default function GachaPage() {
   const impactRingRef = useRef<HTMLDivElement>(null)
   const bgCanvasRef = useRef<HTMLCanvasElement>(null)
   const winCanvasRef = useRef<HTMLCanvasElement>(null)
-  const leverRef = useRef<HTMLDivElement>(null)
 
   const rafId = useRef(0)
   const animStart = useRef(0)
@@ -227,15 +226,6 @@ export default function GachaPage() {
     loop()
   }
 
-  const animLever = () => {
-    const lv = leverRef.current
-    if (!lv) return
-    lv.className = 'lever-wrap pulling'
-    setTimeout(() => { lv.className = 'lever-wrap releasing' }, 160)
-    setTimeout(() => { lv.className = 'lever-wrap back' }, 320)
-    setTimeout(() => { lv.className = 'lever-wrap' }, 700)
-  }
-
   const onLanded = () => {
     if (!currentPrize.current) return
     const p = currentPrize.current
@@ -305,7 +295,6 @@ export default function GachaPage() {
     
     hasFinished.current = false
     currentResultData.current = null
-    animLever()
 
     try {
       const res = await tgFetch('/api/gacha/spin', { method: 'POST' })
@@ -415,9 +404,9 @@ export default function GachaPage() {
         </div>
       </div>
 
-      <div style={{ position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'center', alignItems: 'flex-end', marginTop: 24, padding: '0 8px', gap: '8px', flexWrap: 'nowrap', width: '100%' }}>
+      <div style={{ position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'center', alignItems: 'flex-end', marginTop: 24, padding: '0 8px', width: '100%' }}>
         
-        <div className={`cabinet ${isShaking ? 'shaking' : ''}`} style={{ flex: '1 1 auto', maxWidth: '260px' }}>
+        <div className={`cabinet ${isShaking ? 'shaking' : ''}`} style={{ flex: '1 1 auto', minWidth: 0, maxWidth: '260px' }}>
           <div className="marquee">
             <div className="marquee-body">
               <p className="marquee-title">Taboo Realm</p>
@@ -494,12 +483,6 @@ export default function GachaPage() {
           <div className="cab-base"><div className="cab-foot"></div></div>
         </div>
 
-        <div className="lever-wrap" ref={leverRef} onClick={handleSpin} style={{ marginBottom: '15px' }}>
-          <div className="lever-rail"></div>
-          <div className="lever-arm"><div className="lever-ball"></div></div>
-          <div className="lever-base"></div>
-          <span className="lever-tag">PULL</span>
-        </div>
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16, position: 'relative', zIndex: 10 }}>
@@ -693,11 +676,11 @@ export default function GachaPage() {
         
         .cabinet.shaking { animation: shake 0.38s ease; }
         @keyframes shake { 
-          0%,100%{transform:translateX(0);} 
-          20%{transform:translateX(-4px);} 
-          40%{transform:translateX(4px);} 
-          60%{transform:translateX(-3px);} 
-          80%{transform:translateX(3px);} 
+          0%,100%{transform:translateY(0);} 
+          20%{transform:translateY(-4px);} 
+          40%{transform:translateY(4px);} 
+          60%{transform:translateY(-3px);} 
+          80%{transform:translateY(3px);} 
         }
 
         .marquee { width: 100%; position: relative; margin-bottom: -2px; z-index: 3; }
@@ -825,87 +808,6 @@ export default function GachaPage() {
           border-top: none; 
           box-shadow: 0 10px 20px rgba(0,0,0,0.9);
         }
-
-        .lever-wrap { 
-          position: relative; 
-          width: 40px; 
-          height: 220px; 
-          display: flex; 
-          flex-direction: column; 
-          align-items: center; 
-          cursor: pointer; 
-          user-select: none; 
-          z-index: 1;
-          flex-shrink: 0;
-        }
-        
-        .lever-rail { 
-          position: absolute; 
-          top: 20px; 
-          bottom: 20px; 
-          left: 50%; 
-          transform: translateX(-50%); 
-          width: 8px; 
-          background: linear-gradient(90deg, #0a0510, #1f1733, #0a0510); 
-          border-radius: 4px; 
-          border: 1px solid rgba(168,85,247,0.3); 
-          box-shadow: inset 0 5px 10px rgba(0,0,0,0.9);
-        }
-        
-        .lever-arm { 
-          position: absolute; 
-          top: 30px; 
-          left: 50%; 
-          transform: translateX(-50%); 
-          width: 6px; 
-          height: 120px; 
-          background: linear-gradient(90deg, #7a4f10, #c4b5fd 30%, #a5b4fc 60%, #3730a3); 
-          border-radius: 3px; 
-          transition: transform 0.15s ease; 
-          box-shadow: 2px 2px 5px rgba(0,0,0,0.5);
-        }
-        
-        .lever-ball { 
-          position: absolute; 
-          top: -14px; 
-          left: 50%; 
-          transform: translateX(-50%); 
-          width: 24px; 
-          height: 24px; 
-          border-radius: 50%; 
-          background: radial-gradient(circle at 30% 30%, #fff 0%, #f472b6 20%, #c026d3 60%, #4c1d95 100%); 
-          box-shadow: 
-            0 6px 15px rgba(192,38,211,0.8), 
-            inset 0 -4px 8px rgba(0,0,0,0.6),
-            inset 4px 4px 8px rgba(255,255,255,0.4);
-        }
-        
-        .lever-base { 
-          position: absolute; 
-          bottom: 10px; 
-          left: 50%; 
-          transform: translateX(-50%); 
-          width: 20px; 
-          height: 20px; 
-          border-radius: 50%; 
-          background: conic-gradient(from 90deg, #ffe066, #7a4f10, #0a0510, #7a4f10, #ffe066); 
-          box-shadow: 0 4px 10px rgba(0,0,0,0.9);
-        }
-        
-        .lever-tag { 
-          position: absolute; 
-          bottom: -10px; 
-          font-size: 8px; 
-          letter-spacing: 0.1em; 
-          color: #a78bfa; 
-          text-transform: uppercase; 
-          font-weight: 800;
-          text-shadow: 0 0 8px #a78bfa;
-        }
-
-        .lever-wrap.pulling .lever-arm { transform: translateX(-50%) rotate(35deg); transition: transform 0.1s ease-in; }
-        .lever-wrap.releasing .lever-arm { transform: translateX(-50%) rotate(-5deg); transition: transform 0.2s ease-out; }
-        .lever-wrap.back .lever-arm { transform: translateX(-50%) rotate(0deg); transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1); }
 
         .glow-common { box-shadow: inset 0 0 30px rgba(129,140,248,0.3), 0 0 20px rgba(129,140,248,0.4); }
         .glow-rare { box-shadow: inset 0 0 30px rgba(6,182,212,0.5), 0 0 30px rgba(6,182,212,0.6); }
