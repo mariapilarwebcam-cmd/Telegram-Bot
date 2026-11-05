@@ -701,9 +701,13 @@ export default function GachaPage() {
           display: flex; 
           flex-direction: column; 
           align-items: center; 
-          filter: drop-shadow(0 25px 35px rgba(0,0,0,0.9)) drop-shadow(0 0 26px rgba(168,85,247,0.30)) drop-shadow(0 0 44px rgba(236,72,153,0.16)); 
+          filter: drop-shadow(0 0 22px rgba(236,72,153,0.42)) drop-shadow(0 0 40px rgba(255,196,90,0.20)) drop-shadow(0 25px 35px rgba(0,0,0,0.9)); 
           transition: transform 0.1s; 
           z-index: 2;
+          padding: 8px 8px 10px;
+          border-radius: 26px;
+          background: linear-gradient(180deg, rgba(38,20,52,0.98) 0%, rgba(14,8,26,0.99) 55%, rgba(8,4,16,1) 100%);
+          box-shadow: inset 0 0 0 2px rgba(184,134,11,0.55), inset 0 0 32px rgba(168,85,247,0.25), 0 26px 40px rgba(0,0,0,0.9);
         }
         
         .cabinet.shaking { animation: shake 0.38s ease; }
@@ -718,25 +722,22 @@ export default function GachaPage() {
         .marquee { width: 100%; position: relative; margin-bottom: -2px; z-index: 3; }
         .marquee-body { 
           position: relative; 
-          margin: 0 12px; 
-          background: linear-gradient(180deg, rgba(20, 15, 40, 0.95) 0%, rgba(10, 5, 20, 0.98) 100%);
-          backdrop-filter: blur(10px);
-          border-radius: 16px 16px 0 0; 
-          padding: 14px 20px 12px; 
-          border: 2px solid #b8860b; 
-          border-bottom: none; 
-          box-shadow: inset 0 4px 15px rgba(255,255,255,0.1), 0 0 15px rgba(196, 181, 253, 0.4);
+          margin: 0; 
+          padding: 16px 8px 6px; 
         }
         .marquee-title { text-align: center; font-size: 9px; font-weight: 800; letter-spacing: 0.3em; color: #a78bfa; margin-bottom: 4px; text-shadow: 0 0 10px #a78bfa; }
         .marquee-name { 
           text-align: center; 
-          font-size: 18px; 
+          max-width: 196px; 
+          margin: 0 auto; 
+          font-size: 25px; 
+          line-height: 1.06; 
           font-weight: 900; 
-          letter-spacing: 0.05em; 
-          background: linear-gradient(135deg, #ffe066 0%, #f472b6 50%, #22d3ee 100%); 
+          letter-spacing: 0.015em; 
+          background: linear-gradient(180deg, #ffb3e6 0%, #f472b6 46%, #ffd27a 100%); 
           -webkit-background-clip: text; 
           -webkit-text-fill-color: transparent; 
-          filter: drop-shadow(0 0 12px rgba(255,224,102,0.5)); 
+          filter: drop-shadow(0 0 14px rgba(244,114,182,0.55)); 
         }
         .marquee-lights { display: flex; justify-content: center; gap: 5px; margin-top: 8px; }
         .mlight { width: 6px; height: 6px; border-radius: 50%; background: #22d3ee; box-shadow: 0 0 10px #22d3ee; animation: mflicker 1.4s infinite; }
@@ -748,23 +749,23 @@ export default function GachaPage() {
           width: 100%; 
           position: relative; 
           background: linear-gradient(180deg, #1a1228 0%, #0d0820 100%); 
-          border-left: 4px solid #7a4f10; 
-          border-right: 4px solid #7a4f10; 
-          padding: 16px 14px; 
+          padding: 12px 10px 14px; 
           z-index: 1; 
           box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
         }
 
         .screen-frame {
           width: 100%;
-          border: 3px solid #b8860b;
-          border-radius: 8px;
-          background: #060514;
-          padding: 2px;
-          box-shadow: 
-            inset 0 0 15px rgba(0,0,0,1), 
-            0 4px 10px rgba(0,0,0,0.5),
-            0 0 15px rgba(184,134,11,0.4);
+          position: relative;
+          border: 4px solid #b8860b;
+          border-radius: 12px;
+          background: #05030f;
+          padding: 3px;
+          box-shadow: 0 0 0 2px rgba(122,79,16,0.9), inset 0 0 24px rgba(0,0,0,1), 0 0 18px rgba(184,134,11,0.45), 0 0 34px rgba(6,182,212,0.18);
+        }
+        .screen-frame::before {
+          content: ''; position: absolute; inset: 0; border-radius: 9px; pointer-events: none; z-index: 1;
+          background: linear-gradient(180deg, rgba(34,211,238,0.10) 0%, rgba(34,211,238,0.03) 26%, transparent 48%, transparent 74%, rgba(34,211,238,0.07) 100%);
         }
 
         .reel-panel { position: relative; border-radius: 6px; padding: 2px; transition: box-shadow 0.5s ease; }
@@ -791,7 +792,7 @@ export default function GachaPage() {
         .impact-ring { position: absolute; top: 50%; left: 50%; width: 0; height: 0; border-radius: 50%; border: 2px solid transparent; transform: translate(-50%,-50%); pointer-events: none; z-index: 30; opacity: 0; }
         @keyframes impactWave { 0% { width: 60px; height: 60px; opacity: 0.9; border-color: var(--wave-color,#ec4899); } 100% { width: 300px; height: 120px; opacity: 0; border-color: var(--wave-color,#ec4899); } }
 
-        .cab-info { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; padding: 6px 10px; background: rgba(0,0,0,0.4); border-radius: 8px; border: 1px solid rgba(168,85,247,0.2); }
+        .cab-info { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; padding: 8px 12px; background: linear-gradient(180deg, rgba(28,16,44,0.95), rgba(8,4,16,0.98)); border-radius: 10px; border: 1px solid rgba(184,134,11,0.55); box-shadow: inset 0 1px 0 rgba(255,224,102,0.18), inset 0 0 14px rgba(0,0,0,0.8), 0 0 12px rgba(168,85,247,0.14); }
         .info-gem { font-size: 10px; color: rgba(196,181,253,0.7); font-weight: 600; }
         .info-gem b { color: #c4b5fd; font-size: 12px; }
         .info-tier { font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; transition: color 0.3s; }
@@ -800,12 +801,12 @@ export default function GachaPage() {
 
         .control-panel { 
           background: linear-gradient(180deg, #150f24 0%, #0a0510 100%); 
-          border-left: 4px solid #7a4f10; 
-          border-right: 4px solid #7a4f10; 
-          padding: 16px; 
+          padding: 6px 10px 12px; 
           display: flex; 
+          align-items: center;
           justify-content: center; 
-          box-shadow: inset 0 5px 15px rgba(0,0,0,0.8), 0 0 14px rgba(168,85,247,0.16);
+          gap: 9px;
+          box-shadow: inset 0 5px 15px rgba(0,0,0,0.85), 0 0 14px rgba(168,85,247,0.16);
           position: relative;
           overflow: hidden;
           width: 100%;
@@ -813,36 +814,46 @@ export default function GachaPage() {
         
         .spin-btn { 
           position: relative; 
-          width: 32%; 
-          height: 50px; 
+          order: 2;
+          flex: 0 0 56%;
+          min-width: 0;
+          max-width: 188px;
+          height: 62px; 
           border: none; 
           cursor: pointer; 
-          border-radius: 14px; 
-          font-size: 15px; 
+          border-radius: 16px; 
+          font-size: 17px; 
           font-weight: 900; 
-          color: #1a1228; 
-          background: linear-gradient(135deg, #f472b6 0%, #ffe066 50%, #f472b6 100%); 
-          background-size: 200% 100%; 
+          letter-spacing: 0.02em;
+          color: #2a1030; 
+          background: linear-gradient(180deg, #ffb3e0 0%, #ff8fce 34%, #ffd27a 82%, #f7b955 100%); 
+          background-size: 180% 180%; 
           z-index: 1;
           box-shadow: 
-            0 6px 20px rgba(244,114,182,0.6),
-            inset 0 2px 5px rgba(255,255,255,0.5);
-          transition: transform 0.1s; 
+            0 0 0 2px rgba(255,224,102,0.75),
+            0 0 0 4px rgba(122,79,16,0.9),
+            0 10px 18px rgba(0,0,0,0.55),
+            0 0 22px rgba(236,72,153,0.45),
+            inset 0 3px 6px rgba(255,255,255,0.55),
+            inset 0 -5px 10px rgba(76,29,149,0.45);
+          text-shadow: 0 1px 0 rgba(255,255,255,0.45);
+          transition: transform 0.1s, box-shadow 0.2s; 
           overflow: hidden; 
         }
         .spin-btn:hover { background-position: 100% 0; transform: translateY(-1px); }
         .spin-btn:active { transform: scale(0.97); }
-        .spin-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; filter: grayscale(1); }
+        .spin-btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; filter: saturate(0.45) brightness(0.92); }
 
         .cab-base { width: 100%; }
         .cab-foot { 
           width: 100%; 
-          height: 18px; 
-          background: linear-gradient(180deg, #0e0b1e 0%, #07050f 100%); 
-          border-radius: 0 0 14px 14px; 
+          height: 30px; 
+          background: linear-gradient(180deg, #3a2410 0%, #180d24 52%, #07040d 100%); 
+          border-radius: 0 0 24px 24px; 
           border: 4px solid #7a4f10; 
           border-top: none; 
-          box-shadow: 0 10px 20px rgba(0,0,0,0.9), inset 0 2px 0 rgba(255,224,102,0.18);
+          border-bottom-width: 6px;
+          box-shadow: 0 10px 20px rgba(0,0,0,0.9), 0 10px 28px rgba(236,72,153,0.30), inset 0 2px 0 rgba(255,224,102,0.38), inset 0 -8px 16px rgba(0,0,0,0.95), 0 0 20px rgba(255,196,90,0.22);
           position: relative;
           overflow: hidden;
         }
@@ -860,22 +871,30 @@ export default function GachaPage() {
 
         /* ── Paneles decorativos amplios (por debajo del botón) ── */
         .panel-side {
-          position: absolute; top: 6px; bottom: 6px;
-          width: calc(34% - 6px);
-          border-radius: 10px;
+          position: relative;
+          order: 1;
+          flex: 1 1 0;
+          min-width: 0;
+          height: 64px;
+          border-radius: 12px;
           background:
-            linear-gradient(180deg, rgba(24,17,44,0.95) 0%, rgba(9,5,18,0.98) 100%),
-            repeating-linear-gradient(90deg, rgba(255,224,102,0.05) 0 1px, transparent 1px 7px);
-          border: 1px solid rgba(122,79,16,0.55);
-          box-shadow: inset 0 0 16px rgba(0,0,0,0.9), inset 0 1px 0 rgba(255,224,102,0.10);
-          display: flex; flex-direction: column; justify-content: center; gap: 9px;
-          pointer-events: none; z-index: 0;
+            linear-gradient(180deg, rgba(38,20,54,0.98) 0%, rgba(10,5,20,1) 100%),
+            repeating-linear-gradient(180deg, rgba(255,224,102,0.05) 0 1px, transparent 1px 6px);
+          border: 1.5px solid rgba(236,72,153,0.65);
+          box-shadow: inset 0 0 12px rgba(236,72,153,0.30), inset 0 1px 0 rgba(255,255,255,0.14), inset 0 -10px 16px rgba(0,0,0,0.9), 0 0 12px rgba(236,72,153,0.28);
+          display: flex; flex-direction: column; justify-content: center; gap: 7px;
+          align-items: flex-start; padding-left: 9px;
+          pointer-events: none;
+          clip-path: polygon(0 10%, 100% 0, 100% 100%, 0 90%);
         }
-        .panel-side.left { left: 6px; align-items: flex-start; padding-left: 10px; }
-        .panel-side.right { right: 6px; align-items: flex-end; padding-right: 10px; }
+        .panel-side.left { order: 1; }
+        .panel-side.right {
+          order: 3; align-items: flex-end; padding-right: 8px; padding-left: 0;
+          clip-path: polygon(0 0, 100% 8%, 100% 92%, 0 100%);
+        }
         .panel-dot {
-          width: 5px; height: 5px; border-radius: 50%;
-          background: #a855f7; box-shadow: 0 0 8px #a855f7, 0 0 2px #f0abfc;
+          width: 6px; height: 6px; border-radius: 50%;
+          background: #a855f7; box-shadow: 0 0 10px #a855f7, 0 0 3px #f0abfc;
           animation: panelGlow 3.6s ease-in-out infinite;
         }
         .panel-side.right .panel-dot { background: #f0abfc; box-shadow: 0 0 8px #f0abfc, 0 0 2px #a855f7; }
@@ -906,16 +925,6 @@ export default function GachaPage() {
           .spin-btn::after, .mlight { animation: none !important; }
         }
 
-        /* ── Hombros dorados: conectan el encabezado con los laterales ── */
-        .cab-body::before, .cab-body::after {
-          content: ''; position: absolute; top: 0; width: 26px; height: 4px;
-          background: linear-gradient(90deg, #7a4f10 0%, #b8860b 100%);
-          box-shadow: 0 0 8px rgba(184,134,11,0.45);
-          pointer-events: none; z-index: 0;
-        }
-        .cab-body::before { left: 0; }
-        .cab-body::after { right: 0; background: linear-gradient(270deg, #7a4f10 0%, #b8860b 100%); }
-
         .glow-common { box-shadow: inset 0 0 30px rgba(129,140,248,0.3), 0 0 20px rgba(129,140,248,0.4); }
         .glow-rare { box-shadow: inset 0 0 30px rgba(6,182,212,0.5), 0 0 30px rgba(6,182,212,0.6); }
         .glow-epic { box-shadow: inset 0 0 40px rgba(168,85,247,0.7), 0 0 40px rgba(168,85,247,0.8); }
@@ -924,6 +933,20 @@ export default function GachaPage() {
 
         .skip-btn { position: fixed; bottom: 24px; right: 24px; z-index: 200; padding: 8px 16px; border-radius: 8px; border: 1px solid rgba(129,140,248,0.4); background: rgba(7,6,26,0.85); color: rgba(196,181,253,0.8); font-size: 11px; font-weight: 700; cursor: pointer; backdrop-filter: blur(4px); transition: opacity 0.2s; }
         .skip-btn:hover { border-color: rgba(34,211,238,0.6); color: #22d3ee; }
+
+        /* Doble marco luminoso exterior del gabinete (rosa/magenta + dorado) */
+        .cabinet::before {
+          content: ''; position: absolute; inset: -7px; border-radius: 33px;
+          border: 2px solid rgba(236,72,153,0.55);
+          box-shadow: 0 0 18px rgba(236,72,153,0.45), inset 0 0 24px rgba(236,72,153,0.16);
+          pointer-events: none;
+        }
+        .cabinet::after {
+          content: ''; position: absolute; inset: -2px; border-radius: 28px;
+          border: 2px solid rgba(255,196,90,0.75);
+          box-shadow: 0 0 14px rgba(255,196,90,0.35), inset 0 0 12px rgba(255,196,90,0.14);
+          pointer-events: none;
+        }
       `}</style>
     </div>
   )
