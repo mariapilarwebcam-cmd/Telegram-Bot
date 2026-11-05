@@ -362,9 +362,6 @@ export default function GachaPage() {
       }
 
       if (instantSpin) {
-        // ✅ FIX: render new items synchronously, then snap to the winner.
-        // No intermediate frame shows random prizes. flushSync guarantees the DOM
-        // contains the winning item at WIN_INDEX before we translate the strip.
         flushSync(() => {
           setReelItems(newItems)
         })
@@ -376,8 +373,6 @@ export default function GachaPage() {
         }
         finishSpin()
       } else {
-        // Normal spin: reset to start position and animate. The "position 0" here
-        // is the legitimate animation start, not a bug.
         setReelItems(newItems)
         if (reelRef.current) {
           reelRef.current.style.transition = 'none'
@@ -676,7 +671,7 @@ export default function GachaPage() {
         <div className="modal-backdrop" style={{ zIndex: 9999, background: 'rgba(5, 2, 10, 0.95)', backdropFilter: 'blur(10px)' }}>
           <div className="modal-box level-up-modal" style={{ textAlign: 'center', border: `2px solid ${TIER_COLORS[result.tier as keyof typeof TIER_COLORS]?.color || '#a395c9'}`, boxShadow: `0 0 40px ${TIER_COLORS[result.tier as keyof typeof TIER_COLORS]?.color || '#a395c9'}40` }}>
             <div style={{ fontSize: 64, marginBottom: 16, animation: 'levelUpSparkle 1.5s infinite' }}>
-              {result.tier === 'common' ? '💬' : result.tier === 'rare' ? '📸' : result.tier === 'epic' ? '🎟️' : result.tier === 'legendary' ? '👑' : '🔥'}
+              {getResultPrize(result).icon}
             </div>
             <p style={{ fontSize: 12, fontWeight: 900, letterSpacing: '0.2em', color: TIER_COLORS[result.tier as keyof typeof TIER_COLORS]?.color || '#a395c9', margin: 0, textShadow: `0 0 10px ${TIER_COLORS[result.tier as keyof typeof TIER_COLORS]?.color || '#a395c9'}` }}>
               ¡HAS OBTENIDO UN PREMIO {TIER_COLORS[result.tier as keyof typeof TIER_COLORS]?.label || 'COMÚN'}!
