@@ -163,26 +163,45 @@ export default function GachaPage() {
     if (!cx) return
     let W = cv.width = window.innerWidth
     let H = cv.height = window.innerHeight
+    const onResize = () => { W = cv.width = window.innerWidth; H = cv.height = window.innerHeight }
+    window.addEventListener('resize', onResize)
 
-    const stars = Array.from({ length: 100 }, () => ({
-      x: Math.random(), y: Math.random(), r: Math.random() * 1.2 + 0.2,
+    const HUES = ['270', '220', '270', '330', '190']
+    const stars = Array.from({ length: 130 }, (_, i) => ({
+      x: Math.random(), y: Math.random(), r: Math.random() * 1.4 + 0.2,
       a: Math.random(), da: (Math.random() - 0.5) * 0.003,
-      dy: -Math.random() * 0.00014, hue: Math.random() > 0.6 ? '270' : '220'
+      dy: -Math.random() * 0.00015,
+      hue: HUES[i % HUES.length],
+      wob: Math.random() * 0.0006,
+      ph: Math.random() * Math.PI * 2,
+      bright: i % 12 === 0
     }))
 
-    let animId: number
-    const loop = () => {
+    const paint = (t: number) => {
       cx.clearRect(0, 0, W, H)
       stars.forEach(s => {
         s.a += s.da; if (s.a <= 0 || s.a >= 1) s.da *= -1
         s.y += s.dy; if (s.y < -0.01) s.y = 1.01
-        cx.beginPath(); cx.arc(s.x * W, s.y * H, s.r, 0, Math.PI * 2)
-        cx.fillStyle = `hsla(${s.hue}, 70%, 80%, ${s.a * 0.5})`; cx.fill()
+        const px = (s.x + Math.sin(t * 0.0004 + s.ph) * s.wob) * W
+        const py = s.y * H
+        if (s.bright) {
+          cx.beginPath(); cx.arc(px, py, s.r * 3.2, 0, Math.PI * 2)
+          cx.fillStyle = `hsla(${s.hue}, 80%, 80%, ${s.a * 0.10})`; cx.fill()
+        }
+        cx.beginPath(); cx.arc(px, py, s.r, 0, Math.PI * 2)
+        cx.fillStyle = `hsla(${s.hue}, 72%, 82%, ${s.a * (s.bright ? 0.72 : 0.5)})`; cx.fill()
       })
-      animId = requestAnimationFrame(loop)
     }
-    loop()
-    return () => cancelAnimationFrame(animId)
+
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      paint(0)
+      return () => window.removeEventListener('resize', onResize)
+    }
+
+    let animId = 0
+    const loop = (t: number) => { paint(t); animId = requestAnimationFrame(loop) }
+    animId = requestAnimationFrame(loop)
+    return () => { cancelAnimationFrame(animId); window.removeEventListener('resize', onResize) }
   }, [])
 
   const spawnParticles = (color: string) => {
@@ -409,6 +428,13 @@ export default function GachaPage() {
         <div className={`cabinet ${isShaking ? 'shaking' : ''}`} style={{ flex: '1 1 auto', minWidth: 0, maxWidth: '260px' }}>
           <div className="marquee">
             <div className="marquee-body">
+              <svg className="arcane-sigil" viewBox="0 0 100 100" aria-hidden="true" focusable="false">
+                <circle cx="50" cy="50" r="46" />
+                <circle cx="50" cy="50" r="33" strokeDasharray="3 8" />
+                <polygon points="50,9 85,71 15,71" />
+                <polygon points="50,91 15,29 85,29" />
+                <circle cx="50" cy="50" r="5.5" />
+              </svg>
               <p className="marquee-title">Taboo Realm</p>
               <p className="marquee-name">EL ORÁCULO OSCURO</p>
               <div className="marquee-lights">
@@ -475,6 +501,12 @@ export default function GachaPage() {
           </div>
 
           <div className="control-panel">
+            <div className="panel-side left" aria-hidden="true">
+              <span className="panel-dot" /><span className="panel-dot" /><span className="panel-dot" />
+            </div>
+            <div className="panel-side right" aria-hidden="true">
+              <span className="panel-dot" /><span className="panel-dot" /><span className="panel-dot" />
+            </div>
             <button className="spin-btn" onClick={handleSpin} disabled={spinning}>
               {spinning ? '✦ GIRANDO...' : '⚡ GIRAR'}
             </button>
@@ -669,7 +701,7 @@ export default function GachaPage() {
           display: flex; 
           flex-direction: column; 
           align-items: center; 
-          filter: drop-shadow(0 25px 35px rgba(0,0,0,0.9)) drop-shadow(0 0 40px rgba(168,85,247,0.2)); 
+          filter: drop-shadow(0 25px 35px rgba(0,0,0,0.9)) drop-shadow(0 0 26px rgba(168,85,247,0.30)) drop-shadow(0 0 44px rgba(236,72,153,0.16)); 
           transition: transform 0.1s; 
           z-index: 2;
         }
@@ -773,7 +805,9 @@ export default function GachaPage() {
           padding: 16px; 
           display: flex; 
           justify-content: center; 
-          box-shadow: inset 0 5px 15px rgba(0,0,0,0.8);
+          box-shadow: inset 0 5px 15px rgba(0,0,0,0.8), 0 0 14px rgba(168,85,247,0.16);
+          position: relative;
+          overflow: hidden;
         }
         
         .spin-btn { 
@@ -788,6 +822,7 @@ export default function GachaPage() {
           color: #1a1228; 
           background: linear-gradient(135deg, #f472b6 0%, #ffe066 50%, #f472b6 100%); 
           background-size: 200% 100%; 
+          z-index: 1;
           box-shadow: 
             0 6px 20px rgba(244,114,182,0.6),
             inset 0 2px 5px rgba(255,255,255,0.5);
@@ -801,12 +836,73 @@ export default function GachaPage() {
         .cab-base { width: 100%; }
         .cab-foot { 
           width: 100%; 
-          height: 16px; 
+          height: 18px; 
           background: linear-gradient(180deg, #0e0b1e 0%, #07050f 100%); 
-          border-radius: 0 0 12px 12px; 
-          border: 2px solid #7a4f10; 
+          border-radius: 0 0 14px 14px; 
+          border: 4px solid #7a4f10; 
           border-top: none; 
-          box-shadow: 0 10px 20px rgba(0,0,0,0.9);
+          box-shadow: 0 10px 20px rgba(0,0,0,0.9), inset 0 2px 0 rgba(255,224,102,0.18);
+          position: relative;
+          overflow: hidden;
+        }
+
+        /* ── Símbolo arcano (detrás del título, decorativo) ── */
+        .arcane-sigil {
+          position: absolute; top: 50%; left: 50%;
+          width: 74px; height: 74px; margin: -37px 0 0 -37px;
+          fill: none; stroke: #a78bfa; stroke-width: 1.6;
+          opacity: 0.14; pointer-events: none; z-index: 0;
+          animation: sigilPulse 7s ease-in-out infinite;
+        }
+        .marquee-title, .marquee-name { position: relative; z-index: 1; }
+        @keyframes sigilPulse { 0%,100% { opacity: 0.10; } 50% { opacity: 0.18; } }
+
+        /* ── Paneles decorativos amplios (por debajo del botón) ── */
+        .panel-side {
+          position: absolute; top: 6px; bottom: 6px;
+          width: calc(50% - 6px);
+          border-radius: 10px;
+          background:
+            linear-gradient(180deg, rgba(24,17,44,0.95) 0%, rgba(9,5,18,0.98) 100%),
+            repeating-linear-gradient(90deg, rgba(255,224,102,0.05) 0 1px, transparent 1px 7px);
+          border: 1px solid rgba(122,79,16,0.55);
+          box-shadow: inset 0 0 16px rgba(0,0,0,0.9), inset 0 1px 0 rgba(255,224,102,0.10);
+          display: flex; flex-direction: column; justify-content: center; gap: 9px;
+          pointer-events: none; z-index: 0;
+        }
+        .panel-side.left { left: 6px; align-items: flex-start; padding-left: 10px; }
+        .panel-side.right { right: 6px; align-items: flex-end; padding-right: 10px; }
+        .panel-dot {
+          width: 5px; height: 5px; border-radius: 50%;
+          background: #a855f7; box-shadow: 0 0 8px #a855f7, 0 0 2px #f0abfc;
+          animation: panelGlow 3.6s ease-in-out infinite;
+        }
+        .panel-side.right .panel-dot { background: #f0abfc; box-shadow: 0 0 8px #f0abfc, 0 0 2px #a855f7; }
+        .panel-dot:nth-child(2) { animation-delay: 1.2s; }
+        .panel-dot:nth-child(3) { animation-delay: 2.4s; }
+        @keyframes panelGlow { 0%,100% { opacity: 0.35; } 50% { opacity: 1; } }
+
+        /* ── Barrido luminoso del marco (solo panel y base, nunca el carrete) ── */
+        .control-panel::after, .cab-foot::after {
+          content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 0;
+          background: linear-gradient(115deg, transparent 44%, rgba(255,224,102,0.16) 50%, rgba(236,72,153,0.10) 54%, transparent 60%);
+          background-size: 300% 300%;
+          animation: frameSweep 9s ease-in-out infinite;
+        }
+        @keyframes frameSweep { 0% { background-position: -70% -30%; } 55%,100% { background-position: 170% 130%; } }
+
+        /* ── Pulsación luminosa del botón (solo cuando está disponible) ── */
+        .spin-btn::after {
+          content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+          background: radial-gradient(ellipse at 50% 130%, rgba(255,255,255,0.55), transparent 62%);
+          opacity: 0; animation: btnBreath 3.4s ease-in-out infinite;
+        }
+        .spin-btn:disabled::after { animation: none; opacity: 0; }
+        @keyframes btnBreath { 0%,100% { opacity: 0; } 50% { opacity: 0.45; } }
+
+        @media (prefers-reduced-motion: reduce) {
+          .arcane-sigil, .panel-dot, .control-panel::after, .cab-foot::after,
+          .spin-btn::after, .mlight { animation: none !important; }
         }
 
         .glow-common { box-shadow: inset 0 0 30px rgba(129,140,248,0.3), 0 0 20px rgba(129,140,248,0.4); }
