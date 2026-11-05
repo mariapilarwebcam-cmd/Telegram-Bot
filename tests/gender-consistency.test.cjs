@@ -104,22 +104,28 @@ test('4. género desconocido del usuario usa la forma por defecto sin romper', (
   }
 })
 
-test('5. reglas de género en las cuatro combinaciones, sin afirmar orientación', () => {
-  const combos = [
-    ['male', 'male'],
-    ['male', 'female'],
-    ['female', 'male'],
-    ['female', 'female'],
+test('5. contexto romántico correcto en las cuatro combinaciones', () => {
+  const expectations = [
+    ['male', 'female', /heterosexual/, /Romantic context: straight/],
+    ['female', 'male', /heterosexual/, /Romantic context: straight/],
+    ['male', 'male', /dos hombres/, /Romantic context: two men/],
+    ['female', 'female', /dos mujeres/, /Romantic context: two women/],
   ]
 
-  for (const [userGender, charGender] of combos) {
+  for (const [userGender, charGender, esPattern, enPattern] of expectations) {
     const es = gender.buildGenderRules(userGender, charGender, 'es')
-    assert.ok(es.includes(userGender === 'male' ? 'hombre' : 'mujer'), es)
-    assert.ok(es.includes(charGender === 'male' ? 'hombre' : 'mujer'), es)
-    assert.ok(!/heterosexual|gay|l[eé]sbica/i.test(es), es)
-
     const en = gender.buildGenderRules(userGender, charGender, 'en')
-    assert.ok(!/straight|gay|lesbian/i.test(en), en)
+
+    assert.match(es, esPattern)
+    assert.match(en, enPattern)
+
+    // Contexto interno: nunca tema recurrente ni etiqueta espontánea.
+    assert.match(es, /NO anuncies, expliques, recuerdes ni menciones espontáneamente/)
+    assert.match(en, /Do NOT announce, explain, remind or spontaneously mention/)
+
+    // Las reglas gramaticales siguen intactas.
+    assert.ok(es.includes('"cansado"') && es.includes('"cansada"'), es)
+    assert.ok(en.includes('I/me/my'), en)
   }
 })
 
@@ -139,10 +145,12 @@ test('7. usuario sin género definido no recibe suposiciones', () => {
     assert.ok(es.includes('sin especificar'), es)
     assert.ok(es.includes('no especificó su género'), es)
     assert.ok(!/heterosexual/i.test(es), es)
+    assert.ok(!/Contexto romántico/i.test(es), es)
 
     const en = gender.buildGenderRules(unknown, 'male', 'en')
     assert.ok(en.includes('unspecified'), en)
     assert.ok(en.includes("didn't specify"), en)
+    assert.ok(!/Romantic context/i.test(en), en)
   }
 })
 
