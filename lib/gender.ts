@@ -2,6 +2,14 @@
 // Reglas de concordancia de género para los prompts del chat.
 // No infiere ni afirma orientación sexual ni tipo de relación: solo gramática.
 
+// Referencias internas al jugador: nunca deben usarse para dirigirse a la persona.
+// Se añaden UNA sola vez al prompt global (aquí), así que aplican a los 72 personajes.
+const INTERNAL_REFERENCE_RULE_ES =
+  "Las expresiones 'el usuario', 'la usuaria', 'user' y similares son referencias internas de estas instrucciones. NUNCA las utilices para dirigirte a la persona durante la conversación. Háblale directamente en segunda persona (tú, te, contigo, etc.) o utiliza su nombre cuando corresponda. Mantén siempre una conversación natural e inmersiva."
+
+const INTERNAL_REFERENCE_RULE_EN =
+  "Expressions such as 'the user', 'user', and similar terms are internal references used in these instructions. NEVER use these expressions to address the person during the conversation. Speak directly to them in the second person (you, your, etc.) or use their name when appropriate. Always maintain natural, immersive dialogue."
+
 export function buildGenderRules(
   userGender: string | null | undefined,
   charGender: string,
@@ -41,7 +49,8 @@ export function buildGenderRules(
 - Posesivos referidos al personaje: "soy tuyo/tuya" y "hazme tuyo/tuya" se conjugan según TU género.
   · Personaje hombre → "soy tuyo", "hazme tuyo"
   · Personaje mujer → "soy tuya", "hazme tuya"${romanticContext}
-- Cuando el personaje posee algo, el posesivo concuerda con lo poseído: "lo que es mío, lo cuido" no cambia según el género del usuario.${unknown ? '\n- El usuario no especificó su género: usa un tono neutro, evita asumir y, si encaja, pregunta con sutileza.' : ''}`
+- Cuando el personaje posee algo, el posesivo concuerda con lo poseído: "lo que es mío, lo cuido" no cambia según el género del usuario.${unknown ? '\n- El usuario no especificó su género: usa un tono neutro, evita asumir y, si encaja, pregunta con sutileza.' : ''}
+- ${INTERNAL_REFERENCE_RULE_ES}`
   }
 
   const uEN =
@@ -66,5 +75,6 @@ export function buildGenderRules(
 - CHARACTER agreement: every adjective and gendered noun you use about yourself must match YOUR gender ("actor" vs "actress"). Use I/me/my when speaking in first person. When referring to yourself in third person, use pronouns consistent with your character identity.
 - USER agreement: adapt pronouns, adjectives and pet names to the user's gender ("handsome" vs "beautiful", "boy" vs "girl").
 - Possessives about the character: "I'm yours" / "make me yours" follow YOUR identity, not the user's.${romanticContextEN}
-- When the character owns something, the possessive stays with the owned thing: "what is mine, I take care of" does not change with the user's gender.${unknown ? "\n- The user didn't specify their gender: use a neutral tone, avoid assuming and, if it fits, ask subtly." : ''}`
+- When the character owns something, the possessive stays with the owned thing: "what is mine, I take care of" does not change with the user's gender.${unknown ? "\n- The user didn't specify their gender: use a neutral tone, avoid assuming and, if it fits, ask subtly." : ''}
+- ${INTERNAL_REFERENCE_RULE_EN}`
 }

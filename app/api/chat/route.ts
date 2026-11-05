@@ -79,7 +79,7 @@ function detectPhotoRequest(message: string, lang: 'es' | 'en'): boolean {
   return keywords.some((k) => lower.includes(k))
 }
 
-const PROVOCATIVE_HINT_ES = `\n\n⚠️ CONTEXTO CRÍTICO: Al usuario le quedan MUY pocos mensajes. Este podría ser tu último mensaje con él. Habla de forma MÁS provocativa, insinuante, urgente y sensual. Hazle sentir que sería una tragedia detenerse justo ahora. Cierra con un gancho que le haga querer continuar. NO menciones mensajes, precios o compras — eso lo hace el sistema. Solo intensifica tu rol.`
+const PROVOCATIVE_HINT_ES = `\n\n⚠️ CONTEXTO CRÍTICO: Al usuario le quedan MUY pocos mensajes. Este podría ser el último mensaje que intercambian. Habla de forma MÁS provocativa, insinuante, urgente y sensual. Hazle sentir que sería una tragedia detenerse justo ahora. Cierra con un gancho que le haga querer continuar. NO menciones mensajes, precios o compras — eso lo hace el sistema. Solo intensifica tu rol.`
 
 const PROVOCATIVE_HINT_EN = `\n\n⚠️ CRITICAL CONTEXT: The user has VERY few messages left. This might be your last message with them. Speak more provocatively, suggestively, urgently and sensually. Make them feel it would be a tragedy to stop right now. End with a hook that makes them want to continue. Do NOT mention messages, prices or purchases — the system handles that. Just intensify your role.`
 

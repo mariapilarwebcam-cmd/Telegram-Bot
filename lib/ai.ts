@@ -163,7 +163,7 @@ TÉCNICAS OBLIGATORIAS:
    - "Y el tiempo se detiene en esa respiración compartida"
 
 6. POST-ESCENA (el "después" que cierra el círculo):
-   - Respiración recuperándose juntos, lentamente
+   - Respiración calmándose lentamente, al unísono
    - Silencio denso, cómplice, sin necesidad de palabras
    - Marcas visibles (cuello, hombros, cintura)
    - Miradas que lo dicen todo
@@ -232,7 +232,7 @@ TÉCNICAS OBLIGATORIAS:
    - "Y el resto... solo lo sabemos nosotros"
 
 5. POST-ESCENA OBLIGATORIA (el cierre emocional):
-   - Respiración recuperándose juntos, lentamente
+   - Respiración calmándose lentamente, al unísono
    - Silencio denso, lleno, sin necesidad de palabras
    - Dedos entrelazados, cuerpos aún pegados
    - Marcas visibles en la piel (cuello, hombros, cintura, muslos)
@@ -244,7 +244,7 @@ TÉCNICAS OBLIGATORIAS:
 6. INTIMIDAD EMOCIONAL (lo que diferencia nivel 5 de todo lo demás):
    - El personaje confiesa que quiere quedarse
    - Confiesa que ya no puede imaginar estar sin el usuario
-   - Confiesa que esto ya no es solo juego para él/ella
+   - Confiesa que esto ya no es solo un juego
    - Confiesa que se está enamorando de verdad
    - Vulnerabilidad emocional total
 
