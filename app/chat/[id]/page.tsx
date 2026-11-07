@@ -16,6 +16,8 @@ import { getTranslations } from '@/lib/i18n'
 import { useUser } from '@/lib/UserContext'
 import { Analytics } from '@/lib/posthog'
 import { AnimatedNumber } from '@/components/AnimatedNumber'
+import { OutfitCard } from '@/components/OutfitCard'
+import { groupOutfitInventory, getOutfitName, getOutfitCompatibilityError, type OutfitUnit, type OutfitCatalogItem } from '@/lib/outfits'
 
 interface Message {
   id?: number
@@ -39,12 +41,6 @@ function getGradient(key: string) {
   let h = 0
   for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) | 0
   return GRADIENTS[Math.abs(h) % GRADIENTS.length]
-}
-
-const getItemImageUrl = (itemId: string) => {
-  const base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL
-  if (!base) return ''
-  return `${base.replace(/\/$/, '')}/items/${itemId}.jpg`
 }
 
 const HOOK_ROTATIONS_ES: Array<(n: number) => string> = [
@@ -176,8 +172,16 @@ export default function ChatPage() {
   const [usingFantasyPass, setUsingFantasyPass] = useState(false)
 
   const [showWardrobe, setShowWardrobe] = useState(false)
-  const [wardrobeData, setWardrobeData] = useState<{ inventory: any[], owned: string[], equipped: string | null }>({ inventory: [], owned: [], equipped: null })
+  const [wardrobeData, setWardrobeData] = useState<{ inventory: OutfitUnit[], catalog: OutfitCatalogItem[], owned: string[], equipped: string | null }>({ inventory: [], catalog: [], owned: [], equipped: null })
+  const [wardrobeLoading, setWardrobeLoading] = useState(false)
+  const [wardrobeError, setWardrobeError] = useState(false)
   const [equippingOutfit, setEquippingOutfit] = useState(false)
+  const outfitRequestInFlight = useRef(false)
+  const outfitScope = `${user?.telegram_id ?? ''}:${characterId}`
+  const outfitScopeRef = useRef({ key: outfitScope })
+  if (outfitScopeRef.current.key !== outfitScope) {
+    outfitScopeRef.current = { key: outfitScope }
+  }
 
   const [showExchangeModal, setShowExchangeModal] = useState(false)
   const [exchangeAmount, setExchangeAmount] = useState(2)
@@ -612,36 +616,159 @@ export default function ChatPage() {
     }
   }
 
-  const handleEquipOutfit = async (outfitKey: string) => {
-    if (!character || equippingOutfit) return
+  const handleEquipOutfit = async (outfitKey: string, intent: 'gift' | 'alternate') => {
+    if (!character || !user?.telegram_id || outfitRequestInFlight.current) return
+    if (getOutfitCompatibilityError(outfitKey, character.gender)) {
+      alert(lang === 'es' ? 'Este outfit no es compatible con el personaje o no está clasificado.'
+        : 'This outfit is incompatible with the character or has not been classified.')
+      return
+    }
+    outfitRequestInFlight.current = true
     setEquippingOutfit(true)
+    const scope = outfitScopeRef.current
+    const isCurrent = () => outfitScopeRef.current === scope
+    let confirmed = false
 
     try {
+      let storageKey: string | undefined
+      let idempotencyKey: string | undefined
+      if (intent === 'gift') {
+        storageKey = `b1:pending-gift:${JSON.stringify([String(user.telegram_id), characterId, outfitKey])}`
+        try {
+          idempotencyKey = sessionStorage.getItem(storageKey) || crypto.randomUUID()
+          if (!idempotencyKey.trim() || idempotencyKey.length > 200) throw new Error('invalid_key')
+          sessionStorage.setItem(storageKey, idempotencyKey)
+          if (sessionStorage.getItem(storageKey) !== idempotencyKey) throw new Error('key_not_persisted')
+        } catch {
+          if (isCurrent()) alert(lang === 'es'
+            ? 'No se pudo guardar la clave del regalo. No se ha enviado la solicitud.'
+            : 'Could not save the gift key. No request was sent.')
+          return
+        }
+      }
       const res = await tgFetch('/api/outfits/equip', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ character_id: characterId, outfit_key: outfitKey }),
+        body: JSON.stringify({ character_id: characterId, outfit_key: outfitKey,
+          ...(idempotencyKey ? { idempotency_key: idempotencyKey } : {}) }),
       })
       const data = await res.json()
 
       if (!res.ok) {
-        alert(data.message || data.error || 'Error al equipar')
-        setEquippingOutfit(false)
+        if (isCurrent()) alert(data.message || data.error || 'Error al equipar')
         return
       }
 
-      setWardrobeData(prev => ({
-        ...prev,
-        equipped: outfitKey,
-        inventory: prev.inventory.filter(i => i.item_key !== outfitKey),
-        owned: prev.owned.includes(outfitKey) ? prev.owned : [...prev.owned, outfitKey]
-      }))
-
-      setCharacter((prev: any) => prev ? { ...prev, equipped_outfit: outfitKey } : prev)
-
+      const isB1 = data.gift_result !== undefined
+      const hasGift = data.gift_result === 'created' || data.gift_result === 'existing'
+      const gift = data.gift_event
+      const validEvent = gift && Number.isSafeInteger(gift.id) && gift.id > 0 &&
+        gift.outfitKey === outfitKey && ['pending', 'generating', 'failed', 'ready'].includes(gift.status)
+      if (data.success !== true ||
+          (!isB1 && data.gift_event !== undefined) ||
+          (isB1 && !(hasGift ? validEvent : data.gift_result === 'alternated' &&
+            (gift === null || validEvent)))) {
+        if (isCurrent()) alert(lang === 'es'
+          ? 'Respuesta no reconocida. Reintenta el mismo regalo para comprobar su estado.'
+          : 'Unrecognized response. Retry the same gift to check its status.')
+        return
+      }
+      confirmed = true
+      // Failure to remove a confirmed key must never turn success into a retry.
+      if (storageKey) {
+        try { sessionStorage.removeItem(storageKey) } catch { /* replay remains safe */ }
+      }
+      if (!isCurrent()) return
       setShowWardrobe(false)
 
-      if (data.is_new) {
+      if (hasGift) {
+        const statusMessages: Record<string, string> = lang === 'es' ? {
+          pending: 'Regalo registrado. Foto pendiente.',
+          generating: 'La foto se está preparando.',
+          ready: 'La foto del regalo está lista.',
+          failed: 'Regalo registrado, pero la foto no pudo completarse.',
+        } : {
+          pending: 'Gift registered. Photo pending.',
+          generating: 'The photo is being prepared.',
+          ready: 'The gift photo is ready.',
+          failed: 'Gift registered, but the photo could not be completed.',
+        }
+
+        // Processing is an explicit action on a confirmed server event.
+        // Never send another gift to recover a photo.
+        const processQuestions: Record<string, string> = lang === 'es' ? {
+          pending: '¿Quieres procesar ahora la fotografía de este regalo? Puede tardar varios minutos.',
+          generating: '¿Quieres comprobar o recuperar el procesamiento? Si sigue ocupado, no se iniciará otra generación. Si el lease venció, el servidor puede iniciar un nuevo intento.',
+          failed: '¿Quieres intentar procesar otra vez la fotografía? Es una acción nueva y podría generar otra imagen; no vuelve a entregar ni consumir el regalo.',
+        } : {
+          pending: 'Process this gift photo now? It may take several minutes.',
+          generating: 'Check or recover processing? An active lease will not start another generation. If the lease expired, the server may start a new attempt.',
+          failed: 'Try processing the photo again? This is a new action and may generate another image; it does not deliver or consume the gift again.',
+        }
+
+        const shouldProcess = gift.status !== 'ready' &&
+          window.confirm(`${statusMessages[gift.status]}\n\n${processQuestions[gift.status]}`)
+
+        if (gift.status === 'ready') {
+          alert(statusMessages.ready)
+        }
+
+        if (shouldProcess && isCurrent()) {
+          try {
+            const processRes = await tgFetch('/api/gifts/process', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                character_id: characterId,
+                event_id: gift.id,
+              }),
+            })
+            const processed = await processRes.json()
+            if (!isCurrent()) return
+
+            const processedEvent = processed?.gift_event
+            const sameEvent = processedEvent &&
+              processedEvent.id === gift.id &&
+              processedEvent.outfitKey === outfitKey
+            const ready = processRes.status === 200 &&
+              processed?.success === true &&
+              processed.gift_result === 'ready' &&
+              sameEvent && processedEvent.status === 'ready'
+            const busy = processRes.status === 202 &&
+              processed?.success === true &&
+              processed.gift_result === 'busy' &&
+              sameEvent && processedEvent.status === 'generating'
+
+            if (ready) {
+              // Load the published message below. Do not invent a photo message.
+              alert(lang === 'es'
+                ? 'La foto del regalo está lista.'
+                : 'The gift photo is ready.')
+            } else if (busy) {
+              alert(lang === 'es'
+                ? 'La fotografía está procesándose. No se ha solicitado otra generación. No se consultará automáticamente.'
+                : 'The photo is processing. No additional generation was requested. It will not be checked automatically.')
+            } else {
+              // Includes disabled, lost claim and unrecognized success responses.
+              // A processing error must never become a delivery error.
+              alert(lang === 'es'
+                ? 'El regalo sigue confirmado, pero no se pudo confirmar el procesamiento de la fotografía. No se reintentará automáticamente.'
+                : 'The gift remains confirmed, but photo processing could not be confirmed. It will not be retried automatically.')
+            }
+          } catch {
+            if (!isCurrent()) return
+            // The server may still be working or may have committed successfully.
+            // Continue with read-only reconciliation, never resend either POST.
+            alert(lang === 'es'
+              ? 'El regalo sigue confirmado. Hubo un error de conexión o de respuesta al procesar la fotografía; el resultado podría haberse completado. No se reintentará automáticamente.'
+              : 'The gift remains confirmed. A connection or response error occurred while processing the photo; it may already have completed. It will not be retried automatically.')
+          }
+        }
+
+        if (!isCurrent()) return
+      }
+
+      if (!isB1 && data.is_new === true) {
         const imgRes = await tgFetch('/api/generate-image', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -652,6 +779,7 @@ export default function ChatPage() {
         })
         const imgData = await imgRes.json()
 
+        if (!isCurrent()) return
         if (imgRes.ok && imgData.image_url) {
           setMessages((p) => [
             ...p,
@@ -666,9 +794,41 @@ export default function ChatPage() {
           await refresh()
         }
       }
+
+      const [wardrobeRes, historyRes] = await Promise.all([
+        tgFetch(`/api/outfits/available?character_id=${characterId}`),
+        hasGift ? tgFetch(`/api/character/${characterId}`) : Promise.resolve(null),
+      ])
+      if (!wardrobeRes.ok || (historyRes && !historyRes.ok)) throw new Error('gift_view_refresh_failed')
+      const [wardrobe, history] = await Promise.all([
+        wardrobeRes.json(), historyRes ? historyRes.json() : Promise.resolve(null),
+      ])
+      if (!Array.isArray(wardrobe.inventory_items) || !Array.isArray(wardrobe.character_owned) ||
+          !(wardrobe.character_equipped === null || typeof wardrobe.character_equipped === 'string') ||
+          (hasGift && (!history?.character || !Array.isArray(history.messages)))) {
+        throw new Error('gift_view_invalid')
+      }
+      if (!isCurrent()) return
+      setWardrobeData({ inventory: wardrobe.inventory_items, catalog: wardrobe.outfit_catalog || [], owned: wardrobe.character_owned,
+        equipped: wardrobe.character_equipped })
+      setCharacter((prev: any) => prev ? { ...prev, equipped_outfit: wardrobe.character_equipped } : prev)
+      if (history) {
+        const incoming: Message[] = history.messages.filter((msg: Message) =>
+          Number.isSafeInteger(msg.id) && Number(msg.id) > 0 &&
+          (msg.role === 'user' || msg.role === 'assistant') && typeof msg.content === 'string')
+        setMessages(prev => {
+          const byId = new Map(incoming.map(msg => [msg.id, msg]))
+          const existing = new Set(prev.filter(msg => msg.id).map(msg => msg.id))
+          return [...prev.map(msg => msg.id ? byId.get(msg.id) || msg : msg),
+            ...incoming.filter(msg => !existing.has(msg.id))]
+        })
+      }
     } catch (e) {
-      alert('Error de conexión')
+      if (isCurrent()) alert(confirmed
+        ? (lang === 'es' ? 'Operación confirmada; no se pudo actualizar la vista.' : 'Operation confirmed; could not update the view.')
+        : (lang === 'es' ? 'Error de conexión. Reintenta el mismo regalo.' : 'Connection error. Retry the same gift.'))
     } finally {
+      outfitRequestInFlight.current = false
       setEquippingOutfit(false)
     }
   }
@@ -1440,18 +1600,26 @@ export default function ChatPage() {
                 onClick={async () => {
                   setMenuOpen(false)
                   setShowWardrobe(true)
+                  setWardrobeLoading(true)
+                  setWardrobeError(false)
+                  const scope = outfitScopeRef.current
                   try {
                     const res = await tgFetch(`/api/outfits/available?character_id=${characterId}`)
-                    if (res.ok) {
+                    if (!res.ok) throw new Error('wardrobe_load_failed')
+                    if (outfitScopeRef.current === scope) {
                       const data = await res.json()
+                      if (outfitScopeRef.current !== scope) return
                       setWardrobeData({
                         inventory: data.inventory_items || [],
+                        catalog: data.outfit_catalog || [],
                         owned: data.character_owned || [],
                         equipped: data.character_equipped || null
                       })
                     }
                   } catch (e) {
-                    console.error(e)
+                    if (outfitScopeRef.current === scope) setWardrobeError(true)
+                  } finally {
+                    if (outfitScopeRef.current === scope) setWardrobeLoading(false)
                   }
                 }}
               >
@@ -1911,7 +2079,8 @@ export default function ChatPage() {
                 : `Dress up ${displayName} with your outfits.`}
             </p>
 
-            {wardrobeData.inventory.length === 0 && wardrobeData.owned.length === 0 ? (
+            {wardrobeLoading ? <p role="status">{lang === 'es' ? 'Cargando…' : 'Loading…'}</p> : wardrobeError ?
+              <p role="alert">{lang === 'es' ? 'No se pudo cargar el armario. Cierra y vuelve a intentarlo.' : 'Could not load wardrobe. Close and try again.'}</p> : wardrobeData.inventory.length === 0 && wardrobeData.owned.length === 0 ? (
               <p style={{ textAlign: 'center', color: '#8b8b9e', fontSize: 13, padding: '20px 0' }}>
                 {lang === 'es' ? 'No tienes outfits. ¡Consíguelos en la Ruleta!' : 'You have no outfits. Get them in the Roulette!'}
               </p>
@@ -1920,36 +2089,19 @@ export default function ChatPage() {
                 {wardrobeData.inventory.length > 0 && (
                   <div style={{ marginBottom: 20 }}>
                     <p style={{ fontSize: 12, color: '#a395c9', fontWeight: 700, marginBottom: 8, textTransform: 'uppercase' }}>
-                      🎁 Para regalar (se consume)
+                      {lang === 'es' ? '🎁 Copias disponibles (regalar consume 1)' : '🎁 Available copies (gifting consumes 1)'}
                     </p>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                      {wardrobeData.inventory.map((item) => (
-                        <button
-                          key={item.id}
-                          onClick={() => handleEquipOutfit(item.item_key)}
-                          disabled={equippingOutfit}
-                          style={{
-                            padding: 0, borderRadius: 12,
-                            background: 'rgba(168, 85, 247, 0.1)', border: '1px solid rgba(168, 85, 247, 0.3)',
-                            color: '#fff', cursor: 'pointer', fontFamily: 'inherit',
-                            display: 'flex', flexDirection: 'column', alignItems: 'center',
-                            overflow: 'hidden'
-                          }}
-                        >
-                          <div style={{ 
-                            width: '100%', aspectRatio: '3/4', 
-                            backgroundImage: `url('${getItemImageUrl(item.item_key)}')`, 
-                            backgroundSize: 'cover', backgroundPosition: 'center' 
-                          }} />
-                          <div style={{ padding: 8, textAlign: 'center', width: '100%' }}>
-                            <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'capitalize', display: 'block' }}>
-                              {item.item_key.replace('outfit_', '').replace('_', ' ')}
-                            </span>
-                            <span style={{ fontSize: 9, color: '#fbbf24', fontWeight: 800, display: 'block', marginTop: 4 }}>
-                              REGALAR
-                            </span>
-                          </div>
-                        </button>
+                      {groupOutfitInventory(wardrobeData.inventory).map((item) => (
+                        <OutfitCard key={item.item_key} itemKey={item.item_key}
+                          name={getOutfitName(item.item_key, wardrobeData.catalog)} quantity={item.quantity}
+                          label={getOutfitCompatibilityError(item.item_key, character?.gender)
+                            ? (lang === 'es' ? 'NO COMPATIBLE / SIN CLASIFICAR' : 'INCOMPATIBLE / UNCLASSIFIED')
+                            : wardrobeData.owned.includes(item.item_key)
+                            ? (lang === 'es' ? 'YA LO POSEE · ALTERNAR SIN CONSUMIR' : 'ALREADY OWNED · SWITCH WITHOUT CONSUMING')
+                            : (lang === 'es' ? 'REGALAR · CONSUME 1' : 'GIFT · CONSUMES 1')}
+                          onClick={() => handleEquipOutfit(item.item_key, wardrobeData.owned.includes(item.item_key) ? 'alternate' : 'gift')}
+                          disabled={equippingOutfit || !!getOutfitCompatibilityError(item.item_key, character?.gender)} />
                       ))}
                     </div>
                   </div>
@@ -1958,41 +2110,19 @@ export default function ChatPage() {
                 {wardrobeData.owned.length > 0 && (
                   <div>
                     <p style={{ fontSize: 12, color: '#a395c9', fontWeight: 700, marginBottom: 8, textTransform: 'uppercase' }}>
-                      👗 Armario del personaje (alternar)
+                      {lang === 'es' ? '👗 Armario del personaje (alternar sin consumir)' : '👗 Character wardrobe (switch without consuming)'}
                     </p>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                       {wardrobeData.owned.map((key) => (
-                        <button
-                          key={key}
-                          onClick={() => handleEquipOutfit(key)}
-                          disabled={equippingOutfit}
-                          style={{
-                            padding: 0, borderRadius: 12,
-                            background: wardrobeData.equipped === key ? 'rgba(34, 197, 94, 0.1)' : 'rgba(255, 255, 255, 0.05)',
-                            border: wardrobeData.equipped === key ? '2px solid #22c55e' : '1px solid rgba(255,255,255,0.1)',
-                            color: wardrobeData.equipped === key ? '#22c55e' : '#fff',
-                            cursor: 'pointer', fontFamily: 'inherit',
-                            display: 'flex', flexDirection: 'column', alignItems: 'center',
-                            overflow: 'hidden'
-                          }}
-                        >
-                          <div style={{ 
-                            width: '100%', aspectRatio: '3/4', 
-                            backgroundImage: `url('${getItemImageUrl(key)}')`, 
-                            backgroundSize: 'cover', backgroundPosition: 'center',
-                            opacity: wardrobeData.equipped === key ? 1 : 0.7
-                          }} />
-                          <div style={{ padding: 8, textAlign: 'center', width: '100%' }}>
-                            <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'capitalize', display: 'block' }}>
-                              {key.replace('outfit_', '').replace('_', ' ')}
-                            </span>
-                            {wardrobeData.equipped === key && (
-                              <span style={{ fontSize: 9, fontWeight: 800, display: 'block', marginTop: 4 }}>
-                                EQUIPADO
-                              </span>
-                            )}
-                          </div>
-                        </button>
+                        <OutfitCard key={key} itemKey={key} name={getOutfitName(key, wardrobeData.catalog)}
+                          selected={wardrobeData.equipped === key}
+                          disabled={equippingOutfit || !!getOutfitCompatibilityError(key, character?.gender)}
+                          label={getOutfitCompatibilityError(key, character?.gender)
+                            ? (lang === 'es' ? 'NO COMPATIBLE / SIN CLASIFICAR' : 'INCOMPATIBLE / UNCLASSIFIED')
+                            : wardrobeData.equipped === key
+                            ? (lang === 'es' ? 'EQUIPADO' : 'EQUIPPED')
+                            : (lang === 'es' ? 'ALTERNAR · NO CONSUME' : 'SWITCH · NO CONSUMPTION')}
+                          onClick={() => handleEquipOutfit(key, 'alternate')} />
                       ))}
                     </div>
                   </div>

@@ -1,8 +1,6 @@
 // app/api/generate-image/route.ts  
 
 import { NextResponse } from 'next/server'
-import sharp from 'sharp' 
-import crypto from 'node:crypto' 
 import {
   ensureUser, getCharacter, countUserMessages, insertGemTransaction,
   getSeenR2Indices, markImageSeen, getAvailablePoolImage, markPoolImageViewed,
@@ -16,7 +14,8 @@ import {
 } from '@/lib/constants'
 import { generateWiroImage } from '@/lib/wiro'
 import { getLevelFromMessages, getImageCost, getClothingLevel, getFaceVisibility } from '@/lib/levels'
-import { r2Available, uploadToR2, downloadImage, buildR2Key, buildTagKey } from '@/lib/r2-upload'
+import { r2Available, buildTagKey } from '@/lib/r2-upload'
+import { storeGeneratedImage } from '@/lib/image-storage'
 import { execute, queryOne, query } from '@/lib/turso'
 
 export const maxDuration = 60
@@ -375,14 +374,6 @@ function getContextLimitMessage(lang: 'es' | 'en', characterName: string): strin
   return `*${characterName} sonríe de lado y niega con la cabeza*\n\n"Wow, veo que te encanta este momento, ¿eh? Creo que ya exploramos bastante esta escena... probemos algo diferente. Cambia el mood o el lugar, y te sorprendo otra vez."`
 }
 
-async function makeBlur(buf: Buffer): Promise<Buffer> {
-  return sharp(buf)
-    .resize(24, 35, { fit: 'cover' })
-    .blur(1.2)
-    .webp({ quality: 60 })
-    .toBuffer()
-}
-
 // ✅ FIX #4: Función atómica para evitar race conditions en los tokens VIP
 async function consumeVipPhotoToken(tid: string): Promise<boolean> {
   const now = Math.floor(Date.now() / 1000)
@@ -428,6 +419,15 @@ export async function POST(request: Request) {
     const isDirectRequest = body?.is_direct_request === true
     const isFantasyPass = body?.is_fantasy_pass === true 
     const isGiftPhoto = body?.is_gift_photo === true 
+
+    // Suspendido hasta disponer de una recompensa acreditada por el servidor.
+    // Rechazar antes de cargar/crear usuario, consumir recursos o generar imagen.
+    if (isGiftPhoto) {
+      return NextResponse.json({
+        error: 'gift_photo_temporarily_unavailable',
+        message: 'Las fotos de regalo están temporalmente suspendidas. No se ha consumido ningún recurso.',
+      }, { status: 403 })
+    }
 
     const user = await ensureUser(tid)
     if (!user) return NextResponse.json({ error: 'Error cargando tu cuenta' }, { status: 500 })
@@ -727,23 +727,12 @@ export async function POST(request: Request) {
           
           modelUsed = 'wiro-seedream-v4-5'
           
-          const { buffer } = await downloadImage(rawUrl)
-          const blurBuffer = await makeBlur(buffer)
-          
-          const key = crypto.randomUUID()
-          const origKey = `orig/${key}.webp`
-          const blurKey = `blur/${key}.webp`
-          
-          await Promise.all([
-            uploadToR2(origKey, buffer, 'image/webp'),
-            uploadToR2(blurKey, blurBuffer, 'image/webp')
-          ])
-          
+          const stored = await storeGeneratedImage(rawUrl)
+          const origKey = stored.r2Key
+          const blurKey = stored.blurR2Key
           imageUrl = origKey
           blurUrl = blurKey
-
-          const r2BaseUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL?.replace(/\/$/, '') || ''
-          const fullOrigUrl = `${r2BaseUrl}/${origKey}`
+          const fullOrigUrl = stored.imageUrl
 
           const ins = await execute(
             `INSERT INTO generated_images 

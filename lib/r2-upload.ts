@@ -49,21 +49,27 @@ const s3 = r2Available
 export async function uploadToR2(
   key: string,
   body: Buffer | Uint8Array,
-  contentType = 'image/jpeg'
+  contentType = 'image/jpeg',
+  signal?: AbortSignal
 ): Promise<string> {
   if (!s3 || !R2_BUCKET_NAME || !R2_PUBLIC_URL) {
     throw new Error('R2 no configurado')
   }
 
-  await s3.send(
-    new PutObjectCommand({
+  signal?.throwIfAborted()
+  const command = new PutObjectCommand({
       Bucket: R2_BUCKET_NAME,
       Key: key,
       Body: body,
       ContentType: contentType,
       CacheControl: 'public, max-age=31536000, immutable',
     })
-  )
+  if (signal) {
+    await s3.send(command, { abortSignal: signal })
+    signal.throwIfAborted()
+  } else {
+    await s3.send(command)
+  }
 
   const cleanBase = R2_PUBLIC_URL.replace(/\/$/, '')
   return `${cleanBase}/${key}`
@@ -72,16 +78,18 @@ export async function uploadToR2(
 // ═══════════════════════════════════════════════════════════════
 // Descargar imagen desde una URL (para pasar a R2)
 // ═══════════════════════════════════════════════════════════════
-export async function downloadImage(url: string): Promise<{
+export async function downloadImage(url: string, signal?: AbortSignal): Promise<{
   buffer: Buffer
   contentType: string
 }> {
-  const res = await fetch(url, { cache: 'no-store' })
+  signal?.throwIfAborted()
+  const res = await fetch(url, { cache: 'no-store', ...(signal ? { signal } : {}) })
   if (!res.ok) {
     throw new Error(`Download failed: HTTP ${res.status}`)
   }
 
   const arrayBuffer = await res.arrayBuffer()
+  signal?.throwIfAborted()
   const contentType = res.headers.get('content-type') || 'image/jpeg'
   return { buffer: Buffer.from(arrayBuffer), contentType }
 }

@@ -8,6 +8,8 @@ import { useUser } from '@/lib/UserContext'
 import { tgFetch } from '@/lib/telegram-fetch'
 import { getTranslations } from '@/lib/i18n'
 import { AnimatedNumber } from '@/components/AnimatedNumber'
+import { OutfitCard } from '@/components/OutfitCard'
+import { getItemImageUrl, groupOutfitInventory, getOutfitName, type OutfitStack, type OutfitCatalogItem } from '@/lib/outfits'
 import { GACHA_ARCHETYPES, CHARACTER_NAMES_FEMALE, CHARACTER_NAMES_MALE, getCharacterImageUrl } from '@/lib/constants'
 
 const TIER_COLORS = {
@@ -70,14 +72,6 @@ function getResultPrize(result: any): Prize {
   return { icon: '💬', imageKey: 'icon_gems', label: `+${result.item_key || '?'}`, color: tierColor, tier }
 }
 
-const getItemImageUrl = (itemId: string) => {
-  const base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL
-  if (!base) return ''
-  const cleanBase = base.replace(/\/$/, '')
-  const folder = cleanBase.endsWith('/item') || cleanBase.endsWith('/items') ? '' : '/item'
-  return `${cleanBase}${folder}/${itemId}.jpg`
-}
-
 const SHOWCASE_OUTFITS = [
   { id: 'outfit_school',          name: 'Escolar',              rarity: 'legendary' },
   { id: 'outfit_maid_sexy',       name: 'Maid Provocativa',     rarity: 'legendary' },
@@ -107,6 +101,11 @@ export default function GachaPage() {
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'characters' | 'outfits'>('characters')
   const [ownedCharacters, setOwnedCharacters] = useState<string[]>([])
+  const [showInventory, setShowInventory] = useState(false)
+  const [inventoryLoading, setInventoryLoading] = useState(false)
+  const [inventoryError, setInventoryError] = useState(false)
+  const [inventory, setInventory] = useState<OutfitStack[]>([])
+  const [outfitCatalog, setOutfitCatalog] = useState<OutfitCatalogItem[]>([])
   const [isVip, setIsVip] = useState(false)
   
   const [reelItems, setReelItems] = useState<Prize[]>([])
@@ -132,6 +131,29 @@ export default function GachaPage() {
   
   const currentResultData = useRef<any>(null)
   const hasFinished = useRef(false)
+
+  // Fetch on each opening so quantities never come from the showcase or spin results.
+  useEffect(() => {
+    if (!showInventory || !user?.telegram_id) return
+    let cancelled = false
+    setInventoryLoading(true)
+    setInventoryError(false)
+    setInventory([])
+    setOutfitCatalog([])
+    tgFetch('/api/outfits/available')
+      .then(async res => {
+        if (!res.ok) throw new Error('inventory_load_failed')
+        const data = await res.json()
+        if (!Array.isArray(data.inventory_items)) throw new Error('inventory_invalid')
+        if (!cancelled) {
+          setInventory(groupOutfitInventory(data.inventory_items))
+          setOutfitCatalog(data.outfit_catalog || [])
+        }
+      })
+      .catch(() => { if (!cancelled) setInventoryError(true) })
+      .finally(() => { if (!cancelled) setInventoryLoading(false) })
+    return () => { cancelled = true }
+  }, [showInventory, user?.telegram_id])
 
   useEffect(() => {
     if (!user?.telegram_id) return
@@ -411,7 +433,9 @@ export default function GachaPage() {
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="m15 18-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
         </button>
         <h1 className="page-title" style={{ flex: 1, textAlign: 'center', fontSize: 18 }}>La Ruleta de lo Prohibido</h1>
-        <div style={{ width: 32 }} />
+        <button type="button" className="modal-btn secondary" onClick={() => setShowInventory(true)}>
+          {lang === 'es' ? '🎒 Inventario' : '🎒 Inventory'}
+        </button>
       </header>
 
       <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginTop: 8, position: 'relative', zIndex: 10 }}>
@@ -699,6 +723,28 @@ export default function GachaPage() {
                 ¡GENIAL!
               </button>
             )}
+          </div>
+        </div>
+      )}
+
+      {showInventory && (
+        <div className="modal-backdrop" onClick={() => setShowInventory(false)}>
+          <div className="modal-box" role="dialog" aria-modal="true" aria-labelledby="outfit-inventory-title"
+            onClick={e => e.stopPropagation()} style={{ maxHeight: '80vh', overflowY: 'auto' }}>
+            <h3 id="outfit-inventory-title" className="modal-title">{lang === 'es' ? 'Inventario de outfits' : 'Outfit inventory'}</h3>
+            <p className="modal-desc">{lang === 'es'
+              ? 'Para entregar un outfit, abre el chat del personaje y entra en ⋮ → Armario / Regalos. Cada regalo nuevo consume una copia; alternar uno que ya posee no consume inventario.'
+              : 'To gift an outfit, open the character chat and choose ⋮ → Wardrobe / Gifts. Each new gift consumes one copy; switching an outfit already owned does not consume inventory.'}</p>
+            {inventoryLoading ? <p role="status">{lang === 'es' ? 'Cargando…' : 'Loading…'}</p>
+              : inventoryError ? <p role="alert">{lang === 'es' ? 'No se pudo cargar el inventario. Cierra y vuelve a intentarlo.' : 'Could not load inventory. Close and try again.'}</p>
+              : inventory.length === 0 ? <p>{lang === 'es' ? 'No tienes copias disponibles. ¡Consigue outfits en la Ruleta!' : 'You have no available copies. Get outfits in the Roulette!'}</p>
+              : <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                {inventory.map(item => <OutfitCard key={item.item_key} itemKey={item.item_key}
+                  name={getOutfitName(item.item_key, outfitCatalog)} quantity={item.quantity}
+                  label={lang === 'es' ? 'COPIAS DISPONIBLES' : 'AVAILABLE COPIES'} />)}
+              </div>}
+            <button type="button" className="modal-btn secondary" style={{ width: '100%', marginTop: 20 }}
+              onClick={() => setShowInventory(false)}>{lang === 'es' ? 'Cerrar' : 'Close'}</button>
           </div>
         </div>
       )}

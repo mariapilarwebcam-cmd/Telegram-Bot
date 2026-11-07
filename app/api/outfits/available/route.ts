@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server'
 import { query, queryOne } from '@/lib/turso'
+import { groupOutfitInventory, type OutfitUnit, type OutfitCatalogItem } from '@/lib/outfits'
+
+export const dynamic = 'force-dynamic'
 
 export async function GET(request: Request) {
   try {
@@ -10,7 +13,8 @@ export async function GET(request: Request) {
     const characterId = url.searchParams.get('character_id')
 
     // 1. Outfits en el inventario global
-    const inventory = await query(`SELECT id, item_key FROM user_inventory WHERE user_id = ? AND item_type = 'outfit'`, [tid])
+    const inventory = await query<OutfitUnit>(`SELECT id, item_key FROM user_inventory WHERE user_id = ? AND item_type = 'outfit'`, [tid])
+    const catalog = await query<OutfitCatalogItem>('SELECT id, name FROM gacha_outfits')
 
     // 2. Outfits en el armario del personaje
     let owned: string[] = []
@@ -28,9 +32,11 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ 
       inventory_items: inventory,
+      inventory_stacks: groupOutfitInventory(inventory),
+      outfit_catalog: catalog,
       character_owned: owned,
       character_equipped: equipped
-    })
+    }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (e) {
     return NextResponse.json({ error: 'Error interno' }, { status: 500 })
   }

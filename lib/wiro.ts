@@ -1,11 +1,20 @@
 // lib/wiro.ts
 
 import { WiroClient } from '@wiro-ai/wiro-mcp/client'
+import { createOperationBudget } from '@/lib/operation-budget'
+
+export type WiroImageOptions = Readonly<{
+  deadlineAt: number
+  signal: AbortSignal
+  startTimeoutMs: number
+  waitTimeoutMs: number
+}>
 
 export async function generateWiroImage(
   prompt: string,
   seedImageUrl: string,
-  level: number
+  level: number,
+  options?: WiroImageOptions
 ): Promise<string> {
   const WIRO_API_KEY = process.env.WIRO_API_KEY
   if (!WIRO_API_KEY) {
@@ -15,14 +24,30 @@ export async function generateWiroImage(
   const client = new WiroClient(WIRO_API_KEY)
   const modelId = 'bytedance/seedream-v4-5-uncensored'
 
-  const run = await client.runModel(modelId, {
+  const params = {
     prompt: prompt,
     inputImage: seedImageUrl,
     aspectRatio: '3:4',
     resolution: '2k',
     maxImages: 1,
     watermark: 'false',
-  })
+  }
+
+  const run = await (async () => {
+    if (!options) return client.runModel(modelId, params)
+    const start = createOperationBudget(
+      Math.min(options.deadlineAt, Date.now() + options.startTimeoutMs),
+      options.signal
+    )
+    try {
+      start.check()
+      const result = await client.runModel(modelId, params, start.signal)
+      start.check()
+      return result
+    } finally {
+      start.dispose()
+    }
+  })()
 
   if (!run.result) {
     // ✅ FIX TYPESCRIPT: Extraemos el mensaje de error correctamente
@@ -35,10 +60,23 @@ export async function generateWiroImage(
     throw new Error(errorMessage)
   }
 
-  // ✅ FIX CRÍTICO: Timeout ajustado a 55 segundos.
-  // Vercel mata la función a los 60s (maxDuration). Damos 55s a Wiro y
-  // nos quedan 5s para subir a R2 y actualizar la base de datos.
-  const result = await client.waitForTask(run.socketaccesstoken, 55000)
+  const result = await (async () => {
+    // Preserve existing callers: 55s polling, unchanged invocation.
+    if (!options) return client.waitForTask(run.socketaccesstoken, 55_000)
+    const wait = createOperationBudget(
+      Math.min(options.deadlineAt, Date.now() + options.waitTimeoutMs),
+      options.signal
+    )
+    try {
+      wait.check()
+      const remainingMs = Math.min(options.waitTimeoutMs, options.deadlineAt - Date.now())
+      const detail = await client.waitForTask(run.socketaccesstoken, remainingMs, { signal: wait.signal })
+      wait.check()
+      return detail
+    } finally {
+      wait.dispose()
+    }
+  })()
   const task = result.tasklist[0]
 
   if (!task || task.pexit !== '0') {
